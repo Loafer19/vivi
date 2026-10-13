@@ -42,6 +42,15 @@ impl Player {
             init.set_property("idle", "yes")?;
             init.set_property("input-default-bindings", "no")?;
             init.set_property("volume-max", 150i64)?;
+            // Resume: mpv watch-later files in $XDG_STATE_HOME/vivi/watch_later.
+            let wl = crate::store::watch_later_dir();
+            let _ = std::fs::create_dir_all(&wl);
+            init.set_property("watch-later-dir", wl.to_string_lossy().as_ref())?;
+            init.set_property("resume-playback", "yes")?;
+            init.set_property(
+                "watch-later-options",
+                "start,aid,sid,sub-delay,audio-delay,volume,speed",
+            )?;
             if std::env::var_os("VIVI_MPV_DEBUG").is_some() {
                 init.set_property("terminal", "yes")?;
                 init.set_property("msg-level", "all=v")?;
@@ -66,6 +75,8 @@ impl Player {
             "chapter-list/count",
             "audio-device",
             "audio-device-list",
+            "playlist-count",
+            "playlist-pos",
         ]
         .iter()
         .enumerate()
@@ -102,7 +113,7 @@ impl Player {
                                 }
                                 (
                                     "aid" | "sid" | "chapter-list/count" | "audio-device"
-                                    | "audio-device-list",
+                                    | "audio-device-list" | "playlist-count" | "playlist-pos",
                                     _,
                                 ) => Some(PlayerEvent::ListsChanged),
                                 _ => None,
@@ -123,10 +134,15 @@ impl Player {
         Ok((Self { mpv }, rx))
     }
 
+    /// Save the resume position of the current file (no-op when idle).
+    pub fn save_position(&self) {
+        if self.get("path").is_some() {
+            let _ = self.mpv.command("write-watch-later-config", &[]);
+        }
+    }
     pub fn open(&self, path: &str) {
-        let _ = self
-            .mpv
-            .command("loadfile", &[&format!("\"{}\"", path.replace('"', "\\\""))]);
+        self.save_position();
+        let _ = self.mpv.command("loadfile", &[&quote(path)]);
         let _ = self.mpv.set_property("pause", false);
     }
     pub fn toggle_pause(&self) {
@@ -236,4 +252,48 @@ impl Player {
             })
             .collect()
     }
+
+    /// Append to the queue (mpv playlist); starts playing if idle.
+    pub fn enqueue(&self, path: &str) {
+        let _ = self.mpv.command("loadfile", &[&quote(path), "append-play"]);
+    }
+    /// Queue entries: (filename, is_current).
+    pub fn queue(&self) -> Vec<(String, bool)> {
+        let n: i64 = self.mpv.get_property("playlist/count").unwrap_or(0);
+        (0..n)
+            .filter_map(|i| {
+                let f = self.get(&format!("playlist/{i}/filename"))?;
+                let cur = self.get(&format!("playlist/{i}/current")).as_deref() == Some("yes");
+                Some((f, cur))
+            })
+            .collect()
+    }
+    pub fn play_index(&self, i: i32) {
+        self.save_position();
+        let _ = self.mpv.command("playlist-play-index", &[&i.to_string()]);
+        let _ = self.mpv.set_property("pause", false);
+    }
+    pub fn remove_index(&self, i: i32) {
+        let _ = self.mpv.command("playlist-remove", &[&i.to_string()]);
+    }
+    /// Move entry `from` one step up (-1) or down (+1).
+    pub fn move_index(&self, from: i32, delta: i32) {
+        let n: i64 = self.mpv.get_property("playlist/count").unwrap_or(0);
+        let to = from + delta;
+        if to < 0 || to as i64 >= n {
+            return;
+        }
+        // mpv inserts before `to`; moving down needs +1.
+        let target = if delta > 0 { to + 1 } else { to };
+        let _ = self
+            .mpv
+            .command("playlist-move", &[&from.to_string(), &target.to_string()]);
+    }
+    pub fn clear_queue(&self) {
+        let _ = self.mpv.command("playlist-clear", &[]);
+    }
+}
+
+fn quote(path: &str) -> String {
+    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
 }
