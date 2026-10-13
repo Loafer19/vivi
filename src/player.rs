@@ -27,7 +27,9 @@ pub struct Player {
 impl Player {
     /// Creates mpv with `vo=libmpv` (we render through the render API) and starts the
     /// event thread. `wakeup` is called after each event is queued (e.g. to poke the UI).
-    pub fn new(wakeup: impl Fn() + Send + 'static) -> Result<(Self, Receiver<PlayerEvent>), libmpv2::Error> {
+    pub fn new(
+        wakeup: impl Fn() + Send + 'static,
+    ) -> Result<(Self, Receiver<PlayerEvent>), libmpv2::Error> {
         let mpv = Mpv::with_initializer(|init| {
             init.set_property("vo", "libmpv")?;
             init.set_property("hwdec", "auto-safe")?;
@@ -67,16 +69,26 @@ impl Player {
                         Some(Ok(Event::Shutdown)) => break,
                         Some(Ok(Event::FileLoaded)) => Some(PlayerEvent::FileLoaded),
                         Some(Ok(Event::EndFile(_))) => Some(PlayerEvent::EndFile),
-                        Some(Ok(Event::PropertyChange { name, change, .. })) => match (name, change) {
-                            ("time-pos", PropertyData::Double(v)) => Some(PlayerEvent::TimePos(v)),
-                            ("duration", PropertyData::Double(v)) => Some(PlayerEvent::Duration(v)),
-                            ("pause", PropertyData::Flag(v)) => Some(PlayerEvent::Pause(v)),
-                            ("volume", PropertyData::Double(v)) => Some(PlayerEvent::Volume(v)),
-                            ("mute", PropertyData::Flag(v)) => Some(PlayerEvent::Mute(v)),
-                            ("media-title", PropertyData::Str(v)) => Some(PlayerEvent::Title(v.to_owned())),
-                            ("track-list/count", PropertyData::Int64(v)) => Some(PlayerEvent::TrackCount(v)),
-                            _ => None,
-                        },
+                        Some(Ok(Event::PropertyChange { name, change, .. })) => {
+                            match (name, change) {
+                                ("time-pos", PropertyData::Double(v)) => {
+                                    Some(PlayerEvent::TimePos(v))
+                                }
+                                ("duration", PropertyData::Double(v)) => {
+                                    Some(PlayerEvent::Duration(v))
+                                }
+                                ("pause", PropertyData::Flag(v)) => Some(PlayerEvent::Pause(v)),
+                                ("volume", PropertyData::Double(v)) => Some(PlayerEvent::Volume(v)),
+                                ("mute", PropertyData::Flag(v)) => Some(PlayerEvent::Mute(v)),
+                                ("media-title", PropertyData::Str(v)) => {
+                                    Some(PlayerEvent::Title(v.to_owned()))
+                                }
+                                ("track-list/count", PropertyData::Int64(v)) => {
+                                    Some(PlayerEvent::TrackCount(v))
+                                }
+                                _ => None,
+                            }
+                        }
                         _ => None,
                     };
                     if let Some(m) = msg {
@@ -93,17 +105,23 @@ impl Player {
     }
 
     pub fn open(&self, path: &str) {
-        let _ = self.mpv.command("loadfile", &[&format!("\"{}\"", path.replace('"', "\\\""))]);
+        let _ = self
+            .mpv
+            .command("loadfile", &[&format!("\"{}\"", path.replace('"', "\\\""))]);
         let _ = self.mpv.set_property("pause", false);
     }
     pub fn toggle_pause(&self) {
         let _ = self.mpv.command("cycle", &["pause"]);
     }
     pub fn seek_abs(&self, secs: f64) {
-        let _ = self.mpv.command("seek", &[&format!("{secs:.3}"), "absolute"]);
+        let _ = self
+            .mpv
+            .command("seek", &[&format!("{secs:.3}"), "absolute"]);
     }
     pub fn seek_rel(&self, secs: f64) {
-        let _ = self.mpv.command("seek", &[&format!("{secs:.3}"), "relative"]);
+        let _ = self
+            .mpv
+            .command("seek", &[&format!("{secs:.3}"), "relative"]);
     }
     pub fn set_volume(&self, v: f64) {
         let _ = self.mpv.set_property("volume", v.clamp(0.0, 150.0));
@@ -115,6 +133,13 @@ impl Player {
         let _ = self.mpv.command("cycle", &["mute"]);
     }
     pub fn playlist_step(&self, next: bool) {
-        let _ = self.mpv.command(if next { "playlist-next" } else { "playlist-prev" }, &[]);
+        let _ = self.mpv.command(
+            if next {
+                "playlist-next"
+            } else {
+                "playlist-prev"
+            },
+            &[],
+        );
     }
 }

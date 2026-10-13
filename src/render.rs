@@ -28,56 +28,65 @@ pub fn attach(
     let weak = app.as_weak();
     let mut ctx: Option<RenderContext> = None;
     let mut on_ready = Some(on_ready);
-    app.window().set_rendering_notifier(move |state, api| match state {
-        RenderingState::RenderingSetup => {
-            let GraphicsAPI::NativeOpenGL { get_proc_address: gpa } = api else {
-                eprintln!("vivi: non-OpenGL renderer, video output unavailable");
-                return;
-            };
-            let gpa: ProcFn = gpa;
-            let ptr = &gpa as *const ProcFn as usize;
-            // SAFETY: mpv handle outlives the render context (Arc kept in closure).
-            let handle = unsafe { &mut *mpv.ctx.as_ptr() };
-            match RenderContext::new(
-                handle,
-                vec![
-                    RenderParam::ApiType(RenderParamApiType::OpenGl),
-                    RenderParam::InitParams(OpenGLInitParams { get_proc_address, ctx: ptr }),
-                ],
-            ) {
-                Ok(mut rc) => {
-                    let w = weak.clone();
-                    rc.set_update_callback(move || {
-                        let w = w.clone();
-                        let _ = slint::invoke_from_event_loop(move || {
-                            if let Some(a) = w.upgrade() {
-                                a.window().request_redraw();
-                            }
+    app.window()
+        .set_rendering_notifier(move |state, api| match state {
+            RenderingState::RenderingSetup => {
+                let GraphicsAPI::NativeOpenGL {
+                    get_proc_address: gpa,
+                } = api
+                else {
+                    eprintln!("vivi: non-OpenGL renderer, video output unavailable");
+                    return;
+                };
+                let gpa: ProcFn = gpa;
+                let ptr = &gpa as *const ProcFn as usize;
+                // SAFETY: mpv handle outlives the render context (Arc kept in closure).
+                let handle = unsafe { &mut *mpv.ctx.as_ptr() };
+                match RenderContext::new(
+                    handle,
+                    vec![
+                        RenderParam::ApiType(RenderParamApiType::OpenGl),
+                        RenderParam::InitParams(OpenGLInitParams {
+                            get_proc_address,
+                            ctx: ptr,
+                        }),
+                    ],
+                ) {
+                    Ok(mut rc) => {
+                        let w = weak.clone();
+                        rc.set_update_callback(move || {
+                            let w = w.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(a) = w.upgrade() {
+                                    a.window().request_redraw();
+                                }
+                            });
                         });
-                    });
-                    ctx = Some(rc);
-                    if let Some(f) = on_ready.take() {
-                        // Run after this callback returns (outside the GL setup).
-                        slint::Timer::single_shot(std::time::Duration::ZERO, f);
+                        ctx = Some(rc);
+                        if let Some(f) = on_ready.take() {
+                            // Run after this callback returns (outside the GL setup).
+                            slint::Timer::single_shot(std::time::Duration::ZERO, f);
+                        }
+                    }
+                    Err(e) => eprintln!("vivi: mpv render context failed: {e:?}"),
+                }
+            }
+            RenderingState::BeforeRendering => {
+                if let (Some(rc), Some(a)) = (&ctx, weak.upgrade().filter(|a| a.get_has_media())) {
+                    let size = a.window().size();
+                    if let Err(e) =
+                        rc.render::<usize>(0, size.width as i32, size.height as i32, true)
+                    {
+                        eprintln!("vivi: mpv render error: {e:?}");
                     }
                 }
-                Err(e) => eprintln!("vivi: mpv render context failed: {e:?}"),
             }
-        }
-        RenderingState::BeforeRendering => {
-            if let (Some(rc), Some(a)) = (&ctx, weak.upgrade()) {
-                let size = a.window().size();
-                if let Err(e) = rc.render::<usize>(0, size.width as i32, size.height as i32, true) {
-                    eprintln!("vivi: mpv render error: {e:?}");
-                }
+            RenderingState::AfterRendering => {
+                let _ = &ctx;
             }
-        }
-        RenderingState::AfterRendering => {
-            let _ = &ctx;
-        }
-        RenderingState::RenderingTeardown => {
-            ctx = None;
-        }
-        _ => {}
-    })
+            RenderingState::RenderingTeardown => {
+                ctx = None;
+            }
+            _ => {}
+        })
 }
