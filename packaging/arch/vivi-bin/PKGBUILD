@@ -1,0 +1,27 @@
+# Maintainer: Loafer19 <https://github.com/Loafer19>
+# Prebuilt binary from the GitHub release. The release workflow also attaches this file
+# with the version and checksum filled in (asset "PKGBUILD").
+pkgname=vivi-bin
+pkgver=0.7.0
+pkgrel=1
+pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
+arch=('x86_64')
+url="https://github.com/Loafer19/vivi"
+license=('MIT')
+depends=('mpv' 'sqlite' 'libxkbcommon' 'fontconfig' 'xdg-desktop-portal' 'hicolor-icon-theme')
+optdepends=('ffmpeg: library thumbnails and album covers'
+            'yt-dlp: YouTube and other sites in Open Network Stream')
+provides=('vivi')
+conflicts=('vivi')
+source=("vivi-v${pkgver}-linux-x86_64.tar.gz::${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "vivi-v${pkgver}-linux-x86_64"
+  install -Dm755 vivi "${pkgdir}/usr/bin/vivi"
+  install -Dm644 vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"
+  install -Dm644 vivi.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vivi.svg"
+  install -Dm644 vivi.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/vivi.png"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

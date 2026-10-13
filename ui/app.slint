@@ -127,6 +127,7 @@ component BarItem inherits HorizontalLayout {
 }
 
 export component AppWindow inherits Window {
+    icon: @image-url("../packaging/vivi.svg");
     title: root.has-media ? root.media-title + " — Vivi" : "Vivi";
     preferred-width: 1280px;
     preferred-height: 720px;

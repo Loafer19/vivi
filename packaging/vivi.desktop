@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Vivi
+GenericName=Media Player
+Comment=Fast, minimal media player built on mpv
+Exec=vivi %U
+Icon=vivi
+Terminal=false
+Categories=AudioVideo;Audio;Video;Player;
+Keywords=video;audio;player;mpv;movie;music;
+StartupWMClass=vivi
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;video/x-flv;video/3gpp;video/mp2t;audio/mpeg;audio/flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/mp4;audio/aac;audio/x-wav;audio/x-matroska;audio/x-mpegurl;application/x-mpegurl;application/vnd.apple.mpegurl;

@@ -1,0 +1,36 @@
+# Maintainer: Loafer19 <https://github.com/Loafer19>
+# Build from the tagged source release.
+pkgname=vivi
+pkgver=0.7.0
+pkgrel=1
+pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Loafer19/vivi"
+license=('MIT')
+depends=('mpv' 'sqlite' 'libxkbcommon' 'fontconfig' 'xdg-desktop-portal' 'hicolor-icon-theme')
+optdepends=('ffmpeg: library thumbnails and album covers'
+            'yt-dlp: YouTube and other sites in Open Network Stream')
+makedepends=('cargo')
+options=('!lto')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${pkgname}-${pkgver}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}-${pkgver}"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+package() {
+  cd "${pkgname}-${pkgver}"
+  install -Dm755 target/release/vivi "${pkgdir}/usr/bin/vivi"
+  install -Dm644 packaging/vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"
+  install -Dm644 packaging/vivi.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vivi.svg"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
