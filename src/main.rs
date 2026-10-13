@@ -21,6 +21,11 @@ use std::time::{Duration, Instant};
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // winit 0.30 has no Wayland drag & drop; VIVI_X11=1 runs under XWayland instead,
+    // where dropping files works (#5). Done before any thread or backend starts.
+    if std::env::var_os("VIVI_X11").is_some_and(|v| v != "0") {
+        std::env::remove_var("WAYLAND_DISPLAY");
+    }
     // Prefer winit + femtovg (OpenGL): works on Wayland (Hyprland) and X11.
     slint::BackendSelector::new()
         .backend_name("winit".into())

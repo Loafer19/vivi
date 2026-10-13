@@ -16,8 +16,11 @@ instant startup, a simple interface by default with deep customization when you 
   - audio output device, volume boost up to 150%, EQ presets
   - aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hwdec toggle
   - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
+- Miniplayer (`P`): compact always-on-top 391×339 window with an optional queue view
+- Seek-bar hover preview: frame thumbnails while hovering the seek bar (needs `ffmpeg`)
+- MPRIS2 (Linux): media keys, `playerctl`, Waybar/desktop widgets with title, artist and cover art
 - Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files
-- Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11)
+- Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11, Windows, macOS; on Wayland see below)
 - Settings (`Ctrl+,`) with search, Basic/Advanced mode and tooltips: dark/light theme, accent color, resume, default speed, hwdec, preferred audio/subtitle languages, volume cap, subtitle size, auto-load, privacy. Saved to `~/.config/vivi/config.toml`
 - Library: home screen (Continue watching, Pinned, Recently added, Recent), Video folders with breadcrumb, Music by songs/albums/artists/genres, playlists, search, sort, grid/list, right-click menu, thumbnails via ffmpeg
 - Open Network Stream (URLs, m3u; YouTube etc. via yt-dlp)
@@ -32,10 +35,42 @@ instant startup, a simple interface by default with deep customization when you 
 | <img src="docs/screenshots/settings.png" width="420"> | <img src="docs/screenshots/light.png" width="420"> |
 | **Library** | **Music** |
 | <img src="docs/screenshots/library-home.png" width="420"> | <img src="docs/screenshots/library-music.png" width="420"> |
+| **Miniplayer** | **Seek preview** |
+| <img src="docs/screenshots/miniplayer-queue.png" width="260"> | <img src="docs/screenshots/seek-preview.png" width="420"> |
 | **Customize player** | **Onboarding** |
 | <img src="docs/screenshots/customize.png" width="420"> | <img src="docs/screenshots/onboarding.png" width="420"> |
 
-## Install / build (Arch / Omarchy)
+## Install
+
+| Platform | Package |
+|---|---|
+| Arch / Omarchy | `packaging/arch/vivi-bin` (prebuilt) or `packaging/arch/vivi` (from source): `makepkg -si`. The release also ships a ready `PKGBUILD` with checksums. |
+| Any Linux | `Vivi-<version>-x86_64.AppImage` (libmpv bundled): `chmod +x` and run |
+| Linux tarball | `vivi-<version>-linux-x86_64.tar.gz` (needs system `mpv`) with `.desktop` file and icons |
+| Windows 10/11 | `vivi-<version>-windows-x86_64.zip` — unzip, run `vivi.exe` (`libmpv-2.dll` included) |
+| macOS (Apple Silicon, best effort) | `vivi-<version>-macos-arm64.zip` — unsigned `Vivi.app`; right-click → Open the first time |
+
+Downloads: [Releases](https://github.com/Loafer19/vivi/releases) (each with `SHA256SUMS`).
+
+### Set Vivi as the default player (Linux)
+`vivi.desktop` declares the common video/audio MIME types and is installed by the packages
+(for the tarball: copy it to `~/.local/share/applications/`). Then:
+```sh
+# all types listed in the desktop file
+grep '^MimeType=' /usr/share/applications/vivi.desktop | cut -d= -f2 | tr ';' '\n' \
+  | xargs -r xdg-mime default vivi.desktop
+# or a single type
+xdg-mime default vivi.desktop video/mp4
+xdg-mime query default video/x-matroska   # → vivi.desktop
+```
+
+### Drag & drop on Wayland
+winit (the windowing library under Slint) does not support drag & drop on Wayland yet.
+Until it does, run Vivi through XWayland when you want to drop files onto the window:
+`VIVI_X11=1 vivi` (or add `VIVI_X11=1` to the `Exec=` line of a copy of `vivi.desktop`).
+Opening files from the file manager, the command line or the library works natively.
+
+## Build from source (Arch / Omarchy)
 ```sh
 sudo pacman -S --needed mpv sqlite rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
 # optional: ffmpeg (library thumbnails), yt-dlp (YouTube & other sites)
@@ -44,10 +79,9 @@ cargo build --release
 ./target/release/vivi ~/Videos/film.mkv
 ```
 Debian/Ubuntu: `sudo apt install libmpv-dev libsqlite3-dev libxkbcommon-x11-0 libfontconfig1-dev`.
-Prebuilt Linux binaries: [Releases](https://github.com/Loafer19/vivi/releases) (requires system `mpv`/`libmpv`).
 
 Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv log),
-`WINIT_UNIX_BACKEND=x11` (force XWayland).
+`VIVI_X11=1` (force XWayland).
 
 ## Keyboard shortcuts
 | Key | Action |
@@ -57,10 +91,11 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | ↑ / ↓ | Volume ±5 |
 | F, double-click | Fullscreen |
 | M | Mute |
+| P | Miniplayer on / off |
 | Ctrl+O | Open file |
 | Ctrl+B | Add bookmark |
 | Ctrl+, | Settings |
-| Esc | Leave fullscreen / close settings |
+| Esc | Leave miniplayer / fullscreen, close settings |
 
 ## Architecture
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
@@ -75,7 +110,7 @@ Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones),
 - [x] M4 Queue / playlists / resume
 - [x] M5 Settings & customization
 - [x] M6 Library
-- [ ] M7 Packaging
+- [x] M7 Packaging & desktop integration (v0.7)
 
 ## License
 MIT — see [LICENSE](LICENSE). Icons come from the Figma community file "VLC Redesign" by Juxtopposed.
