@@ -177,6 +177,8 @@ export component SidePanel inherits Rectangle {
     callback playlist-save(string);
     callback playlist-load(string);
     callback playlist-delete(string);
+    in property <string> preset-name;
+    callback save-preset();
     callback seek-to(string);
     callback add-bookmark();
     in property <string> ab-state: "Off";
@@ -258,6 +260,9 @@ export component SidePanel inherits Rectangle {
                         value <=> root.sub-pos;
                         changed(v) => { root.set-prop("sub-pos", round(v)); }
                     }
+                    Section { text: "Show preset"; }
+                    Text { text: "Saves delays, subtitle size/position and track languages for “" + root.preset-name + "”. Applied automatically to other episodes."; color: Theme.fg-a3; wrap: word-wrap; font-size: 12px; }
+                    Button { text: "Save preset for this show"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.save-preset(); } }
                 }
                 // ---- Audio ----
                 if root.tab == 1: VerticalLayout {
