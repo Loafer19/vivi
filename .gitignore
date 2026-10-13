@@ -2,3 +2,4 @@
 *.mp4
 *.webm
 .DS_Store
+*.fig

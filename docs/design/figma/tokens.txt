@@ -1,0 +1,54 @@
+Dark/FG/A2 #8F8F8F 
+Dark/Accent/Main #D37918 
+Dark/BG/Accent Bright #371F06 
+Dark/BG/B1 #0E0E0E 
+Dark/BG/A4 #191919 
+Dark/BG/B2 #090909 
+Dark/BG/Accent Dark #1A1611 
+Dark/Accent/Logo #D37918 
+#D37918 #D37918 
+Dark/Accent/Bright #FC9729 
+Dark/FG/A3 #6B6B6B 
+Dark/Divider/Bright #373737 
+Dark/FG/B1 #161616 
+Dark/Divider/Dim #222222 
+Dark/FG/A1 #969696 
+Dark/BG/A1 #222222 
+Accent/Dim #955F24 
+Dark/Accent/DIm #AB6314 
+Dark/FG/A4 #404040 
+Dark/BG/A3 #1B1B1B 
+Dark/FG/1 #EAEAEA 
+Dark/BG/A5 #151515 
+Dark/BG/A3 Transparent #191919 a=0.95
+bg blur EFFECT
+Dark/BG/B1 Transparent #0E0E0E a=0.95
+bg blur + shadow EFFECT
+Dark/FG/2 #C6C6C6 
+Dark/BG/A2 #1F1F1F 
+Draggable #6B6B6B 
+Light/FG/1 #EAEAEA 
+Light/FG/2 #C6C6C6 
+Light/FG/A1 #3C3C3C 
+Light/FG/A2 #2E2E2E 
+Light/FG/A3 #6B6B6B 
+Light/FG/A4 #3B3B3B 
+Light/FG/B1 #161616 
+Light/Accent/Main #E8851A 
+Light/Accent/Bright #FFA13B 
+Light/Accent/Logo #C2711A 
+Light/Accent/DIm #965916 
+Light/BG/Accent Bright #D8BA9A 
+Light/BG/Accent Dark #C6AB89 
+Light/BG/A1 #EDEDED 
+Light/BG/A2 #DDDDDD 
+Light/BG/A3 #D5D5D5 
+Light/BG/A4 #B3B3B3 
+Light/BG/A5 #888888 
+Light/BG/B1 #E7E7E7 
+Light/BG/B2 #DEDEDE 
+Light/BG/A3 Transparent #D5D5D5 a=0.75
+Light/BG/B1 Transparent #E7E7E7 a=0.80
+Light/Divider/Bright #9B9B9B 
+Light/Divider/Dim #ACACAC 
+Dark/BG/B2 Transparent #000000 a=0.80

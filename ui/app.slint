@@ -1,10 +1,31 @@
 import { Button, Slider } from "std-widgets.slint";
 
+// Design tokens from Figma "VLC Redesign" (Dark theme)
+export global Theme {
+    out property <color> accent: #D37918;
+    out property <color> accent-bright: #FC9729;
+    out property <color> accent-dim: #AB6314;
+    out property <color> bg-a1: #222222;
+    out property <color> bg-a3: #1B1B1B;
+    out property <color> bg-b1: #0E0E0E;
+    out property <color> bg-b2: #090909;
+    out property <color> fg-1: #EAEAEA;
+    out property <color> fg-2: #C6C6C6;
+    out property <color> fg-a1: #969696;
+    out property <color> fg-a3: #6B6B6B;
+    out property <color> divider: #373737;
+    out property <length> radius: 4px;
+    out property <length> radius-lg: 6px;
+    out property <length> gap: 10px;
+}
+
 export component AppWindow inherits Window {
     title: "Vivi";
     preferred-width: 1280px;
     preferred-height: 720px;
-    background: #111111;
+    background: #0E0E0E; // Figma Dark/BG/B1
+    default-font-family: "Inter";
+    default-font-size: 14px;
     in-out property <bool> playing: false;
     in-out property <float> position: 0;
     callback toggle-play();
@@ -14,12 +35,12 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             height: 36px; padding: 6px; spacing: 8px;
             Button { text: "☰"; }
-            Text { text: "Vivi — no media"; color: #dddddd; vertical-alignment: center; }
+            Text { text: "Vivi — no media"; color: #EAEAEA; vertical-alignment: center; }
         }
         // Video surface placeholder
         Rectangle {
-            background: #000000;
-            Text { text: "Drop media here"; color: #666666; }
+            background: Theme.bg-b2;
+            Text { text: "Drop media here"; color: #6B6B6B; }
         }
         // Thick seek bar
         Slider { minimum: 0; maximum: 100; value <=> position; height: 14px; }

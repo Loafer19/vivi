@@ -48,8 +48,17 @@
 Кадри з відео: `docs/design/`.
 
 ### Figma
-Сторінка community-файлу «VLC Redesign» повертає 403 для автоматичних запитів (CloudFront),
-тож метадані/мініатюри отримати не вдалося — відкрити вручну в браузері.
+Локальну копію `.fig` розпарсено (деталі — `docs/design/FIGMA.md`, картинки — `docs/design/figma/`).
+- **Екрани:** Player (dark/light/music/hide UI), Player – customize + Profiles, Miniplayer, sidebar,
+  панелі Audio (EQ, Compressor, Spatializer, Stereo Widener) і Video (Essential, Crop, Colors),
+  13 екранів Settings, Keyboard Shortcuts, Add Subtitles, Open network stream, New playlist,
+  Onboarding (11 кроків), контекстні меню, сортування/вигляд.
+- **Кольори (dark):** акцент `#D37918` (bright `#FC9729`, dim `#AB6314`), фон `#222222`→`#151515`,
+  глибокий фон `#0E0E0E`/`#090909`, текст `#EAEAEA`/`#C6C6C6`, вторинний `#969696`/`#6B6B6B`,
+  роздільники `#373737`/`#222222`. Є повна світла тема (акцент `#E8851A`).
+- **Шрифти:** Inter 14 (основний), 12/16, Semi Bold для заголовків; DM Mono 14 для часу.
+- **Відступи/радіуси:** gap 10 (також 8/5/16/20); радіуси 4 і 6, pill 100.
+- Рендер фреймів у PNG не зроблено (немає відкритого рендерера .fig) — лише thumbnail.
 
 ## Craft — знахідки
 «Craft» у Rust-екосистемі — це **craft-gui** ([github.com/craft-gui/craft](https://github.com/craft-gui/craft),
@@ -58,6 +67,22 @@ craft3, crate `craft_gui` 0.1.x, craftgui.com): експериментальни
 Windows/Linux/macOS, базово Web/Android). Відео та SVG поки не підтримуються, документації мало.
 **Висновок:** цікаво як референс, але для плеєра обираємо Slint (стабільний, малий рантайм, є
 інтеграція з OpenGL/wgpu для відеоповерхні). Craft (додаток для документів Craft.do) — не Rust-порт.
+
+## Crafting Apps (storytold: PhotoCraft, ArtCraft)
+- **PhotoCraft** — «чистий» Rust-редактор (клон Photoshop, early alpha): 24+ крейти workspace
+  (engine/doc/compose/gpu/codecs/psd/…), UI на **egui/eframe 0.36 + wgpu**, тонкий UI над
+  командним рушієм, CPU-композитор як еталон + wgpu-композитор, WASM-збірка (ліміт 24 MiB),
+  perf-бюджети (`perf/budgets.toml`, `cargo xtask perf`), release: `lto = "thin"`, `codegen-units = 1`.
+- **craft-libs** — спільні крейти: `craft-ui` (іконки SVG, кнопки, вкладки, докінг, теми для egui),
+  `craft-settings` (config.toml, атомарне збереження, міграції), `craft-atomic`, `craft-quit`, `craft-cms`.
+- **FilmCraft** (той самий набір) — відеоредактор із власними pure-Rust декодерами/контейнерами
+  (h264, hevc, av1, aac, ac3, flac, matroska, isobmff, mpegts, mxf…) + symphonia, egui + wgpu.
+- **ArtCraft** — інший стек: **Tauri** + React/Vite/Tailwind/three.js фронтенд, Rust-бекенд з
+  клієнтами AI-API. Для легкого плеєра не підходить (webview).
+- **Висновок для Vivi:** лишаємо Slint + libmpv (зріле декодування всіх форматів). Запозичити:
+  структуру workspace «рушій окремо від UI», perf-бюджети/xtask, підхід `craft-settings`
+  (TOML, атомарні записи, міграції). Альтернатива UI — egui + `craft-ui`. Pure-Rust декодери
+  FilmCraft — цікаві на майбутнє, але не замінять mpv за покриттям форматів.
 
 ## Прогрес
 ### Тиждень 1 — каркас
