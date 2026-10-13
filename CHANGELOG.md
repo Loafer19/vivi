@@ -11,9 +11,12 @@ Milestone M7: packaging and desktop integration.
 - **MPRIS2** (#31, Linux): media keys, `playerctl`, and Waybar or desktop widgets work. Supported: play/pause/stop, next/previous, seek and position, volume, plus metadata (title, artist, album, length, cover art).
 - **Seek-bar hover preview** (#10): hovering the seek bar shows a video frame above the time. Frames are keyframes extracted in the background with `ffmpeg` (optional). Turning off thumbnails in Settings → Library also turns this off.
 - **Miniplayer** (#32), following the Figma "Miniplayer" frame: a compact 391×339 always-on-top window with the title, seek bar and transport controls. An optional queue view grows it to 391×690. Toggle it with `P` or the new top-bar button; `Esc` goes back to the full player at its previous size.
+- **Responsive layout** (#33): the window can shrink to 480×320. Bottom-bar buttons that do not fit move into a “⋯” overflow menu, and the volume slider collapses below 900 px. The side panel overlays the video, and below 800 px it takes the full width. The library grid picks its column count from the width, falls back to a list when very narrow, and the library sidebar becomes an icon rail below 700 px. Below 760 px, Settings replaces its category sidebar with a dropdown. Onboarding and other dialogs scale down.
+- **Resizable miniplayer** (#33): it can shrink to 280×160, and its size and position are remembered (`interface.mini_window`). mpv letterboxes the video, so the aspect ratio is kept. When the window is small, the queue and secondary controls are hidden; at tiny sizes only the video shows, with play/pause and a progress line on hover.
 - **Drag & drop on Wayland** (#5): winit does not support Wayland drag & drop yet. `VIVI_X11=1` runs Vivi through XWayland, where dropping files works. The README documents this.
 
 ### Fixed
+- **Top-bar buttons did not respond to clicks** (seen on Hyprland since v0.5.0). The invisible hover strip that reveals the top bar was declared after the bar, so it sat on top of it in z-order and caught every click. It now sits underneath the bar.
 - Video turned black after library thumbnails or other images had been drawn: GL state is now reset before mpv renders each frame.
 - Home directory and path separators now work on Windows. SQLite is bundled on Windows and macOS.
 

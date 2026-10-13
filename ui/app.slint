@@ -398,6 +398,9 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Top bar (title) ----------
+    // Hover strip that reveals the bar. It must sit *below* the bar in z-order (declared
+    // first); declared after it, it swallowed every click on the top-bar buttons.
+    top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
     if !root.mini && (root.show-ui || top-ta.has-hover): Rectangle {
         y: 0; height: 40px;
         background: root.has-media ? Theme.bar : Theme.bg-a4;
@@ -416,8 +419,6 @@ export component AppWindow inherits Window {
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
     }
-
-    top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
 
     // ---------- Side panel ----------
     if !root.mini && root.has-media && root.panel-open: SidePanel {
