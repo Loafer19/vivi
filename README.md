@@ -19,6 +19,8 @@ instant startup, a simple interface by default with deep customization when you 
 - Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files
 - Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11)
 - Settings (`Ctrl+,`) with search, Basic/Advanced mode and tooltips: dark/light theme, accent color, resume, default speed, hwdec, preferred audio/subtitle languages, volume cap, subtitle size, auto-load, privacy. Saved to `~/.config/vivi/config.toml`
+- Library: home screen (Continue watching, Pinned, Recently added, Recent), Video folders with breadcrumb, Music by songs/albums/artists/genres, playlists, search, sort, grid/list, right-click menu, thumbnails via ffmpeg
+- Open Network Stream (URLs, m3u; YouTube etc. via yt-dlp)
 - Customizable bottom bar (16 items, re-order/remove/add) with Minimal / Default / Power profiles
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
@@ -28,17 +30,20 @@ instant startup, a simple interface by default with deep customization when you 
 | <img src="docs/screenshots/queue.png" width="420"> | <img src="docs/screenshots/empty.png" width="420"> |
 | **Settings** | **Light theme** |
 | <img src="docs/screenshots/settings.png" width="420"> | <img src="docs/screenshots/light.png" width="420"> |
+| **Library** | **Music** |
+| <img src="docs/screenshots/library-home.png" width="420"> | <img src="docs/screenshots/library-music.png" width="420"> |
 | **Customize player** | **Onboarding** |
 | <img src="docs/screenshots/customize.png" width="420"> | <img src="docs/screenshots/onboarding.png" width="420"> |
 
 ## Install / build (Arch / Omarchy)
 ```sh
-sudo pacman -S --needed mpv rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
+sudo pacman -S --needed mpv sqlite rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
+# optional: ffmpeg (library thumbnails), yt-dlp (YouTube & other sites)
 git clone https://github.com/Loafer19/vivi && cd vivi
 cargo build --release
 ./target/release/vivi ~/Videos/film.mkv
 ```
-Debian/Ubuntu: `sudo apt install libmpv-dev libxkbcommon-x11-0 libfontconfig1-dev`.
+Debian/Ubuntu: `sudo apt install libmpv-dev libsqlite3-dev libxkbcommon-x11-0 libfontconfig1-dev`.
 Prebuilt Linux binaries: [Releases](https://github.com/Loafer19/vivi/releases) (requires system `mpv`/`libmpv`).
 
 Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv log),
@@ -69,7 +74,7 @@ Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones),
 - [x] M3 Side panel & tracks
 - [x] M4 Queue / playlists / resume
 - [x] M5 Settings & customization
-- [ ] M6 Library
+- [x] M6 Library
 - [ ] M7 Packaging
 
 ## License

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0] - 2026-10-14
+
+Milestone M6: Library.
+
+### Added
+- **Library home screen** (#26): Continue watching (from mpv resume positions, with progress bars), Pinned items, Recently added and Recent. It replaces the old empty state and opens over playback with the new Home button in the top bar.
+- **Sections** (#24): Video (folder browsing with a breadcrumb), Music (Songs, Albums, Artists, Genres from file tags), Playlists (saved `.m3u` files).
+- **Search, sorting and views:** search the whole library or the current section; sort by name (natural order, so “Ep 2” comes before “Ep 10”), date, size or watched progress; grid or list view. The sort and view choices are saved.
+- **Context menu** (right-click): Play/Open, Add to queue, Pin to Home / Unpin, Remove from Continue watching.
+- **Open Network Stream** (#25): plays http(s), HLS/DASH, `.m3u` playlists, rtsp/rtmp/udp URLs. YouTube and other sites work when `yt-dlp` is installed (the dialog says whether it is).
+- **Library folders** in Settings → Library: add folders (folder picker), remove them, rescan; in Advanced, turn thumbnails on/off and clear the thumbnail cache. Defaults to `~/Videos` and `~/Music` if they exist.
+- **Background scanning:** `walkdir` scan into a SQLite cache (`~/.cache/vivi/library.db`). Only new or changed files are re-read; tags and durations come from `lofty`.
+- **Lazy thumbnails:** a worker thread renders video frames and album covers with the `ffmpeg` CLI (optional) into `~/.cache/vivi/thumbs`. No image decoders are linked into the binary.
+- **Compact library** tab in the side panel: search, click to play, `+` to add to the queue.
+- Playing a song from a list queues the songs after it.
+
+### Changed
+- Build now links the system SQLite (`sqlite` on Arch, `libsqlite3-dev` on Debian/Ubuntu). The release binary grew by about 1.5 MB in total.
+
 ## [0.5.0] - 2026-10-14
 
 Milestone M5 complete: customization and onboarding.
