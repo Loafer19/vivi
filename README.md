@@ -18,10 +18,14 @@ instant startup, a simple interface by default with deep customization when you 
   - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
 - Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files
 - Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11)
+- Settings (`Ctrl+,`) with search, Basic/Advanced mode and tooltips: dark/light theme, accent color, resume, default speed, hwdec, preferred audio/subtitle languages, volume cap, subtitle size, auto-load, privacy. Saved to `~/.config/vivi/config.toml`
+- Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
 | Side panel | Empty state |
 |---|---|
 | <img src="docs/screenshots/queue.png" width="420"> | <img src="docs/screenshots/empty.png" width="420"> |
+| **Settings** | **Light theme** |
+| <img src="docs/screenshots/settings.png" width="420"> | <img src="docs/screenshots/light.png" width="420"> |
 
 ## Install / build (Arch / Omarchy)
 ```sh
@@ -46,7 +50,8 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | M | Mute |
 | Ctrl+O | Open file |
 | Ctrl+B | Add bookmark |
-| Esc | Leave fullscreen |
+| Ctrl+, | Settings |
+| Esc | Leave fullscreen / close settings |
 
 ## Architecture
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
@@ -59,7 +64,7 @@ Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones),
 - [x] M2 Figma UI & icons
 - [x] M3 Side panel & tracks
 - [x] M4 Queue / playlists / resume
-- [ ] M5 Settings
+- [ ] M5 Settings (settings, shortcuts and presets done in 0.4.0; toolbar customization and onboarding pending)
 - [ ] M6 Library
 - [ ] M7 Packaging
 
