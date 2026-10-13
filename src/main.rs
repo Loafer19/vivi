@@ -409,7 +409,8 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         app.set_panel_tab(t.parse().unwrap_or(0));
         app.set_panel_open(true);
     }
-    if std::env::var_os("VIVI_SELFTEST").is_some() {
+    // Scripted self-test, debug builds only.
+    if cfg!(debug_assertions) && std::env::var_os("VIVI_SELFTEST").is_some() {
         let weak = app.as_weak();
         let t = Box::leak(Box::new(slint::Timer::default()));
         let step = Cell::new(0);
