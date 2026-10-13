@@ -7,7 +7,8 @@ import { SidePanel, Item } from "panel.slint";
 import { SettingsDialog, SettingRow } from "settings.slint";
 import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
-export { Item, SettingRow, Theme }
+import { LibraryView, LibItem, NetworkDialog } from "library.slint";
+export { Item, SettingRow, Theme, LibItem }
 
 component IconButton inherits Rectangle {
     in property <image> icon;
@@ -235,6 +236,34 @@ export component AppWindow inherits Window {
             || (id == "settings" && root.settings-open);
     }
 
+    // Library
+    in-out property <bool> library-open;
+    in-out property <bool> network-open;
+    in property <[LibItem]> lib-items;
+    in property <[LibItem]> lib-continue;
+    in property <[LibItem]> lib-recent;
+    in property <[LibItem]> lib-pinned;
+    in property <string> lib-nav: "home";
+    in property <[string]> lib-crumb-keys;
+    in property <[string]> lib-crumb-labels;
+    in property <string> lib-sort: "name";
+    in property <bool> lib-grid: true;
+    in property <int> lib-count;
+    in property <bool> lib-scanning;
+    in property <bool> ytdlp;
+    in-out property <string> lib-query;
+    in property <[Item]> panel-lib;
+    callback lib-refresh();
+    callback lib-rescan();
+    callback lib-navigate(string);
+    callback lib-search(string);
+    callback lib-set-sort(string);
+    callback lib-set-grid(bool);
+    callback lib-open(string, string);
+    callback lib-menu(string, string, string);
+    callback open-url(string);
+    callback panel-lib-search(string);
+
     // Onboarding
     in-out property <bool> onboarding-open;
     in-out property <int> onboarding-step;
@@ -297,56 +326,22 @@ export component AppWindow inherits Window {
         double-clicked => { root.toggle-fullscreen(); }
     }
 
-    // ---------- Empty state ----------
-    if !root.has-media: VerticalLayout {
-        alignment: center; spacing: 18px;
-        HorizontalLayout { alignment: center;
-            Image { source: @image-url("../assets/icons/vlc.svg"); width: 72px; height: 72px; }
-        }
-        Text { text: "Vivi"; color: Theme.fg-1; font-size: 32px; font-weight: 300; horizontal-alignment: center; }
-        HorizontalLayout { alignment: center;
-            Rectangle {
-                width: 160px; height: 36px; border-radius: Theme.radius-lg;
-                background: open-ta.has-hover ? Theme.accent-bright : Theme.accent;
-                HorizontalLayout {
-                    alignment: center; spacing: 8px; padding-top: 6px; padding-bottom: 6px;
-                    Icon { source: @image-url("../assets/icons/open.svg"); tint: Theme.bg-b2; width: 20px; height: 24px; }
-                    Text { text: "Open file"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; }
-                }
-                open-ta := TouchArea { mouse-cursor: pointer; clicked => { root.open-file(); } }
-            }
-        }
-        Text { text: "or drop a file here · Ctrl+O"; color: Theme.fg-a3; horizontal-alignment: center; }
-        HorizontalLayout { alignment: center;
-            Rectangle {
-                width: 460px; height: rl.preferred-height;
-                border-radius: Theme.radius-lg;
-                background: Theme.bg-a4;
-                border-width: 1px; border-color: Theme.bg-a1;
-                rl := VerticalLayout {
-                    padding: 12px; spacing: 4px;
-                    HorizontalLayout { spacing: 8px;
-                        Icon { source: @image-url("../assets/icons/recent.svg"); width: 18px; height: 18px; tint: Theme.fg-a2; }
-                        Text { text: "Recent"; color: Theme.fg-2; font-weight: 600; horizontal-stretch: 1; }
-                        if root.recent.length > 0: Text {
-                            text: "Clear"; color: cta.has-hover ? Theme.accent-bright : Theme.fg-a3; font-size: 12px;
-                            cta := TouchArea { mouse-cursor: pointer; clicked => { root.clear-recent(); } }
-                        }
-                    }
-                    if root.recent.length == 0: Text { text: "Nothing here yet — recently played files will appear here."; color: Theme.fg-a3; wrap: word-wrap; }
-                    for r in root.recent: Rectangle {
-                        height: 30px; border-radius: Theme.radius;
-                        background: rta.has-hover ? Theme.bg-a1 : transparent;
-                        rta := TouchArea { mouse-cursor: pointer; clicked => { root.open-recent(r.key); } }
-                        HorizontalLayout {
-                            padding-left: 8px; padding-right: 8px; spacing: 8px;
-                            Icon { source: @image-url("../assets/icons/videos.svg"); width: 16px; height: 30px; tint: Theme.fg-a3; }
-                            Text { text: r.label; color: Theme.fg-2; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                        }
-                    }
-                }
-            }
-        }
+    // ---------- Library (home screen when idle; overlay via the Home button) ----------
+    if !root.has-media || root.library-open: LibraryView {
+        y: 40px; height: root.height - 40px;
+        items: root.lib-items; continue-items: root.lib-continue; recent-items: root.lib-recent; pinned-items: root.lib-pinned;
+        nav: root.lib-nav; crumb-keys: root.lib-crumb-keys; crumb-labels: root.lib-crumb-labels;
+        sort: root.lib-sort; grid: root.lib-grid; count: root.lib-count; scanning: root.lib-scanning; has-media: root.has-media;
+        query <=> root.lib-query;
+        navigate(k) => { root.lib-query = ""; root.lib-navigate(k); }
+        search(q) => { root.lib-search(q); }
+        set-sort(s) => { root.lib-set-sort(s); }
+        set-grid(g) => { root.lib-set-grid(g); }
+        open(k, kind) => { root.lib-open(k, kind); }
+        menu(k, kind, a) => { root.lib-menu(k, kind, a); }
+        open-file() => { root.open-file(); }
+        open-network() => { root.network-open = true; }
+        clear-recent() => { root.clear-recent(); }
     }
 
     // ---------- Top bar (title) ----------
@@ -355,7 +350,8 @@ export component AppWindow inherits Window {
         background: root.has-media ? Theme.bar : Theme.bg-a4;
         HorizontalLayout {
             padding: 6px; spacing: Theme.gap;
-            IconButton { icon: @image-url("../assets/icons/more.svg"); tip: "Menu"; clicked => { root.open-file(); } }
+            IconButton { icon: @image-url("../assets/icons/open.svg"); tip: "Open file"; clicked => { root.open-file(); } }
+            if root.has-media: IconButton { icon: @image-url("../assets/icons/home.svg"); active: root.library-open; clicked => { root.library-open = !root.library-open; } }
             Text {
                 horizontal-stretch: 1;
                 text: root.has-media ? root.media-title : "Vivi Media Player";
@@ -394,6 +390,10 @@ export component AppWindow inherits Window {
         playlist-load(k) => { root.playlist-load(k); }
         playlist-delete(k) => { root.playlist-delete(k); }
         preset-name: root.preset-name;
+        library: root.panel-lib;
+        library-search(q) => { root.panel-lib-search(q); }
+        library-play(k) => { root.lib-open(k, "video"); }
+        library-enqueue(k) => { root.lib-menu(k, "video", "enqueue"); }
         sub-delay <=> root.pv-sub-delay;
         sub-scale <=> root.pv-sub-scale;
         sub-pos <=> root.pv-sub-pos;
@@ -484,6 +484,14 @@ export component AppWindow inherits Window {
                 }
             }
         }
+    }
+
+    // ---------- Network stream ----------
+    if root.network-open: NetworkDialog {
+        width: root.width; height: root.height;
+        ytdlp: root.ytdlp;
+        open(u) => { root.open-url(u); fs.focus(); }
+        close() => { root.network-open = false; fs.focus(); }
     }
 
     // ---------- Settings dialog ----------

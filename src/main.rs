@@ -1,4 +1,6 @@
 mod config;
+mod library;
+mod libview;
 mod player;
 mod render;
 mod settings;
@@ -34,6 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let player = Rc::new(player);
     let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
     settings::setup(&app, &player, cfg.clone(), log);
+    libview::setup(&app, &player, cfg.clone(), log);
     if cfg!(debug_assertions) {
         debug_ui(&app);
     }
@@ -66,6 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             a.set_has_media(true);
                             refresh_lists(&a, &player, log);
                             on_file_loaded(&a, &player, log);
+                            a.set_library_open(false);
+                            a.invoke_lib_refresh();
                             let c = cfg.borrow();
                             let key = settings::apply_preset(&player, &c, log);
                             settings::sync_panel(&a, &player);
@@ -480,7 +485,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
 
 /// Debug builds only: open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
-/// VIVI_ONBOARDING=<step>.
+/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY.
 fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
     if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
@@ -494,6 +499,28 @@ fn debug_ui(app: &AppWindow) {
     }
     if let Some(p) = var("VIVI_CUSTOMIZE") {
         app.invoke_customize_profile(p.into());
+    }
+    if let Some(n) = var("VIVI_LIB") {
+        app.invoke_lib_navigate(n.into());
+    }
+    if let Some(q) = var("VIVI_LIBQ") {
+        app.set_lib_query(q.clone().into());
+        app.invoke_lib_search(q.into());
+    }
+    if let Some(u) = var("VIVI_URL") {
+        // After the render context exists (files must not load before it).
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(1500), move || {
+            if let Some(a) = w.upgrade() {
+                a.invoke_open_url(u.into());
+            }
+        });
+    }
+    if var("VIVI_NETWORK").is_some() {
+        app.set_network_open(true);
+    }
+    if var("VIVI_LIBRARY").is_some() {
+        app.set_library_open(true);
     }
     if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
         app.set_onboarding_step(n);

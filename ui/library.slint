@@ -1,0 +1,329 @@
+// Library per Figma library frames, "Sorting / View Options" and context menus.
+import { ScrollView, LineEdit } from "std-widgets.slint";
+import { Theme, Icon } from "theme.slint";
+
+export struct LibItem {
+    key: string,
+    title: string,
+    subtitle: string,
+    // "video" | "audio" | "folder" | "group" | "playlist"
+    kind: string,
+    thumb: image,
+    has-thumb: bool,
+    progress: float,
+    pinned: bool,
+    // Media path whose thumbnail this item shows (groups use their first song).
+    thumb-key: string,
+}
+
+global KindIcon {
+    public pure function of(kind: string) -> image {
+        if kind == "folder" { return @image-url("../assets/icons/folder.svg"); }
+        if kind == "audio" { return @image-url("../assets/icons/music.svg"); }
+        if kind == "group" { return @image-url("../assets/icons/album.svg"); }
+        if kind == "playlist" { return @image-url("../assets/icons/playlist.svg"); }
+        return @image-url("../assets/icons/video.svg");
+    }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> active;
+    in property <int> indent: 0;
+    callback clicked();
+    height: 34px; border-radius: Theme.radius-lg;
+    background: active ? Theme.accent-bg : (ta.has-hover ? Theme.bg-a1 : transparent);
+    HorizontalLayout {
+        padding-left: 10px + root.indent * 18px; spacing: 10px;
+        if root.indent == 0: Icon { y: 7px; source: root.icon; width: 20px; height: 20px; tint: root.active ? Theme.accent-bright : Theme.fg-2; }
+        Text { text: root.text; color: root.active ? Theme.accent-bright : Theme.fg-2; vertical-alignment: center; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    callback clicked();
+    height: 28px; width: t.preferred-width + 20px; border-radius: Theme.radius-lg;
+    background: selected ? Theme.accent : (ta.has-hover ? Theme.divider : Theme.bg-a1);
+    t := Text { text: root.text; font-size: 13px; color: selected ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Grid tile / list row. Right-click opens the context menu.
+component Tile inherits Rectangle {
+    in property <LibItem> it;
+    in property <bool> grid: true;
+    callback open();
+    callback menu(length, length);
+    border-radius: Theme.radius-lg;
+    background: ta.has-hover ? Theme.bg-a1 : transparent;
+    property <length> tw: grid ? self.width - 12px : 96px;
+    property <length> th: grid ? (self.width - 12px) * 9 / 16 : 54px;
+    thumb := Rectangle {
+        x: 6px; y: 6px; width: root.tw; height: root.th;
+        border-radius: Theme.radius-lg; clip: true;
+        background: Theme.bg-a3;
+        if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: cover; }
+        if !root.it.has-thumb: Icon { source: KindIcon.of(root.it.kind); width: root.grid ? 40px : 24px; height: self.width; tint: Theme.fg-a3; }
+        if root.it.progress > 0: Rectangle {
+            y: parent.height - 4px; height: 4px; background: #00000080;
+            Rectangle { x: 0; width: parent.width * root.it.progress; background: Theme.accent; }
+        }
+        if root.it.pinned: Rectangle {
+            x: 6px; y: 6px; width: 22px; height: 22px; border-radius: 11px; background: #000000A0;
+            Icon { source: @image-url("../assets/icons/favorite-active.svg"); width: 14px; height: 14px; tint: Theme.accent-bright; }
+        }
+    }
+    Text {
+        x: grid ? 8px : root.tw + 20px; y: grid ? root.th + 12px : 12px;
+        width: grid ? root.width - 16px : root.width - root.tw - 30px;
+        text: root.it.title; color: Theme.fg-1; overflow: elide; font-size: 14px;
+    }
+    Text {
+        x: grid ? 8px : root.tw + 20px; y: grid ? root.th + 32px : 34px;
+        width: grid ? root.width - 16px : root.width - root.tw - 30px;
+        text: root.it.subtitle; color: Theme.fg-a1; overflow: elide; font-size: 12px;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.open(); }
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) {
+                root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+            }
+        }
+    }
+}
+
+component Grid inherits Rectangle {
+    in property <[LibItem]> items;
+    in property <bool> grid: true;
+    in property <int> max-rows: 0; // 0 = unlimited
+    callback open(LibItem);
+    callback menu(LibItem, length, length);
+    property <int> cols: grid ? max(1, floor(self.width / 210px)) : 1;
+    property <length> cw: self.width / cols;
+    property <length> ch: grid ? (cw - 12px) * 9 / 16 + 62px : 66px;
+    property <int> shown: max-rows > 0 ? min(items.length, max-rows * cols) : items.length;
+    height: ceil(shown / cols) * ch;
+    for it[i] in root.items: Tile {
+        visible: i < root.shown;
+        x: mod(i, root.cols) * root.cw; y: floor(i / root.cols) * root.ch;
+        width: root.cw - 6px; height: root.ch - 6px;
+        it: it; grid: root.grid;
+        open => { root.open(it); }
+        menu(x, y) => { root.menu(it, x, y); }
+    }
+}
+
+component SectionTitle inherits Text {
+    color: Theme.fg-1; font-size: 18px; font-weight: 600;
+}
+
+export component NetworkDialog inherits Rectangle {
+    in property <bool> ytdlp;
+    callback open(string);
+    callback close();
+    background: #00000080;
+    TouchArea { clicked => { root.close(); } }
+    Rectangle {
+        width: min(560px, root.width - 48px); height: col.preferred-height;
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
+        TouchArea { }
+        col := VerticalLayout {
+            padding: 22px; spacing: 12px;
+            Text { text: "Open Network Stream"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
+            Text {
+                text: "Enter a URL: http(s), HLS/DASH, an .m3u playlist, rtsp, rtmp, udp…" + (root.ytdlp ? " YouTube and other sites work through yt-dlp." : " Install yt-dlp to play YouTube and other sites.");
+                color: Theme.fg-a1; wrap: word-wrap;
+            }
+            url := LineEdit { placeholder-text: "https://…"; accepted(t) => { root.open(t); } }
+            HorizontalLayout {
+                spacing: 10px; alignment: end;
+                Rectangle {
+                    width: 90px; height: 36px; border-radius: Theme.radius-lg; background: ca.has-hover ? Theme.divider : Theme.bg-a1;
+                    Text { text: "Cancel"; color: Theme.fg-1; }
+                    ca := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                }
+                Rectangle {
+                    width: 90px; height: 36px; border-radius: Theme.radius-lg; background: pa.has-hover ? Theme.accent-bright : Theme.accent;
+                    Text { text: "Play"; color: Theme.bg-b2; font-weight: 600; }
+                    pa := TouchArea { mouse-cursor: pointer; clicked => { root.open(url.text); } }
+                }
+            }
+        }
+    }
+    init => { url.focus(); }
+}
+
+export component LibraryView inherits Rectangle {
+    in property <[LibItem]> items;
+    in property <[LibItem]> continue-items;
+    in property <[LibItem]> recent-items;
+    in property <[LibItem]> pinned-items;
+    in property <string> nav: "home";
+    in property <[string]> crumb-keys;
+    in property <[string]> crumb-labels;
+    in property <string> sort: "name";
+    in property <bool> grid: true;
+    in property <int> count;
+    in property <bool> scanning;
+    in property <bool> has-media;
+    callback navigate(string);
+    callback search(string);
+    callback set-sort(string);
+    callback set-grid(bool);
+    callback open(string, string);
+    callback menu(string, string, string);
+    callback open-file();
+    callback open-network();
+    callback clear-recent();
+
+    property <bool> music-sub: crumb-keys.length > 0 && crumb-keys[0] == "music:songs";
+    property <bool> is-video: crumb-keys.length > 0 && crumb-keys[0] == "video";
+    // context menu
+    property <bool> menu-open;
+    property <LibItem> menu-it;
+    property <length> menu-x;
+    property <length> menu-y;
+    in-out property <string> query;
+
+    background: Theme.bg-b1;
+    TouchArea { }
+
+    HorizontalLayout {
+        // Sidebar
+        Rectangle {
+            width: 220px; background: Theme.bg-a4;
+            VerticalLayout {
+                padding: 12px; spacing: 2px; alignment: start;
+                NavItem { text: "Home"; icon: @image-url("../assets/icons/home.svg"); active: root.nav == "home"; clicked => { root.navigate("home"); } }
+                NavItem { text: "Video"; icon: @image-url("../assets/icons/videos.svg"); active: root.is-video; clicked => { root.navigate("video"); } }
+                NavItem { text: "Music"; icon: @image-url("../assets/icons/songs.svg"); active: root.music-sub; clicked => { root.navigate("music:songs"); } }
+                if root.music-sub: VerticalLayout {
+                    NavItem { indent: 1; text: "Songs"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:songs"; clicked => { root.navigate("music:songs"); } }
+                    NavItem { indent: 1; text: "Albums"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:albums"; clicked => { root.navigate("music:albums"); } }
+                    NavItem { indent: 1; text: "Artists"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:artists"; clicked => { root.navigate("music:artists"); } }
+                    NavItem { indent: 1; text: "Genres"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:genres"; clicked => { root.navigate("music:genres"); } }
+                }
+                NavItem { text: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active: root.nav == "playlists"; clicked => { root.navigate("playlists"); } }
+                NavItem { text: "Network stream"; icon: @image-url("../assets/icons/streaming.svg"); clicked => { root.open-network(); } }
+                Rectangle { height: 12px; }
+                NavItem { text: "Open file…"; icon: @image-url("../assets/icons/open.svg"); clicked => { root.open-file(); } }
+                Rectangle { height: 12px; }
+                Text {
+                    text: root.scanning ? "Scanning library…" : root.count + " files in library";
+                    color: Theme.fg-a3; font-size: 12px; x: 10px;
+                }
+            }
+        }
+        // Content
+        VerticalLayout {
+            padding: 20px; padding-bottom: 0; spacing: 12px;
+            HorizontalLayout {
+                spacing: 6px; height: 34px;
+                for k[i] in root.crumb-keys: HorizontalLayout {
+                    spacing: 6px;
+                    if i > 0: Text { text: "›"; color: Theme.fg-a3; font-size: 18px; vertical-alignment: center; }
+                    Text {
+                        text: root.crumb-labels[i]; font-size: 20px; font-weight: i == root.crumb-keys.length - 1 ? 600 : 400;
+                        color: i == root.crumb-keys.length - 1 ? Theme.fg-1 : Theme.fg-a1; vertical-alignment: center;
+                        TouchArea { mouse-cursor: pointer; clicked => { root.navigate(k); } }
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                LineEdit {
+                    width: 240px; placeholder-text: "Search library";
+                    text <=> root.query;
+                    edited(t) => { root.search(t); }
+                }
+            }
+            if root.nav != "home" && root.nav != "playlists": HorizontalLayout {
+                spacing: 6px; alignment: start; height: 28px;
+                Text { text: "Sort"; color: Theme.fg-a1; vertical-alignment: center; }
+                Chip { text: "Name"; selected: root.sort == "name"; clicked => { root.set-sort("name"); } }
+                Chip { text: "Date"; selected: root.sort == "date"; clicked => { root.set-sort("date"); } }
+                Chip { text: "Size"; selected: root.sort == "size"; clicked => { root.set-sort("size"); } }
+                Chip { text: "Watched"; selected: root.sort == "watched"; clicked => { root.set-sort("watched"); } }
+                Rectangle { width: 16px; }
+                Text { text: "View"; color: Theme.fg-a1; vertical-alignment: center; }
+                Chip { text: "Grid"; selected: root.grid; clicked => { root.set-grid(true); } }
+                Chip { text: "List"; selected: !root.grid; clicked => { root.set-grid(false); } }
+            }
+            ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    alignment: start; spacing: 10px; padding-right: 12px; padding-bottom: 20px;
+                    if root.nav == "home" && root.query == "": VerticalLayout {
+                        spacing: 10px;
+                        if root.count == 0 && root.recent-items.length == 0: VerticalLayout {
+                            spacing: 10px; padding-top: 60px;
+                            HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: 72px; height: 72px; } }
+                            Text { text: "Your library is empty"; color: Theme.fg-1; font-size: 22px; horizontal-alignment: center; }
+                            Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; }
+                        }
+                        if root.continue-items.length > 0: SectionTitle { text: "Continue watching"; }
+                        if root.continue-items.length > 0: Grid { items: root.continue-items; max-rows: 1;
+                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
+                        if root.pinned-items.length > 0: SectionTitle { text: "Pinned"; }
+                        if root.pinned-items.length > 0: Grid { items: root.pinned-items;
+                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
+                        if root.items.length > 0: SectionTitle { text: "Recently added"; }
+                        if root.items.length > 0: Grid { items: root.items; max-rows: 1;
+                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
+                        if root.recent-items.length > 0: HorizontalLayout {
+                            SectionTitle { text: "Recent"; horizontal-stretch: 1; }
+                            Text {
+                                text: "Clear"; color: cta.has-hover ? Theme.fg-1 : Theme.fg-a1; vertical-alignment: center;
+                                cta := TouchArea { mouse-cursor: pointer; clicked => { root.clear-recent(); } }
+                            }
+                        }
+                        if root.recent-items.length > 0: Grid { items: root.recent-items; max-rows: 2;
+                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
+                    }
+                    if root.nav != "home" || root.query != "": Grid {
+                        items: root.items; grid: root.grid;
+                        open(it) => { root.open(it.key, it.kind); }
+                        menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; }
+                    }
+                    if (root.nav != "home" || root.query != "") && root.items.length == 0: Text {
+                        text: root.scanning ? "Scanning…" : (root.query != "" ? "Nothing matches “" + root.query + "”." : "Nothing here yet.");
+                        color: Theme.fg-a3;
+                    }
+                }
+            }
+        }
+    }
+
+    // Context menu
+    if root.menu-open: TouchArea {
+        clicked => { root.menu-open = false; }
+        pointer-event(e) => { if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { root.menu-open = false; } }
+    }
+    if root.menu-open: Rectangle {
+        x: min(root.menu-x - root.absolute-position.x, root.width - self.width - 8px);
+        y: min(root.menu-y - root.absolute-position.y, root.height - self.height - 8px);
+        width: 220px; height: mcol.preferred-height;
+        background: Theme.bg-a4; border-radius: Theme.radius-lg; border-width: 1px; border-color: Theme.divider;
+        drop-shadow-blur: 16px; drop-shadow-color: #00000080;
+        mcol := VerticalLayout {
+            padding: 6px;
+            for a in [
+                { id: "play", label: root.menu-it.kind == "folder" || root.menu-it.kind == "group" ? "Open" : "Play", show: true },
+                { id: "enqueue", label: "Add to queue", show: root.menu-it.kind == "video" || root.menu-it.kind == "audio" },
+                { id: "pin", label: "Pin to Home", show: !root.menu-it.pinned && (root.menu-it.kind != "group" && root.menu-it.kind != "playlist") },
+                { id: "unpin", label: "Unpin from Home", show: root.menu-it.pinned },
+                { id: "forget", label: "Remove from Continue watching", show: root.menu-it.progress > 0 },
+            ]: Rectangle {
+                visible: a.show; height: a.show ? 32px : 0px;
+                border-radius: Theme.radius; background: ma.has-hover ? Theme.bg-a1 : transparent;
+                Text { x: 10px; text: a.label; color: Theme.fg-1; vertical-alignment: center; height: parent.height; }
+                ma := TouchArea { mouse-cursor: pointer; clicked => { root.menu-open = false; root.menu(root.menu-it.key, root.menu-it.kind, a.id); } }
+            }
+        }
+    }
+}
