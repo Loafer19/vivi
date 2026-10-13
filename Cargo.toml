@@ -1,6 +1,6 @@
 [package]
 name = "vivi"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Fast, lightweight media player inspired by Juxtopposed's VLC redesign"
 
@@ -8,6 +8,8 @@ description = "Fast, lightweight media player inspired by Juxtopposed's VLC rede
 slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "unstable-winit-030"] }
 libmpv2 = "4.1"
 rfd = "0.15"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
 
 [build-dependencies]
 slint-build = "1.8"
