@@ -31,13 +31,14 @@ component NavItem inherits Rectangle {
     in property <image> icon;
     in property <bool> active;
     in property <int> indent: 0;
+    in property <bool> rail; // icon-only sidebar on narrow windows
     callback clicked();
     height: 34px; border-radius: Theme.radius-lg;
     background: active ? Theme.accent-bg : (ta.has-hover ? Theme.bg-a1 : transparent);
     HorizontalLayout {
         padding-left: 10px + root.indent * 18px; spacing: 10px;
         if root.indent == 0: Icon { y: 7px; source: root.icon; width: 20px; height: 20px; tint: root.active ? Theme.accent-bright : Theme.fg-2; }
-        Text { text: root.text; color: root.active ? Theme.accent-bright : Theme.fg-2; vertical-alignment: center; }
+        if !root.rail: Text { text: root.text; color: root.active ? Theme.accent-bright : Theme.fg-2; vertical-alignment: center; }
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
@@ -104,16 +105,18 @@ component Grid inherits Rectangle {
     in property <int> max-rows: 0; // 0 = unlimited
     callback open(LibItem);
     callback menu(LibItem, length, length);
-    property <int> cols: grid ? max(1, floor(self.width / 210px)) : 1;
+    // Grid columns follow the width; very narrow widths fall back to the list view.
+    property <bool> g: grid && self.width >= 400px;
+    property <int> cols: g ? max(1, floor(self.width / 210px)) : 1;
     property <length> cw: self.width / cols;
-    property <length> ch: grid ? (cw - 12px) * 9 / 16 + 62px : 66px;
+    property <length> ch: g ? (cw - 12px) * 9 / 16 + 62px : 66px;
     property <int> shown: max-rows > 0 ? min(items.length, max-rows * cols) : items.length;
     height: ceil(shown / cols) * ch;
     for it[i] in root.items: Tile {
         visible: i < root.shown;
         x: mod(i, root.cols) * root.cw; y: floor(i / root.cols) * root.ch;
         width: root.cw - 6px; height: root.ch - 6px;
-        it: it; grid: root.grid;
+        it: it; grid: root.g;
         open => { root.open(it); }
         menu(x, y) => { root.menu(it, x, y); }
     }
@@ -191,6 +194,7 @@ export component LibraryView inherits Rectangle {
     property <length> menu-x;
     property <length> menu-y;
     in-out property <string> query;
+    property <bool> rail: root.width < 700px;
 
     background: Theme.bg-b1;
     TouchArea { }
@@ -198,24 +202,24 @@ export component LibraryView inherits Rectangle {
     HorizontalLayout {
         // Sidebar
         Rectangle {
-            width: 220px; background: Theme.bg-a4;
+            width: root.rail ? 64px : 220px; background: Theme.bg-a4;
             VerticalLayout {
-                padding: 12px; spacing: 2px; alignment: start;
-                NavItem { text: "Home"; icon: @image-url("../assets/icons/home.svg"); active: root.nav == "home"; clicked => { root.navigate("home"); } }
-                NavItem { text: "Video"; icon: @image-url("../assets/icons/videos.svg"); active: root.is-video; clicked => { root.navigate("video"); } }
-                NavItem { text: "Music"; icon: @image-url("../assets/icons/songs.svg"); active: root.music-sub; clicked => { root.navigate("music:songs"); } }
-                if root.music-sub: VerticalLayout {
+                padding: root.rail ? 10px : 12px; spacing: 2px; alignment: start;
+                NavItem { rail: root.rail; text: "Home"; icon: @image-url("../assets/icons/home.svg"); active: root.nav == "home"; clicked => { root.navigate("home"); } }
+                NavItem { rail: root.rail; text: "Video"; icon: @image-url("../assets/icons/videos.svg"); active: root.is-video; clicked => { root.navigate("video"); } }
+                NavItem { rail: root.rail; text: "Music"; icon: @image-url("../assets/icons/songs.svg"); active: root.music-sub; clicked => { root.navigate("music:songs"); } }
+                if root.music-sub && !root.rail: VerticalLayout {
                     NavItem { indent: 1; text: "Songs"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:songs"; clicked => { root.navigate("music:songs"); } }
                     NavItem { indent: 1; text: "Albums"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:albums"; clicked => { root.navigate("music:albums"); } }
                     NavItem { indent: 1; text: "Artists"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:artists"; clicked => { root.navigate("music:artists"); } }
                     NavItem { indent: 1; text: "Genres"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:genres"; clicked => { root.navigate("music:genres"); } }
                 }
-                NavItem { text: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active: root.nav == "playlists"; clicked => { root.navigate("playlists"); } }
-                NavItem { text: "Network stream"; icon: @image-url("../assets/icons/streaming.svg"); clicked => { root.open-network(); } }
+                NavItem { rail: root.rail; text: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active: root.nav == "playlists"; clicked => { root.navigate("playlists"); } }
+                NavItem { rail: root.rail; text: "Network stream"; icon: @image-url("../assets/icons/streaming.svg"); clicked => { root.open-network(); } }
                 Rectangle { height: 12px; }
-                NavItem { text: "Open file…"; icon: @image-url("../assets/icons/open.svg"); clicked => { root.open-file(); } }
+                NavItem { rail: root.rail; text: "Open file…"; icon: @image-url("../assets/icons/open.svg"); clicked => { root.open-file(); } }
                 Rectangle { height: 12px; }
-                Text {
+                if !root.rail: Text {
                     text: root.scanning ? "Scanning library…" : root.count + " files in library";
                     color: Theme.fg-a3; font-size: 12px; x: 10px;
                 }

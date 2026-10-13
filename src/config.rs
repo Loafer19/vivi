@@ -31,6 +31,8 @@ pub struct Interface {
     pub toolbar: Vec<String>,
     /// First-run onboarding completed or skipped.
     pub onboarded: bool,
+    /// Miniplayer geometry `[x, y, width, height]` (height without the queue view).
+    pub mini_window: Option<[i32; 4]>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -111,6 +113,7 @@ impl Default for Interface {
             profile: "Default".into(),
             toolbar: profile_toolbar("Default").unwrap_or_default(),
             onboarded: false,
+            mini_window: None,
         }
     }
 }

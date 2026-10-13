@@ -16,7 +16,8 @@ instant startup, a simple interface by default with deep customization when you 
   - audio output device, volume boost up to 150%, EQ presets
   - aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hwdec toggle
   - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
-- Miniplayer (`P`): compact always-on-top 391×339 window with an optional queue view
+- Miniplayer (`P`): compact always-on-top window (391×339 by default, resizable down to 280×160, size and position remembered) with an optional queue view; tiny sizes show the video only, with hover controls
+- Responsive layout down to 480×320: the bottom bar folds extra buttons into a “⋯” menu, the side panel overlays the video (full width below 800 px), the library switches to an icon rail and list view, Settings uses a category dropdown — see [docs/screenshots/responsive](docs/screenshots/responsive)
 - Seek-bar hover preview: frame thumbnails while hovering the seek bar (needs `ffmpeg`)
 - MPRIS2 (Linux): media keys, `playerctl`, Waybar/desktop widgets with title, artist and cover art
 - Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files

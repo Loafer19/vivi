@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     settings::setup(&app, &player, cfg.clone(), log);
     libview::setup(&app, &player, cfg.clone(), log);
     desktop::setup(&app, &player, log);
-    mini::setup(&app, &player);
+    mini::setup(&app, cfg.clone());
     if cfg!(debug_assertions) {
         debug_ui(&app);
     }

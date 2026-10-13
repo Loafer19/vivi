@@ -1,5 +1,5 @@
 // Settings dialog per Figma "Settings - global/interface/…" (1048×865) and "Keyboard Shortcuts".
-import { ScrollView, LineEdit } from "std-widgets.slint";
+import { ScrollView, LineEdit, ComboBox } from "std-widgets.slint";
 import { Theme, Icon } from "theme.slint";
 
 export struct SettingRow {
@@ -121,6 +121,7 @@ component Row inherits Rectangle {
 
 export component SettingsDialog inherits Rectangle {
     in property <[string]> categories;
+    property <bool> narrow: root.width < 760px;
     in property <[SettingRow]> rows;
     in-out property <int> category: 0;
     in-out property <bool> advanced: false;
@@ -134,16 +135,16 @@ export component SettingsDialog inherits Rectangle {
     TouchArea { clicked => { root.close(); } }
 
     dlg := Rectangle {
-        width: min(1048px, root.width - 48px);
-        height: min(760px, root.height - 48px);
+        width: root.narrow ? root.width - 16px : min(1048px, root.width - 48px);
+        height: root.narrow ? root.height - 16px : min(760px, root.height - 48px);
         x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
         background: Theme.bg-a4; border-radius: 12px;
         border-width: 1px; border-color: Theme.bg-a1;
         clip: true;
         TouchArea { }
         HorizontalLayout {
-            // Category sidebar
-            Rectangle {
+            // Category sidebar (collapses into a dropdown on narrow windows)
+            if !root.narrow: Rectangle {
                 width: 240px; background: Theme.bg-b1;
                 VerticalLayout {
                     padding: 14px; spacing: 4px; alignment: start;
@@ -168,7 +169,22 @@ export component SettingsDialog inherits Rectangle {
             }
             // Content
             VerticalLayout {
-                padding: 20px; spacing: 10px;
+                padding: root.narrow ? 12px : 20px; spacing: 10px;
+                if root.narrow: HorizontalLayout {
+                    spacing: 8px;
+                    ComboBox {
+                        horizontal-stretch: 1;
+                        model: root.categories;
+                        current-index: root.category;
+                        selected(c) => { root.search = ""; root.category = self.current-index; root.refresh(self.current-index, "", root.advanced); }
+                    }
+                    LineEdit {
+                        horizontal-stretch: 1;
+                        text <=> root.search;
+                        placeholder-text: "Search";
+                        edited(t) => { root.refresh(root.category, t, root.advanced); }
+                    }
+                }
                 HorizontalLayout {
                     spacing: 10px;
                     Text {

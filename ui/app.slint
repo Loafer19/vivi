@@ -119,10 +119,12 @@ component BarItem inherits HorizontalLayout {
     in property <float> volume;
     in property <float> volume-max: 150;
     in property <bool> fullscreen;
+    in property <bool> wide: true; // room for the volume slider
+    in property <bool> shown: true; // false = collapsed into the overflow menu
     callback act(string);
     callback volume-changed(float);
     spacing: 6px;
-    if root.id == "volume": IconButton {
+    if root.shown && root.id == "volume": IconButton {
         y: 4px;
         icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
             : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
@@ -130,14 +132,29 @@ component BarItem inherits HorizontalLayout {
             : @image-url("../assets/icons/volume-high.svg");
         clicked => { root.act("mute"); }
     }
-    if root.id == "volume": VolumeBar {
+    if root.shown && root.wide && root.id == "volume": VolumeBar {
         y: 17px; value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
     }
-    if root.id != "volume": IconButton {
+    if root.shown && root.id != "volume": IconButton {
         y: 4px; active: root.active;
         icon: root.id == "fullscreen" && root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : Tools.icon(root.id);
         clicked => { root.act(root.id); }
+    }
+}
+
+component OverflowRow inherits Rectangle {
+    in property <string> id;
+    in property <bool> active;
+    callback act(string);
+    border-radius: Theme.radius;
+    background: ta.has-hover ? Theme.bg-a1 : transparent;
+    clip: true;
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.act(root.id); } }
+    HorizontalLayout {
+        padding-left: 8px; spacing: 10px;
+        Icon { source: Tools.icon(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
+        Text { text: Tools.label(root.id); color: root.active ? Theme.accent : Theme.fg-1; vertical-alignment: center; }
     }
 }
 
@@ -146,7 +163,9 @@ export component AppWindow inherits Window {
     title: root.has-media ? root.media-title + " — Vivi" : "Vivi";
     preferred-width: 1280px;
     preferred-height: 720px;
-    min-width: 480px; min-height: 300px;
+    // Main window minimum; the miniplayer goes down to 280x160.
+    min-width: root.mini ? 280px : 480px;
+    min-height: root.mini ? 160px : 320px;
     // Transparent only while playing (mpv underlay shows through); opaque otherwise.
     background: root.has-media ? transparent : Theme.bg-b1;
     default-font-family: "Inter";
@@ -242,6 +261,12 @@ export component AppWindow inherits Window {
         else if (id == "settings") { root.settings-open = true; root.settings-refresh(root.settings-category, "", false); }
         else { root.bar-action(id); }
     }
+    // Responsive bottom bar: how many items fit on each side of the play controls.
+    // Items are ~40px wide; the left side also holds the time display. The rest go to "⋯".
+    property <int> bar-left-n: min(root.bar-left.length, max(0, floor((root.width / 2 - 260px) / 40px)));
+    property <int> bar-right-n: min(root.bar-right.length, max(0, floor((root.width / 2 - 170px - (root.bar-has-volume ? 110px : 0px)) / 40px)));
+    property <bool> bar-has-volume: root.width >= 900px;
+    property <int> bar-hidden: root.bar-left.length - root.bar-left-n + root.bar-right.length - root.bar-right-n;
     function bar-active(id: string) -> bool {
         return (id == "queue" && root.panel-open && root.panel-tab == 4)
             || (id == "subtitles" && root.panel-open && root.panel-tab == 0)
@@ -275,6 +300,12 @@ export component AppWindow inherits Window {
     in-out property <bool> mini-queue;
     callback toggle-mini();
     callback toggle-mini-queue();
+    // Miniplayer layout: queue shown only when there is room; "tiny" = video-only.
+    property <bool> mini-q-shown: root.mini && root.mini-queue && root.height >= 420px;
+    property <length> mini-video-h: root.mini-q-shown ? max(160px, root.height - 351px) : root.height;
+    property <bool> mini-tiny: root.width < 320px || root.mini-video-h < 200px;
+    property <float> mini-margin: root.mini-q-shown ? (root.height - root.mini-video-h) / root.height : 0;
+    changed mini-margin => { root.set-prop("video-margin-ratio-bottom", root.mini-margin); }
     callback lib-refresh();
     callback lib-rescan();
     callback lib-navigate(string);
@@ -385,10 +416,13 @@ export component AppWindow inherits Window {
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
     }
+
     top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
 
     // ---------- Side panel ----------
     if !root.mini && root.has-media && root.panel-open: SidePanel {
+        // Overlays the video; full width on narrow windows.
+        width: root.width < 800px ? root.width : 400px;
         x: root.width - self.width;
         y: 40px;
         height: root.height - 40px - 72px;
@@ -484,8 +518,8 @@ export component AppWindow inherits Window {
                     Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
                     Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
                     Rectangle { width: 8px; }
-                    for id in root.bar-left: BarItem {
-                        id: id; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                    for id[i] in root.bar-left: BarItem {
+                        id: id; shown: i < root.bar-left-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
                         act(x) => { root.bar-act(x); fs.focus(); }
                         volume-changed(v) => { root.volume = v; root.volume-changed(v); }
                     }
@@ -500,8 +534,12 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     x: parent.width - self.preferred-width; width: self.preferred-width; height: parent.height;
                     spacing: 6px;
-                    for id in root.bar-right: BarItem {
-                        id: id; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                    if root.bar-hidden > 0: IconButton {
+                        y: 4px; icon: @image-url("../assets/icons/more.svg"); tip: "More";
+                        clicked => { overflow.show(); }
+                    }
+                    for id[i] in root.bar-right: BarItem {
+                        id: id; shown: i < root.bar-right-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
                         act(x) => { root.bar-act(x); fs.focus(); }
                         volume-changed(v) => { root.volume = v; root.volume-changed(v); }
                     }
@@ -511,9 +549,24 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Miniplayer ----------
-    if root.mini && root.has-media && root.show-ui: Rectangle {
-        property <length> video-h: root.mini-queue ? 339px : root.height;
-        width: root.width; height: self.video-h; x: 0; y: 0;
+    // Tiny: video only; hovering shows play/pause and the way back.
+    if root.mini && root.mini-tiny && root.has-media && root.show-ui: Rectangle {
+        width: root.width; height: root.mini-video-h; x: 0; y: 0;
+        background: #00000066;
+        IconButton { x: 6px; y: 6px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
+        IconButton {
+            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+            primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg");
+            clicked => { root.toggle-play(); fs.focus(); }
+        }
+        Rectangle {
+            y: parent.height - 4px; height: 4px; x: 0;
+            width: root.duration > 0 ? parent.width * root.position / root.duration : 0;
+            background: Theme.accent;
+        }
+    }
+    if root.mini && !root.mini-tiny && root.has-media && root.show-ui: Rectangle {
+        width: root.width; height: root.mini-video-h; x: 0; y: 0;
         // top: back to the full player, title, queue toggle
         Rectangle {
             y: 0; height: 44px;
@@ -522,7 +575,7 @@ export component AppWindow inherits Window {
                 padding: 6px; spacing: 4px;
                 IconButton { icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
                 Text { text: root.media-title; color: Theme.fg-1; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                IconButton { icon: @image-url("../assets/icons/queue.svg"); tip: "Queue"; active: root.mini-queue; clicked => { root.toggle-mini-queue(); } }
+                if root.height >= 300px || root.mini-queue: IconButton { icon: @image-url("../assets/icons/queue.svg"); tip: "Queue"; active: root.mini-queue; clicked => { root.toggle-mini-queue(); } }
             }
         }
         // bottom: seek bar + transport
@@ -541,7 +594,7 @@ export component AppWindow inherits Window {
                 }
                 Rectangle {
                     height: 44px;
-                    HorizontalLayout {
+                    if root.width >= 360px: HorizontalLayout {
                         x: 0; width: self.preferred-width; spacing: 4px;
                         Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
                         Text { text: "/ " + fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
@@ -557,8 +610,8 @@ export component AppWindow inherits Window {
             }
         }
     }
-    if root.mini && root.mini-queue: Rectangle {
-        y: 339px; height: root.height - 339px;
+    if root.mini-q-shown: Rectangle {
+        y: root.mini-video-h; height: root.height - root.mini-video-h;
         background: Theme.bg-a4;
         TouchArea { }
         VerticalLayout {
@@ -579,6 +632,20 @@ export component AppWindow inherits Window {
                     }
                 }
             }
+        }
+    }
+
+    overflow := PopupWindow {
+        x: root.width - 220px; y: root.height - 72px - self.height - 6px;
+        width: 210px;
+        Rectangle {
+            background: Theme.bg-a4; border-radius: Theme.radius-lg; border-width: 1px; border-color: Theme.bg-a1;
+            drop-shadow-blur: 12px; drop-shadow-color: #00000080;
+        }
+        VerticalLayout {
+            padding: 6px;
+            for id[i] in root.bar-left: OverflowRow { visible: i >= root.bar-left-n; height: self.visible ? 36px : 0; id: id; active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
+            for id[i] in root.bar-right: OverflowRow { visible: i >= root.bar-right-n; height: self.visible ? 36px : 0; id: id; active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
         }
     }
 
