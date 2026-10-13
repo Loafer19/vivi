@@ -3,6 +3,7 @@ mod config;
 mod desktop;
 mod library;
 mod libview;
+mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
 mod player;
@@ -43,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     settings::setup(&app, &player, cfg.clone(), log);
     libview::setup(&app, &player, cfg.clone(), log);
     desktop::setup(&app, &player, log);
+    mini::setup(&app, &player);
     if cfg!(debug_assertions) {
         debug_ui(&app);
     }
@@ -185,6 +187,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ if is(Key::UpArrow) => p.add_volume(5.0),
             _ if is(Key::DownArrow) => p.add_volume(-5.0),
             _ if s == "f" => toggle_fs(),
+            _ if s == "p" && !ctrl => {
+                if let Some(a) = weak.upgrade() {
+                    if a.get_has_media() {
+                        a.invoke_toggle_mini();
+                    }
+                }
+            }
             _ if s == "m" => p.toggle_mute(),
             _ if ctrl && s == "o" => open_file(),
             _ if ctrl && s == "," => {
@@ -200,7 +209,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ if is(Key::Escape) => {
                 if let Some(a) = weak.upgrade() {
-                    if a.window().is_fullscreen() {
+                    if a.get_mini() {
+                        a.invoke_toggle_mini();
+                    } else if a.window().is_fullscreen() {
                         a.window().set_fullscreen(false);
                         a.set_fullscreen(false);
                     } else if a.get_customize_open() {
@@ -455,6 +466,19 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     if let Ok(t) = std::env::var("VIVI_PANEL") {
         app.set_panel_tab(t.parse().unwrap_or(0));
         app.set_panel_open(true);
+    }
+    if cfg!(debug_assertions) {
+        if let Ok(m) = std::env::var("VIVI_MINI") {
+            let weak = app.as_weak();
+            slint::Timer::single_shot(Duration::from_millis(2500), move || {
+                if let Some(a) = weak.upgrade() {
+                    a.invoke_toggle_mini();
+                    if m == "queue" {
+                        a.invoke_toggle_mini_queue();
+                    }
+                }
+            });
+        }
     }
     // Scripted self-test, debug builds only.
     if cfg!(debug_assertions) && std::env::var_os("VIVI_SELFTEST").is_some() {
