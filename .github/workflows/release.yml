@@ -2,40 +2,167 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Manual runs build every platform without publishing (for testing packaging).
+  workflow_dispatch:
 permissions:
   contents: write
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: System deps
-        run: sudo apt-get update && sudo apt-get install -y libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev
+        run: sudo apt-get update && sudo apt-get install -y libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev libfuse2t64 desktop-file-utils
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release
-      - name: Package
+      - name: Tarball
         run: |
-          NAME=vivi-${GITHUB_REF_NAME}-linux-x86_64
-          mkdir -p $NAME
-          cp target/release/vivi README.md LICENSE CHANGELOG.md $NAME/
-          tar czf $NAME.tar.gz $NAME
-          sha256sum $NAME.tar.gz > $NAME.tar.gz.sha256
+          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          NAME=vivi-${VER}-linux-x86_64
+          mkdir -p dist $NAME
+          cp target/release/vivi README.md LICENSE CHANGELOG.md packaging/vivi.desktop packaging/vivi.svg packaging/vivi.png $NAME/
+          tar czf dist/$NAME.tar.gz $NAME
+      - name: AppImage (bundles libmpv and its libraries)
+        run: |
+          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          desktop-file-validate packaging/vivi.desktop
+          curl -fsSLo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy
+          export LDAI_OUTPUT=dist/Vivi-${VER}-x86_64.AppImage APPIMAGE_EXTRACT_AND_RUN=1
+          ./linuxdeploy --appdir AppDir --executable target/release/vivi \
+            --desktop-file packaging/vivi.desktop --icon-file packaging/vivi.svg --output appimage
+          ls -la dist
+          # Smoke test: the bundled binary must resolve all libraries.
+          ./dist/Vivi-${VER}-x86_64.AppImage --appimage-extract >/dev/null
+          ! ldd squashfs-root/usr/bin/vivi | grep "not found"
+      - name: PKGBUILD (vivi-bin) with checksum
+        run: |
+          VER=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || VER=0.0.0
+          SUM=$(sha256sum dist/vivi-*-linux-x86_64.tar.gz | cut -d' ' -f1)
+          sed -e "s/^pkgver=.*/pkgver=${VER}/" -e "s/^sha256sums=.*/sha256sums=('${SUM}')/" packaging/arch/vivi-bin/PKGBUILD > dist/PKGBUILD
+      - uses: actions/upload-artifact@v7
+        with: { name: linux, path: dist/* }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R shinchiro/mpv-winbuild-cmake -p 'mpv-dev-x86_64-2*' -O mpv-dev.7z
+          7z x mpv-dev.7z -ompv | Out-Null
+          Get-ChildItem mpv
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $bin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64" | Select-Object -Last 1).FullName
+          $dll = (Get-ChildItem mpv\libmpv-2.dll).FullName
+          if (-not (Test-Path mpv\mpv.def)) {
+            $names = & "$bin\dumpbin.exe" /exports $dll | ForEach-Object { if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] } }
+            (@('EXPORTS') + $names) | Set-Content mpv\mpv.def
+          }
+          & "$bin\lib.exe" /def:mpv\mpv.def /name:libmpv-2.dll /machine:x64 /out:mpv\mpv.lib
+          "RUSTFLAGS=-L native=$((Resolve-Path mpv).Path)" | Out-File -Append $env:GITHUB_ENV
+      - run: cargo build --release
+      - name: Zip
+        shell: pwsh
+        run: |
+          $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME } else { 'dev' }
+          $name = "vivi-$ver-windows-x86_64"
+          New-Item -ItemType Directory -Force $name, dist | Out-Null
+          Copy-Item target\release\vivi.exe, mpv\libmpv-2.dll, README.md, LICENSE, CHANGELOG.md $name
+          Compress-Archive -Path $name -DestinationPath "dist\$name.zip"
+      - uses: actions/upload-artifact@v7
+        with: { name: windows, path: dist/* }
+
+  macos:
+    runs-on: macos-14
+    continue-on-error: true # best effort
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: brew install mpv dylibbundler librsvg
+      - run: cargo build --release
+        env:
+          LIBRARY_PATH: /opt/homebrew/lib
+      - name: Vivi.app
+        run: |
+          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          APP=Vivi.app
+          mkdir -p $APP/Contents/MacOS $APP/Contents/Resources $APP/Contents/Frameworks dist
+          cp target/release/vivi $APP/Contents/MacOS/vivi
+          mkdir vivi.iconset
+          for s in 16 32 64 128 256 512; do
+            rsvg-convert -w $s -h $s packaging/vivi.svg -o vivi.iconset/icon_${s}x${s}.png
+            rsvg-convert -w $((s*2)) -h $((s*2)) packaging/vivi.svg -o vivi.iconset/icon_${s}x${s}@2x.png
+          done
+          iconutil -c icns vivi.iconset -o $APP/Contents/Resources/vivi.icns
+          cat > $APP/Contents/Info.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleName</key><string>Vivi</string>
+            <key>CFBundleDisplayName</key><string>Vivi</string>
+            <key>CFBundleIdentifier</key><string>io.github.loafer19.vivi</string>
+            <key>CFBundleVersion</key><string>${VER#v}</string>
+            <key>CFBundleShortVersionString</key><string>${VER#v}</string>
+            <key>CFBundleExecutable</key><string>vivi</string>
+            <key>CFBundleIconFile</key><string>vivi</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>LSMinimumSystemVersion</key><string>12.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          sed -i '' 's/^          //' $APP/Contents/Info.plist
+          dylibbundler -od -b -x $APP/Contents/MacOS/vivi -d $APP/Contents/Frameworks -p @executable_path/../Frameworks/
+          codesign --force --deep -s - $APP
+          ditto -c -k --keepParent $APP dist/vivi-${VER}-macos-arm64.zip
+      - uses: actions/upload-artifact@v7
+        with: { name: macos, path: dist/* }
+
+  publish:
+    needs: [linux, windows, macos]
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.linux.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { path: dist, merge-multiple: true }
+      - name: Checksums
+        run: |
+          cd dist
+          ls -la
+          sha256sum * > SHA256SUMS
       - name: Release notes from CHANGELOG
         run: |
           VER=${GITHUB_REF_NAME#v}
           awk -v v="$VER" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md > notes.md
+          test -s notes.md
+          T=${GITHUB_REF_NAME}
           {
             echo
-            echo "![Vivi](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/docs/screenshots/player.png)"
+            echo "![Vivi](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${T}/docs/screenshots/library-home.png)"
             echo
-            echo "### Install"
-            echo '1. Install mpv: `sudo pacman -S mpv` (Arch) or `sudo apt install libmpv2` (Debian/Ubuntu).'
-            echo "2. Download \`vivi-${GITHUB_REF_NAME}-linux-x86_64.tar.gz\`, extract, run \`./vivi <file>\`."
-            echo '3. Or build from source: `cargo build --release`.'
+            echo "### Downloads"
+            echo "| Platform | File |"
+            echo "|---|---|"
+            echo "| Linux (any distro) | \`Vivi-${T}-x86_64.AppImage\`: \`chmod +x\` and run. libmpv is bundled. |"
+            echo "| Linux tarball | \`vivi-${T}-linux-x86_64.tar.gz\`: needs mpv and sqlite installed. |"
+            echo "| Arch / Omarchy | \`PKGBUILD\` (vivi-bin): \`makepkg -si\` in a folder with it. |"
+            [ -n "$(ls dist/*windows* 2>/dev/null)" ] && echo "| Windows x64 | \`vivi-${T}-windows-x86_64.zip\`: unzip and run \`vivi.exe\` (libmpv-2.dll included). |"
+            [ -n "$(ls dist/*macos* 2>/dev/null)" ] && echo "| macOS (Apple Silicon, experimental) | \`vivi-${T}-macos-arm64.zip\`: unsigned; right-click → Open the first time. |"
+            echo
+            echo "Checksums: \`SHA256SUMS\`."
           } >> notes.md
-          test -s notes.md
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" vivi-*.tar.gz* --notes-file notes.md --generate-notes --title "Vivi $GITHUB_REF_NAME"
+        run: gh release create "$GITHUB_REF_NAME" dist/* --notes-file notes.md --generate-notes --title "Vivi $GITHUB_REF_NAME"
