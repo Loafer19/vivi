@@ -1,6 +1,5 @@
-import { Button, Slider } from "std-widgets.slint";
 
-// Design tokens from Figma "VLC Redesign" (Dark theme)
+// Design tokens from Figma "VLC Redesign" (Dark theme) — see docs/design/FIGMA.md
 export global Theme {
     out property <color> accent: #D37918;
     out property <color> accent-bright: #FC9729;
@@ -9,6 +8,7 @@ export global Theme {
     out property <color> bg-a3: #1B1B1B;
     out property <color> bg-b1: #0E0E0E;
     out property <color> bg-b2: #090909;
+    out property <color> bg-b1-t: #0E0E0EF2; // B1 Transparent 95%
     out property <color> fg-1: #EAEAEA;
     out property <color> fg-2: #C6C6C6;
     out property <color> fg-a1: #969696;
@@ -19,44 +19,189 @@ export global Theme {
     out property <length> gap: 10px;
 }
 
+component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool> primary: false;
+    in property <length> size: 32px;
+    callback clicked();
+    width: size; height: size;
+    border-radius: Theme.radius;
+    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
+                        : (ta.has-hover ? Theme.bg-a1 : transparent);
+    Text {
+        text: icon;
+        color: primary ? Theme.bg-b2 : (ta.has-hover ? Theme.fg-1 : Theme.fg-2);
+        font-size: primary ? 18px : 15px;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Thick seek bar (Figma "Controls"): accent fill on dim track, drag/click to seek.
+component SeekBar inherits Rectangle {
+    in property <float> position;
+    in property <float> duration;
+    callback seek(float);
+    height: 10px;
+    border-radius: 2px;
+    background: Theme.bg-a1;
+    property <float> frac: duration > 0 ? clamp(position / duration, 0, 1) : 0;
+    Rectangle {
+        x: 0; y: 0; height: parent.height;
+        width: parent.width * (ta.pressed ? clamp(ta.mouse-x / parent.width, 0, 1) : frac);
+        border-radius: 2px;
+        background: ta.has-hover ? Theme.accent-bright : Theme.accent;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.up && root.duration > 0) {
+                root.seek(clamp(self.mouse-x / self.width, 0, 1) * root.duration);
+            }
+        }
+    }
+}
+
+// Volume: accent fill, thin track (Figma "volume" uses the accent on a dim track).
+component VolumeBar inherits Rectangle {
+    in property <float> value;
+    in property <float> maximum: 150;
+    callback changed(float);
+    height: 6px;
+    border-radius: 3px;
+    background: Theme.divider;
+    Rectangle {
+        x: 0; height: parent.height; border-radius: 3px;
+        width: parent.width * clamp(value / maximum, 0, 1);
+        background: Theme.accent;
+    }
+    TouchArea {
+        y: -8px; height: 22px;
+        mouse-cursor: pointer;
+        moved => { if (self.pressed) { root.changed(clamp(self.mouse-x / self.width, 0, 1) * root.maximum); } }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.changed(clamp(self.mouse-x / self.width, 0, 1) * root.maximum); }
+        }
+    }
+}
+
 export component AppWindow inherits Window {
     title: "Vivi";
     preferred-width: 1280px;
     preferred-height: 720px;
-    background: #0E0E0E; // Figma Dark/BG/B1
+    // Transparent so mpv (rendered as an OpenGL underlay) shows through.
+    background: transparent;
     default-font-family: "Inter";
     default-font-size: 14px;
-    in-out property <bool> playing: false;
-    in-out property <float> position: 0;
+
+    in property <string> media-title: "";
+    in property <bool> playing: false;
+    in property <float> position: 0;
+    in property <float> duration: 0;
+    in-out property <float> volume: 100;
+    in property <bool> muted: false;
+    in property <bool> has-media: false;
+
     callback toggle-play();
+    callback open-file();
+    callback seek(float);
+    callback volume-changed(float);
+    callback toggle-mute();
+    callback toggle-fullscreen();
+    callback prev();
+    callback next();
+    callback key(string, bool, bool) -> bool; // text, shift, ctrl
+
+    pure function fmt(t: float) -> string {
+        if (t < 0) { return "00:00"; }
+        let h = floor(t / 3600);
+        let m = floor(mod(t, 3600) / 60);
+        let s = floor(mod(t, 60));
+        (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
+    }
+
+    fs := FocusScope {
+        key-pressed(e) => {
+            if (root.key(e.text, e.modifiers.shift, e.modifiers.control)) { return accept; }
+            reject
+        }
+    }
+    init => { fs.focus(); }
 
     VerticalLayout {
-        // Top bar: menu + media title (auto-hide on hover later)
-        HorizontalLayout {
-            height: 36px; padding: 6px; spacing: 8px;
-            Button { text: "☰"; }
-            Text { text: "Vivi — no media"; color: #EAEAEA; vertical-alignment: center; }
-        }
-        // Video surface placeholder
+        // Top bar: menu + media title
         Rectangle {
-            background: Theme.bg-b2;
-            Text { text: "Drop media here"; color: #6B6B6B; }
+            height: 40px; vertical-stretch: 0;
+            background: Theme.bg-b1-t;
+            HorizontalLayout {
+                padding-left: Theme.gap; padding-right: Theme.gap; spacing: Theme.gap;
+                alignment: start;
+                IconButton { icon: "☰"; y: 4px; clicked => { root.open-file(); } }
+                Text {
+                    text: root.has-media ? root.media-title : "Vivi";
+                    color: Theme.fg-1; vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
         }
-        // Thick seek bar
-        Slider { minimum: 0; maximum: 100; value <=> position; height: 14px; }
-        // Bottom controls: queue/left, prev-play-next, subs/audio/volume/fullscreen right
-        HorizontalLayout {
-            height: 48px; padding: 6px; spacing: 6px;
-            Button { text: "Queue"; }
-            Rectangle { }
-            Button { text: "⏮"; }
-            Button { text: playing ? "⏸" : "▶"; primary: true; clicked => { root.toggle-play(); } }
-            Button { text: "⏭"; }
-            Rectangle { }
-            Button { text: "CC"; }
-            Button { text: "Audio"; }
-            Slider { width: 100px; minimum: 0; maximum: 100; value: 80; }
-            Button { text: "⛶"; }
+        // Video area (transparent → mpv underlay)
+        Rectangle {
+            vertical-stretch: 1;
+            if !root.has-media: VerticalLayout {
+                alignment: center; spacing: Theme.gap;
+                Text { text: "Vivi"; color: Theme.accent; font-size: 32px; font-weight: 300; horizontal-alignment: center; }
+                Text { text: "Open a file (Ctrl+O) or pass a path on the command line"; color: Theme.fg-a3; horizontal-alignment: center; }
+            }
+            TouchArea {
+                clicked => { fs.focus(); }
+                double-clicked => { root.toggle-fullscreen(); }
+            }
+        }
+        // Bottom bar
+        Rectangle {
+            vertical-stretch: 0;
+            background: Theme.bg-b1-t;
+            VerticalLayout {
+                padding: Theme.gap; spacing: 8px;
+                SeekBar {
+                    position: root.position; duration: root.duration;
+                    seek(t) => { root.seek(t); fs.focus(); }
+                }
+                Rectangle {
+                    height: 40px;
+                    // left: time
+                    HorizontalLayout {
+                        x: 0; height: parent.height; width: self.preferred-width;
+                        spacing: 6px;
+                        Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; }
+                        Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
+                        Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
+                    }
+                    // center: prev / play / next
+                    mid := HorizontalLayout {
+                        x: (parent.width - self.preferred-width) / 2; height: parent.height;
+                        width: self.preferred-width;
+                        spacing: 6px; alignment: center;
+                        IconButton { icon: "⏮"; y: 4px; clicked => { root.prev(); } }
+                        IconButton { icon: root.playing ? "⏸" : "▶"; primary: true; size: 40px; clicked => { root.toggle-play(); fs.focus(); } }
+                        IconButton { icon: "⏭"; y: 4px; clicked => { root.next(); } }
+                    }
+                    // right: subtitles, audio/volume, fullscreen
+                    rgt := HorizontalLayout {
+                        x: parent.width - self.preferred-width; height: parent.height;
+                        width: self.preferred-width;
+                        spacing: 6px;
+                        IconButton { icon: "CC"; y: 4px; }
+                        IconButton { icon: root.muted ? "🔇" : "🔊"; y: 4px; clicked => { root.toggle-mute(); } }
+                        VolumeBar {
+                            y: 15px; width: 110px;
+                            value: root.volume;
+                            changed(v) => { root.volume = v; root.volume-changed(v); }
+                        }
+                        IconButton { icon: "⛶"; y: 4px; clicked => { root.toggle-fullscreen(); } }
+                    }
+                }
+            }
         }
     }
 }

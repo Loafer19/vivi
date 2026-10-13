@@ -18,9 +18,16 @@ fn get_proc_address(ctx: &usize, name: &str) -> *mut c_void {
     f(&name) as *mut c_void
 }
 
-pub fn attach(app: &crate::AppWindow, mpv: Arc<Mpv>) -> Result<(), slint::SetRenderingNotifierError> {
+/// `on_ready` runs once the mpv render context exists. Files must be loaded only after
+/// that, otherwise `vo=libmpv` fails to initialize ("No render context set").
+pub fn attach(
+    app: &crate::AppWindow,
+    mpv: Arc<Mpv>,
+    on_ready: impl FnOnce() + 'static,
+) -> Result<(), slint::SetRenderingNotifierError> {
     let weak = app.as_weak();
     let mut ctx: Option<RenderContext> = None;
+    let mut on_ready = Some(on_ready);
     app.window().set_rendering_notifier(move |state, api| match state {
         RenderingState::RenderingSetup => {
             let GraphicsAPI::NativeOpenGL { get_proc_address: gpa } = api else {
@@ -49,6 +56,10 @@ pub fn attach(app: &crate::AppWindow, mpv: Arc<Mpv>) -> Result<(), slint::SetRen
                         });
                     });
                     ctx = Some(rc);
+                    if let Some(f) = on_ready.take() {
+                        // Run after this callback returns (outside the GL setup).
+                        slint::Timer::single_shot(std::time::Duration::ZERO, f);
+                    }
                 }
                 Err(e) => eprintln!("vivi: mpv render context failed: {e:?}"),
             }
@@ -56,7 +67,9 @@ pub fn attach(app: &crate::AppWindow, mpv: Arc<Mpv>) -> Result<(), slint::SetRen
         RenderingState::BeforeRendering => {
             if let (Some(rc), Some(a)) = (&ctx, weak.upgrade()) {
                 let size = a.window().size();
-                let _ = rc.render::<usize>(0, size.width as i32, size.height as i32, true);
+                if let Err(e) = rc.render::<usize>(0, size.width as i32, size.height as i32, true) {
+                    eprintln!("vivi: mpv render error: {e:?}");
+                }
             }
         }
         RenderingState::AfterRendering => {

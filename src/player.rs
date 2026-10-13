@@ -38,6 +38,10 @@ impl Player {
             init.set_property("idle", "yes")?;
             init.set_property("input-default-bindings", "no")?;
             init.set_property("volume-max", 150i64)?;
+            if std::env::var_os("VIVI_MPV_DEBUG").is_some() {
+                init.set_property("terminal", "yes")?;
+                init.set_property("msg-level", "all=v")?;
+            }
             Ok(())
         })?;
         let mpv = Arc::new(mpv);
