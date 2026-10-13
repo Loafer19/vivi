@@ -125,6 +125,7 @@ export component SettingsDialog inherits Rectangle {
     in-out property <int> category: 0;
     in-out property <bool> advanced: false;
     in property <string> status;
+    in-out property <string> search;
     callback changed(string, string);
     callback refresh(int, string, bool); // category, search, advanced
     callback close();
@@ -148,19 +149,20 @@ export component SettingsDialog inherits Rectangle {
                     padding: 14px; spacing: 4px; alignment: start;
                     Text { text: "Settings"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
                     Rectangle { height: 8px; }
-                    search := LineEdit {
+                    search-edit := LineEdit {
+                        text <=> root.search;
                         placeholder-text: "Search settings";
                         edited(t) => { root.refresh(root.category, t, root.advanced); }
                     }
                     Rectangle { height: 8px; }
                     for c[i] in root.categories: Rectangle {
                         height: 34px; border-radius: Theme.radius-lg;
-                        background: i == root.category && search.text == "" ? Theme.accent-bg : (cta.has-hover ? Theme.bg-a1 : transparent);
+                        background: i == root.category && root.search == "" ? Theme.accent-bg : (cta.has-hover ? Theme.bg-a1 : transparent);
                         Text {
                             x: 12px; text: c; vertical-alignment: center; height: parent.height;
-                            color: i == root.category && search.text == "" ? Theme.accent-bright : Theme.fg-2;
+                            color: i == root.category && root.search == "" ? Theme.accent-bright : Theme.fg-2;
                         }
-                        cta := TouchArea { mouse-cursor: pointer; clicked => { search.text = ""; root.category = i; root.refresh(i, "", root.advanced); } }
+                        cta := TouchArea { mouse-cursor: pointer; clicked => { root.search = ""; root.category = i; root.refresh(i, "", root.advanced); } }
                     }
                 }
             }
@@ -171,12 +173,12 @@ export component SettingsDialog inherits Rectangle {
                     spacing: 10px;
                     Text {
                         horizontal-stretch: 1;
-                        text: search.text != "" ? "Results for “" + search.text + "”" : root.categories[root.category];
+                        text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category];
                         color: Theme.fg-1; font-size: 18px; font-weight: 600; vertical-alignment: center;
                     }
                     Text { text: "Advanced"; color: Theme.fg-a1; vertical-alignment: center; }
                     VerticalLayout { alignment: center;
-                        Switch { on: root.advanced; toggled => { root.advanced = !root.advanced; root.refresh(root.category, search.text, root.advanced); } } }
+                        Switch { on: root.advanced; toggled => { root.advanced = !root.advanced; root.refresh(root.category, root.search, root.advanced); } } }
                     Rectangle {
                         width: 32px; height: 32px; border-radius: Theme.radius;
                         background: xta.has-hover ? Theme.bg-a1 : transparent;

@@ -192,21 +192,21 @@ export component SidePanel inherits Rectangle {
     callback close();
 
     // Local UI state (nothing persisted yet).
-    property <float> sub-delay: 0;
-    property <float> sub-scale: 1;
-    property <float> sub-pos: 100;
-    property <float> audio-delay: 0;
-    property <float> boost: 100;
+    in-out property <float> sub-delay: 0;
+    in-out property <float> sub-scale: 1;
+    in-out property <float> sub-pos: 100;
+    in-out property <float> audio-delay: 0;
+    in-out property <float> boost: 100;
     property <string> eq: "flat";
     property <string> aspect: "-1";
-    property <int> rotate: 0;
-    property <float> zoom: 0;
-    property <float> panscan: 0;
-    property <float> brightness: 0;
-    property <float> contrast: 0;
-    property <float> saturation: 0;
-    property <float> gamma: 0;
-    property <float> speed: 1;
+    in-out property <int> rotate: 0;
+    in-out property <float> zoom: 0;
+    in-out property <float> panscan: 0;
+    in-out property <float> brightness: 0;
+    in-out property <float> contrast: 0;
+    in-out property <float> saturation: 0;
+    in-out property <float> gamma: 0;
+    in-out property <float> speed: 1;
 
     width: 400px;
     background: Theme.bar;
