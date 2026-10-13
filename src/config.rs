@@ -11,6 +11,7 @@ pub struct Config {
     pub playback: Playback,
     pub audio: Audio,
     pub subtitles: Subtitles,
+    pub library: Library,
     /// Per-show presets keyed by normalized show name (see [`show_key`]).
     pub presets: BTreeMap<String, Preset>,
 }
@@ -55,6 +56,39 @@ pub struct Subtitles {
     pub scale: f64,
     /// mpv `sub-auto`: "no" | "exact" | "fuzzy" | "all"
     pub auto_load: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Library {
+    /// Folders scanned for media.
+    pub folders: Vec<String>,
+    /// Files and folders pinned to Home.
+    pub pinned: Vec<String>,
+    /// "grid" | "list"
+    pub view: String,
+    /// "name" | "date" | "size" | "watched"
+    pub sort: String,
+    /// Generate thumbnails with ffmpeg (if installed).
+    pub thumbnails: bool,
+}
+
+impl Default for Library {
+    fn default() -> Self {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let folders = ["Videos", "Music"]
+            .iter()
+            .map(|d| format!("{home}/{d}"))
+            .filter(|p| std::path::Path::new(p).is_dir())
+            .collect();
+        Self {
+            folders,
+            pinned: Vec::new(),
+            view: "grid".into(),
+            sort: "name".into(),
+            thumbnails: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

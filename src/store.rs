@@ -2,6 +2,7 @@
 //! - `$XDG_STATE_HOME/vivi/recent.txt`  — recently played files, newest first
 //! - `$XDG_STATE_HOME/vivi/watch_later/` — mpv resume positions
 //! - `$XDG_DATA_HOME/vivi/playlists/*.m3u` — saved playlists
+//! - `$XDG_CACHE_HOME/vivi/` — library database and thumbnails
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,9 @@ fn xdg(var: &str, fallback: &str) -> PathBuf {
 }
 pub fn state_dir() -> PathBuf {
     xdg("XDG_STATE_HOME", ".local/state")
+}
+pub fn cache_dir() -> PathBuf {
+    xdg("XDG_CACHE_HOME", ".cache")
 }
 pub fn watch_later_dir() -> PathBuf {
     state_dir().join("watch_later")
@@ -103,4 +107,19 @@ pub fn display_name(path: &str) -> String {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_owned())
+}
+
+/// Saved resume position for `path` (mpv names watch-later files by the MD5 of the path).
+pub fn resume_position(path: &str) -> Option<f64> {
+    let name = format!("{:X}", md5::compute(path.as_bytes()));
+    let text = fs::read_to_string(watch_later_dir().join(name)).ok()?;
+    text.lines()
+        .find_map(|l| l.strip_prefix("start="))
+        .and_then(|v| v.trim().parse().ok())
+}
+
+/// Forget the resume position for `path`.
+pub fn forget_position(path: &str) {
+    let name = format!("{:X}", md5::compute(path.as_bytes()));
+    let _ = fs::remove_file(watch_later_dir().join(name));
 }
