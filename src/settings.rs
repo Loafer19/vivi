@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// Seconds of inactivity before the controls hide (read by the auto-hide timer).
 pub static AUTOHIDE_SECS: AtomicU32 = AtomicU32::new(2);
 
-const CATEGORIES: [&str; 7] = [
+const CATEGORIES: [&str; 8] = [
     "Interface",
     "Playback",
     "Audio",
@@ -19,6 +19,7 @@ const CATEGORIES: [&str; 7] = [
     "Keyboard Shortcuts",
     "Presets",
     "Privacy",
+    "Library",
 ];
 const ACCENTS: [&str; 6] = [
     "#D37918", "#E5484D", "#30A46C", "#0090FF", "#8E4EC6", "#E54666",
@@ -158,6 +159,70 @@ fn all_rows(c: &Config) -> Vec<(SettingRow, bool)> {
             false,
         ));
     }
+    v.push((
+        row(
+            "",
+            "Library",
+            "Library folders",
+            "",
+            "header",
+            String::new(),
+        ),
+        false,
+    ));
+    if c.library.folders.is_empty() {
+        v.push((
+            row("", "Library", "No folders yet.", "", "info", String::new()),
+            false,
+        ));
+    }
+    for f in &c.library.folders {
+        v.push((
+            row(
+                &format!("library.remove:{f}"),
+                "Library",
+                f,
+                "Scanned for video and music (sub-folders included).",
+                "action",
+                "Remove".into(),
+            ),
+            false,
+        ));
+    }
+    v.push((
+        row(
+            "library.add",
+            "Library",
+            "Add a folder",
+            "Pick a folder to include in the library.",
+            "action",
+            "Add folder…".into(),
+        ),
+        false,
+    ));
+    v.push((
+        row(
+            "library.rescan",
+            "Library",
+            "Rescan library",
+            "Look for new, changed and deleted files now. Vivi also rescans on start.",
+            "action",
+            "Rescan".into(),
+        ),
+        false,
+    ));
+    v.push((row("library.thumbnails", "Library", "Thumbnails", "Generate video thumbnails and album covers with ffmpeg (if installed), cached in ~/.cache/vivi/thumbs.", "toggle", b(c.library.thumbnails)), true));
+    v.push((
+        row(
+            "library.clear_thumbs",
+            "Library",
+            "Clear thumbnail cache",
+            "Delete cached thumbnails; they are regenerated when needed.",
+            "action",
+            "Clear".into(),
+        ),
+        true,
+    ));
     v.push((
         row("", "Privacy", "Privacy", "", "header", String::new()),
         false,
@@ -551,6 +616,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             if log {
                 eprintln!("setting {id} = {v}");
             }
+            let mut rescan = false;
             {
                 let mut c = cfg.borrow_mut();
                 match id.as_str() {
@@ -594,6 +660,30 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         a.set_settings_status("Resume positions cleared".into());
                         return;
                     }
+                    "library.add" => {
+                        if let Some(d) = rfd::FileDialog::new()
+                            .set_title("Add library folder")
+                            .pick_folder()
+                        {
+                            let d = d.to_string_lossy().trim_end_matches('/').to_string();
+                            if !c.library.folders.contains(&d) {
+                                c.library.folders.push(d);
+                            }
+                        }
+                        rescan = true;
+                    }
+                    "library.rescan" => rescan = true,
+                    "library.thumbnails" => c.library.thumbnails = v == "true",
+                    "library.clear_thumbs" => {
+                        let _ = std::fs::remove_dir_all(store::cache_dir().join("thumbs"));
+                        a.set_settings_status("Thumbnail cache cleared".into());
+                        return;
+                    }
+                    k if k.starts_with("library.remove:") => {
+                        let f = &k["library.remove:".len()..];
+                        c.library.folders.retain(|x| x != f);
+                        rescan = true;
+                    }
                     k if k.starts_with("preset.delete:") => {
                         c.presets.remove(&k["preset.delete:".len()..]);
                     }
@@ -606,6 +696,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             sync_panel(&a, &p);
             save();
             refresh();
+            if rescan {
+                a.invoke_lib_rescan();
+            }
         });
     }
     {

@@ -178,6 +178,10 @@ export component SidePanel inherits Rectangle {
     callback playlist-load(string);
     callback playlist-delete(string);
     in property <string> preset-name;
+    in property <[Item]> library;
+    callback library-search(string);
+    callback library-play(string);
+    callback library-enqueue(string);
     callback save-preset();
     callback seek-to(string);
     callback add-bookmark();
@@ -221,6 +225,7 @@ export component SidePanel inherits Rectangle {
             Tab { icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == 2; clicked => { root.tab = 2; } }
             Tab { icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; } }
             Tab { icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == 4; clicked => { root.tab = 4; } }
+            Tab { icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == 5; clicked => { root.tab = 5; root.library-search(""); } }
             Rectangle {
                 width: 28px;
                 Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
@@ -341,6 +346,24 @@ export component SidePanel inherits Rectangle {
                             { key: "no", label: "Off (software)", selected: root.hwdec == "no" },
                         ];
                         pick(it) => { root.set-prop("hwdec", it.key); }
+                    }
+                }
+                // ---- Compact library ----
+                if root.tab == 5: VerticalLayout {
+                    spacing: 10px; alignment: start;
+                    LineEdit { placeholder-text: "Search library"; edited(t) => { root.library-search(t); } }
+                    if root.library.length == 0: Text { text: "No matching files. Folders are set in Settings → Library."; color: Theme.fg-a3; wrap: word-wrap; }
+                    for it in root.library: Rectangle {
+                        height: 34px; border-radius: Theme.radius;
+                        background: lta.has-hover ? Theme.bg-a1 : transparent;
+                        lta := TouchArea { mouse-cursor: pointer; clicked => { root.library-play(it.key); } }
+                        HorizontalLayout {
+                            padding-left: 8px; spacing: 6px;
+                            Text { text: it.label; color: Theme.fg-2; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; }
+                            Rectangle { width: 30px;
+                                Icon { source: @image-url("../assets/icons/add.svg"); width: 16px; height: 34px; }
+                                TouchArea { mouse-cursor: pointer; clicked => { root.library-enqueue(it.key); } } }
+                        }
                     }
                 }
                 // ---- Queue & playlists (Figma "Miniplayer", "playlist", "new playlist") ----
