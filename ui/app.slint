@@ -2,34 +2,9 @@
 // topbar 40px #191919 (pad 6, gap 10, title Inter 14 #8F8F8F centered),
 // Controls 54px #191919 @93% (pad 20/11, gap 20), radii 4/6.
 
-export global Theme {
-    out property <color> accent: #D37918;
-    out property <color> accent-bright: #FC9729;
-    out property <color> accent-dim: #AB6314;
-    out property <color> accent-bg: #371F06;
-    out property <color> bg-a1: #222222;
-    out property <color> bg-a3: #1B1B1B;
-    out property <color> bg-a4: #191919;
-    out property <color> bg-b1: #0E0E0E;
-    out property <color> bg-b2: #090909;
-    out property <color> bar: #191919ED; // A4 @93%
-    out property <color> fg-1: #EAEAEA;
-    out property <color> fg-2: #C6C6C6;
-    out property <color> fg-a1: #969696;
-    out property <color> fg-a2: #8F8F8F;
-    out property <color> fg-a3: #6B6B6B;
-    out property <color> divider: #373737;
-    out property <length> radius: 4px;
-    out property <length> radius-lg: 6px;
-    out property <length> gap: 10px;
-}
-
-component Icon inherits Image {
-    in property <color> tint: Theme.fg-2;
-    width: 24px; height: 24px;
-    colorize: tint;
-    image-fit: contain;
-}
+import { Theme, Icon } from "theme.slint";
+import { SidePanel, Item } from "panel.slint";
+export { Item }
 
 component IconButton inherits Rectangle {
     in property <image> icon;
@@ -149,6 +124,27 @@ export component AppWindow inherits Window {
     callback activity();
     callback key(string, bool, bool) -> bool;
 
+    // Side panel
+    in-out property <bool> panel-open: false;
+    in-out property <int> panel-tab: 0;
+    in property <[Item]> sub-tracks;
+    in property <[Item]> audio-tracks;
+    in property <[Item]> audio-devices;
+    in property <[Item]> chapters;
+    in property <[Item]> bookmarks;
+    callback add-bookmark();
+    in property <string> ab-state: "Off";
+    in property <string> sleep-state: "";
+    in property <string> hwdec: "auto-safe";
+    callback set-prop(string, string);
+    callback run(string);
+    callback load-sub();
+    callback sleep(int);
+    function open-panel(t: int) {
+        if (root.panel-open && root.panel-tab == t) { root.panel-open = false; }
+        else { root.panel-tab = t; root.panel-open = true; }
+    }
+
     pure function fmt(t: float) -> string {
         if (t < 0) { return "00:00"; }
         let h = floor(t / 3600);
@@ -156,7 +152,7 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: !root.has-media || root.controls-visible;
+    property <bool> show-ui: !root.has-media || root.controls-visible || root.panel-open;
 
     fs := FocusScope {
         key-pressed(e) => {
@@ -231,6 +227,25 @@ export component AppWindow inherits Window {
     }
     top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
 
+    // ---------- Side panel ----------
+    if root.has-media && root.panel-open: SidePanel {
+        x: root.width - self.width;
+        y: 40px;
+        height: root.height - 40px - 72px;
+        tab <=> root.panel-tab;
+        sub-tracks: root.sub-tracks; audio-tracks: root.audio-tracks;
+        audio-devices: root.audio-devices; chapters: root.chapters;
+        ab-state: root.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
+        set-prop(n, v) => { root.set-prop(n, v); }
+        run(c) => { root.run(c); }
+        load-sub() => { root.load-sub(); }
+        sleep(m) => { root.sleep(m); }
+        bookmarks: root.bookmarks;
+        seek-to(k) => { root.seek(k.to-float()); }
+        add-bookmark() => { root.add-bookmark(); }
+        close() => { root.panel-open = false; }
+    }
+
     // ---------- Controls ----------
     if root.has-media && root.show-ui: Rectangle {
         y: root.height - self.height;
@@ -264,8 +279,8 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     x: parent.width - self.preferred-width; width: self.preferred-width; height: parent.height;
                     spacing: 6px;
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/subtitles.svg"); }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/audio.svg"); }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/subtitles.svg"); active: root.panel-open && root.panel-tab == 0; clicked => { root.open-panel(0); } }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/audio.svg"); active: root.panel-open && root.panel-tab == 1; clicked => { root.open-panel(1); } }
                     IconButton {
                         y: 4px;
                         icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
@@ -279,7 +294,7 @@ export component AppWindow inherits Window {
                         value: root.volume;
                         changed(v) => { root.volume = v; root.volume-changed(v); }
                     }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/settings.svg"); }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/playback_settings.svg"); active: root.panel-open && root.panel-tab >= 2; clicked => { root.open-panel(root.panel-tab >= 2 ? root.panel-tab : 2); } }
                     IconButton { y: 4px; icon: root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : @image-url("../assets/icons/fullscreen.svg"); clicked => { root.toggle-fullscreen(); } }
                 }
             }
