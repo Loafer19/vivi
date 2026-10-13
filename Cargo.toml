@@ -5,7 +5,7 @@ edition = "2021"
 description = "Fast, lightweight media player inspired by Juxtopposed's VLC redesign"
 
 [dependencies]
-slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg"] }
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "unstable-winit-030"] }
 libmpv2 = "4.1"
 rfd = "0.15"
 

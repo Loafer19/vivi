@@ -1,17 +1,22 @@
+// Vivi player UI. Layout & tokens follow the Figma "Player" frame:
+// topbar 40px #191919 (pad 6, gap 10, title Inter 14 #8F8F8F centered),
+// Controls 54px #191919 @93% (pad 20/11, gap 20), radii 4/6.
 
-// Design tokens from Figma "VLC Redesign" (Dark theme) — see docs/design/FIGMA.md
 export global Theme {
     out property <color> accent: #D37918;
     out property <color> accent-bright: #FC9729;
     out property <color> accent-dim: #AB6314;
+    out property <color> accent-bg: #371F06;
     out property <color> bg-a1: #222222;
     out property <color> bg-a3: #1B1B1B;
+    out property <color> bg-a4: #191919;
     out property <color> bg-b1: #0E0E0E;
     out property <color> bg-b2: #090909;
-    out property <color> bg-b1-t: #0E0E0EF2; // B1 Transparent 95%
+    out property <color> bar: #191919ED; // A4 @93%
     out property <color> fg-1: #EAEAEA;
     out property <color> fg-2: #C6C6C6;
     out property <color> fg-a1: #969696;
+    out property <color> fg-a2: #8F8F8F;
     out property <color> fg-a3: #6B6B6B;
     out property <color> divider: #373737;
     out property <length> radius: 4px;
@@ -19,55 +24,82 @@ export global Theme {
     out property <length> gap: 10px;
 }
 
-component IconButton inherits Rectangle {
-    in property <string> icon;
-    in property <bool> primary: false;
-    in property <length> size: 32px;
-    callback clicked();
-    width: size; height: size;
-    border-radius: Theme.radius;
-    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
-                        : (ta.has-hover ? Theme.bg-a1 : transparent);
-    Text {
-        text: icon;
-        color: primary ? Theme.bg-b2 : (ta.has-hover ? Theme.fg-1 : Theme.fg-2);
-        font-size: primary ? 18px : 15px;
-        horizontal-alignment: center; vertical-alignment: center;
-    }
-    ta := TouchArea { clicked => { root.clicked(); } }
+component Icon inherits Image {
+    in property <color> tint: Theme.fg-2;
+    width: 24px; height: 24px;
+    colorize: tint;
+    image-fit: contain;
 }
 
-// Thick seek bar (Figma "Controls"): accent fill on dim track, drag/click to seek.
+component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> primary: false;
+    in property <bool> active: false;
+    in property <string> tip;
+    callback clicked();
+    width: primary ? 44px : 36px; height: primary ? 36px : 32px;
+    border-radius: Theme.radius-lg;
+    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
+                        : (ta.has-hover ? Theme.bg-a1 : transparent);
+    Icon {
+        source: root.icon;
+        tint: root.primary ? Theme.bg-b2 : (root.active ? Theme.accent : (ta.has-hover ? Theme.fg-1 : Theme.fg-2));
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
 component SeekBar inherits Rectangle {
     in property <float> position;
     in property <float> duration;
     callback seek(float);
-    height: 10px;
-    border-radius: 2px;
-    background: Theme.bg-a1;
+    pure callback fmt(float) -> string;
+    height: 18px;
     property <float> frac: duration > 0 ? clamp(position / duration, 0, 1) : 0;
-    Rectangle {
-        x: 0; y: 0; height: parent.height;
-        width: parent.width * (ta.pressed ? clamp(ta.mouse-x / parent.width, 0, 1) : frac);
+    property <float> hover-frac: clamp(ta.mouse-x / self.width, 0, 1);
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: ta.has-hover ? 10px : 8px;
         border-radius: 2px;
-        background: ta.has-hover ? Theme.accent-bright : Theme.accent;
+        background: Theme.bg-a1;
+        if ta.has-hover: Rectangle {
+            x: 0; height: parent.height; border-radius: 2px;
+            width: parent.width * root.hover-frac;
+            background: Theme.divider;
+        }
+        Rectangle {
+            x: 0; height: parent.height; border-radius: 2px;
+            width: parent.width * (ta.pressed ? root.hover-frac : root.frac);
+            background: ta.has-hover ? Theme.accent-bright : Theme.accent;
+        }
+    }
+    // Hover time tooltip
+    if ta.has-hover && root.duration > 0: Rectangle {
+        y: -30px;
+        width: tiptext.preferred-width + 12px; height: 22px;
+        x: clamp(ta.mouse-x - self.width / 2, 0, root.width - self.width);
+        border-radius: Theme.radius;
+        background: Theme.bg-a1;
+        tiptext := Text {
+            text: root.fmt(root.hover-frac * root.duration);
+            color: Theme.fg-1; font-family: "DM Mono"; font-size: 12px;
+            horizontal-alignment: center; vertical-alignment: center;
+        }
     }
     ta := TouchArea {
         mouse-cursor: pointer;
         pointer-event(e) => {
             if (e.kind == PointerEventKind.up && root.duration > 0) {
-                root.seek(clamp(self.mouse-x / self.width, 0, 1) * root.duration);
+                root.seek(root.hover-frac * root.duration);
             }
         }
     }
 }
 
-// Volume: accent fill, thin track (Figma "volume" uses the accent on a dim track).
 component VolumeBar inherits Rectangle {
     in property <float> value;
     in property <float> maximum: 150;
     callback changed(float);
-    height: 6px;
+    width: 96px; height: 6px;
     border-radius: 3px;
     background: Theme.divider;
     Rectangle {
@@ -76,7 +108,7 @@ component VolumeBar inherits Rectangle {
         background: Theme.accent;
     }
     TouchArea {
-        y: -8px; height: 22px;
+        y: -10px; height: 26px;
         mouse-cursor: pointer;
         moved => { if (self.pressed) { root.changed(clamp(self.mouse-x / self.width, 0, 1) * root.maximum); } }
         pointer-event(e) => {
@@ -86,11 +118,12 @@ component VolumeBar inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "Vivi";
+    title: root.has-media ? root.media-title + " — Vivi" : "Vivi";
     preferred-width: 1280px;
     preferred-height: 720px;
-    // Transparent so mpv (rendered as an OpenGL underlay) shows through.
-    background: transparent;
+    min-width: 480px; min-height: 300px;
+    // Transparent only while playing (mpv underlay shows through); opaque otherwise.
+    background: root.has-media ? transparent : Theme.bg-b1;
     default-font-family: "Inter";
     default-font-size: 14px;
 
@@ -101,6 +134,9 @@ export component AppWindow inherits Window {
     in-out property <float> volume: 100;
     in property <bool> muted: false;
     in property <bool> has-media: false;
+    in property <bool> fullscreen: false;
+    // Driven from Rust: false after ~2s of mouse inactivity during playback.
+    in property <bool> controls-visible: true;
 
     callback toggle-play();
     callback open-file();
@@ -110,7 +146,8 @@ export component AppWindow inherits Window {
     callback toggle-fullscreen();
     callback prev();
     callback next();
-    callback key(string, bool, bool) -> bool; // text, shift, ctrl
+    callback activity();
+    callback key(string, bool, bool) -> bool;
 
     pure function fmt(t: float) -> string {
         if (t < 0) { return "00:00"; }
@@ -119,87 +156,131 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
+    property <bool> show-ui: !root.has-media || root.controls-visible;
 
     fs := FocusScope {
         key-pressed(e) => {
+            root.activity();
             if (root.key(e.text, e.modifiers.shift, e.modifiers.control)) { return accept; }
             reject
         }
     }
     init => { fs.focus(); }
 
-    VerticalLayout {
-        // Top bar: menu + media title
-        Rectangle {
-            height: 40px; vertical-stretch: 0;
-            background: Theme.bg-b1-t;
-            HorizontalLayout {
-                padding-left: Theme.gap; padding-right: Theme.gap; spacing: Theme.gap;
-                alignment: start;
-                IconButton { icon: "☰"; y: 4px; clicked => { root.open-file(); } }
-                Text {
-                    text: root.has-media ? root.media-title : "Vivi";
-                    color: Theme.fg-1; vertical-alignment: center;
-                    overflow: elide;
+    // Whole-window activity tracker (mouse moves reset the auto-hide timer).
+    main-ta := TouchArea {
+        mouse-cursor: root.show-ui ? MouseCursor.default : MouseCursor.none;
+        changed mouse-x => { root.activity(); }
+        changed mouse-y => { root.activity(); }
+        clicked => { fs.focus(); if (root.has-media) { root.toggle-play(); } }
+        double-clicked => { root.toggle-fullscreen(); }
+    }
+
+    // ---------- Empty state ----------
+    if !root.has-media: VerticalLayout {
+        alignment: center; spacing: 18px;
+        HorizontalLayout { alignment: center;
+            Image { source: @image-url("../assets/icons/vlc.svg"); width: 72px; height: 72px; }
+        }
+        Text { text: "Vivi"; color: Theme.fg-1; font-size: 32px; font-weight: 300; horizontal-alignment: center; }
+        HorizontalLayout { alignment: center;
+            Rectangle {
+                width: 160px; height: 36px; border-radius: Theme.radius-lg;
+                background: open-ta.has-hover ? Theme.accent-bright : Theme.accent;
+                HorizontalLayout {
+                    alignment: center; spacing: 8px; padding-top: 6px; padding-bottom: 6px;
+                    Icon { source: @image-url("../assets/icons/open.svg"); tint: Theme.bg-b2; width: 20px; height: 24px; }
+                    Text { text: "Open file"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; }
+                }
+                open-ta := TouchArea { mouse-cursor: pointer; clicked => { root.open-file(); } }
+            }
+        }
+        Text { text: "or drop a file here · Ctrl+O"; color: Theme.fg-a3; horizontal-alignment: center; }
+        HorizontalLayout { alignment: center;
+            Rectangle {
+                width: 420px; height: 96px; border-radius: Theme.radius-lg;
+                background: Theme.bg-a4;
+                border-width: 1px; border-color: Theme.bg-a1;
+                VerticalLayout {
+                    padding: 12px; spacing: 8px;
+                    HorizontalLayout { spacing: 8px;
+                        Icon { source: @image-url("../assets/icons/recent.svg"); width: 18px; height: 18px; tint: Theme.fg-a2; }
+                        Text { text: "Recent"; color: Theme.fg-2; font-weight: 600; }
+                    }
+                    Text { text: "Nothing here yet — recently played files will appear here."; color: Theme.fg-a3; wrap: word-wrap; }
                 }
             }
         }
-        // Video area (transparent → mpv underlay)
-        Rectangle {
-            vertical-stretch: 1;
-            if !root.has-media: VerticalLayout {
-                alignment: center; spacing: Theme.gap;
-                Text { text: "Vivi"; color: Theme.accent; font-size: 32px; font-weight: 300; horizontal-alignment: center; }
-                Text { text: "Open a file (Ctrl+O) or pass a path on the command line"; color: Theme.fg-a3; horizontal-alignment: center; }
+    }
+
+    // ---------- Top bar (title) ----------
+    if root.show-ui || top-ta.has-hover: Rectangle {
+        y: 0; height: 40px;
+        background: root.has-media ? Theme.bar : Theme.bg-a4;
+        HorizontalLayout {
+            padding: 6px; spacing: Theme.gap;
+            IconButton { icon: @image-url("../assets/icons/more.svg"); tip: "Menu"; clicked => { root.open-file(); } }
+            Text {
+                horizontal-stretch: 1;
+                text: root.has-media ? root.media-title : "Vivi Media Player";
+                color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
+                overflow: elide;
             }
-            TouchArea {
-                clicked => { fs.focus(); }
-                double-clicked => { root.toggle-fullscreen(); }
-            }
+            IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
-        // Bottom bar
-        Rectangle {
-            vertical-stretch: 0;
-            background: Theme.bg-b1-t;
-            VerticalLayout {
-                padding: Theme.gap; spacing: 8px;
-                SeekBar {
-                    position: root.position; duration: root.duration;
-                    seek(t) => { root.seek(t); fs.focus(); }
+    }
+    top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
+
+    // ---------- Controls ----------
+    if root.has-media && root.show-ui: Rectangle {
+        y: root.height - self.height;
+        height: 72px;
+        background: Theme.bar;
+        TouchArea { } // swallow clicks so they don't toggle play
+        VerticalLayout {
+            padding-left: 20px; padding-right: 20px; padding-top: 4px; padding-bottom: 8px;
+            spacing: 2px;
+            SeekBar {
+                position: root.position; duration: root.duration;
+                fmt(t) => { root.fmt(t) }
+                seek(t) => { root.seek(t); fs.focus(); }
+            }
+            Rectangle {
+                height: 40px;
+                HorizontalLayout {
+                    x: 0; width: self.preferred-width; height: parent.height;
+                    spacing: 6px;
+                    Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; }
+                    Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
+                    Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
                 }
-                Rectangle {
-                    height: 40px;
-                    // left: time
-                    HorizontalLayout {
-                        x: 0; height: parent.height; width: self.preferred-width;
-                        spacing: 6px;
-                        Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; }
-                        Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
-                        Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
+                HorizontalLayout {
+                    x: (parent.width - self.preferred-width) / 2; width: self.preferred-width; height: parent.height;
+                    spacing: 8px; alignment: center;
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
+                    IconButton { y: 2px; primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
+                }
+                HorizontalLayout {
+                    x: parent.width - self.preferred-width; width: self.preferred-width; height: parent.height;
+                    spacing: 6px;
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/subtitles.svg"); }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/audio.svg"); }
+                    IconButton {
+                        y: 4px;
+                        icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
+                            : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
+                            : root.volume < 100 ? @image-url("../assets/icons/close-medium.svg")
+                            : @image-url("../assets/icons/volume-high.svg");
+                        clicked => { root.toggle-mute(); }
                     }
-                    // center: prev / play / next
-                    mid := HorizontalLayout {
-                        x: (parent.width - self.preferred-width) / 2; height: parent.height;
-                        width: self.preferred-width;
-                        spacing: 6px; alignment: center;
-                        IconButton { icon: "⏮"; y: 4px; clicked => { root.prev(); } }
-                        IconButton { icon: root.playing ? "⏸" : "▶"; primary: true; size: 40px; clicked => { root.toggle-play(); fs.focus(); } }
-                        IconButton { icon: "⏭"; y: 4px; clicked => { root.next(); } }
+                    VolumeBar {
+                        y: 17px;
+                        value: root.volume;
+                        changed(v) => { root.volume = v; root.volume-changed(v); }
                     }
-                    // right: subtitles, audio/volume, fullscreen
-                    rgt := HorizontalLayout {
-                        x: parent.width - self.preferred-width; height: parent.height;
-                        width: self.preferred-width;
-                        spacing: 6px;
-                        IconButton { icon: "CC"; y: 4px; }
-                        IconButton { icon: root.muted ? "🔇" : "🔊"; y: 4px; clicked => { root.toggle-mute(); } }
-                        VolumeBar {
-                            y: 15px; width: 110px;
-                            value: root.volume;
-                            changed(v) => { root.volume = v; root.volume-changed(v); }
-                        }
-                        IconButton { icon: "⛶"; y: 4px; clicked => { root.toggle-fullscreen(); } }
-                    }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/settings.svg"); }
+                    IconButton { y: 4px; icon: root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : @image-url("../assets/icons/fullscreen.svg"); clicked => { root.toggle-fullscreen(); } }
                 }
             }
         }
