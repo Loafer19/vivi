@@ -6,6 +6,7 @@ mod libview;
 #[cfg(target_os = "linux")]
 mod mpris;
 mod player;
+mod preview;
 mod render;
 mod settings;
 mod store;
@@ -76,6 +77,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             on_file_loaded(&a, &player, log);
                             a.set_library_open(false);
                             a.invoke_lib_refresh();
+                            let dur: f64 = player.mpv.get_property("duration").unwrap_or(0.0);
+                            preview::start(
+                                &a,
+                                &player.get("path").unwrap_or_default(),
+                                dur,
+                                cfg.borrow().library.thumbnails,
+                            );
                             let c = cfg.borrow();
                             let key = settings::apply_preset(&player, &c, log);
                             settings::sync_panel(&a, &player);

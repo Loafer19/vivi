@@ -30,6 +30,7 @@ component IconButton inherits Rectangle {
 component SeekBar inherits Rectangle {
     in property <float> position;
     in property <float> duration;
+    in property <[image]> frames; // evenly spaced preview frames (may be empty / partial)
     callback seek(float);
     pure callback fmt(float) -> string;
     height: 18px;
@@ -49,6 +50,19 @@ component SeekBar inherits Rectangle {
             x: 0; height: parent.height; border-radius: 2px;
             width: parent.width * (ta.pressed ? root.hover-frac : root.frac);
             background: ta.has-hover ? Theme.accent-bright : Theme.accent;
+        }
+    }
+    // Hover frame preview (#10)
+    if ta.has-hover && root.duration > 0 && root.frames.length > 0: Rectangle {
+        y: -30px - 6px - 108px;
+        width: 192px; height: 108px;
+        x: clamp(ta.mouse-x - self.width / 2, 0, root.width - self.width);
+        border-radius: Theme.radius-lg; clip: true;
+        background: #000000;
+        border-width: 1px; border-color: Theme.divider;
+        Image {
+            width: parent.width; height: parent.height; image-fit: contain;
+            source: root.frames[round(root.hover-frac * (root.frames.length - 1))];
         }
     }
     // Hover time tooltip
@@ -254,6 +268,7 @@ export component AppWindow inherits Window {
     in property <bool> ytdlp;
     in-out property <string> lib-query;
     in property <[Item]> panel-lib;
+    in property <[image]> preview-frames;
     callback lib-refresh();
     callback lib-rescan();
     callback lib-navigate(string);
@@ -449,6 +464,7 @@ export component AppWindow inherits Window {
             spacing: 2px;
             SeekBar {
                 position: root.position; duration: root.duration;
+                frames: root.preview-frames;
                 fmt(t) => { root.fmt(t) }
                 seek(t) => { root.seek(t); fs.focus(); }
             }
