@@ -1,0 +1,13 @@
+name: Bug report
+description: Щось не працює
+labels: ["type: bug"]
+body:
+  - type: textarea
+    attributes: { label: Що сталося, description: Кроки для відтворення }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Очікувана поведінка }
+  - type: input
+    attributes: { label: Система, placeholder: "Arch/Omarchy, Hyprland (Wayland), GPU" }
+  - type: textarea
+    attributes: { label: Лог, description: "Запуск з VIVI_MPV_DEBUG=1", render: text }

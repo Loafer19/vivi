@@ -1,124 +1,59 @@
 # Vivi
 
-Швидкий і легкий (<100 МБ) медіаплеєр на Rust, натхненний редизайном VLC від Juxtopposed
-([відео](https://www.youtube.com/watch?v=ERFeOgqk324), [Figma](https://www.figma.com/community/file/1691465999134370980/vlc-redesign)).
+Швидкий і легкий медіаплеєр на Rust (Slint + libmpv), натхненний редизайном VLC від
+[Juxtopposed](https://www.youtube.com/watch?v=ERFeOgqk324). Ціль — менше 100 МБ, миттєвий запуск,
+простий інтерфейс із глибокою кастомізацією.
 
-## Мета
-- Відтворення майже будь-яких форматів (через libmpv), миттєвий запуск, мала пам'ять.
-- Простий інтерфейс за замовчуванням, глибока кастомізація для профі.
-- Розмір дистрибутиву < 100 МБ (release-профіль: LTO fat, strip, panic=abort).
+![Vivi](docs/screenshots/player.png)
 
-## Стек
-- **Rust** (edition 2021)
-- **Slint** — декларативний UI (`ui/app.slint`), компілюється в build.rs
-- **libmpv2** — біндинги до libmpv (декодування/рендер; потрібна системна `libmpv`)
+## Можливості (v0.1.0)
+- Відтворення майже будь-яких форматів через libmpv (OpenGL render API), `hwdec=auto-safe`
+- Wayland (Hyprland) та X11 — Slint winit + femtovg
+- Інтерфейс за Figma «VLC Redesign»: товстий seek bar з підказкою часу, іконки з Figma, темна тема
+- Автоховання панелей і курсора після 2 с бездіяльності
+- Відкриття: діалог (XDG portal), аргумент командного рядка, drag&drop (X11)
+- Порожній екран з «Open file» і списком нещодавніх (заглушка)
 
-## Архітектура
-| Модуль | Відповідальність |
-|---|---|
-| `ui` | Slint-компоненти: плеєр, бічна панель (4 вкладки), бібліотека, налаштування |
-| `player` | Обгортка над libmpv: стан, черга, доріжки, події, рендер у Slint |
-| `library` | Відео / музика / мережеві потоки / плейлисти, сортування, «переглянуті» |
-| `config` | Налаштування, пресети для серіалів, профілі, гарячі клавіші (TOML) |
-| `system` | Аудіовихід, ОС-інтеграція (медіаклавіші, PiP, файлові асоціації) |
+<img src="docs/screenshots/empty.png" width="480">
 
-## Дизайн та ідеї з відео
-- Кольори: помаранчевий акцент + нейтральні сірі/чорні; акцентний колір змінюваний; світла/темна тема.
-- Іконки: двоколірні лише в меню, монохромні для кнопок. Форми прямокутні, але менш гострі.
-- Кнопка Play лишається внизу (не в центрі), трохи більша, «попередній/наступний» поруч.
-- Повний екран / налаштування — праворуч; субтитри та аудіо (доріжки + вихід) — праворуч унизу.
-- Розділити **чергу** (автовідтворення) і **плейлисти** (колекції); drag&drop у чергу.
-- Товста панель перемотування з прев'ю-мініатюрою, опційно — waveform.
-- Верхня/нижня панелі з'являються при наведенні в повноекранному режимі (назва видима).
-- Одне меню замість дубльованого верхнього меню + контекстного; опція «сховати інтерфейс».
-- Субтитри: додати до файлу / папки / плейлиста, OpenSubtitles, автозіставлення епізодів.
-- Бічна панель із 4 вкладками: Субтитри, Аудіо, Відео, Відтворення.
-  - затримка повзунком + часова шкала субтитрів; шрифт/розмір/обведення/позиція;
-  - мова доріжки за замовчуванням; **пресети для серіалу**;
-  - фільтри з прев'ю-пресетами, еквалайзер; швидкість, реверс, таймер сну, метадані.
-- Бібліотека: відео/музика (пісні, альбоми, виконавці, жанри)/потоки/плейлисти; хлібні крихти,
-  сортування, вигляд, пошук; компактна бібліотека в бічній панелі без виходу з відео.
-- Головна: нещодавні, закріплені; «Продовжити» біля центральних контролів.
-- Закладки й розділи на бічній панелі (Ctrl+B створює закладку); OSD показує натиснуту клавішу.
-- Налаштування: ~12 категорій (Загальні, Інтерфейс, Приватність, Керування, Відтворення, Відео,
-  Аудіо, Субтитри, Бібліотека, Мережа, Продуктивність, Запис, Розширення); базові → розширені внизу;
-  слова замість цифр; іконка «i» з поясненням. Гарячі клавіші — окреме вікно.
-- Drag&drop редактор панелі керування, профілі макетів; екран привітання (тема + гарячі клавіші).
-
-Кадри з відео: `docs/design/`.
-
-### Figma
-Локальну копію `.fig` розпарсено (деталі — `docs/design/FIGMA.md`, картинки — `docs/design/figma/`).
-- **Екрани:** Player (dark/light/music/hide UI), Player – customize + Profiles, Miniplayer, sidebar,
-  панелі Audio (EQ, Compressor, Spatializer, Stereo Widener) і Video (Essential, Crop, Colors),
-  13 екранів Settings, Keyboard Shortcuts, Add Subtitles, Open network stream, New playlist,
-  Onboarding (11 кроків), контекстні меню, сортування/вигляд.
-- **Кольори (dark):** акцент `#D37918` (bright `#FC9729`, dim `#AB6314`), фон `#222222`→`#151515`,
-  глибокий фон `#0E0E0E`/`#090909`, текст `#EAEAEA`/`#C6C6C6`, вторинний `#969696`/`#6B6B6B`,
-  роздільники `#373737`/`#222222`. Є повна світла тема (акцент `#E8851A`).
-- **Шрифти:** Inter 14 (основний), 12/16, Semi Bold для заголовків; DM Mono 14 для часу.
-- **Відступи/радіуси:** gap 10 (також 8/5/16/20); радіуси 4 і 6, pill 100.
-- Рендер фреймів у PNG не зроблено (немає відкритого рендерера .fig) — лише thumbnail.
-
-## Craft — знахідки
-«Craft» у Rust-екосистемі — це **craft-gui** ([github.com/craft-gui/craft](https://github.com/craft-gui/craft),
-craft3, crate `craft_gui` 0.1.x, craftgui.com): експериментальний реактивний GUI (компоненти + повідомлення
-в стилі Elm/React, без макросів, web-подібні стилі, рендер через vello/wgpu або CPU, taffy-лейаут,
-Windows/Linux/macOS, базово Web/Android). Відео та SVG поки не підтримуються, документації мало.
-**Висновок:** цікаво як референс, але для плеєра обираємо Slint (стабільний, малий рантайм, є
-інтеграція з OpenGL/wgpu для відеоповерхні). Craft (додаток для документів Craft.do) — не Rust-порт.
-
-## Crafting Apps (storytold: PhotoCraft, ArtCraft)
-- **PhotoCraft** — «чистий» Rust-редактор (клон Photoshop, early alpha): 24+ крейти workspace
-  (engine/doc/compose/gpu/codecs/psd/…), UI на **egui/eframe 0.36 + wgpu**, тонкий UI над
-  командним рушієм, CPU-композитор як еталон + wgpu-композитор, WASM-збірка (ліміт 24 MiB),
-  perf-бюджети (`perf/budgets.toml`, `cargo xtask perf`), release: `lto = "thin"`, `codegen-units = 1`.
-- **craft-libs** — спільні крейти: `craft-ui` (іконки SVG, кнопки, вкладки, докінг, теми для egui),
-  `craft-settings` (config.toml, атомарне збереження, міграції), `craft-atomic`, `craft-quit`, `craft-cms`.
-- **FilmCraft** (той самий набір) — відеоредактор із власними pure-Rust декодерами/контейнерами
-  (h264, hevc, av1, aac, ac3, flac, matroska, isobmff, mpegts, mxf…) + symphonia, egui + wgpu.
-- **ArtCraft** — інший стек: **Tauri** + React/Vite/Tailwind/three.js фронтенд, Rust-бекенд з
-  клієнтами AI-API. Для легкого плеєра не підходить (webview).
-- **Висновок для Vivi:** лишаємо Slint + libmpv (зріле декодування всіх форматів). Запозичити:
-  структуру workspace «рушій окремо від UI», perf-бюджети/xtask, підхід `craft-settings`
-  (TOML, атомарні записи, міграції). Альтернатива UI — egui + `craft-ui`. Pure-Rust декодери
-  FilmCraft — цікаві на майбутнє, але не замінять mpv за покриттям форматів.
-
-## Збірка та запуск
-Залежності (Arch / Omarchy):
+## Встановлення та збірка (Arch / Omarchy)
 ```sh
 sudo pacman -S --needed mpv rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
+git clone https://github.com/Loafer19/vivi && cd vivi
 cargo build --release
-./target/release/vivi /шлях/до/відео.mkv
+./target/release/vivi ~/Videos/film.mkv
 ```
 Debian/Ubuntu: `sudo apt install libmpv-dev libxkbcommon-x11-0 libfontconfig1-dev`.
+Готові збірки: [Releases](https://github.com/Loafer19/vivi/releases).
 
-Slint працює через winit + femtovg (OpenGL/EGL) і на Wayland (Hyprland), і на X11.
-Змінні середовища: `VIVI_LOG=1` — лог time-pos; `VIVI_MPV_DEBUG=1` — детальний лог mpv;
-`WINIT_UNIX_BACKEND=x11` — примусово XWayland.
+Налагодження: `VIVI_LOG=1` (позиція), `VIVI_MPV_DEBUG=1` (лог mpv), `WINIT_UNIX_BACKEND=x11` (XWayland).
 
-Скриншот (Xvfb, програмний рендер llvmpipe): `docs/screenshots/player.png`.
+## Гарячі клавіші
+| Клавіша | Дія |
+|---|---|
+| Space / K | Відтворення / пауза |
+| ← / → | −5 / +5 с (з Shift — 60 с) |
+| ↑ / ↓ | Гучність ±5 |
+| F, подвійний клік | Повний екран |
+| M | Без звуку |
+| Ctrl+O | Відкрити файл |
+| Esc | Вийти з повного екрана |
 
-## Прогрес
-### Тиждень 1 — каркас
-- [x] cargo init, Slint + libmpv2, release-профіль
-- [x] Базове вікно з плейсхолдер-контролами
-- [x] Модуль `player` (libmpv2, потік подій + канал: time-pos, duration, pause, volume, mute, tracks)
-- [x] Відтворення через libmpv render API (OpenGL) як підкладка під Slint (femtovg)
-- [x] Відкриття файлу: діалог (rfd, XDG portal), аргумент CLI
-- [x] Play/pause, seek bar, гучність, повний екран, гарячі клавіші (Space, ←/→, ↑/↓, F, M, Ctrl+O, Esc)
-- [x] hwdec=auto-safe; release-збірка (бінарник ≈12.5 МБ)
-- [ ] Drag&drop файлів у вікно
-- [ ] Модулі library/config/system
-### Тиждень 2 — плеєр
-- [ ] Play/pause/seek/гучність, товста панель перемотування
-- [ ] Автоховання панелей, повний екран, гарячі клавіші + OSD
-- [ ] Черга з drag&drop
-### Тиждень 3 — бічна панель
-- [ ] Субтитри: доріжки, затримка, стиль, пресети серіалів
-- [ ] Аудіо: доріжки, вихідний пристрій; Відео; Відтворення (швидкість, таймер сну)
-- [ ] Закладки та розділи
-### Тиждень 4 — бібліотека та налаштування
-- [ ] Бібліотека (відео/музика/потоки/плейлисти), головна, «продовжити»
-- [ ] Налаштування за категоріями (TOML), теми, акцентний колір
-- [ ] Перевірка розміру (<100 МБ), пакування
+## Архітектура
+`src/player.rs` — обгортка libmpv (потік подій → канал) · `src/render.rs` — mpv під Slint ·
+`ui/app.slint` — UI і дизайн-токени · `assets/icons` — SVG з Figma.
+Далі: `library`, `config`, `system`. Дизайн: [docs/design/FIGMA.md](docs/design/FIGMA.md),
+дослідження: [docs/RESEARCH.md](docs/RESEARCH.md).
+
+## Roadmap
+Етапи — у [Milestones](https://github.com/Loafer19/vivi/milestones), задачі — в [Issues](https://github.com/Loafer19/vivi/issues).
+- [x] M1 Playback
+- [x] M2 Figma UI & icons (базово)
+- [ ] M3 Side panel & tracks
+- [ ] M4 Queue / playlists / resume
+- [ ] M5 Settings
+- [ ] M6 Library
+- [ ] M7 Packaging
+
+## Ліцензія
+MIT — див. [LICENSE](LICENSE). Іконки — з Figma-файлу «VLC Redesign» (Juxtopposed, Figma Community).

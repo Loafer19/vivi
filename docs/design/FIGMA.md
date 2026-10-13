@@ -3,11 +3,10 @@
 Джерело: `docs/design/vlc-redesign.fig` (локальна копія, не в git). Формат: zip → `canvas.fig`
 (fig-kiwi, schema + data, deflate), `meta.json`, `thumbnail.png`, `images/` (42 растрові картинки).
 Розпарсено власним скриптом на `kiwi-schema` + `pako` (11 613 вузлів: 4570 FRAME, 2539 INSTANCE,
-1945 TEXT, 1121 VECTOR, 332 SYMBOL). Збережено: `figma/thumbnail.png`, `figma/images/*`,
-`figma/tokens.txt`.
+1945 TEXT, 1121 VECTOR, 332 SYMBOL). Іконки: `assets/icons/*.svg` (201 шт., контакт-лист `docs/design/icons.png`).
 
 **Рендер фреймів у PNG не виконано**: відкритого рендерера .fig немає (потрібно відкрити файл у Figma
-й експортувати; або Figma REST API з токеном). Є лише `thumbnail.png` (400×134).
+й експортувати; або Figma REST API з токеном). 
 
 ## Сторінки та фрейми (Page 1)
 - **Player** 1920×1080 (×7 варіантів), **Player - Light**, **Player - hide UI**, **Player - Music** (×2)

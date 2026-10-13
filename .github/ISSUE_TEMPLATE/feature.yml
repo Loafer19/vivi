@@ -1,0 +1,11 @@
+name: Feature request
+description: Нова можливість
+labels: ["type: feature"]
+body:
+  - type: textarea
+    attributes: { label: Опис }
+    validations: { required: true }
+  - type: input
+    attributes: { label: Figma frame, placeholder: "напр. Player - customize" }
+  - type: textarea
+    attributes: { label: Критерії приймання }
