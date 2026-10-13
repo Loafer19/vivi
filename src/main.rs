@@ -1,5 +1,6 @@
 mod player;
 mod render;
+mod store;
 
 use player::{Player, PlayerEvent};
 use slint::{ComponentHandle, Model};
@@ -56,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         PlayerEvent::FileLoaded => {
                             a.set_has_media(true);
                             refresh_lists(&a, &player, log);
+                            on_file_loaded(&a, &player, log);
                         }
                         PlayerEvent::ListsChanged => refresh_lists(&a, &player, log),
                         PlayerEvent::TrackCount(n) => {
@@ -70,11 +72,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let cli_path = std::env::args().nth(1);
+    // First CLI file opens once rendering is ready; further files are queued.
+    let cli: Vec<String> = std::env::args().skip(1).collect();
     let p = player.clone();
     render::attach(&app, player.mpv.clone(), move || {
-        if let Some(path) = cli_path {
-            p.open(&path);
+        let mut it = cli.iter();
+        if let Some(first) = it.next() {
+            p.open(first);
+        }
+        for f in it {
+            p.enqueue(f);
         }
     })?;
 
@@ -220,7 +227,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let p = player.clone();
         app.window().on_winit_window_event(move |_w, ev| {
             if let WindowEvent::DroppedFile(path) = ev {
-                p.open(&path.to_string_lossy());
+                // Drop on an idle player opens; otherwise adds to the queue.
+                if p.get("path").is_some() {
+                    p.enqueue(&path.to_string_lossy());
+                } else {
+                    p.open(&path.to_string_lossy());
+                }
                 return EventResult::PreventDefault;
             }
             EventResult::Propagate
@@ -228,8 +240,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     side_panel(&app, &player, log);
+    queue_and_resume(&app, &player, log);
 
     app.run()?;
+    player.save_position();
     Ok(())
 }
 
@@ -274,13 +288,20 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
         },
     )));
     a.set_hwdec(p.get("hwdec").unwrap_or_default().into());
+    a.set_queue(items(
+        p.queue()
+            .into_iter()
+            .enumerate()
+            .map(|(i, (f, cur))| (i.to_string(), store::display_name(&f), cur)),
+    ));
     if log {
         eprintln!(
-            "lists aid={:?} sid={:?} audio={:?} sub={:?}",
+            "lists aid={:?} sid={:?} audio={:?} sub={:?} queue={:?}",
             p.get("aid"),
             p.get("sid"),
             p.tracks("audio"),
-            p.tracks("sub")
+            p.tracks("sub"),
+            p.queue()
         );
     }
 }
@@ -417,10 +438,163 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     a.invoke_set_prop((*k).into(), (*v).into());
                 } else if n == ops.len() {
                     a.invoke_add_bookmark();
+                    a.invoke_playlist_save("Selftest".into());
                     a.invoke_run("ab-loop".into());
                     a.invoke_run("ab-loop".into());
                 }
             },
         );
     }
+}
+
+fn recent_items() -> slint::ModelRc<Item> {
+    items(
+        store::recent()
+            .into_iter()
+            .take(8)
+            .map(|p| (p.clone(), store::display_name(&p), false)),
+    )
+}
+
+fn playlist_items() -> slint::ModelRc<Item> {
+    items(
+        store::playlists()
+            .into_iter()
+            .map(|(n, p)| (p.to_string_lossy().into_owned(), n, false)),
+    )
+}
+
+/// Remember the file in Recent and offer "Start over" when mpv resumed mid-file.
+fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
+    if let Some(path) = p.get("path") {
+        let abs = std::fs::canonicalize(&path)
+            .map(|x| x.to_string_lossy().into_owned())
+            .unwrap_or(path);
+        store::push_recent(&abs);
+        a.set_recent(recent_items());
+    }
+    let p = p.clone();
+    let w = a.as_weak();
+    slint::Timer::single_shot(Duration::from_millis(300), move || {
+        let Some(a) = w.upgrade() else { return };
+        let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
+        if log {
+            eprintln!("loaded, start at {t:.2}");
+        }
+        if t > 5.0 {
+            let s = t as i64;
+            a.set_resume_text(
+                format!("Resumed from {}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60).into(),
+            );
+            let w = a.as_weak();
+            slint::Timer::single_shot(Duration::from_secs(8), move || {
+                if let Some(a) = w.upgrade() {
+                    a.set_resume_text("".into());
+                }
+            });
+        } else {
+            a.set_resume_text("".into());
+        }
+    });
+}
+
+fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
+    app.set_recent(recent_items());
+    app.set_playlists(playlist_items());
+
+    let p = player.clone();
+    app.on_queue_play(move |i| p.play_index(i));
+    let p = player.clone();
+    app.on_queue_move(move |i, d| p.move_index(i, d));
+    let p = player.clone();
+    app.on_queue_remove(move |i| p.remove_index(i));
+    let p = player.clone();
+    app.on_queue_clear(move || p.clear_queue());
+    let p = player.clone();
+    app.on_queue_add(move || {
+        if let Some(files) = rfd::FileDialog::new()
+            .set_title("Add to queue")
+            .add_filter(
+                "Media",
+                &[
+                    "mkv", "mp4", "webm", "avi", "mov", "m4v", "ts", "mp3", "flac", "ogg", "opus",
+                    "m4a", "wav",
+                ],
+            )
+            .add_filter("All files", &["*"])
+            .pick_files()
+        {
+            for f in files {
+                p.enqueue(&f.to_string_lossy());
+            }
+        }
+    });
+    let p = player.clone();
+    let weak = app.as_weak();
+    app.on_playlist_save(move |name| {
+        let files: Vec<String> = p
+            .queue()
+            .into_iter()
+            .map(|(f, _)| {
+                std::fs::canonicalize(&f)
+                    .map(|x| x.to_string_lossy().into_owned())
+                    .unwrap_or(f)
+            })
+            .collect();
+        if files.is_empty() {
+            return;
+        }
+        match store::save_playlist(&name, &files) {
+            Ok(path) if log => eprintln!("saved playlist {}", path.display()),
+            Err(e) => eprintln!("vivi: save playlist: {e}"),
+            _ => {}
+        }
+        if let Some(a) = weak.upgrade() {
+            a.set_playlists(playlist_items());
+        }
+    });
+    let p = player.clone();
+    app.on_playlist_load(move |path| p.open(&path));
+    let weak = app.as_weak();
+    app.on_playlist_delete(move |path| {
+        store::delete_playlist(std::path::Path::new(path.as_str()));
+        if let Some(a) = weak.upgrade() {
+            a.set_playlists(playlist_items());
+        }
+    });
+    let p = player.clone();
+    app.on_open_recent(move |path| p.open(&path));
+    let weak = app.as_weak();
+    app.on_clear_recent(move || {
+        store::clear_recent();
+        if let Some(a) = weak.upgrade() {
+            a.set_recent(recent_items());
+        }
+    });
+    let p = player.clone();
+    let weak = app.as_weak();
+    app.on_start_over(move || {
+        p.seek_abs(0.0);
+        if let Some(a) = weak.upgrade() {
+            a.set_resume_text("".into());
+        }
+    });
+    let weak = app.as_weak();
+    app.on_dismiss_resume(move || {
+        if let Some(a) = weak.upgrade() {
+            a.set_resume_text("".into());
+        }
+    });
+    // Save the resume position periodically so a crash or kill keeps it.
+    let p = player.clone();
+    let t = Box::leak(Box::new(slint::Timer::default()));
+    t.start(
+        slint::TimerMode::Repeated,
+        Duration::from_secs(5),
+        move || {
+            if p.get("pause").as_deref() == Some("no") {
+                p.save_position();
+            }
+        },
+    );
 }
