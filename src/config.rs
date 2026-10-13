@@ -24,6 +24,12 @@ pub struct Interface {
     pub accent: String,
     /// Seconds of mouse inactivity before controls hide.
     pub autohide_secs: u32,
+    /// Toolbar profile: "Minimal" | "Default" | "Power" | "Custom".
+    pub profile: String,
+    /// Bottom-bar items; `|` marks the play controls (left of it = left group).
+    pub toolbar: Vec<String>,
+    /// First-run onboarding completed or skipped.
+    pub onboarded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -68,6 +74,9 @@ impl Default for Interface {
             theme: "dark".into(),
             accent: "#D37918".into(),
             autohide_secs: 2,
+            profile: "Default".into(),
+            toolbar: profile_toolbar("Default").unwrap_or_default(),
+            onboarded: false,
         }
     }
 }
@@ -196,5 +205,94 @@ mod tests {
         );
         let s = toml::to_string_pretty(&c).unwrap();
         assert_eq!(toml::from_str::<Config>(&s).unwrap(), c);
+    }
+}
+
+/// Every item that can be placed in the bottom bar.
+pub const TOOL_ITEMS: [&str; 16] = [
+    "queue",
+    "subtitles",
+    "audio",
+    "volume",
+    "video",
+    "speed",
+    "chapters",
+    "bookmark",
+    "back10",
+    "fwd10",
+    "stop",
+    "snapshot",
+    "repeat",
+    "shuffle",
+    "settings",
+    "fullscreen",
+];
+
+pub const PROFILES: [&str; 3] = ["Minimal", "Default", "Power"];
+
+/// Built-in toolbar layouts.
+pub fn profile_toolbar(name: &str) -> Option<Vec<String>> {
+    let v: &[&str] = match name {
+        "Minimal" => &["|", "volume", "fullscreen"],
+        "Default" => &[
+            "queue",
+            "|",
+            "subtitles",
+            "audio",
+            "volume",
+            "video",
+            "fullscreen",
+        ],
+        "Power" => &[
+            "queue",
+            "chapters",
+            "bookmark",
+            "back10",
+            "fwd10",
+            "|",
+            "repeat",
+            "shuffle",
+            "snapshot",
+            "subtitles",
+            "audio",
+            "volume",
+            "speed",
+            "video",
+            "fullscreen",
+        ],
+        _ => return None,
+    };
+    Some(v.iter().map(|s| s.to_string()).collect())
+}
+
+/// Drop unknown/duplicate ids and make sure exactly one `|` exists.
+pub fn sanitize_toolbar(v: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for s in v {
+        let ok = s == "|" || TOOL_ITEMS.contains(&s.as_str());
+        if ok && !out.contains(s) {
+            out.push(s.clone());
+        }
+    }
+    if !out.iter().any(|s| s == "|") {
+        out.insert(0, "|".into());
+    }
+    out
+}
+
+#[cfg(test)]
+mod toolbar_tests {
+    use super::*;
+    #[test]
+    fn profiles_are_valid() {
+        for p in PROFILES {
+            let t = profile_toolbar(p).unwrap();
+            assert_eq!(sanitize_toolbar(&t), t, "{p}");
+        }
+        let bad = vec!["nope".to_string(), "volume".into(), "volume".into()];
+        assert_eq!(
+            sanitize_toolbar(&bad),
+            vec!["|".to_string(), "volume".into()]
+        );
     }
 }

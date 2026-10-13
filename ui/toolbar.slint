@@ -1,0 +1,201 @@
+// Bottom-bar customization per Figma "Player - customize" and "Profiles".
+import { Theme, Icon } from "theme.slint";
+
+export global Tools {
+    public pure function icon(id: string) -> image {
+        if id == "queue" { return @image-url("../assets/icons/queue.svg"); }
+        if id == "subtitles" { return @image-url("../assets/icons/subtitles.svg"); }
+        if id == "audio" { return @image-url("../assets/icons/audio.svg"); }
+        if id == "volume" { return @image-url("../assets/icons/volume-high.svg"); }
+        if id == "video" { return @image-url("../assets/icons/playback_settings.svg"); }
+        if id == "speed" { return @image-url("../assets/icons/speed.svg"); }
+        if id == "chapters" { return @image-url("../assets/icons/chapters.svg"); }
+        if id == "bookmark" { return @image-url("../assets/icons/bookmark.svg"); }
+        if id == "back10" { return @image-url("../assets/icons/backward-10-sec.svg"); }
+        if id == "fwd10" { return @image-url("../assets/icons/forward-10-sec.svg"); }
+        if id == "stop" { return @image-url("../assets/icons/stop.svg"); }
+        if id == "snapshot" { return @image-url("../assets/icons/snapshot.svg"); }
+        if id == "repeat" { return @image-url("../assets/icons/repeat-right.svg"); }
+        if id == "shuffle" { return @image-url("../assets/icons/shuffle-right.svg"); }
+        if id == "settings" { return @image-url("../assets/icons/settings.svg"); }
+        if id == "fullscreen" { return @image-url("../assets/icons/fullscreen.svg"); }
+        return @image-url("../assets/icons/more.svg");
+    }
+    public pure function label(id: string) -> string {
+        if id == "queue" { return "Queue"; }
+        if id == "subtitles" { return "Subtitles"; }
+        if id == "audio" { return "Audio"; }
+        if id == "volume" { return "Volume"; }
+        if id == "video" { return "Video"; }
+        if id == "speed" { return "Playback speed"; }
+        if id == "chapters" { return "Chapters"; }
+        if id == "bookmark" { return "Bookmark"; }
+        if id == "back10" { return "Backward 10s"; }
+        if id == "fwd10" { return "Forward 10s"; }
+        if id == "stop" { return "Stop"; }
+        if id == "snapshot" { return "Snapshot"; }
+        if id == "repeat" { return "Repeat"; }
+        if id == "shuffle" { return "Shuffle"; }
+        if id == "settings" { return "Settings"; }
+        if id == "fullscreen" { return "Fullscreen"; }
+        if id == "|" { return "Play controls"; }
+        return id;
+    }
+}
+
+component SmallButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    callback clicked();
+    width: t.preferred-width + 28px; height: 36px; border-radius: Theme.radius-lg;
+    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent) : (ta.has-hover ? Theme.divider : Theme.bg-a1);
+    t := Text { text: root.text; color: primary ? Theme.bg-b2 : Theme.fg-1; font-weight: primary ? 600 : 400; vertical-alignment: center; horizontal-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component Glyph inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 20px; height: 24px; border-radius: 3px;
+    background: ta.has-hover && enabled ? Theme.divider : transparent;
+    Text { text: root.text; color: enabled ? Theme.fg-1 : Theme.fg-a3; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
+    ta := TouchArea { mouse-cursor: enabled ? pointer : default; clicked => { if (root.enabled) { root.clicked(); } } }
+}
+
+// One placed item: icon with move/remove controls and a hover label.
+component Placed inherits Rectangle {
+    in property <string> id;
+    in property <bool> first;
+    in property <bool> last;
+    callback move(int);
+    callback remove();
+    width: 70px; height: 62px;
+    border-radius: Theme.radius-lg; background: Theme.bg-a1;
+    border-width: 1px; border-color: hov.has-hover ? Theme.accent : Theme.divider;
+    hov := TouchArea { }
+    Icon { y: 8px; source: Tools.icon(root.id); width: 22px; height: 22px; tint: Theme.fg-1; }
+    HorizontalLayout {
+        y: 34px; height: 24px; alignment: center; spacing: 1px;
+        Glyph { text: "‹"; enabled: !root.first; clicked => { root.move(-1); } }
+        Glyph { text: "×"; clicked => { root.remove(); } }
+        Glyph { text: "›"; enabled: !root.last; clicked => { root.move(1); } }
+    }
+    if hov.has-hover: Rectangle {
+        y: -28px; height: 24px; width: tl.preferred-width + 14px; z: 5;
+        background: Theme.bg-a1; border-radius: Theme.radius; border-width: 1px; border-color: Theme.divider;
+        tl := Text { text: Tools.label(root.id); color: Theme.fg-1; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
+    }
+}
+
+component Zone inherits Rectangle {
+    in property <string> title;
+    in property <[string]> items;
+    in property <int> offset;
+    in property <bool> lock-first;
+    in property <bool> lock-last;
+    callback move(int, int);
+    callback remove(int);
+    min-height: 90px; border-radius: Theme.radius-lg; background: Theme.bg-b1;
+    Text { x: 12px; y: 6px; text: root.title; color: Theme.fg-a1; font-size: 11px; }
+    if root.items.length == 0: Text { text: "Empty"; color: Theme.fg-a3; }
+    HorizontalLayout {
+        x: 10px; y: 22px; height: 62px; spacing: 6px; alignment: start;
+        for id[i] in root.items: Placed {
+            id: id;
+            first: root.lock-first && i == 0;
+            last: root.lock-last && i == root.items.length - 1;
+            move(d) => { root.move(root.offset + i, d); }
+            remove() => { root.remove(root.offset + i); }
+        }
+    }
+}
+
+export component CustomizeDialog inherits Rectangle {
+    in property <[string]> left;
+    in property <[string]> right;
+    in property <[string]> available;
+    in property <[string]> profiles;
+    in property <string> profile;
+    callback move(int, int);
+    callback remove(int);
+    callback add(string);
+    callback pick-profile(string);
+    callback save();
+    callback cancel();
+
+    background: #00000080;
+    TouchArea { }
+    Rectangle {
+        width: min(1000px, root.width - 48px);
+        height: col.preferred-height;
+        x: (root.width - self.width) / 2;
+        y: max(24px, (root.height - 72px - self.height) / 2);
+        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
+        col := VerticalLayout {
+            padding: 22px; spacing: 14px;
+            Text { text: "Customize Player"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
+            Text {
+                text: "Use ‹ › to re-order items in the bottom bar and × to remove them. Click an item below to add it. Items left of “Play controls” sit on the left side of the bar.";
+                color: Theme.fg-a1; wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: 8px; alignment: start;
+                Text { text: "Profile"; color: Theme.fg-2; vertical-alignment: center; }
+                for p in root.profiles: Rectangle {
+                    height: 30px; width: pt.preferred-width + 22px; border-radius: Theme.radius-lg;
+                    background: p == root.profile ? Theme.accent : (pta.has-hover ? Theme.divider : Theme.bg-a1);
+                    pt := Text { text: p; color: p == root.profile ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
+                    pta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-profile(p); } }
+                }
+                if root.profile == "Custom": Rectangle {
+                    height: 30px; width: ct.preferred-width + 22px; border-radius: Theme.radius-lg; background: Theme.accent;
+                    ct := Text { text: "Custom"; color: Theme.bg-b2; vertical-alignment: center; horizontal-alignment: center; }
+                }
+            }
+            Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }
+            VerticalLayout {
+                spacing: 6px;
+                Zone {
+                    title: "LEFT SIDE"; items: root.left; offset: 0; lock-first: true;
+                    move(i, d) => { root.move(i, d); }
+                    remove(i) => { root.remove(i); }
+                }
+                Rectangle {
+                    height: 30px; border-radius: Theme.radius-lg; background: Theme.accent-bg;
+                    Text { text: "⏮  ▶  ⏭   Play controls (fixed in the center)"; color: Theme.accent-bright; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                Zone {
+                    title: "RIGHT SIDE"; items: root.right; offset: root.left.length + 1; lock-last: true;
+                    move(i, d) => { root.move(i, d); }
+                    remove(i) => { root.remove(i); }
+                }
+            }
+            Text { text: "Available items"; color: Theme.fg-1; font-weight: 600; }
+            Rectangle {
+                height: 64px; border-radius: Theme.radius-lg;
+                border-width: 1px; border-color: Theme.divider;
+                if root.available.length == 0: Text { text: "Every item is already in the player."; color: Theme.fg-a3; }
+                HorizontalLayout {
+                    x: 10px; y: 12px; height: 40px; spacing: 6px; alignment: start;
+                    for id in root.available: Rectangle {
+                        height: 40px; width: 44px; border-radius: Theme.radius-lg;
+                        background: ata.has-hover ? Theme.divider : Theme.bg-a1;
+                        Icon { source: Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
+                        ata := TouchArea { mouse-cursor: pointer; clicked => { root.add(id); } }
+                        if ata.has-hover: Rectangle {
+                            y: -30px; height: 24px; width: tl.preferred-width + 14px; z: 5;
+                            background: Theme.bg-a1; border-radius: Theme.radius;
+                            tl := Text { text: "Add " + Tools.label(id); color: Theme.fg-1; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
+                        }
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 10px; alignment: end;
+                SmallButton { text: "Cancel"; clicked => { root.cancel(); } }
+                SmallButton { text: "Save"; primary: true; clicked => { root.save(); } }
+            }
+        }
+    }
+}
