@@ -1,7 +1,10 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod config;
+mod desktop;
 mod library;
 mod libview;
+#[cfg(target_os = "linux")]
+mod mpris;
 mod player;
 mod render;
 mod settings;
@@ -38,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
     settings::setup(&app, &player, cfg.clone(), log);
     libview::setup(&app, &player, cfg.clone(), log);
+    desktop::setup(&app, &player, log);
     if cfg!(debug_assertions) {
         debug_ui(&app);
     }

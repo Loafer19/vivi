@@ -298,6 +298,28 @@ pub fn make_thumb(m: &Media) -> Option<PathBuf> {
     Some(out)
 }
 
+/// Cover art (audio) or a frame at ~10 % (video) as a 256 px PNG, for MPRIS widgets.
+pub fn make_art(path: &str, out: &Path) {
+    if let Some(d) = out.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let tmp = out.with_extension("tmp.png");
+    let audio = kind_of(Path::new(path)) == Some("audio");
+    let mut cmd = std::process::Command::new("ffmpeg");
+    cmd.args(["-v", "error", "-nostdin", "-y"]);
+    if !audio {
+        cmd.args(["-ss", "5"]);
+    }
+    let ok = cmd
+        .args(["-i", path, "-an", "-frames:v", "1", "-vf", "scale=256:-2"])
+        .arg(&tmp)
+        .status()
+        .is_ok_and(|s| s.success());
+    if ok {
+        let _ = std::fs::rename(&tmp, out);
+    }
+}
+
 pub fn load_thumb(p: &Path) -> Option<slint::Image> {
     let b = std::fs::read(p).ok()?;
     if b.len() != (THUMB_W * THUMB_H * 4) as usize {

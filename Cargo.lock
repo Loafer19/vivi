@@ -4688,6 +4688,7 @@ dependencies = [
  "slint-build",
  "toml",
  "walkdir",
+ "zbus",
 ]
 
 [[package]]
