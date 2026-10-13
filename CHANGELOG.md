@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0] - 2026-10-14
+
+Milestone M7: packaging and desktop integration.
+
+### Added
+- **Packages for every platform** (#28, #29): an AppImage with libmpv bundled, a Linux tarball (binary, `.desktop` file, icons), Arch `PKGBUILD`s in `packaging/arch` (`vivi-bin` from the release tarball and `vivi` from source; the release also ships a `PKGBUILD` with checksums filled in), a Windows x86_64 zip (MSVC build with `libmpv-2.dll` from shinchiro's mpv builds), and a best-effort macOS arm64 `Vivi.app` (Homebrew mpv, unsigned). Every release has `SHA256SUMS`.
+- **Desktop file and app icon.** The icon is also used as the window icon.
+- **File associations** (#30): `vivi.desktop` declares 22 video and audio MIME types. The README shows how to make Vivi the default player with `xdg-mime`.
+- **MPRIS2** (#31, Linux): media keys, `playerctl`, and Waybar or desktop widgets work. Supported: play/pause/stop, next/previous, seek and position, volume, plus metadata (title, artist, album, length, cover art).
+- **Seek-bar hover preview** (#10): hovering the seek bar shows a video frame above the time. Frames are keyframes extracted in the background with `ffmpeg` (optional). Turning off thumbnails in Settings → Library also turns this off.
+- **Miniplayer** (#32), following the Figma "Miniplayer" frame: a compact 391×339 always-on-top window with the title, seek bar and transport controls. An optional queue view grows it to 391×690. Toggle it with `P` or the new top-bar button; `Esc` goes back to the full player at its previous size.
+- **Drag & drop on Wayland** (#5): winit does not support Wayland drag & drop yet. `VIVI_X11=1` runs Vivi through XWayland, where dropping files works. The README documents this.
+
+### Fixed
+- Video turned black after library thumbnails or other images had been drawn: GL state is now reset before mpv renders each frame.
+- Home directory and path separators now work on Windows. SQLite is bundled on Windows and macOS.
+
 ## [0.6.0] - 2026-10-14
 
 Milestone M6: Library.
