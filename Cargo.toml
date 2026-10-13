@@ -1,0 +1,19 @@
+[package]
+name = "vivi"
+version = "0.1.0"
+edition = "2021"
+description = "Fast, lightweight media player inspired by Juxtopposed's VLC redesign"
+
+[dependencies]
+slint = "1.8"
+libmpv2 = "4"
+
+[build-dependencies]
+slint-build = "1.8"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"

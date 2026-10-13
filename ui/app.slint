@@ -1,0 +1,41 @@
+import { Button, Slider } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "Vivi";
+    preferred-width: 1280px;
+    preferred-height: 720px;
+    background: #111111;
+    in-out property <bool> playing: false;
+    in-out property <float> position: 0;
+    callback toggle-play();
+
+    VerticalLayout {
+        // Top bar: menu + media title (auto-hide on hover later)
+        HorizontalLayout {
+            height: 36px; padding: 6px; spacing: 8px;
+            Button { text: "☰"; }
+            Text { text: "Vivi — no media"; color: #dddddd; vertical-alignment: center; }
+        }
+        // Video surface placeholder
+        Rectangle {
+            background: #000000;
+            Text { text: "Drop media here"; color: #666666; }
+        }
+        // Thick seek bar
+        Slider { minimum: 0; maximum: 100; value <=> position; height: 14px; }
+        // Bottom controls: queue/left, prev-play-next, subs/audio/volume/fullscreen right
+        HorizontalLayout {
+            height: 48px; padding: 6px; spacing: 6px;
+            Button { text: "Queue"; }
+            Rectangle { }
+            Button { text: "⏮"; }
+            Button { text: playing ? "⏸" : "▶"; primary: true; clicked => { root.toggle-play(); } }
+            Button { text: "⏭"; }
+            Rectangle { }
+            Button { text: "CC"; }
+            Button { text: "Audio"; }
+            Slider { width: 100px; minimum: 0; maximum: 100; value: 80; }
+            Button { text: "⛶"; }
+        }
+    }
+}
