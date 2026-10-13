@@ -4,7 +4,8 @@
 
 import { Theme, Icon } from "theme.slint";
 import { SidePanel, Item } from "panel.slint";
-export { Item }
+import { SettingsDialog, SettingRow } from "settings.slint";
+export { Item, SettingRow, Theme }
 
 component IconButton inherits Rectangle {
     in property <image> icon;
@@ -148,6 +149,17 @@ export component AppWindow inherits Window {
     callback clear-recent();
     callback start-over();
     callback dismiss-resume();
+
+    // Settings
+    in-out property <bool> settings-open: false;
+    in property <[string]> settings-categories;
+    in property <[SettingRow]> settings-rows;
+    in-out property <int> settings-category: 0;
+    in property <string> settings-status;
+    in property <string> preset-name;
+    callback setting-changed(string, string);
+    callback settings-refresh(int, string, bool);
+    callback save-preset();
     callback add-bookmark();
     in property <string> ab-state: "Off";
     in property <string> sleep-state: "";
@@ -168,7 +180,7 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: !root.has-media || root.controls-visible || root.panel-open;
+    property <bool> show-ui: !root.has-media || root.controls-visible || root.panel-open || root.settings-open;
 
     fs := FocusScope {
         key-pressed(e) => {
@@ -253,6 +265,7 @@ export component AppWindow inherits Window {
                 color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
                 overflow: elide;
             }
+            IconButton { icon: @image-url("../assets/icons/settings.svg"); active: root.settings-open; clicked => { root.settings-open = !root.settings-open; root.settings-refresh(root.settings-category, "", false); } }
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
     }
@@ -283,6 +296,8 @@ export component AppWindow inherits Window {
         playlist-save(n) => { root.playlist-save(n); }
         playlist-load(k) => { root.playlist-load(k); }
         playlist-delete(k) => { root.playlist-delete(k); }
+        preset-name: root.preset-name;
+        save-preset() => { root.save-preset(); }
         close() => { root.panel-open = false; }
     }
 
@@ -367,5 +382,17 @@ export component AppWindow inherits Window {
                 }
             }
         }
+    }
+
+    // ---------- Settings dialog ----------
+    if root.settings-open: SettingsDialog {
+        width: root.width; height: root.height;
+        categories: root.settings-categories;
+        rows: root.settings-rows;
+        category <=> root.settings-category;
+        status: root.settings-status;
+        changed(id, v) => { root.setting-changed(id, v); }
+        refresh(c, q, adv) => { root.settings-refresh(c, q, adv); }
+        close() => { root.settings-open = false; fs.focus(); }
     }
 }

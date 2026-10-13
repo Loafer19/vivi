@@ -1,5 +1,7 @@
+mod config;
 mod player;
 mod render;
+mod settings;
 mod store;
 
 use player::{Player, PlayerEvent};
@@ -30,11 +32,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     })?;
     let player = Rc::new(player);
+    let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
+    settings::setup(&app, &player, cfg.clone(), log);
+    if let Some(n) = std::env::var("VIVI_SETTINGS").ok().and_then(|v| v.parse().ok()) {
+        app.set_settings_open(true);
+        app.set_settings_category(n);
+        let adv = std::env::var_os("VIVI_ADVANCED").is_some();
+        let q = std::env::var("VIVI_SEARCH").unwrap_or_default();
+        app.invoke_settings_refresh(n, q.into(), adv);
+    }
 
     // Drain player events on the UI thread.
     {
         let weak = app.as_weak();
         let player = player.clone();
+        let cfg = cfg.clone();
         let timer = Box::leak(Box::new(slint::Timer::default()));
         timer.start(
             slint::TimerMode::Repeated,
@@ -58,6 +70,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             a.set_has_media(true);
                             refresh_lists(&a, &player, log);
                             on_file_loaded(&a, &player, log);
+                            let c = cfg.borrow();
+                            let key = settings::apply_preset(&player, &c, log);
+                            a.set_preset_name(
+                                key.or_else(|| player.get("path").map(|p| config::show_key(&p)))
+                                    .unwrap_or_default()
+                                    .into(),
+                            );
                         }
                         PlayerEvent::ListsChanged => refresh_lists(&a, &player, log),
                         PlayerEvent::TrackCount(n) => {
@@ -153,6 +172,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ if s == "f" => toggle_fs(),
             _ if s == "m" => p.toggle_mute(),
             _ if ctrl && s == "o" => open_file(),
+            _ if ctrl && s == "," => {
+                if let Some(a) = weak.upgrade() {
+                    a.set_settings_open(!a.get_settings_open());
+                    a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
+                }
+            }
             _ if ctrl && s == "b" => {
                 if let Some(a) = weak.upgrade() {
                     a.invoke_add_bookmark();
@@ -163,6 +188,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if a.window().is_fullscreen() {
                         a.window().set_fullscreen(false);
                         a.set_fullscreen(false);
+                    } else if a.get_settings_open() {
+                        a.set_settings_open(false);
                     }
                 }
             }
@@ -195,7 +222,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Duration::from_millis(250),
             move || {
                 let Some(a) = weak.upgrade() else { return };
-                let idle = last.get().elapsed() > Duration::from_secs(2);
+                let idle = last.get().elapsed()
+                    > Duration::from_secs(
+                        settings::AUTOHIDE_SECS.load(std::sync::atomic::Ordering::Relaxed) as u64,
+                    );
                 let want = !(idle && a.get_playing() && a.get_has_media());
                 if a.get_controls_visible() != want {
                     a.set_controls_visible(want);
@@ -440,6 +470,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                 } else if n == ops.len() {
                     a.invoke_add_bookmark();
                     a.invoke_playlist_save("Selftest".into());
+                    a.invoke_save_preset();
                     a.invoke_run("ab-loop".into());
                     a.invoke_run("ab-loop".into());
                 }

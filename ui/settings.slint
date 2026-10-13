@@ -1,0 +1,199 @@
+// Settings dialog per Figma "Settings - global/interface/…" (1048×865) and "Keyboard Shortcuts".
+import { ScrollView, LineEdit } from "std-widgets.slint";
+import { Theme, Icon } from "theme.slint";
+
+export struct SettingRow {
+    id: string,
+    category: string,
+    title: string,
+    info: string,
+    // "toggle" | "choice" | "slider" | "text" | "action" | "key" | "color" | "header"
+    kind: string,
+    value: string,
+    options: [string],
+    swatches: [color],
+    minimum: float,
+    maximum: float,
+    step: float,
+}
+
+component Info inherits Rectangle {
+    in property <string> text;
+    width: 18px; height: 18px;
+    Icon { source: @image-url("../assets/icons/info.svg"); width: 16px; height: 16px; tint: ta.has-hover ? Theme.accent : Theme.fg-a3; }
+    ta := TouchArea { }
+    if ta.has-hover: Rectangle {
+        x: 24px; y: -6px; z: 10;
+        width: 280px; height: tip.preferred-height + 16px;
+        background: Theme.bg-a1; border-radius: Theme.radius; border-width: 1px; border-color: Theme.divider;
+        tip := Text { x: 8px; y: 8px; width: parent.width - 16px; text: root.text; wrap: word-wrap; color: Theme.fg-1; font-size: 12px; }
+    }
+}
+
+component Switch inherits Rectangle {
+    in property <bool> on;
+    callback toggled();
+    width: 40px; height: 22px; border-radius: 11px;
+    background: on ? Theme.accent : Theme.divider;
+    Rectangle {
+        x: on ? parent.width - self.width - 3px : 3px; y: 3px;
+        width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF;
+        animate x { duration: 120ms; }
+    }
+    TouchArea { mouse-cursor: pointer; clicked => { root.toggled(); } }
+}
+
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <color> swatch: transparent;
+    callback clicked();
+    height: 28px; width: swatch == transparent ? t.preferred-width + 20px : 28px;
+    border-radius: Theme.radius;
+    background: swatch != transparent ? swatch : (selected ? Theme.accent : (ta.has-hover ? Theme.divider : Theme.bg-a1));
+    border-width: swatch != transparent && selected ? 2px : 0px;
+    border-color: Theme.fg-1;
+    t := Text { text: swatch == transparent ? root.text : ""; font-size: 13px; color: selected ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component Row inherits Rectangle {
+    in property <SettingRow> setting;
+    callback changed(string, string);
+    height: setting.kind == "header" ? 40px : 52px;
+    if setting.kind == "header": Text {
+        x: 0; y: 16px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: 15px;
+    }
+    if setting.kind != "header": HorizontalLayout {
+        spacing: 10px; padding-top: 6px; padding-bottom: 6px;
+        HorizontalLayout {
+            spacing: 6px; horizontal-stretch: 1; alignment: start;
+            Text { text: setting.title; color: Theme.fg-2; vertical-alignment: center; }
+            if setting.info != "": VerticalLayout { alignment: center; Info { text: setting.info; } }
+        }
+        if setting.kind == "toggle": VerticalLayout { alignment: center;
+            Switch { on: setting.value == "true"; toggled => { root.changed(setting.id, setting.value == "true" ? "false" : "true"); } } }
+        if setting.kind == "choice": HorizontalLayout { spacing: 6px; alignment: end; padding-top: 6px; padding-bottom: 6px;
+            for o in setting.options: Chip { text: o; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } }
+        if setting.kind == "color": HorizontalLayout { spacing: 8px; alignment: end; padding-top: 6px; padding-bottom: 6px;
+            for o[i] in setting.options: Chip { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } }
+        if setting.kind == "text": LineEdit {
+            width: 200px; text: setting.value; placeholder-text: "e.g. uk,en";
+            accepted(t) => { root.changed(setting.id, t); }
+            edited(t) => { root.changed(setting.id, t); }
+        }
+        if setting.kind == "slider": HorizontalLayout {
+            spacing: 10px; width: 260px;
+            Rectangle {
+                horizontal-stretch: 1;
+                property <float> v: setting.value.to-float();
+                property <float> frac: clamp((v - setting.minimum) / (setting.maximum - setting.minimum), 0, 1);
+                Rectangle { y: (parent.height - 6px) / 2; height: 6px; border-radius: 3px; background: Theme.divider;
+                    Rectangle { x: 0; width: parent.width * frac; height: 6px; border-radius: 3px; background: Theme.accent; } }
+                Rectangle { x: parent.width * frac - 7px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; border-radius: 7px; background: Theme.fg-1; }
+                ta := TouchArea {
+                    mouse-cursor: pointer;
+                    function apply() {
+                        let raw = setting.minimum + clamp(self.mouse-x / self.width, 0, 1) * (setting.maximum - setting.minimum);
+                        root.changed(setting.id, round(raw / setting.step) * setting.step);
+                    }
+                    pointer-event(e) => { if (e.kind == PointerEventKind.up) { self.apply(); } }
+                }
+            }
+            Text { width: 48px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; horizontal-alignment: right; }
+        }
+        if setting.kind == "action": Rectangle {
+            width: at.preferred-width + 24px; height: 32px; y: 4px; border-radius: Theme.radius;
+            background: ata.has-hover ? Theme.divider : Theme.bg-a1;
+            at := Text { text: setting.value; color: Theme.fg-1; vertical-alignment: center; horizontal-alignment: center; }
+            ata := TouchArea { mouse-cursor: pointer; clicked => { root.changed(setting.id, "run"); } }
+        }
+        if setting.kind == "key": HorizontalLayout { spacing: 4px; alignment: end; padding-top: 8px; padding-bottom: 8px;
+            Rectangle {
+                width: kt.preferred-width + 16px; border-radius: Theme.radius; background: Theme.bg-a1;
+                border-width: 1px; border-color: Theme.divider;
+                kt := Text { text: setting.value; color: Theme.fg-1; font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; }
+            }
+        }
+    }
+    Rectangle { y: parent.height - 1px; height: 1px; background: setting.kind == "header" ? transparent : Theme.bg-a1; }
+}
+
+export component SettingsDialog inherits Rectangle {
+    in property <[string]> categories;
+    in property <[SettingRow]> rows;
+    in-out property <int> category: 0;
+    in-out property <bool> advanced: false;
+    in property <string> status;
+    callback changed(string, string);
+    callback refresh(int, string, bool); // category, search, advanced
+    callback close();
+
+    background: #000000A0;
+    TouchArea { clicked => { root.close(); } }
+
+    dlg := Rectangle {
+        width: min(1048px, root.width - 48px);
+        height: min(760px, root.height - 48px);
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+        background: Theme.bg-a4; border-radius: 12px;
+        border-width: 1px; border-color: Theme.bg-a1;
+        clip: true;
+        TouchArea { }
+        HorizontalLayout {
+            // Category sidebar
+            Rectangle {
+                width: 240px; background: Theme.bg-b1;
+                VerticalLayout {
+                    padding: 14px; spacing: 4px; alignment: start;
+                    Text { text: "Settings"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
+                    Rectangle { height: 8px; }
+                    search := LineEdit {
+                        placeholder-text: "Search settings";
+                        edited(t) => { root.refresh(root.category, t, root.advanced); }
+                    }
+                    Rectangle { height: 8px; }
+                    for c[i] in root.categories: Rectangle {
+                        height: 34px; border-radius: Theme.radius-lg;
+                        background: i == root.category && search.text == "" ? Theme.accent-bg : (cta.has-hover ? Theme.bg-a1 : transparent);
+                        Text {
+                            x: 12px; text: c; vertical-alignment: center; height: parent.height;
+                            color: i == root.category && search.text == "" ? Theme.accent-bright : Theme.fg-2;
+                        }
+                        cta := TouchArea { mouse-cursor: pointer; clicked => { search.text = ""; root.category = i; root.refresh(i, "", root.advanced); } }
+                    }
+                }
+            }
+            // Content
+            VerticalLayout {
+                padding: 20px; spacing: 10px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text {
+                        horizontal-stretch: 1;
+                        text: search.text != "" ? "Results for “" + search.text + "”" : root.categories[root.category];
+                        color: Theme.fg-1; font-size: 18px; font-weight: 600; vertical-alignment: center;
+                    }
+                    Text { text: "Advanced"; color: Theme.fg-a1; vertical-alignment: center; }
+                    VerticalLayout { alignment: center;
+                        Switch { on: root.advanced; toggled => { root.advanced = !root.advanced; root.refresh(root.category, search.text, root.advanced); } } }
+                    Rectangle {
+                        width: 32px; height: 32px; border-radius: Theme.radius;
+                        background: xta.has-hover ? Theme.bg-a1 : transparent;
+                        Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
+                        xta := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                    }
+                }
+                ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        alignment: start; padding-right: 14px;
+                        if root.rows.length == 0: Text { text: "No matching settings."; color: Theme.fg-a3; }
+                        for r in root.rows: Row { setting: r; changed(id, v) => { root.changed(id, v); } }
+                    }
+                }
+                if root.status != "": Text { text: root.status; color: Theme.fg-a3; font-size: 12px; }
+            }
+        }
+    }
+}

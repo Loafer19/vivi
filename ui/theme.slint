@@ -1,20 +1,22 @@
+// Design tokens from Figma "VLC Redesign" (Dark/* and Light/* styles). Switched at runtime.
 export global Theme {
-    out property <color> accent: #D37918;
-    out property <color> accent-bright: #FC9729;
-    out property <color> accent-dim: #AB6314;
-    out property <color> accent-bg: #371F06;
-    out property <color> bg-a1: #222222;
-    out property <color> bg-a3: #1B1B1B;
-    out property <color> bg-a4: #191919;
-    out property <color> bg-b1: #0E0E0E;
-    out property <color> bg-b2: #090909;
-    out property <color> bar: #191919ED; // A4 @93%
-    out property <color> fg-1: #EAEAEA;
-    out property <color> fg-2: #C6C6C6;
-    out property <color> fg-a1: #969696;
-    out property <color> fg-a2: #8F8F8F;
-    out property <color> fg-a3: #6B6B6B;
-    out property <color> divider: #373737;
+    in-out property <bool> dark: true;
+    in-out property <color> accent: #D37918;
+    out property <color> accent-bright: dark ? accent.brighter(25%) : accent.darker(10%);
+    out property <color> accent-dim: accent.darker(20%);
+    out property <color> accent-bg: dark ? accent.mix(#000000, 22%) : accent.mix(#EDEDED, 30%);
+    out property <color> bg-a1: dark ? #222222 : #D5D5D5;
+    out property <color> bg-a3: dark ? #1B1B1B : #DDDDDD;
+    out property <color> bg-a4: dark ? #191919 : #EDEDED;
+    out property <color> bg-b1: dark ? #0E0E0E : #E7E7E7;
+    out property <color> bg-b2: #090909; // text on accent
+    out property <color> bar: dark ? #191919ED : #EDEDEDF0;
+    out property <color> fg-1: dark ? #EAEAEA : #161616;
+    out property <color> fg-2: dark ? #C6C6C6 : #2E2E2E;
+    out property <color> fg-a1: dark ? #969696 : #3C3C3C;
+    out property <color> fg-a2: dark ? #8F8F8F : #3B3B3B;
+    out property <color> fg-a3: dark ? #6B6B6B : #6B6B6B;
+    out property <color> divider: dark ? #373737 : #ACACAC;
     out property <length> radius: 4px;
     out property <length> radius-lg: 6px;
     out property <length> gap: 10px;
