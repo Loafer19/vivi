@@ -1,6 +1,6 @@
 // Right side panel (Figma "sidebar", "Audio - Equalizer", "Video - Essential/Crop/Colors").
 // 400px wide, tabs Subtitles / Audio / Video / Playback.
-import { ScrollView } from "std-widgets.slint";
+import { ScrollView, LineEdit } from "std-widgets.slint";
 import { Theme, Icon } from "theme.slint";
 
 export struct Item { key: string, label: string, selected: bool }
@@ -126,6 +126,40 @@ component Button inherits Rectangle {
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
+// Queue row with hover actions (play, move up/down, remove).
+component QueueRow inherits Rectangle {
+    in property <Item> it;
+    in property <int> index;
+    callback play(int);
+    callback move(int, int);
+    callback remove(int);
+    height: 36px;
+    border-radius: Theme.radius;
+    background: ta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg : transparent);
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.play(root.index); } }
+    HorizontalLayout {
+        padding-left: 10px; padding-right: 4px; spacing: 6px;
+        Text { text: (root.index + 1) + "."; color: Theme.fg-a3; vertical-alignment: center; font-family: "DM Mono"; font-size: 12px; }
+        Text {
+            horizontal-stretch: 1;
+            text: it.label; overflow: elide; vertical-alignment: center;
+            color: it.selected ? Theme.accent-bright : Theme.fg-2;
+        }
+        HorizontalLayout {
+            spacing: 2px;
+            Rectangle { width: 24px;
+                Icon { source: @image-url("../assets/icons/chevron-up.svg"); width: 16px; height: 36px; }
+                up := TouchArea { clicked => { root.move(root.index, -1); } } }
+            Rectangle { width: 24px;
+                Icon { source: @image-url("../assets/icons/chevron-down.svg"); width: 16px; height: 36px; }
+                dn := TouchArea { clicked => { root.move(root.index, 1); } } }
+            Rectangle { width: 24px;
+                Icon { source: @image-url("../assets/icons/close.svg"); width: 14px; height: 36px; }
+                rm := TouchArea { clicked => { root.remove(root.index); } } }
+        }
+    }
+}
+
 export component SidePanel inherits Rectangle {
     in-out property <int> tab: 0;
     in property <[Item]> sub-tracks;
@@ -133,6 +167,16 @@ export component SidePanel inherits Rectangle {
     in property <[Item]> audio-devices;
     in property <[Item]> chapters;
     in property <[Item]> bookmarks;
+    in property <[Item]> queue;
+    in property <[Item]> playlists;
+    callback queue-play(int);
+    callback queue-move(int, int);
+    callback queue-remove(int);
+    callback queue-add();
+    callback queue-clear();
+    callback playlist-save(string);
+    callback playlist-load(string);
+    callback playlist-delete(string);
     callback seek-to(string);
     callback add-bookmark();
     in property <string> ab-state: "Off";
@@ -174,6 +218,7 @@ export component SidePanel inherits Rectangle {
             Tab { icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == 1; clicked => { root.tab = 1; } }
             Tab { icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == 2; clicked => { root.tab = 2; } }
             Tab { icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; } }
+            Tab { icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == 4; clicked => { root.tab = 4; } }
             Rectangle {
                 width: 28px;
                 Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
@@ -291,6 +336,47 @@ export component SidePanel inherits Rectangle {
                             { key: "no", label: "Off (software)", selected: root.hwdec == "no" },
                         ];
                         pick(it) => { root.set-prop("hwdec", it.key); }
+                    }
+                }
+                // ---- Queue & playlists (Figma "Miniplayer", "playlist", "new playlist") ----
+                if root.tab == 4: VerticalLayout {
+                    spacing: 14px; alignment: start;
+                    HorizontalLayout {
+                        Section { text: "Up next  ·  " + root.queue.length; horizontal-stretch: 1; vertical-alignment: center; }
+                        Button { width: 96px; text: "Add"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.queue-add(); } }
+                        Rectangle { width: 6px; }
+                        Button { width: 80px; text: "Clear"; icon: @image-url("../assets/icons/remove.svg"); clicked => { root.queue-clear(); } }
+                    }
+                    if root.queue.length == 0: Text { text: "Queue is empty — add files or drop them on the window."; color: Theme.fg-a3; wrap: word-wrap; }
+                    VerticalLayout {
+                        spacing: 2px; alignment: start;
+                        for it[i] in root.queue: QueueRow {
+                            it: it; index: i;
+                            play(n) => { root.queue-play(n); }
+                            move(n, d) => { root.queue-move(n, d); }
+                            remove(n) => { root.queue-remove(n); }
+                        }
+                    }
+                    Section { text: "Save queue as playlist"; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        name := LineEdit { placeholder-text: "Playlist name"; horizontal-stretch: 1; }
+                        Button { width: 80px; text: "Save"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.playlist-save(name.text); name.text = ""; } }
+                    }
+                    Section { text: "Playlists"; }
+                    if root.playlists.length == 0: Text { text: "No saved playlists"; color: Theme.fg-a3; }
+                    for pl in root.playlists: Rectangle {
+                        height: 34px; border-radius: Theme.radius;
+                        background: pta.has-hover ? Theme.bg-a1 : transparent;
+                        pta := TouchArea { mouse-cursor: pointer; clicked => { root.playlist-load(pl.key); } }
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 4px; spacing: 8px;
+                            Icon { source: @image-url("../assets/icons/playlist.svg"); width: 18px; height: 34px; }
+                            Text { text: pl.label; color: Theme.fg-2; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                            Rectangle { width: 24px;
+                                Icon { source: @image-url("../assets/icons/close.svg"); width: 14px; height: 34px; tint: Theme.fg-a3; }
+                                TouchArea { clicked => { root.playlist-delete(pl.key); } } }
+                        }
                     }
                 }
                 // ---- Playback ----

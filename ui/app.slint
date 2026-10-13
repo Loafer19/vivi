@@ -132,6 +132,22 @@ export component AppWindow inherits Window {
     in property <[Item]> audio-devices;
     in property <[Item]> chapters;
     in property <[Item]> bookmarks;
+    in property <[Item]> queue;
+    in property <[Item]> playlists;
+    in property <[Item]> recent;
+    in property <string> resume-text;
+    callback queue-play(int);
+    callback queue-move(int, int);
+    callback queue-remove(int);
+    callback queue-add();
+    callback queue-clear();
+    callback playlist-save(string);
+    callback playlist-load(string);
+    callback playlist-delete(string);
+    callback open-recent(string);
+    callback clear-recent();
+    callback start-over();
+    callback dismiss-resume();
     callback add-bookmark();
     in property <string> ab-state: "Off";
     in property <string> sleep-state: "";
@@ -194,16 +210,31 @@ export component AppWindow inherits Window {
         Text { text: "or drop a file here · Ctrl+O"; color: Theme.fg-a3; horizontal-alignment: center; }
         HorizontalLayout { alignment: center;
             Rectangle {
-                width: 420px; height: 96px; border-radius: Theme.radius-lg;
+                width: 460px; height: rl.preferred-height;
+                border-radius: Theme.radius-lg;
                 background: Theme.bg-a4;
                 border-width: 1px; border-color: Theme.bg-a1;
-                VerticalLayout {
-                    padding: 12px; spacing: 8px;
+                rl := VerticalLayout {
+                    padding: 12px; spacing: 4px;
                     HorizontalLayout { spacing: 8px;
                         Icon { source: @image-url("../assets/icons/recent.svg"); width: 18px; height: 18px; tint: Theme.fg-a2; }
-                        Text { text: "Recent"; color: Theme.fg-2; font-weight: 600; }
+                        Text { text: "Recent"; color: Theme.fg-2; font-weight: 600; horizontal-stretch: 1; }
+                        if root.recent.length > 0: Text {
+                            text: "Clear"; color: cta.has-hover ? Theme.accent-bright : Theme.fg-a3; font-size: 12px;
+                            cta := TouchArea { mouse-cursor: pointer; clicked => { root.clear-recent(); } }
+                        }
                     }
-                    Text { text: "Nothing here yet — recently played files will appear here."; color: Theme.fg-a3; wrap: word-wrap; }
+                    if root.recent.length == 0: Text { text: "Nothing here yet — recently played files will appear here."; color: Theme.fg-a3; wrap: word-wrap; }
+                    for r in root.recent: Rectangle {
+                        height: 30px; border-radius: Theme.radius;
+                        background: rta.has-hover ? Theme.bg-a1 : transparent;
+                        rta := TouchArea { mouse-cursor: pointer; clicked => { root.open-recent(r.key); } }
+                        HorizontalLayout {
+                            padding-left: 8px; padding-right: 8px; spacing: 8px;
+                            Icon { source: @image-url("../assets/icons/videos.svg"); width: 16px; height: 30px; tint: Theme.fg-a3; }
+                            Text { text: r.label; color: Theme.fg-2; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                        }
+                    }
                 }
             }
         }
@@ -243,7 +274,42 @@ export component AppWindow inherits Window {
         bookmarks: root.bookmarks;
         seek-to(k) => { root.seek(k.to-float()); }
         add-bookmark() => { root.add-bookmark(); }
+        queue: root.queue; playlists: root.playlists;
+        queue-play(i) => { root.queue-play(i); }
+        queue-move(i, d) => { root.queue-move(i, d); }
+        queue-remove(i) => { root.queue-remove(i); }
+        queue-add() => { root.queue-add(); }
+        queue-clear() => { root.queue-clear(); }
+        playlist-save(n) => { root.playlist-save(n); }
+        playlist-load(k) => { root.playlist-load(k); }
+        playlist-delete(k) => { root.playlist-delete(k); }
         close() => { root.panel-open = false; }
+    }
+
+    // ---------- Resume toast ----------
+    if root.has-media && root.resume-text != "": Rectangle {
+        width: toast.preferred-width; height: 52px;
+        x: (root.width - self.width) / 2;
+        y: root.height - 72px - self.height - 16px;
+        border-radius: 16px;
+        background: Theme.bar;
+        toast := HorizontalLayout {
+            padding-left: 20px; padding-right: 10px; spacing: 24px;
+            Text { text: root.resume-text; color: #D1D1D1; font-size: 16px; vertical-alignment: center; }
+            HorizontalLayout {
+                spacing: 10px; padding-top: 10px; padding-bottom: 10px;
+                Rectangle {
+                    width: so.preferred-width + 20px; border-radius: Theme.radius-lg; background: Theme.accent-bg;
+                    so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
+                    TouchArea { mouse-cursor: pointer; clicked => { root.start-over(); } }
+                }
+                Rectangle {
+                    width: 44px; border-radius: Theme.radius-lg; background: Theme.accent;
+                    Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
+                    TouchArea { mouse-cursor: pointer; clicked => { root.dismiss-resume(); } }
+                }
+            }
+        }
     }
 
     // ---------- Controls ----------
@@ -268,6 +334,8 @@ export component AppWindow inherits Window {
                     Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; }
                     Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
                     Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
+                    Rectangle { width: 8px; }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/queue.svg"); active: root.panel-open && root.panel-tab == 4; clicked => { root.open-panel(4); } }
                 }
                 HorizontalLayout {
                     x: (parent.width - self.preferred-width) / 2; width: self.preferred-width; height: parent.height;
@@ -294,7 +362,7 @@ export component AppWindow inherits Window {
                         value: root.volume;
                         changed(v) => { root.volume = v; root.volume-changed(v); }
                     }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/playback_settings.svg"); active: root.panel-open && root.panel-tab >= 2; clicked => { root.open-panel(root.panel-tab >= 2 ? root.panel-tab : 2); } }
+                    IconButton { y: 4px; icon: @image-url("../assets/icons/playback_settings.svg"); active: root.panel-open && (root.panel-tab == 2 || root.panel-tab == 3); clicked => { root.open-panel(root.panel-tab == 3 ? 3 : 2); } }
                     IconButton { y: 4px; icon: root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : @image-url("../assets/icons/fullscreen.svg"); clicked => { root.toggle-fullscreen(); } }
                 }
             }
