@@ -14,7 +14,7 @@ component OptionList inherits VerticalLayout {
     in property <[Item]> items;
     in property <string> empty-text: "None";
     callback pick(Item);
-    spacing: 2px;
+    spacing: 2px; alignment: start;
     if items.length == 0: Text { text: root.empty-text; color: Theme.fg-a3; }
     for it in items: Rectangle {
         height: 32px;
@@ -185,10 +185,10 @@ export component SidePanel inherits Rectangle {
         ScrollView {
             vertical-stretch: 1;
             VerticalLayout {
-                spacing: 14px; padding-right: 10px;
+                spacing: 14px; padding-right: 10px; alignment: start;
                 // ---- Subtitles ----
                 if root.tab == 0: VerticalLayout {
-                    spacing: 14px;
+                    spacing: 14px; alignment: start;
                     Section { text: "Track"; }
                     OptionList {
                         items: [{ key: "no", label: "Off", selected: false }];
@@ -216,7 +216,7 @@ export component SidePanel inherits Rectangle {
                 }
                 // ---- Audio ----
                 if root.tab == 1: VerticalLayout {
-                    spacing: 14px;
+                    spacing: 14px; alignment: start;
                     Section { text: "Track"; }
                     OptionList { items: root.audio-tracks; empty-text: "No audio tracks"; pick(it) => { root.set-prop("aid", it.key); } }
                     Section { text: "Output device"; }
@@ -246,7 +246,7 @@ export component SidePanel inherits Rectangle {
                 }
                 // ---- Video ----
                 if root.tab == 2: VerticalLayout {
-                    spacing: 14px;
+                    spacing: 14px; alignment: start;
                     Section { text: "Aspect ratio"; }
                     Chips {
                         items: [
@@ -295,7 +295,7 @@ export component SidePanel inherits Rectangle {
                 }
                 // ---- Playback ----
                 if root.tab == 3: VerticalLayout {
-                    spacing: 14px;
+                    spacing: 14px; alignment: start;
                     Section { text: "Speed"; }
                     Chips {
                         items: [
