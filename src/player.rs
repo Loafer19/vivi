@@ -17,6 +17,8 @@ pub enum PlayerEvent {
     Title(String),
     TrackCount(i64),
     FileLoaded,
+    /// A list-like property changed (tracks, selection, chapters, devices).
+    ListsChanged,
     EndFile,
 }
 
@@ -58,6 +60,18 @@ impl Player {
         ev.observe_property("mute", Format::Flag, 5)?;
         ev.observe_property("media-title", Format::String, 6)?;
         ev.observe_property("track-list/count", Format::Int64, 7)?;
+        for (i, p) in [
+            "aid",
+            "sid",
+            "chapter-list/count",
+            "audio-device",
+            "audio-device-list",
+        ]
+        .iter()
+        .enumerate()
+        {
+            ev.observe_property(p, Format::String, 10 + i as u64)?;
+        }
 
         let keep_alive = mpv.clone();
         thread::Builder::new()
@@ -86,6 +100,11 @@ impl Player {
                                 ("track-list/count", PropertyData::Int64(v)) => {
                                     Some(PlayerEvent::TrackCount(v))
                                 }
+                                (
+                                    "aid" | "sid" | "chapter-list/count" | "audio-device"
+                                    | "audio-device-list",
+                                    _,
+                                ) => Some(PlayerEvent::ListsChanged),
                                 _ => None,
                             }
                         }
@@ -141,5 +160,80 @@ impl Player {
             },
             &[],
         );
+    }
+
+    /// Set any mpv property from its string form (e.g. `("sub-delay", "0.5")`).
+    pub fn set(&self, name: &str, value: &str) {
+        if let Err(e) = self.mpv.set_property(name, value) {
+            eprintln!("vivi: set {name}={value}: {e:?}");
+        }
+    }
+    pub fn get(&self, name: &str) -> Option<String> {
+        self.mpv.get_property::<String>(name).ok()
+    }
+    pub fn run(&self, cmd: &str) {
+        if let Err(e) = self.mpv.command(cmd, &[]) {
+            eprintln!("vivi: command {cmd}: {e:?}");
+        }
+    }
+    /// Tracks of a type ("audio" | "sub" | "video"): (id, label, selected).
+    pub fn tracks(&self, kind: &str) -> Vec<(i64, String, bool)> {
+        let n: i64 = self.mpv.get_property("track-list/count").unwrap_or(0);
+        (0..n)
+            .filter_map(|i| {
+                let g = |f: &str| self.get(&format!("track-list/{i}/{f}"));
+                if g("type")? != kind {
+                    return None;
+                }
+                let id: i64 = self.mpv.get_property(&format!("track-list/{i}/id")).ok()?;
+                let mut label = g("title").unwrap_or_default();
+                if let Some(lang) = g("lang") {
+                    label = if label.is_empty() {
+                        lang
+                    } else {
+                        format!("{label} ({lang})")
+                    };
+                }
+                if label.is_empty() {
+                    label = format!("Track {id}");
+                }
+                if g("external").as_deref() == Some("yes") {
+                    label.push_str(" · external");
+                }
+                Some((id, label, g("selected").as_deref() == Some("yes")))
+            })
+            .collect()
+    }
+    /// Audio output devices: (name, description).
+    pub fn audio_devices(&self) -> Vec<(String, String)> {
+        let n: i64 = self
+            .mpv
+            .get_property("audio-device-list/count")
+            .unwrap_or(0);
+        (0..n)
+            .filter_map(|i| {
+                let name = self.get(&format!("audio-device-list/{i}/name"))?;
+                let desc = self
+                    .get(&format!("audio-device-list/{i}/description"))
+                    .unwrap_or_else(|| name.clone());
+                Some((name, desc))
+            })
+            .collect()
+    }
+    /// Chapters: (title, start seconds).
+    pub fn chapters(&self) -> Vec<(String, f64)> {
+        let n: i64 = self.mpv.get_property("chapter-list/count").unwrap_or(0);
+        (0..n)
+            .map(|i| {
+                let t: f64 = self
+                    .mpv
+                    .get_property(&format!("chapter-list/{i}/time"))
+                    .unwrap_or(0.0);
+                let title = self
+                    .get(&format!("chapter-list/{i}/title"))
+                    .unwrap_or_else(|| format!("Chapter {}", i + 1));
+                (title, t)
+            })
+            .collect()
     }
 }
