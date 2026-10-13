@@ -16,11 +16,12 @@ instant startup, a simple interface by default with deep customization when you 
   - audio output device, volume boost up to 150%, EQ presets
   - aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hwdec toggle
   - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
-- Open via file dialog (XDG portal), command line, or drag & drop (X11)
+- Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files
+- Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11)
 
 | Side panel | Empty state |
 |---|---|
-| <img src="docs/screenshots/panel-audio.png" width="420"> | <img src="docs/screenshots/empty.png" width="420"> |
+| <img src="docs/screenshots/queue.png" width="420"> | <img src="docs/screenshots/empty.png" width="420"> |
 
 ## Install / build (Arch / Omarchy)
 ```sh
@@ -57,7 +58,7 @@ Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones),
 - [x] M1 Playback
 - [x] M2 Figma UI & icons
 - [x] M3 Side panel & tracks
-- [ ] M4 Queue / playlists / resume
+- [x] M4 Queue / playlists / resume
 - [ ] M5 Settings
 - [ ] M6 Library
 - [ ] M7 Packaging

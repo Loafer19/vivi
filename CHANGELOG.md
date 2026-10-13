@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0] — 2026-10-13
+Milestone M4: queue, playlists and resume.
+
+### Highlights
+- **Queue** tab in the side panel: everything you open, drop or pass on the command line plays in order.
+- **Resume where you left off**, with a "Start over" prompt (Figma "continue" toast).
+- **Recent files** on the start screen.
+
+### Added
+- Queue: add files (multi-select), drag & drop to append, click to play, reorder, remove, clear; next/prev buttons step through it.
+- Playlists: save the queue as `.m3u` in `$XDG_DATA_HOME/vivi/playlists`, load and delete saved playlists.
+- Resume: mpv watch-later files in `$XDG_STATE_HOME/vivi/watch_later` (position, tracks, delays, volume, speed), saved every 5 s and on quit.
+- Recent: last 8 files on the empty state (stored in `$XDG_STATE_HOME/vivi/recent.txt`), with Clear.
+
+### Known issues
+- Queue reordering uses up/down buttons; drag-to-reorder is not implemented.
+- The playlist name field still uses Slint's default (light) text input style.
+- Drag & drop does not work on Wayland yet (#5).
+- Settings and per-show presets are still not saved (M5).
+
 ## [0.2.0] — 2026-10-13
 Milestone M3: side panel & tracks.
 
