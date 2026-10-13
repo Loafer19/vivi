@@ -34,7 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let player = Rc::new(player);
     let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
     settings::setup(&app, &player, cfg.clone(), log);
-    if let Some(n) = std::env::var("VIVI_SETTINGS").ok().and_then(|v| v.parse().ok()) {
+    if let Some(n) = std::env::var("VIVI_SETTINGS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
         app.set_settings_open(true);
         app.set_settings_category(n);
         let adv = std::env::var_os("VIVI_ADVANCED").is_some();
