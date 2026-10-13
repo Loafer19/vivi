@@ -117,7 +117,8 @@ pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> 
                 .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map_or(0, |d| d.as_secs() as i64);
-            let path = p.to_string_lossy().into_owned();
+            // Forward slashes everywhere (mpv accepts them on Windows too).
+            let path = p.to_string_lossy().replace('\\', "/");
             seen.insert(path.clone());
             if known.get(&path) == Some(&mtime) {
                 continue;

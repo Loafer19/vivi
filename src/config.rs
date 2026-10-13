@@ -75,7 +75,7 @@ pub struct Library {
 
 impl Default for Library {
     fn default() -> Self {
-        let home = std::env::var("HOME").unwrap_or_default();
+        let home = crate::store::home().to_string_lossy().replace('\\', "/");
         let folders = ["Videos", "Music"]
             .iter()
             .map(|d| format!("{home}/{d}"))
@@ -145,9 +145,7 @@ pub fn path() -> PathBuf {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| ".".into())).join(".config")
-        })
+        .unwrap_or_else(|| crate::store::home().join(".config"))
         .join("vivi")
         .join("config.toml")
 }

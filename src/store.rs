@@ -9,8 +9,10 @@ use std::path::{Path, PathBuf};
 
 const MAX_RECENT: usize = 12;
 
-fn home() -> PathBuf {
+/// Home directory (`USERPROFILE` on Windows).
+pub fn home() -> PathBuf {
     std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .unwrap_or_else(|| ".".into())
 }

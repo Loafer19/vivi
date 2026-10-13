@@ -15,6 +15,10 @@ rusqlite = { version = "0.40.2", default-features = false }
 lofty = "0.25.4"
 md5 = "0.8.1"
 
+# Windows/macOS: compile SQLite in (no system library to link against).
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
+
 [build-dependencies]
 slint-build = "1.8"
 

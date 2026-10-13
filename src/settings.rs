@@ -665,7 +665,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             .set_title("Add library folder")
                             .pick_folder()
                         {
-                            let d = d.to_string_lossy().trim_end_matches('/').to_string();
+                            let d = d
+                                .to_string_lossy()
+                                .replace('\\', "/")
+                                .trim_end_matches('/')
+                                .to_string();
                             if !c.library.folders.contains(&d) {
                                 c.library.folders.push(d);
                             }
