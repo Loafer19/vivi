@@ -180,6 +180,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let hide_timer = slint::Timer::default();
     {
+        let sub_margin = Cell::new(-1i64);
+        let hp = player.clone();
         let weak = app.as_weak();
         hide_timer.start(
             slint::TimerMode::Repeated,
@@ -190,6 +192,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let want = !(idle && a.get_playing() && a.get_has_media());
                 if a.get_controls_visible() != want {
                     a.set_controls_visible(want);
+                }
+                // Lift subtitles above the bottom bar while it is shown.
+                let bar = want || a.get_panel_open();
+                let h = a
+                    .window()
+                    .size()
+                    .to_logical(a.window().scale_factor())
+                    .height
+                    .max(1.0);
+                let margin = if bar {
+                    22 + (72.0 * 720.0 / h) as i64
+                } else {
+                    22
+                };
+                if sub_margin.get() != margin {
+                    sub_margin.set(margin);
+                    hp.set("sub-margin-y", &margin.to_string());
                 }
             },
         );
