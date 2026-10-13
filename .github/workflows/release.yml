@@ -21,7 +21,21 @@ jobs:
           cp target/release/vivi README.md LICENSE CHANGELOG.md $NAME/
           tar czf $NAME.tar.gz $NAME
           sha256sum $NAME.tar.gz > $NAME.tar.gz.sha256
+      - name: Release notes from CHANGELOG
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          awk -v v="$VER" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md > notes.md
+          {
+            echo
+            echo "![Vivi](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/docs/screenshots/player.png)"
+            echo
+            echo "### Install"
+            echo '1. Install mpv: `sudo pacman -S mpv` (Arch) or `sudo apt install libmpv2` (Debian/Ubuntu).'
+            echo "2. Download \`vivi-${GITHUB_REF_NAME}-linux-x86_64.tar.gz\`, extract, run \`./vivi <file>\`."
+            echo '3. Or build from source: `cargo build --release`.'
+          } >> notes.md
+          test -s notes.md
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" vivi-*.tar.gz* --generate-notes --title "Vivi $GITHUB_REF_NAME"
+        run: gh release create "$GITHUB_REF_NAME" vivi-*.tar.gz* --notes-file notes.md --generate-notes --title "Vivi $GITHUB_REF_NAME"

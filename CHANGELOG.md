@@ -1,23 +1,35 @@
 # Changelog
 
 ## [0.2.0] — 2026-10-13
-M3 Side panel & tracks.
+Milestone M3: side panel & tracks.
+
+### Highlights
+- New right-hand **side panel** (from the Figma "sidebar" frame) with Subtitles, Audio, Video and Playback tabs.
+- Subtitles stay visible above the controls.
+
 ### Added
-- Бічна панель (Figma «sidebar») з вкладками Субтитри / Аудіо / Відео / Відтворення.
-- Субтитри: доріжки з mpv, додавання файлу, затримка, розмір, позиція.
-- Аудіо: доріжки, пристрій виводу, затримка, підсилення до 150%, EQ-пресети (lavfi).
-- Відео: співвідношення сторін, поворот, zoom, pan&scan, яскравість/контраст/насиченість/гама, hwdec.
-- Відтворення: швидкість, A-B loop, таймер сну, розділи, закладки (Ctrl+B, у пам'яті).
+- Subtitles: track list from mpv, add external subtitle file, delay, size, position.
+- Audio: track list, output device, delay, volume boost up to 150%, EQ presets (Flat, Bass, Treble, Voice, Loudness).
+- Video: aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hardware decoding toggle.
+- Playback: speed presets + slider, A-B loop, sleep timer, chapters, in-memory bookmarks (Ctrl+B).
+
 ### Fixed
-- Субтитри більше не ховаються під нижньою панеллю.
+- Subtitles were hidden behind the bottom bar.
+- Empty gaps above lists in the side panel.
+
+### Known issues
+- Settings, bookmarks and per-show presets are not saved yet (planned for M5).
+- Drag & drop does not work on Wayland yet (#5).
+- Not yet tested on real Hyprland/GPU hardware; CI and screenshots use Xvfb + software GL.
 
 ## [0.1.0] — 2026-10-13
-Перша збірка, що відтворює відео.
+First playable build.
+
 ### Added
-- Відтворення через libmpv (render API, OpenGL) під Slint UI (winit + femtovg, Wayland/X11).
-- Нижня панель за Figma: товстий seek bar з підказкою часу, play/prev/next, гучність, повний екран.
-- 201 SVG-іконка з Figma «VLC Redesign».
-- Автоховання панелей і курсора (2 с), верхня панель із назвою.
-- Порожній екран (Open file, підказка drag&drop, Recent-заглушка); drag&drop на X11.
-- Гарячі клавіші: Space/K, ←/→ (Shift ×60 с), ↑/↓, F, M, Ctrl+O, Esc.
-- hwdec=auto-safe, fallback на null-аудіо.
+- Playback via libmpv (OpenGL render API) under a Slint UI (winit + femtovg; Wayland and X11).
+- Figma-based bottom bar: thick seek bar with hover time, prev/play/next, volume, fullscreen.
+- 201 SVG icons extracted from the Figma "VLC Redesign" file.
+- Auto-hiding bars and cursor (2 s), title top bar.
+- Empty state with "Open file", drag & drop hint and a Recent placeholder; drag & drop on X11.
+- Shortcuts: Space/K, ←/→ (Shift ×60 s), ↑/↓, F, M, Ctrl+O, Esc.
+- `hwdec=auto-safe`; falls back to a null audio output when no device is available.

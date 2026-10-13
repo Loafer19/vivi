@@ -1,20 +1,20 @@
-# Дослідження (коротко)
+# Research (short)
 
-## Відео Juxtopposed «VLC redesign»
-Ключові ідеї: зберегти помаранчевий конус і «прямокутний, але не гострий» стиль; play лишається внизу,
-більший, prev/next поруч; субтитри/аудіо/повний екран — праворуч; товстий seek bar з прев'ю;
-панелі з'являються при наведенні; черга ≠ плейлисти; одне меню замість дублів; бічна панель
-(Субтитри / Аудіо / Відео / Відтворення) з пресетами для серіалів, затримкою повзунком і таймлайном
-субтитрів; бібліотека (відео, музика, потоки, плейлисти) і компактна бібліотека в плеєрі;
-закладки/розділи; налаштування ~12 категорій «словами, а не цифрами»; drag&drop-кастомізація панелі,
-профілі, онбординг.
+## Juxtopposed's "VLC redesign" video
+Key ideas: keep the orange cone and a "rectangular but not sharp" look; keep Play at the bottom but larger,
+with prev/next beside it; subtitles/audio/fullscreen on the right; a thick seek bar with previews; bars
+that appear on hover; separate **queue** from **playlists**; one menu instead of duplicates; a side panel
+(Subtitles / Audio / Video / Playback) with per-show presets, a delay slider and a subtitle timeline;
+a library (video, music, streams, playlists) plus a compact library inside the player; bookmarks and
+chapters; ~12 settings categories that use words instead of numbers; drag & drop toolbar customization,
+profiles and onboarding.
 
 ## Figma
-Див. [design/FIGMA.md](design/FIGMA.md): фрейми, токени, іконки (`assets/icons`).
+See [design/FIGMA.md](design/FIGMA.md): frames, tokens, icons (`assets/icons`).
 
-## Rust GUI / «Craft»
-- **craft-gui** (crate `craft_gui`) — експериментальний реактивний GUI; без відео/SVG — не підходить.
-- **storytold Crafting Apps** (PhotoCraft, FilmCraft…) — pure-Rust, egui + wgpu, спільні `craft-libs`
-  (`craft-ui`, `craft-settings`). FilmCraft має власні Rust-декодери. ArtCraft — Tauri + React.
-- **Рішення:** Slint + libmpv (повне покриття форматів, малий бінарник). Запозичити: відокремлення
-  рушія від UI, perf-бюджети, TOML-налаштування з атомарним збереженням.
+## Rust GUI / "Craft"
+- **craft-gui** (crate `craft_gui`) — experimental reactive GUI; no video/SVG support — not suitable.
+- **storytold Crafting Apps** (PhotoCraft, FilmCraft…) — pure Rust, egui + wgpu, shared `craft-libs`
+  (`craft-ui`, `craft-settings`). FilmCraft has its own Rust decoders. ArtCraft is Tauri + React.
+- **Decision:** Slint + libmpv (full format coverage, small binary). Borrow: engine/UI separation,
+  performance budgets, TOML settings with atomic saves.

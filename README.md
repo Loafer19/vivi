@@ -1,22 +1,28 @@
 # Vivi
 
-Швидкий і легкий медіаплеєр на Rust (Slint + libmpv), натхненний редизайном VLC від
-[Juxtopposed](https://www.youtube.com/watch?v=ERFeOgqk324). Ціль — менше 100 МБ, миттєвий запуск,
-простий інтерфейс із глибокою кастомізацією.
+A fast, lightweight media player written in Rust (Slint + libmpv), inspired by
+[Juxtopposed's VLC redesign](https://www.youtube.com/watch?v=ERFeOgqk324). Goals: under 100 MB,
+instant startup, a simple interface by default with deep customization when you want it.
 
 ![Vivi](docs/screenshots/player.png)
 
-## Можливості (v0.1.0)
-- Відтворення майже будь-яких форматів через libmpv (OpenGL render API), `hwdec=auto-safe`
-- Wayland (Hyprland) та X11 — Slint winit + femtovg
-- Інтерфейс за Figma «VLC Redesign»: товстий seek bar з підказкою часу, іконки з Figma, темна тема
-- Автоховання панелей і курсора після 2 с бездіяльності
-- Відкриття: діалог (XDG portal), аргумент командного рядка, drag&drop (X11)
-- Порожній екран з «Open file» і списком нещодавніх (заглушка)
+## Features
+- Plays nearly any format via libmpv (OpenGL render API), `hwdec=auto-safe`
+- Wayland (Hyprland) and X11 — Slint winit + femtovg backend
+- UI based on the Figma "VLC Redesign": thick seek bar with hover time, Figma icons, dark theme
+- Controls and cursor auto-hide after 2 s of inactivity; subtitles move above the bar when it's shown
+- Side panel with **Subtitles / Audio / Video / Playback** tabs:
+  - subtitle & audio track selection, external subtitle files, delays, subtitle size/position
+  - audio output device, volume boost up to 150%, EQ presets
+  - aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hwdec toggle
+  - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
+- Open via file dialog (XDG portal), command line, or drag & drop (X11)
 
-<img src="docs/screenshots/empty.png" width="480">
+| Side panel | Empty state |
+|---|---|
+| <img src="docs/screenshots/panel-audio.png" width="420"> | <img src="docs/screenshots/empty.png" width="420"> |
 
-## Встановлення та збірка (Arch / Omarchy)
+## Install / build (Arch / Omarchy)
 ```sh
 sudo pacman -S --needed mpv rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
 git clone https://github.com/Loafer19/vivi && cd vivi
@@ -24,36 +30,37 @@ cargo build --release
 ./target/release/vivi ~/Videos/film.mkv
 ```
 Debian/Ubuntu: `sudo apt install libmpv-dev libxkbcommon-x11-0 libfontconfig1-dev`.
-Готові збірки: [Releases](https://github.com/Loafer19/vivi/releases).
+Prebuilt Linux binaries: [Releases](https://github.com/Loafer19/vivi/releases) (requires system `mpv`/`libmpv`).
 
-Налагодження: `VIVI_LOG=1` (позиція), `VIVI_MPV_DEBUG=1` (лог mpv), `WINIT_UNIX_BACKEND=x11` (XWayland).
+Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv log),
+`WINIT_UNIX_BACKEND=x11` (force XWayland).
 
-## Гарячі клавіші
-| Клавіша | Дія |
+## Keyboard shortcuts
+| Key | Action |
 |---|---|
-| Space / K | Відтворення / пауза |
-| ← / → | −5 / +5 с (з Shift — 60 с) |
-| ↑ / ↓ | Гучність ±5 |
-| F, подвійний клік | Повний екран |
-| M | Без звуку |
-| Ctrl+O | Відкрити файл |
-| Esc | Вийти з повного екрана |
+| Space / K | Play / pause |
+| ← / → | Seek −5 / +5 s (Shift: 60 s) |
+| ↑ / ↓ | Volume ±5 |
+| F, double-click | Fullscreen |
+| M | Mute |
+| Ctrl+O | Open file |
+| Ctrl+B | Add bookmark |
+| Esc | Leave fullscreen |
 
-## Архітектура
-`src/player.rs` — обгортка libmpv (потік подій → канал) · `src/render.rs` — mpv під Slint ·
-`ui/app.slint` — UI і дизайн-токени · `assets/icons` — SVG з Figma.
-Далі: `library`, `config`, `system`. Дизайн: [docs/design/FIGMA.md](docs/design/FIGMA.md),
-дослідження: [docs/RESEARCH.md](docs/RESEARCH.md).
+## Architecture
+`src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
+`ui/*.slint` — UI and design tokens · `assets/icons` — SVGs extracted from Figma.
+Design notes: [docs/design/FIGMA.md](docs/design/FIGMA.md) · research: [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## Roadmap
-Етапи — у [Milestones](https://github.com/Loafer19/vivi/milestones), задачі — в [Issues](https://github.com/Loafer19/vivi/issues).
+Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones), tasks as [issues](https://github.com/Loafer19/vivi/issues).
 - [x] M1 Playback
-- [x] M2 Figma UI & icons (базово)
-- [ ] M3 Side panel & tracks
+- [x] M2 Figma UI & icons
+- [x] M3 Side panel & tracks
 - [ ] M4 Queue / playlists / resume
 - [ ] M5 Settings
 - [ ] M6 Library
 - [ ] M7 Packaging
 
-## Ліцензія
-MIT — див. [LICENSE](LICENSE). Іконки — з Figma-файлу «VLC Redesign» (Juxtopposed, Figma Community).
+## License
+MIT — see [LICENSE](LICENSE). Icons come from the Figma community file "VLC Redesign" by Juxtopposed.
