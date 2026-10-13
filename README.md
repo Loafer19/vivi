@@ -84,12 +84,32 @@ Windows/Linux/macOS, базово Web/Android). Відео та SVG поки н�
   (TOML, атомарні записи, міграції). Альтернатива UI — egui + `craft-ui`. Pure-Rust декодери
   FilmCraft — цікаві на майбутнє, але не замінять mpv за покриттям форматів.
 
+## Збірка та запуск
+Залежності (Arch / Omarchy):
+```sh
+sudo pacman -S --needed mpv rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
+cargo build --release
+./target/release/vivi /шлях/до/відео.mkv
+```
+Debian/Ubuntu: `sudo apt install libmpv-dev libxkbcommon-x11-0 libfontconfig1-dev`.
+
+Slint працює через winit + femtovg (OpenGL/EGL) і на Wayland (Hyprland), і на X11.
+Змінні середовища: `VIVI_LOG=1` — лог time-pos; `VIVI_MPV_DEBUG=1` — детальний лог mpv;
+`WINIT_UNIX_BACKEND=x11` — примусово XWayland.
+
+Скриншот (Xvfb, програмний рендер llvmpipe): `docs/screenshots/player.png`.
+
 ## Прогрес
 ### Тиждень 1 — каркас
 - [x] cargo init, Slint + libmpv2, release-профіль
 - [x] Базове вікно з плейсхолдер-контролами
-- [ ] Модулі ui/player/library/config/system
-- [ ] Відтворення файлу через libmpv (рендер у Slint)
+- [x] Модуль `player` (libmpv2, потік подій + канал: time-pos, duration, pause, volume, mute, tracks)
+- [x] Відтворення через libmpv render API (OpenGL) як підкладка під Slint (femtovg)
+- [x] Відкриття файлу: діалог (rfd, XDG portal), аргумент CLI
+- [x] Play/pause, seek bar, гучність, повний екран, гарячі клавіші (Space, ←/→, ↑/↓, F, M, Ctrl+O, Esc)
+- [x] hwdec=auto-safe; release-збірка (бінарник ≈12.5 МБ)
+- [ ] Drag&drop файлів у вікно
+- [ ] Модулі library/config/system
 ### Тиждень 2 — плеєр
 - [ ] Play/pause/seek/гучність, товста панель перемотування
 - [ ] Автоховання панелей, повний екран, гарячі клавіші + OSD
