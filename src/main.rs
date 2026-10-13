@@ -34,15 +34,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let player = Rc::new(player);
     let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
     settings::setup(&app, &player, cfg.clone(), log);
-    if let Some(n) = std::env::var("VIVI_SETTINGS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-    {
-        app.set_settings_open(true);
-        app.set_settings_category(n);
-        let adv = std::env::var_os("VIVI_ADVANCED").is_some();
-        let q = std::env::var("VIVI_SEARCH").unwrap_or_default();
-        app.invoke_settings_refresh(n, q.into(), adv);
+    if cfg!(debug_assertions) {
+        debug_ui(&app);
     }
 
     // Drain player events on the UI thread.
@@ -75,6 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             on_file_loaded(&a, &player, log);
                             let c = cfg.borrow();
                             let key = settings::apply_preset(&player, &c, log);
+                            settings::sync_panel(&a, &player);
                             a.set_preset_name(
                                 key.or_else(|| player.get("path").map(|p| config::show_key(&p)))
                                     .unwrap_or_default()
@@ -191,6 +185,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if a.window().is_fullscreen() {
                         a.window().set_fullscreen(false);
                         a.set_fullscreen(false);
+                    } else if a.get_customize_open() {
+                        a.invoke_customize_done(false);
                     } else if a.get_settings_open() {
                         a.set_settings_open(false);
                     }
@@ -479,6 +475,29 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                 }
             },
         );
+    }
+}
+
+/// Debug builds only: open dialogs from env vars for screenshots/tests.
+/// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
+/// VIVI_ONBOARDING=<step>.
+fn debug_ui(app: &AppWindow) {
+    let var = |k: &str| std::env::var(k).ok();
+    if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
+        let adv = var("VIVI_ADVANCED").is_some();
+        let q = var("VIVI_SEARCH").unwrap_or_default();
+        app.set_settings_open(true);
+        app.set_settings_category(n);
+        app.set_settings_advanced(adv);
+        app.set_settings_search(q.clone().into());
+        app.invoke_settings_refresh(n, q.into(), adv);
+    }
+    if let Some(p) = var("VIVI_CUSTOMIZE") {
+        app.invoke_customize_profile(p.into());
+    }
+    if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
+        app.set_onboarding_step(n);
+        app.set_onboarding_open(true);
     }
 }
 

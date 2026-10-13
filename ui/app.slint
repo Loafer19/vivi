@@ -5,6 +5,8 @@
 import { Theme, Icon } from "theme.slint";
 import { SidePanel, Item } from "panel.slint";
 import { SettingsDialog, SettingRow } from "settings.slint";
+import { CustomizeDialog, Tools } from "toolbar.slint";
+import { OnboardingDialog } from "onboarding.slint";
 export { Item, SettingRow, Theme }
 
 component IconButton inherits Rectangle {
@@ -93,6 +95,36 @@ component VolumeBar inherits Rectangle {
     }
 }
 
+// A configurable bottom-bar item (see toolbar.slint for the catalogue).
+component BarItem inherits HorizontalLayout {
+    in property <string> id;
+    in property <bool> active;
+    in property <bool> muted;
+    in property <float> volume;
+    in property <float> volume-max: 150;
+    in property <bool> fullscreen;
+    callback act(string);
+    callback volume-changed(float);
+    spacing: 6px;
+    if root.id == "volume": IconButton {
+        y: 4px;
+        icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
+            : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
+            : root.volume < 100 ? @image-url("../assets/icons/close-medium.svg")
+            : @image-url("../assets/icons/volume-high.svg");
+        clicked => { root.act("mute"); }
+    }
+    if root.id == "volume": VolumeBar {
+        y: 17px; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    }
+    if root.id != "volume": IconButton {
+        y: 4px; active: root.active;
+        icon: root.id == "fullscreen" && root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : Tools.icon(root.id);
+        clicked => { root.act(root.id); }
+    }
+}
+
 export component AppWindow inherits Window {
     title: root.has-media ? root.media-title + " — Vivi" : "Vivi";
     preferred-width: 1280px;
@@ -150,12 +182,77 @@ export component AppWindow inherits Window {
     callback start-over();
     callback dismiss-resume();
 
+    // Side-panel slider values (synced from mpv so presets/defaults show up)
+    in-out property <float> pv-sub-delay: 0;
+    in-out property <float> pv-sub-scale: 1;
+    in-out property <float> pv-sub-pos: 100;
+    in-out property <float> pv-audio-delay: 0;
+    in-out property <float> pv-boost: 100;
+    in-out property <int> pv-rotate: 0;
+    in-out property <float> pv-zoom: 0;
+    in-out property <float> pv-panscan: 0;
+    in-out property <float> pv-brightness: 0;
+    in-out property <float> pv-contrast: 0;
+    in-out property <float> pv-saturation: 0;
+    in-out property <float> pv-gamma: 0;
+    in-out property <float> pv-speed: 1;
+
+    // Toolbar (bottom bar) and customization
+    in property <[string]> bar-left: ["queue"];
+    in property <[string]> bar-right: ["subtitles", "audio", "volume", "video", "fullscreen"];
+    in property <bool> repeat-on;
+    in property <bool> shuffle-on;
+    in property <float> volume-max: 150;
+    in-out property <bool> customize-open;
+    in property <[string]> customize-available;
+    in property <[string]> profiles;
+    in property <string> profile;
+    callback bar-action(string);
+    callback customize-move(int, int);
+    callback customize-remove(int);
+    callback customize-add(string);
+    callback customize-profile(string);
+    callback customize-done(bool);
+    function bar-act(id: string) {
+        if (id == "queue") { root.open-panel(4); }
+        else if (id == "subtitles") { root.open-panel(0); }
+        else if (id == "audio") { root.open-panel(1); }
+        else if (id == "video") { root.open-panel(2); }
+        else if (id == "speed" || id == "chapters") { root.open-panel(3); }
+        else if (id == "mute") { root.toggle-mute(); }
+        else if (id == "fullscreen") { root.toggle-fullscreen(); }
+        else if (id == "bookmark") { root.add-bookmark(); }
+        else if (id == "settings") { root.settings-open = true; root.settings-refresh(root.settings-category, "", false); }
+        else { root.bar-action(id); }
+    }
+    function bar-active(id: string) -> bool {
+        return (id == "queue" && root.panel-open && root.panel-tab == 4)
+            || (id == "subtitles" && root.panel-open && root.panel-tab == 0)
+            || (id == "audio" && root.panel-open && root.panel-tab == 1)
+            || (id == "video" && root.panel-open && root.panel-tab == 2)
+            || ((id == "speed" || id == "chapters") && root.panel-open && root.panel-tab == 3)
+            || (id == "repeat" && root.repeat-on) || (id == "shuffle" && root.shuffle-on)
+            || (id == "settings" && root.settings-open);
+    }
+
+    // Onboarding
+    in-out property <bool> onboarding-open;
+    in-out property <int> onboarding-step;
+    in property <[string]> accent-names;
+    in property <[color]> accent-colors;
+    in property <string> accent-name;
+    in property <[string]> onboarding-keys;
+    in property <[string]> onboarding-actions;
+    callback onboarding-done();
+
     // Settings
     in-out property <bool> settings-open: false;
     in property <[string]> settings-categories;
     in property <[SettingRow]> settings-rows;
     in-out property <int> settings-category: 0;
     in property <string> settings-status;
+    in-out property <string> settings-search;
+    in-out property <bool> settings-advanced;
     in property <string> preset-name;
     callback setting-changed(string, string);
     callback settings-refresh(int, string, bool);
@@ -180,7 +277,7 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: !root.has-media || root.controls-visible || root.panel-open || root.settings-open;
+    property <bool> show-ui: !root.has-media || root.controls-visible || root.panel-open || root.settings-open || root.customize-open;
 
     fs := FocusScope {
         key-pressed(e) => {
@@ -297,6 +394,19 @@ export component AppWindow inherits Window {
         playlist-load(k) => { root.playlist-load(k); }
         playlist-delete(k) => { root.playlist-delete(k); }
         preset-name: root.preset-name;
+        sub-delay <=> root.pv-sub-delay;
+        sub-scale <=> root.pv-sub-scale;
+        sub-pos <=> root.pv-sub-pos;
+        audio-delay <=> root.pv-audio-delay;
+        boost <=> root.pv-boost;
+        rotate <=> root.pv-rotate;
+        zoom <=> root.pv-zoom;
+        panscan <=> root.pv-panscan;
+        brightness <=> root.pv-brightness;
+        contrast <=> root.pv-contrast;
+        saturation <=> root.pv-saturation;
+        gamma <=> root.pv-gamma;
+        speed <=> root.pv-speed;
         save-preset() => { root.save-preset(); }
         close() => { root.panel-open = false; }
     }
@@ -350,7 +460,11 @@ export component AppWindow inherits Window {
                     Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
                     Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
                     Rectangle { width: 8px; }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/queue.svg"); active: root.panel-open && root.panel-tab == 4; clicked => { root.open-panel(4); } }
+                    for id in root.bar-left: BarItem {
+                        id: id; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                        act(x) => { root.bar-act(x); fs.focus(); }
+                        volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+                    }
                 }
                 HorizontalLayout {
                     x: (parent.width - self.preferred-width) / 2; width: self.preferred-width; height: parent.height;
@@ -362,23 +476,11 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     x: parent.width - self.preferred-width; width: self.preferred-width; height: parent.height;
                     spacing: 6px;
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/subtitles.svg"); active: root.panel-open && root.panel-tab == 0; clicked => { root.open-panel(0); } }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/audio.svg"); active: root.panel-open && root.panel-tab == 1; clicked => { root.open-panel(1); } }
-                    IconButton {
-                        y: 4px;
-                        icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
-                            : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
-                            : root.volume < 100 ? @image-url("../assets/icons/close-medium.svg")
-                            : @image-url("../assets/icons/volume-high.svg");
-                        clicked => { root.toggle-mute(); }
+                    for id in root.bar-right: BarItem {
+                        id: id; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                        act(x) => { root.bar-act(x); fs.focus(); }
+                        volume-changed(v) => { root.volume = v; root.volume-changed(v); }
                     }
-                    VolumeBar {
-                        y: 17px;
-                        value: root.volume;
-                        changed(v) => { root.volume = v; root.volume-changed(v); }
-                    }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/playback_settings.svg"); active: root.panel-open && (root.panel-tab == 2 || root.panel-tab == 3); clicked => { root.open-panel(root.panel-tab == 3 ? 3 : 2); } }
-                    IconButton { y: 4px; icon: root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : @image-url("../assets/icons/fullscreen.svg"); clicked => { root.toggle-fullscreen(); } }
                 }
             }
         }
@@ -391,8 +493,36 @@ export component AppWindow inherits Window {
         rows: root.settings-rows;
         category <=> root.settings-category;
         status: root.settings-status;
+        search <=> root.settings-search;
+        advanced <=> root.settings-advanced;
         changed(id, v) => { root.setting-changed(id, v); }
         refresh(c, q, adv) => { root.settings-refresh(c, q, adv); }
         close() => { root.settings-open = false; fs.focus(); }
+    }
+
+    // ---------- Customize player ----------
+    if root.customize-open: CustomizeDialog {
+        width: root.width; height: root.height;
+        left: root.bar-left; right: root.bar-right;
+        available: root.customize-available;
+        profiles: root.profiles; profile: root.profile;
+        move(i, d) => { root.customize-move(i, d); }
+        remove(i) => { root.customize-remove(i); }
+        add(id) => { root.customize-add(id); }
+        pick-profile(p) => { root.customize-profile(p); }
+        save() => { root.customize-done(true); fs.focus(); }
+        cancel() => { root.customize-done(false); fs.focus(); }
+    }
+
+    // ---------- First-run onboarding ----------
+    if root.onboarding-open: OnboardingDialog {
+        width: root.width; height: root.height;
+        step <=> root.onboarding-step;
+        dark: Theme.dark; accent: root.accent-name;
+        accents: root.accent-names; swatches: root.accent-colors;
+        keys: root.onboarding-keys; actions: root.onboarding-actions;
+        set-theme(t) => { root.setting-changed("interface.theme", t); }
+        set-accent(a) => { root.setting-changed("interface.accent", a); }
+        finish() => { root.onboarding-done(); fs.focus(); }
     }
 }

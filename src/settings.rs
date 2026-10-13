@@ -3,7 +3,7 @@
 use crate::config::{self, Config, Preset};
 use crate::player::Player;
 use crate::{store, AppWindow, SettingRow, Theme};
-use slint::{Color, ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{Color, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -95,6 +95,9 @@ fn all_rows(c: &Config) -> Vec<(SettingRow, bool)> {
         (row("", "Interface", "Appearance", "", "header", String::new()), false),
         (opts(row("interface.theme", "Interface", "Theme", "Dark or light interface colors (Figma light tokens).", "choice", c.interface.theme.clone()), &["dark", "light"]), false),
         (accent, false),
+        (opts(row("interface.profile", "Interface", "Toolbar profile", "Which buttons appear in the bottom bar. Minimal, Default and Power are built in; Custom is your own layout.", "choice", c.interface.profile.clone()), &["Minimal", "Default", "Power", "Custom"]), false),
+        (row("interface.customize", "Interface", "Customize player", "Choose, order and remove bottom-bar buttons.", "action", "Customize…".into()), false),
+        (row("interface.onboarding", "Interface", "Welcome tour", "Show the first-run onboarding again.", "action", "Show".into()), true),
         (range(row("interface.autohide", "Interface", "Hide controls after (s)", "Seconds without mouse movement before bars and cursor hide during playback.", "slider", c.interface.autohide_secs.to_string()), 1.0, 10.0, 1.0), true),
         (row("", "Playback", "Playback", "", "header", String::new()), false),
         (row("playback.resume", "Playback", "Resume where I left off", "Remember the position of every file and continue from it next time.", "toggle", b(c.playback.resume)), false),
@@ -208,6 +211,7 @@ pub fn apply_theme(a: &AppWindow, c: &Config) {
     let t = a.global::<Theme>();
     t.set_dark(c.interface.theme != "light");
     t.set_accent(hex(&c.interface.accent));
+    a.set_accent_name(c.interface.accent.clone().into());
     AUTOHIDE_SECS.store(c.interface.autohide_secs.max(1), Ordering::Relaxed);
 }
 
@@ -279,6 +283,191 @@ fn current_preset(p: &Player) -> Preset {
     }
 }
 
+fn strings(v: impl IntoIterator<Item = impl Into<SharedString>>) -> ModelRc<SharedString> {
+    ModelRc::new(VecModel::from(
+        v.into_iter().map(Into::into).collect::<Vec<_>>(),
+    ))
+}
+
+/// Push the configured bottom-bar layout to the UI.
+pub fn apply_toolbar(a: &AppWindow, c: &Config) {
+    let t = config::sanitize_toolbar(&c.interface.toolbar);
+    let mid = t.iter().position(|s| s == "|").unwrap_or(0);
+    a.set_bar_left(strings(t[..mid].iter().cloned()));
+    a.set_bar_right(strings(t[mid + 1..].iter().cloned()));
+    a.set_profile(c.interface.profile.clone().into());
+    a.set_customize_available(strings(
+        config::TOOL_ITEMS
+            .iter()
+            .filter(|i| !t.iter().any(|s| s == *i))
+            .copied(),
+    ));
+    a.set_volume_max(c.audio.volume_max as f32);
+}
+
+/// Mirror mpv's current values into the side-panel sliders.
+pub fn sync_panel(a: &AppWindow, p: &Player) {
+    let f = |k: &str, d: f64| p.get(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d) as f32;
+    a.set_pv_sub_delay(f("sub-delay", 0.0));
+    a.set_pv_sub_scale(f("sub-scale", 1.0));
+    a.set_pv_sub_pos(f("sub-pos", 100.0));
+    a.set_pv_audio_delay(f("audio-delay", 0.0));
+    a.set_pv_boost(f("volume", 100.0));
+    a.set_pv_rotate(f("video-rotate", 0.0) as i32);
+    a.set_pv_zoom(f("video-zoom", 0.0));
+    a.set_pv_panscan(f("panscan", 0.0) * 100.0);
+    a.set_pv_brightness(f("brightness", 0.0));
+    a.set_pv_contrast(f("contrast", 0.0));
+    a.set_pv_saturation(f("saturation", 0.0));
+    a.set_pv_gamma(f("gamma", 0.0));
+    a.set_pv_speed(f("speed", 1.0));
+}
+
+/// Bottom-bar actions that need the player.
+fn bar_action(a: &AppWindow, p: &Player, id: &str) {
+    match id {
+        "back10" => p.seek_rel(-10.0),
+        "fwd10" => p.seek_rel(10.0),
+        "stop" => {
+            p.set("pause", "yes");
+            p.seek_abs(0.0);
+        }
+        "snapshot" => {
+            p.run("screenshot");
+            a.set_resume_text("Snapshot saved".into());
+        }
+        "repeat" => {
+            let on = !a.get_repeat_on();
+            p.set("loop-file", if on { "inf" } else { "no" });
+            a.set_repeat_on(on);
+        }
+        "shuffle" => {
+            let on = !a.get_shuffle_on();
+            p.run(if on {
+                "playlist-shuffle"
+            } else {
+                "playlist-unshuffle"
+            });
+            a.set_shuffle_on(on);
+        }
+        _ => {}
+    }
+}
+
+fn customize(
+    app: &AppWindow,
+    player: &Rc<Player>,
+    cfg: &Rc<RefCell<Config>>,
+    save: impl Fn() + Clone + 'static,
+    log: bool,
+) {
+    let backup: Rc<RefCell<Option<config::Interface>>> = Rc::new(RefCell::new(None));
+    let edit = {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        move |f: &dyn Fn(&mut Vec<String>)| {
+            let Some(a) = w.upgrade() else { return };
+            let mut c = cfg.borrow_mut();
+            let mut t = config::sanitize_toolbar(&c.interface.toolbar);
+            f(&mut t);
+            c.interface.profile = config::PROFILES
+                .iter()
+                .find(|p| config::profile_toolbar(p).as_ref() == Some(&t))
+                .map_or("Custom".into(), |p| p.to_string());
+            c.interface.toolbar = t;
+            apply_toolbar(&a, &c);
+        }
+    };
+    {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        let backup = backup.clone();
+        app.on_customize_profile(move |p| {
+            let Some(a) = w.upgrade() else { return };
+            if !a.get_customize_open() {
+                *backup.borrow_mut() = Some(cfg.borrow().interface.clone());
+                a.set_customize_open(true);
+            }
+            if let Some(t) = config::profile_toolbar(&p) {
+                let mut c = cfg.borrow_mut();
+                c.interface.toolbar = t;
+                c.interface.profile = p.to_string();
+            }
+            apply_toolbar(&a, &cfg.borrow());
+        });
+    }
+    {
+        let edit = edit.clone();
+        app.on_customize_move(move |i, d| {
+            edit(&|t| {
+                let (i, j) = (i as usize, i as usize as i64 + d as i64);
+                if j >= 0 && (j as usize) < t.len() && i < t.len() {
+                    t.swap(i, j as usize);
+                }
+            })
+        });
+    }
+    {
+        let edit = edit.clone();
+        app.on_customize_remove(move |i| {
+            edit(&|t| {
+                if t.get(i as usize).is_some_and(|s| s != "|") {
+                    t.remove(i as usize);
+                }
+            })
+        });
+    }
+    app.on_customize_add(move |id| edit(&|t| t.push(id.to_string())));
+    {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        let p = player.clone();
+        app.on_customize_done(move |keep| {
+            let Some(a) = w.upgrade() else { return };
+            a.set_customize_open(false);
+            let old = backup.borrow_mut().take();
+            if keep {
+                save();
+                if log {
+                    eprintln!("toolbar saved: {:?}", cfg.borrow().interface.toolbar);
+                }
+            } else if let Some(old) = old {
+                cfg.borrow_mut().interface = old;
+            }
+            apply_toolbar(&a, &cfg.borrow());
+        });
+        let w = app.as_weak();
+        app.on_bar_action(move |id| {
+            if let Some(a) = w.upgrade() {
+                bar_action(&a, &p, &id);
+            }
+        });
+    }
+}
+
+fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'static) {
+    let keys = [
+        ("Play / pause", "Space"),
+        ("Seek ±5 s (Shift: 60 s)", "← →"),
+        ("Volume", "↑ ↓"),
+        ("Fullscreen", "F"),
+        ("Open file", "Ctrl O"),
+        ("Settings", "Ctrl ,"),
+    ];
+    app.set_onboarding_actions(strings(keys.iter().map(|k| k.0)));
+    app.set_onboarding_keys(strings(keys.iter().map(|k| k.1)));
+    app.set_onboarding_open(!cfg.borrow().interface.onboarded);
+    let w = app.as_weak();
+    let cfg = cfg.clone();
+    app.on_onboarding_done(move || {
+        if let Some(a) = w.upgrade() {
+            a.set_onboarding_open(false);
+        }
+        cfg.borrow_mut().interface.onboarded = true;
+        save();
+    });
+}
+
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
     app.set_settings_categories(ModelRc::new(VecModel::from(
         CATEGORIES
@@ -286,23 +475,43 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             .map(|s| SharedString::from(*s))
             .collect::<Vec<_>>(),
     )));
+    app.set_accent_names(strings(ACCENTS));
+    app.set_accent_colors(ModelRc::new(VecModel::from(
+        ACCENTS.iter().map(|a| hex(a)).collect::<Vec<_>>(),
+    )));
+    app.set_profiles(strings(config::PROFILES));
     apply_theme(app, &cfg.borrow());
+    apply_toolbar(app, &cfg.borrow());
     apply_player(player, &cfg.borrow());
 
     let query = Rc::new(RefCell::new((0i32, String::new(), false)));
+    let rows: Rc<VecModel<SettingRow>> = Rc::new(VecModel::default());
+    app.set_settings_rows(ModelRc::from(rows.clone()));
+    // Update rows in place when the set of rows is unchanged, so focused
+    // widgets (e.g. the language text fields) are not recreated.
     let refresh = {
-        let w = app.as_weak();
         let cfg = cfg.clone();
         let query = query.clone();
         move || {
-            let Some(a) = w.upgrade() else { return };
             let q = query.borrow();
-            a.set_settings_rows(ModelRc::new(VecModel::from(filtered(
-                &cfg.borrow(),
-                q.0,
-                &q.1,
-                q.2,
-            ))));
+            let new = filtered(&cfg.borrow(), q.0, &q.1, q.2);
+            let same = new.len() == rows.row_count()
+                && new
+                    .iter()
+                    .zip(rows.iter())
+                    .all(|(a, b)| a.id == b.id && a.title == b.title && a.kind == b.kind);
+            if same {
+                for (i, r) in new.into_iter().enumerate() {
+                    if rows
+                        .row_data(i)
+                        .is_some_and(|o| o.value != r.value || o.info != r.info)
+                    {
+                        rows.set_row_data(i, r);
+                    }
+                }
+            } else {
+                rows.set_vec(new);
+            }
         }
     };
     let save = {
@@ -319,6 +528,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         }
     };
 
+    customize(app, player, &cfg, save.clone(), log);
+    onboarding(app, &cfg, save.clone());
     {
         let refresh = refresh.clone();
         let query = query.clone();
@@ -345,6 +556,24 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 match id.as_str() {
                     "interface.theme" => c.interface.theme = v.into(),
                     "interface.accent" => c.interface.accent = v.into(),
+                    "interface.profile" => {
+                        if let Some(t) = config::profile_toolbar(v) {
+                            c.interface.toolbar = t;
+                        }
+                        c.interface.profile = v.into();
+                    }
+                    "interface.customize" => {
+                        drop(c);
+                        a.set_settings_open(false);
+                        a.invoke_customize_profile("".into());
+                        return;
+                    }
+                    "interface.onboarding" => {
+                        a.set_settings_open(false);
+                        a.set_onboarding_step(0);
+                        a.set_onboarding_open(true);
+                        return;
+                    }
                     "interface.autohide" => c.interface.autohide_secs = num as u32,
                     "playback.resume" => c.playback.resume = v == "true",
                     "playback.speed" => c.playback.speed = (num * 100.0).round() / 100.0,
@@ -372,12 +601,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 }
             }
             apply_theme(&a, &cfg.borrow());
+            apply_toolbar(&a, &cfg.borrow());
             apply_player(&p, &cfg.borrow());
+            sync_panel(&a, &p);
             save();
-            // Text fields re-render on every keystroke otherwise and lose focus.
-            if !id.ends_with(".language") {
-                refresh();
-            }
+            refresh();
         });
     }
     {
