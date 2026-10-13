@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0] - 2026-10-13
+
+Milestone M5: Settings.
+
+### Added
+- **Settings dialog** (gear button in the top bar or `Ctrl+,`) following the Figma Settings frames: categories, a search box across all settings, a Basic/Advanced toggle and info tooltips on every option.
+- **Interface:** dark/light theme (Figma light tokens), six accent colors, auto-hide delay.
+- **Playback:** resume on/off, default speed, hardware decoding mode.
+- **Audio:** preferred audio languages, volume boost cap (100–300%).
+- **Subtitles:** preferred subtitle languages, font size, auto-loading of external subtitle files.
+- **Keyboard Shortcuts** reference page (read-only).
+- **Privacy:** clear recent files and saved resume positions.
+- **Per-show presets** (#16): save subtitle/audio delays, subtitle size and position, and track languages from the side panel; they are applied automatically to every episode of the same show and can be deleted in Settings → Presets.
+- Settings persist to `~/.config/vivi/config.toml` (atomic write; an invalid file is kept as `.bak`).
+
 ## [0.3.0] — 2026-10-13
 Milestone M4: queue, playlists and resume.
 
