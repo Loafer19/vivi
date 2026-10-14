@@ -1,0 +1,25 @@
+id = "night-mode"
+name = "Night Mode"
+version = "1.0.0"
+description = "Compresses loud scenes and lifts quiet dialogue so films stay understandable at low volume (mpv dynaudnorm / loudnorm). Toggle with Alt+N."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "night-mode.lua"
+min_vivi = "0.8.0"
+icon = "night"
+lucide = "moon"
+permissions = []
+issue = 60
+
+[[settings]]
+key = "active"
+title = "Night mode on"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "strength"
+title = "Strength"
+type = "choice"
+options = ["Medium", "Light", "Strong", "Loudness (EBU R128)"]
+default = "Medium"

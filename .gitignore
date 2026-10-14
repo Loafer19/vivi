@@ -4,3 +4,4 @@
 .DS_Store
 *.fig
 /_site
+/dist

@@ -30,7 +30,7 @@ instant startup, a simple interface by default with deep customization when you 
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
 - Music visualizer for audio-only files (no video track; cover art does not count): Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
 - Settings window rebuilt per Figma: grouped sidebar (App / Media / System), 13 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
-- Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), the visualizer, plus mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
+- Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), the visualizer, plus downloadable plugins installed and updated from Settings → Extensions → Browse (A-B Loop, Night Mode, Playback Statistics) and mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
 | Library | Side panel |
@@ -124,6 +124,18 @@ Turn plugins on or off and change their settings in **Settings → Extensions** 
 | **Lyrics** | Synced lyrics as a karaoke overlay. It looks for `song.lrc` next to `song.flac` first, then a cache, then [LRCLIB](https://lrclib.net) using the file's tags (music only). Settings: online lookup, text size and clear cache. |
 | **Subtitle Search** | Side panel → *Add subtitle file…* (or the Subtitle menu) opens the Add Subtitles dialog. It searches [OpenSubtitles](https://www.opensubtitles.com) by file hash and name, then downloads and loads the subtitle you pick. It needs a free API key from [opensubtitles.com/consumers](https://www.opensubtitles.com/consumers), entered in the plugin settings. Username and password are optional and raise the daily download limit. |
 
+### Downloadable plugins
+Settings → Extensions has two tabs. **Installed** lists built-in plugins, downloaded plugins (with Update, Roll back and Uninstall) and mpv scripts. **Browse** shows the catalog from <https://loafer19.github.io/vivi/index.json> with Install / Update / Uninstall buttons, version, author, size and the permissions each plugin asks for (you confirm them before installing). Downloads run in the background, are checked against the sha256 in the catalog and are installed atomically into `~/.local/share/vivi/plugins/<id>/<version>/`; the previous version is kept for rollback. Vivi checks for updates at most once a day on startup (can be turned off) or when you press *Check now*, and shows a notification when updates are available.
+
+| Package | What it does |
+| --- | --- |
+| **A-B Loop & Frame Step** (`ab-loop`) | `Alt+A` / `Alt+B` set loop points, `Alt+C` clears, `Alt+←/→` nudge the last point by a frame, `,` / `.` step a frame while paused; an on-screen bar shows the loop. |
+| **Night Mode** (`night-mode`) | Dynamic range compression (mpv `dynaudnorm`, or EBU R128 `loudnorm`) so dialogue stays audible at low volume. Strength setting, `Alt+N` toggles. |
+| **Playback Statistics** (`playback-stats`) | Time watched/listened per day, top artists and shows, kept locally; `Alt+S` shows a summary, export to `~/vivi-stats.csv`, clear. |
+
+Packages are mpv Lua scripts with a `manifest.toml`, kept in [plugins/](plugins) and published by the [Plugins workflow](.github/workflows/plugins.yml) as release assets tagged `plugin-<id>-v<version>`. Design and rationale: [docs/plugins-architecture.md](docs/plugins-architecture.md). How to publish your own: [Package & publish](https://loafer19.github.io/vivi/plugin-dev.html#package).
+
+### mpv scripts
 Any mpv Lua or JavaScript script placed in `~/.config/vivi/scripts/` shows up as an **external plugin** with its own toggle. It is loaded with mpv `load-script`, and turning one off takes effect after a restart. Optional `-- @name`, `@description`, `@version` and `@author` header lines fill in the card. See [plugins/examples/now-playing.lua](plugins/examples/now-playing.lua).
 
 The machine-readable catalog is [plugins/index.json](plugins/index.json). The docs site in [docs/site](docs/site) has a landing page, the plugin catalog and a guide to writing plugins. Build it with `python3 scripts/build-site.py` (output in `_site/`). The [Pages workflow](.github/workflows/pages.yml) deploys it to **<https://loafer19.github.io/vivi/>** on every push to `master`. Site icons are [Lucide](https://lucide.dev) SVGs inlined at build time (no JavaScript); each catalog entry names its Lucide icon in the `lucide` field of `index.json`.
@@ -151,7 +163,7 @@ Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones),
 - [x] v0.7 Desktop integration (Flatpak moved to v0.9)
 - [x] v0.8 Figma fidelity: settings window, visualizer, plugin system, menus, library, icons
 - [ ] v0.9 Figma fidelity II: equalizer & filter panels, dialogs, miniplayer queue, remaining frames, Flatpak
-- [ ] Plugins: 4 built-in plugins done, more planned (subtitle auto-sync, Discord, remote control, scrobbling, SponsorBlock, …) — label [`plugin`](https://github.com/Loafer19/vivi/labels/plugin)
+- [ ] Plugins: 4 built-in plugins and 3 downloadable packages done, more planned (subtitle auto-sync, Discord, remote control, scrobbling, SponsorBlock, …) — label [`plugin`](https://github.com/Loafer19/vivi/labels/plugin)
 
 ## License
 MIT — see [LICENSE](LICENSE).

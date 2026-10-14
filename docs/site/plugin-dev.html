@@ -31,6 +31,7 @@
   <li><a href="#hooks">Hooks and context</a></li>
   <li><a href="#ui">Adding UI</a></li>
   <li><a href="#scripts">mpv script plugins</a></li>
+  <li><a href="#package">Package &amp; publish a downloadable plugin</a></li>
   <li><a href="#catalog">Listing in the catalog</a></li>
 </ul>
 
@@ -140,7 +141,56 @@ mp.register_event("file-loaded", function()
 end)</code></pre>
 <p>JavaScript scripts use <code>// @name …</code>. Scripts run inside Vivi's mpv, so they see the same
 properties and can bind commands, but mpv's own OSD is drawn under Vivi's UI and Vivi disables mpv's
-default key bindings. Your libmpv must be built with Lua / JavaScript support (most distributions are).</p>
+default key bindings; keys Vivi does not use itself (and all <code>Alt</code> combinations) are forwarded to mpv, so bind them with <code>mp.add_forced_key_binding</code>. Your libmpv must be built with Lua / JavaScript support (most distributions are).</p>
+
+<h2 id="package">Package &amp; publish a downloadable plugin</h2>
+<p>Downloadable plugins are mpv Lua (or JavaScript) scripts with a <code>manifest.toml</code>, installed
+from Settings → Extensions → Browse. Why this format and how install, update and rollback work:
+<a href="architecture.html">Plugin distribution</a>.</p>
+<ol>
+<li>Create <code>plugins/&lt;id&gt;/</code> with <code>manifest.toml</code>, the entry script
+<code>&lt;id&gt;.lua</code> and optionally a README and more files.</li>
+<li>Write the manifest:
+<pre><code>id = "night-mode"
+name = "Night Mode"
+version = "1.0.0"          # semver; bump it for every change
+description = "..."
+author = "You"
+kind = "mpv-lua"           # or mpv-js
+entry = "night-mode.lua"   # file name = mpv script name = id
+min_vivi = "0.8.0"
+icon = "night"             # Settings icon key
+lucide = "moon"            # docs icon (lucide.dev)
+permissions = []           # network, filesystem, subprocess
+
+[[settings]]
+key = "strength"
+title = "Strength"
+type = "choice"            # toggle | choice | text | secret | action
+options = ["Medium", "Light", "Strong"]
+default = "Medium"</code></pre></li>
+<li>Read settings in the script. Vivi passes them as <code>script-opts</code> named
+<code>&lt;id&gt;-&lt;key&gt;</code> and updates them live; toggles arrive as <code>yes</code>/<code>no</code>.
+Action settings arrive as script messages:
+<pre><code>local o = { strength = "Medium" }
+require("mp.options").read_options(o, "night-mode", function(changed) apply() end)
+mp.register_script_message("clear", clear)   -- an action setting with key "clear"
+mp.add_forced_key_binding("Alt+n", "toggle", toggle)</code></pre>
+Vivi disables mpv's default bindings and forwards keys it does not use (and every <code>Alt</code>
+combination) to mpv, so bind keys with <code>mp.add_forced_key_binding</code>; plain
+<code>add_key_binding</code> is ignored.</li>
+<li>Declare honest permissions: <code>network</code> for HTTP (e.g. via <code>curl</code>),
+<code>filesystem</code> for files outside the package folder, <code>subprocess</code> for running programs.
+Users see them before installing.</li>
+<li>Run <code>scripts/package-plugins.py</code>. It validates the manifest, builds a deterministic zip in
+<code>dist/plugins/</code> and writes the entry (URL, sha256, size) into <code>plugins/index.json</code>.
+Test locally by copying the folder to <code>~/.config/vivi/scripts/</code>.</li>
+<li>Commit and push (or open a pull request). The <code>Plugins</code> workflow checks Lua syntax and the
+index, then publishes a release <code>plugin-&lt;id&gt;-v&lt;version&gt;</code> with the zip and verifies the
+uploaded asset's sha256. The <code>Docs site</code> workflow publishes the new catalog; Vivi picks it up on its
+next daily check or on <em>Check now</em>.</li>
+</ol>
+<p>A released version is immutable: change anything, bump <code>version</code>.</p>
 
 <h2 id="catalog">Listing in the catalog</h2>
 <p>The <a href="plugins.html">catalog</a> is generated from <code>plugins/index.json</code> by

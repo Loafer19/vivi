@@ -13,10 +13,14 @@
 //!
 //! mpv Lua/JS user scripts in `~/.config/vivi/scripts` show up as *external plugins*
 //! (see [`scripts`]); enabled ones are loaded with mpv's `load-script` command.
+//! Downloadable *packages* (see [`packages`]) are mpv scripts too, installed from the
+//! catalog into `~/.local/share/vivi/plugins`; their manifest settings are passed to the
+//! script as mpv `script-opts` (`<id>-<key>=<value>`).
 //!
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
 pub mod lyrics;
+pub mod packages;
 pub mod scripts;
 pub mod skip_intro;
 pub mod subtitles;
@@ -96,6 +100,8 @@ pub enum Origin {
     Builtin,
     /// An mpv user script (Lua or JavaScript).
     Script,
+    /// A downloaded plugin package (an mpv script with a manifest).
+    Package,
 }
 
 /// Static description of a plugin (also the format of `plugins/index.json` entries).
@@ -246,6 +252,8 @@ pub struct Registry {
     cfg: Rc<RefCell<Config>>,
     entries: Vec<Entry>,
     scripts: Vec<scripts::Script>,
+    /// Ids of scripts mpv has loaded (it cannot unload them).
+    loaded: std::collections::HashSet<String>,
 }
 
 thread_local! {
@@ -283,7 +291,7 @@ pub fn manifests() -> Vec<Manifest> {
 
 /// Create the registry, enable plugins per config and start the tick timer.
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
-    let entries = builtin()
+    let entries: Vec<Entry> = builtin()
         .into_iter()
         .map(|p| Entry {
             manifest: p.manifest(),
@@ -291,7 +299,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             active: false,
         })
         .collect();
-    let scripts = scripts::scan(&config::scripts_dir());
+    let scripts = all_scripts(&entries);
     REG.with(|r| {
         *r.borrow_mut() = Some(Registry {
             app: app.as_weak(),
@@ -299,6 +307,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             cfg,
             entries,
             scripts,
+            loaded: Default::default(),
         })
     });
     with(|r| {
@@ -312,8 +321,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             }
         }
         if scripts::load_on_startup(&c) {
-            for s in r.scripts.iter().filter(|s| is_enabled(&c, &s.manifest)) {
-                r.player.cmd("load-script", &[&s.path.to_string_lossy()]);
+            let list: Vec<_> = r
+                .scripts
+                .iter()
+                .filter(|s| is_enabled(&c, &s.manifest))
+                .cloned()
+                .collect();
+            for s in &list {
+                r.load_script(s);
             }
         }
     });
@@ -322,6 +337,16 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         let args: Vec<String> = args.split('\u{1f}').map(String::from).collect();
         command(&id, &name, &args);
     });
+    let auto = with(|r| {
+        r.cfg
+            .borrow()
+            .plugins
+            .get(packages::GLOBAL_ID)
+            .and_then(|s| s.settings.get("autocheck"))
+            .is_none_or(|v| v == "true")
+    })
+    .unwrap_or(true);
+    packages::setup(app, auto);
     let timer = Box::leak(Box::new(slint::Timer::default()));
     timer.start(slint::TimerMode::Repeated, TICK, || {
         with(|r| {
@@ -338,18 +363,84 @@ use crate::config;
 /// Re-read the scripts folder; enabled new scripts are loaded. Returns the count.
 pub fn rescan() -> usize {
     with(|r| {
-        let new = scripts::scan(&config::scripts_dir());
+        let new = all_scripts(&r.entries);
         let c = r.cfg.borrow().clone();
         for s in &new {
             let known = r.scripts.iter().any(|o| o.path == s.path);
             if !known && scripts::load_on_startup(&c) && is_enabled(&c, &s.manifest) {
-                r.player.cmd("load-script", &[&s.path.to_string_lossy()]);
+                r.load_script(s);
             }
         }
         r.scripts = new;
-        r.scripts.len()
+        r.scripts
+            .iter()
+            .filter(|s| s.manifest.origin == Origin::Script)
+            .count()
     })
     .unwrap_or(0)
+}
+
+/// Rescan after installing package `id`; whether it is now loaded in mpv.
+pub fn rescan_package(id: &str) -> bool {
+    rescan();
+    with(|r| r.loaded.contains(id)).unwrap_or(false)
+}
+
+/// mpv scripts from the scripts folder plus installed packages (ids that clash with a
+/// built-in plugin are skipped).
+fn all_scripts(entries: &[Entry]) -> Vec<scripts::Script> {
+    let mut v = scripts::scan(&config::scripts_dir());
+    for p in packages::installed(&packages::root()) {
+        if entries.iter().any(|e| e.manifest.id == p.manifest.id) {
+            eprintln!(
+                "vivi: package {} clashes with a built-in plugin",
+                p.manifest.id
+            );
+            continue;
+        }
+        v.push(scripts::Script {
+            path: p.entry_path(),
+            manifest: p.manifest.to_manifest(),
+        });
+    }
+    v
+}
+
+/// mpv `script-opts` value for a package setting (mp.options wants yes/no booleans).
+fn script_opt(id: &str, key: &str, value: &str) -> String {
+    let v = match value {
+        "true" => "yes",
+        "false" => "no",
+        v => v,
+    };
+    format!("{id}-{key}={}", v.replace(',', " "))
+}
+
+impl Registry {
+    /// Load an mpv script once (packages get their settings as script-opts first).
+    fn load_script(&mut self, s: &scripts::Script) {
+        if !self.loaded.insert(s.manifest.id.clone()) {
+            return;
+        }
+        if s.manifest.origin == Origin::Package {
+            let c = self.cfg.borrow();
+            for st in &s.manifest.settings {
+                if matches!(st.kind, SettingKind::Action(_)) {
+                    continue;
+                }
+                let v = setting_value(&c, &s.manifest, &st.key);
+                self.player.cmd(
+                    "change-list",
+                    &[
+                        "script-opts",
+                        "append",
+                        &script_opt(&s.manifest.id, &st.key, &v),
+                    ],
+                );
+            }
+        }
+        self.player.cmd("load-script", &[&s.path.to_string_lossy()]);
+    }
 }
 
 /// mpv loaded a new file.
@@ -393,8 +484,33 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
     };
     with(|r| {
         let a = r.app.upgrade()?;
-        // External scripts: only the enable flag.
-        if let Some(s) = r.scripts.iter().find(|s| s.manifest.id == id) {
+        // External scripts and packages.
+        if let Some(s) = r.scripts.iter().find(|s| s.manifest.id == id).cloned() {
+            if let Some(key) = key {
+                let spec = s.manifest.settings.iter().find(|st| st.key == key)?;
+                // mpv script name = entry file stem with dashes as underscores.
+                let name = s.path.file_stem()?.to_string_lossy().replace('-', "_");
+                if matches!(spec.kind, SettingKind::Action(_)) {
+                    if !r.loaded.contains(id) {
+                        return Some(format!("{} is not running", s.manifest.name));
+                    }
+                    r.player.cmd("script-message-to", &[&name, key]);
+                    return None;
+                }
+                r.cfg
+                    .borrow_mut()
+                    .plugins
+                    .entry(id.into())
+                    .or_default()
+                    .settings
+                    .insert(key.into(), value.into());
+                save(&r.cfg);
+                r.player.cmd(
+                    "change-list",
+                    &["script-opts", "append", &script_opt(id, key, value)],
+                );
+                return None;
+            }
             let on = value == "true";
             r.cfg
                 .borrow_mut()
@@ -404,8 +520,12 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                 .enabled = Some(on);
             save(&r.cfg);
             return Some(if on {
-                r.player.cmd("load-script", &[&s.path.to_string_lossy()]);
-                format!("Loaded {}", s.manifest.name)
+                if r.loaded.contains(id) {
+                    format!("{} is already running", s.manifest.name)
+                } else {
+                    r.load_script(&s);
+                    format!("Loaded {}", s.manifest.name)
+                }
             } else {
                 "mpv cannot unload scripts: restart Vivi to stop it".into()
             });

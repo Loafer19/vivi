@@ -22,12 +22,14 @@
 <section class="hero" style="padding-bottom:24px">
   <h1>Plugin <span>catalog</span></h1>
   <p><!--COUNT--> plugins. Built-in plugins ship with Vivi; enable them in Settings → Extensions.
-  mpv scripts go in <code>~/.config/vivi/scripts</code>. Machine-readable list: <a href="index.json">index.json</a>.</p>
+  <b>Downloadable</b> plugins install with one click from Settings → Extensions → Browse, are checked
+  against their sha256 and update themselves. mpv scripts go in <code>~/.config/vivi/scripts</code>.
+  Machine-readable list: <a href="index.json">index.json</a> · <a href="architecture.html">how distribution works</a>.</p>
 </section>
 <div class="grid">
 <!--PLUGINS-->
 </div>
-<p class="note">Want yours listed? Read <a href="plugin-dev.html">Write a plugin</a> and open a pull request that adds it to <code>plugins/index.json</code>.</p>
+<p class="note">Want yours listed? Read <a href="plugin-dev.html">Write a plugin</a> and open a pull request that adds a <code>plugins/&lt;id&gt;/</code> package (see <a href="plugin-dev.html#package">Package &amp; publish</a>).</p>
 </main>
 <footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·

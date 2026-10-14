@@ -245,10 +245,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let p = player.clone();
     let weak = app.as_weak();
-    app.on_key(move |text, shift, ctrl| {
+    app.on_key(move |text, shift, ctrl, alt| {
         use slint::platform::Key;
         let s = text.as_str();
         let is = |k: Key| s == slint::SharedString::from(k).as_str();
+        // Alt combinations belong to mpv scripts / plugin packages.
+        if alt {
+            return forward_key(&p, s, ctrl, alt);
+        }
         let skip =
             |a: &std::sync::atomic::AtomicU32| a.load(std::sync::atomic::Ordering::Relaxed) as f64;
         let step = if shift {
@@ -319,7 +323,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            _ => return false,
+            _ => {
+                forward_key(&p, s, ctrl, alt);
+                return false;
+            }
         }
         true
     });
@@ -869,4 +876,42 @@ fn walk_media(dir: &std::path::Path) -> Vec<String> {
         }
     }
     out
+}
+
+/// Send a key Vivi does not use to mpv (`keypress`), so key bindings of mpv scripts and
+/// plugin packages work. Returns whether it was sent.
+fn forward_key(p: &player::Player, text: &str, ctrl: bool, alt: bool) -> bool {
+    use slint::platform::Key;
+    let named = [
+        (Key::LeftArrow, "LEFT"),
+        (Key::RightArrow, "RIGHT"),
+        (Key::UpArrow, "UP"),
+        (Key::DownArrow, "DOWN"),
+        (Key::Home, "HOME"),
+        (Key::End, "END"),
+        (Key::PageUp, "PGUP"),
+        (Key::PageDown, "PGDWN"),
+    ];
+    let name = named
+        .iter()
+        .find(|(k, _)| text == slint::SharedString::from(*k).as_str())
+        .map(|(_, n)| n.to_string())
+        .or_else(|| {
+            let mut c = text.chars();
+            match (c.next(), c.next()) {
+                (Some(' '), None) => Some("SPACE".into()),
+                (Some('#'), None) => Some("SHARP".into()),
+                (Some(ch), None) if ch.is_ascii_graphic() => Some(ch.to_string()),
+                _ => None,
+            }
+        });
+    let Some(mut k) = name else { return false };
+    if alt {
+        k = format!("Alt+{k}");
+    }
+    if ctrl {
+        k = format!("Ctrl+{k}");
+    }
+    p.cmd("keypress", &[&k]);
+    true
 }

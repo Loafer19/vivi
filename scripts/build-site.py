@@ -34,6 +34,10 @@ def inline_icons(text: str) -> str:
     return re.sub(r'<i data-lucide="([a-z0-9-]+)"></i>', lambda m: icon(m.group(1)), text)
 
 
+PERM_TEXT = {"network": "Internet access", "filesystem": "Files outside its folder", "subprocess": "Runs programs"}
+KIND_TAG = {"script": ("script", "mpv script"), "package": ("package", "downloadable"), "builtin": ("", "built-in")}
+
+
 def card(p: dict) -> str:
     e = html.escape
     settings = "".join(
@@ -43,15 +47,25 @@ def card(p: dict) -> str:
     kind = p.get("kind", "builtin")
     src = p.get("source")
     link = (
-        f' · <a href="https://github.com/Loafer19/vivi/blob/master/{e(src)}">source</a>' if src else ""
+        f' · <a href="https://github.com/Loafer19/vivi/tree/master/{e(src)}">source</a>' if src else ""
     )
+    cls, label = KIND_TAG.get(kind, KIND_TAG["builtin"])
+    extra = ""
+    if kind == "package":
+        perms = p.get("permissions", [])
+        ptxt = ", ".join(PERM_TEXT.get(x, x) for x in perms) or "No special permissions"
+        extra = f"""<div class=install><span class="tag install">{icon('download')}Install in Vivi</span>
+  <span class=meta>Settings → Extensions → Browse · {e(f"{p.get('size', 0) / 1024:.0f}")} KB ·
+  <a href="{e(p['url'])}">zip</a> · needs Vivi {e(p.get('min_vivi', ''))}+</span></div>
+  <div class=perms>{icon('shield-check')}{e(ptxt)}</div>"""
     return f"""<div class="card plugin" id="{e(p['id'])}">
   <div class=top><div class=icon>{icon(p.get('lucide', 'puzzle'))}</div>
     <div><h3>{e(p['name'])}</h3>
     <div class=meta>{e(p['id'])} · v{e(p.get('version', ''))} · {e(p.get('author', ''))}{link}</div></div></div>
   <p>{e(p['description'])}</p>
-  <div><span class="tag {'script' if kind == 'script' else ''}">{'mpv script' if kind == 'script' else 'built-in'}</span>
+  <div><span class="tag {cls}">{label}</span>
   {'' if p.get('default_enabled', True) else '<span class=tag>off by default</span>'}</div>
+  {extra}
   {f'<ul>{settings}</ul>' if settings else ''}
 </div>"""
 

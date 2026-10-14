@@ -1,0 +1,34 @@
+id = "playback-stats"
+name = "Playback Statistics"
+version = "1.0.0"
+description = "Counts time watched and listened per day, with top artists and shows. Kept locally in a small TSV file; Alt+S shows a summary, export as CSV or clear any time."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "playback-stats.lua"
+min_vivi = "0.8.0"
+icon = "stats"
+lucide = "chart-column"
+permissions = ["filesystem"]
+issue = 66
+
+[[settings]]
+key = "days"
+title = "Summary covers"
+type = "choice"
+options = ["7", "30", "365"]
+default = "7"
+
+[[settings]]
+key = "show"
+title = "Show summary"
+type = "action"
+
+[[settings]]
+key = "export"
+title = "Export CSV to ~/vivi-stats.csv"
+type = "action"
+
+[[settings]]
+key = "clear"
+title = "Clear statistics"
+type = "action"

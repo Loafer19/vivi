@@ -247,7 +247,8 @@ export component AppWindow inherits Window {
     callback prev();
     callback next();
     callback activity();
-    callback key(string, bool, bool) -> bool;
+    // text, shift, ctrl, alt; unhandled keys are forwarded to mpv scripts.
+    callback key(string, bool, bool, bool) -> bool;
     // Music visualizer (src/viz): shown for audio-only media; mode 0 = Disabled.
     in property <bool> viz-audio;
     in property <image> viz-frame;
@@ -484,7 +485,7 @@ export component AppWindow inherits Window {
                 root.viz-select(mod(root.viz-mode + 1, root.viz-modes.length));
                 return accept;
             }
-            if (root.key(e.text, e.modifiers.shift, e.modifiers.control)) { return accept; }
+            if (root.key(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt)) { return accept; }
             reject
         }
     }

@@ -2,6 +2,7 @@
 //! - `$XDG_STATE_HOME/vivi/recent.txt`  — recently played files, newest first
 //! - `$XDG_STATE_HOME/vivi/watch_later/` — mpv resume positions
 //! - `$XDG_DATA_HOME/vivi/playlists/*.m3u` — saved playlists
+//! - `$XDG_DATA_HOME/vivi/plugins/<id>/<version>/` — downloaded plugin packages
 //! - `$XDG_CACHE_HOME/vivi/` — library database and thumbnails
 
 use std::fs;
@@ -32,12 +33,15 @@ pub fn cache_dir() -> PathBuf {
 pub fn watch_later_dir() -> PathBuf {
     state_dir().join("watch_later")
 }
+pub fn data_dir() -> PathBuf {
+    xdg("XDG_DATA_HOME", ".local/share")
+}
 pub fn playlists_dir() -> PathBuf {
-    xdg("XDG_DATA_HOME", ".local/share").join("playlists")
+    data_dir().join("playlists")
 }
 
 /// Write via temp file + rename so a crash never leaves a truncated file.
-fn write_atomic(path: &Path, data: &str) -> std::io::Result<()> {
+pub fn write_atomic(path: &Path, data: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }

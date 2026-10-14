@@ -24,11 +24,34 @@
       "kind": "builtin",
       "default_enabled": true,
       "settings": [
-        { "key": "auto", "title": "Skip automatically", "type": "toggle", "default": "false" },
-        { "key": "chapters", "title": "Detect from chapter names", "type": "toggle", "default": "true" },
-        { "key": "ranges", "title": "Per-show ranges", "type": "text", "default": "" },
-        { "key": "mark", "title": "Mark range for this show", "type": "action" },
-        { "key": "clear", "title": "Clear ranges for this show", "type": "action" }
+        {
+          "key": "auto",
+          "title": "Skip automatically",
+          "type": "toggle",
+          "default": "false"
+        },
+        {
+          "key": "chapters",
+          "title": "Detect from chapter names",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "ranges",
+          "title": "Per-show ranges",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "mark",
+          "title": "Mark range for this show",
+          "type": "action"
+        },
+        {
+          "key": "clear",
+          "title": "Clear ranges for this show",
+          "type": "action"
+        }
       ]
     },
     {
@@ -42,9 +65,28 @@
       "kind": "builtin",
       "default_enabled": true,
       "settings": [
-        { "key": "online", "title": "Search lyrics online (LRCLIB)", "type": "toggle", "default": "true" },
-        { "key": "size", "title": "Text size", "type": "choice", "options": ["Medium", "Small", "Large"], "default": "Medium" },
-        { "key": "clear-cache", "title": "Downloaded lyrics", "type": "action" }
+        {
+          "key": "online",
+          "title": "Search lyrics online (LRCLIB)",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "size",
+          "title": "Text size",
+          "type": "choice",
+          "options": [
+            "Medium",
+            "Small",
+            "Large"
+          ],
+          "default": "Medium"
+        },
+        {
+          "key": "clear-cache",
+          "title": "Downloaded lyrics",
+          "type": "action"
+        }
       ]
     },
     {
@@ -58,10 +100,30 @@
       "kind": "builtin",
       "default_enabled": true,
       "settings": [
-        { "key": "api-key", "title": "OpenSubtitles API key", "type": "secret", "default": "" },
-        { "key": "languages", "title": "Languages", "type": "text", "default": "en" },
-        { "key": "username", "title": "Username (optional)", "type": "text", "default": "" },
-        { "key": "password", "title": "Password (optional)", "type": "secret", "default": "" }
+        {
+          "key": "api-key",
+          "title": "OpenSubtitles API key",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "languages",
+          "title": "Languages",
+          "type": "text",
+          "default": "en"
+        },
+        {
+          "key": "username",
+          "title": "Username (optional)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "password",
+          "title": "Password (optional)",
+          "type": "secret",
+          "default": ""
+        }
       ]
     },
     {
@@ -76,6 +138,138 @@
       "default_enabled": true,
       "source": "plugins/examples/now-playing.lua",
       "settings": []
+    },
+    {
+      "id": "ab-loop",
+      "name": "A-B Loop & Frame Step",
+      "description": "Set and clear A-B loop points from the keyboard, nudge them by a frame, step frame by frame while paused and see the loop on an on-screen bar.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "loop",
+      "lucide": "repeat",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.8.0",
+      "permissions": [],
+      "source": "plugins/ab-loop",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-ab-loop-v1.0.0/ab-loop-1.0.0.zip",
+      "sha256": "71ba407dca7a91098be04fa41bdc9d01101fddc0a263913de4410ae16527b494",
+      "size": 5585,
+      "settings": [
+        {
+          "key": "markers",
+          "title": "Show loop bar",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "osd-seconds",
+          "title": "Show bar for (seconds)",
+          "type": "choice",
+          "options": [
+            "3",
+            "1",
+            "5",
+            "10"
+          ],
+          "default": "3"
+        },
+        {
+          "key": "clear",
+          "title": "Clear loop",
+          "type": "action"
+        }
+      ],
+      "issue": 59
+    },
+    {
+      "id": "night-mode",
+      "name": "Night Mode",
+      "description": "Compresses loud scenes and lifts quiet dialogue so films stay understandable at low volume (mpv dynaudnorm / loudnorm). Toggle with Alt+N.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "night",
+      "lucide": "moon",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.8.0",
+      "permissions": [],
+      "source": "plugins/night-mode",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.0/night-mode-1.0.0.zip",
+      "sha256": "894151fb5905de77ce8c243054ce66a19cedce0446ae0b98fe3bc7b016ca8c4e",
+      "size": 2797,
+      "settings": [
+        {
+          "key": "active",
+          "title": "Night mode on",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "strength",
+          "title": "Strength",
+          "type": "choice",
+          "options": [
+            "Medium",
+            "Light",
+            "Strong",
+            "Loudness (EBU R128)"
+          ],
+          "default": "Medium"
+        }
+      ],
+      "issue": 60
+    },
+    {
+      "id": "playback-stats",
+      "name": "Playback Statistics",
+      "description": "Counts time watched and listened per day, with top artists and shows. Kept locally in a small TSV file; Alt+S shows a summary, export as CSV or clear any time.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "stats",
+      "lucide": "chart-column",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.8.0",
+      "permissions": [
+        "filesystem"
+      ],
+      "source": "plugins/playback-stats",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-playback-stats-v1.0.0/playback-stats-1.0.0.zip",
+      "sha256": "3b58fd7f663f0692f10f68aa1d215829a522d4055920d9a1a3cc9287b71d4687",
+      "size": 7760,
+      "settings": [
+        {
+          "key": "days",
+          "title": "Summary covers",
+          "type": "choice",
+          "options": [
+            "7",
+            "30",
+            "365"
+          ],
+          "default": "7"
+        },
+        {
+          "key": "show",
+          "title": "Show summary",
+          "type": "action"
+        },
+        {
+          "key": "export",
+          "title": "Export CSV to ~/vivi-stats.csv",
+          "type": "action"
+        },
+        {
+          "key": "clear",
+          "title": "Clear statistics",
+          "type": "action"
+        }
+      ],
+      "issue": 66
     }
   ]
 }

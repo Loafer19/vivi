@@ -14,6 +14,10 @@ export struct SettingRow {
     // | "color" | "header" | "info" | "advanced" (the collapsible bar)
     // | "plugin" (Extensions card: title = name, info = description, value = enabled,
     //   options = [version, author, icon key, source]) | "secret" (hidden text)
+    // | "buttons" (title/info + one button per label; clicked label is the value)
+    // | "package" (catalog card: title = name, info = description, value = "confirm"
+    //   while the permission prompt is open, options = [version, author, icon key,
+    //   permissions, state, size], labels = buttons)
     kind: string,
     value: string,
     options: [string],
@@ -33,6 +37,9 @@ global PluginIcons {
         if (key == "lyrics") { return @image-url("../assets/icons/music.svg"); }
         if (key == "subtitles") { return @image-url("../assets/icons/subtitles.svg"); }
         if (key == "script") { return @image-url("../assets/icons/file.svg"); }
+        if (key == "loop") { return @image-url("../assets/icons/repeat-right.svg"); }
+        if (key == "stats") { return @image-url("../assets/icons/spectometer-twotone.svg"); }
+        if (key == "night") { return @image-url("../assets/icons/volume-high.svg"); }
         @image-url("../assets/icons/plugins.svg")
     }
 }
@@ -71,6 +78,44 @@ component PluginCard inherits Rectangle {
     }
 }
 
+// Catalog card (Extensions → Browse): icon, name, meta, description, permissions and
+// Install / Update / Uninstall buttons, or the permission prompt.
+component PackageCard inherits Rectangle {
+    in property <SettingRow> setting;
+    callback changed(string, string);
+    property <bool> confirm: setting.value == "confirm";
+    border-radius: 8px;
+    background: Theme.bg-a3;
+    border-width: 1px; border-color: confirm ? Theme.accent : transparent;
+    HorizontalLayout {
+        padding: 12px; spacing: 12px;
+        VerticalLayout { alignment: center;
+            Rectangle {
+                width: 40px; height: 40px; border-radius: 8px; background: Field.raised;
+                Icon { width: 22px; height: 22px; source: PluginIcons.get(setting.options[2]); tint: Theme.accent; }
+            }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1; alignment: center; spacing: 3px;
+            HorizontalLayout { spacing: 8px; alignment: start;
+                Text { text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600; overflow: elide; }
+                Text {
+                    text: "v" + setting.options[0] + "  ·  " + setting.options[1] + "  ·  " + setting.options[5];
+                    color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; font-family: "DM Mono";
+                }
+            }
+            Text { text: setting.info; color: Theme.fg-a2; font-size: 12px; wrap: word-wrap; overflow: elide; }
+            Text {
+                text: root.confirm ? setting.options[4] : setting.options[3] + (setting.options[4] != "" ? "  ·  " + setting.options[4] : "");
+                color: root.confirm ? Theme.fg-1 : Theme.fg-a3; font-size: 11px; wrap: word-wrap; overflow: elide;
+            }
+        }
+        VerticalLayout { alignment: center; spacing: 4px;
+            for l in setting.labels: FlatButton { text: l; enabled: setting.enabled; clicked => { root.changed(setting.id, l); } }
+        }
+    }
+}
+
 component Info inherits Rectangle {
     in property <string> text;
     width: 18px; height: 18px;
@@ -100,7 +145,7 @@ component Row inherits Rectangle {
     callback changed(string, string);
     callback advanced-toggled(bool);
     property <length> ctl-w: min(300px, root.width * 0.45);
-    height: setting.kind == "plugin" ? 76px : setting.kind == "header" ? 48px : setting.kind == "advanced" ? 56px : setting.kind == "slider" && setting.labels.length > 0 ? 58px : 42px;
+    height: setting.kind == "plugin" ? 76px : setting.kind == "package" ? 104px : setting.kind == "header" ? 48px : setting.kind == "advanced" ? 56px : setting.kind == "slider" && setting.labels.length > 0 ? 58px : 42px;
     if setting.kind == "header": Text {
         x: 0; y: 20px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: 15px;
     }
@@ -113,7 +158,12 @@ component Row inherits Rectangle {
         setting: root.setting;
         changed(id, v) => { root.changed(id, v); }
     }
-    if setting.kind != "header" && setting.kind != "advanced" && setting.kind != "plugin": HorizontalLayout {
+    if setting.kind == "package": PackageCard {
+        y: 6px; height: parent.height - 6px; width: parent.width;
+        setting: root.setting;
+        changed(id, v) => { root.changed(id, v); }
+    }
+    if setting.kind != "header" && setting.kind != "advanced" && setting.kind != "plugin" && setting.kind != "package": HorizontalLayout {
         spacing: 10px; padding-top: 5px; padding-bottom: 5px;
         HorizontalLayout {
             spacing: 6px; horizontal-stretch: 1; alignment: start;
@@ -160,6 +210,9 @@ component Row inherits Rectangle {
                 } }
             if setting.labels.length == 0: Text { width: 44px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-a2; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; }
         }
+        if setting.kind == "buttons": HorizontalLayout { alignment: end; spacing: 4px;
+            for l in setting.labels: VerticalLayout { alignment: center;
+                FlatButton { text: l; enabled: setting.enabled; clicked => { root.changed(setting.id, l); } } } }
         if setting.kind == "action": VerticalLayout { alignment: center;
             FlatButton { text: setting.value; enabled: setting.enabled; clicked => { root.changed(setting.id, "run"); } } }
         if setting.kind == "key": HorizontalLayout { spacing: 4px; alignment: end; padding-top: 4px; padding-bottom: 4px;

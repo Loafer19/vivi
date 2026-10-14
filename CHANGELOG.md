@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Downloadable plugins**: plugins no longer have to be built in. A package is a zip with `manifest.toml` (id, name, semver version, `min_vivi`, entry script, permissions, settings) and an mpv Lua/JS script. The catalog `plugins/index.json` (published at <https://loafer19.github.io/vivi/index.json>) lists each package's download URL, sha256 and size. Design, options considered (mpv script packages now, WASM later, native libraries rejected) and the install/update model: `docs/plugins-architecture.md` and the site page *Plugin distribution*.
+- **Settings → Extensions tabs**: *Installed* (built-in, downloaded, mpv scripts; Update / Roll back / Uninstall for packages) and *Browse* (catalog cards with version, author, size, permissions and Install / Update / Uninstall). Installing shows the requested permissions first. Downloads and catalog checks run on background threads; packages are verified against their sha256, unpacked safely into a staging folder and switched in atomically under `~/.local/share/vivi/plugins/<id>/<version>/`, keeping the previous version for rollback.
+- **Update checks**: the catalog is fetched at startup at most once a day ("Check for plugin updates daily", on by default) or with *Check now*, cached in `~/.cache/vivi/plugin-index.json`; a toast announces available updates. `VIVI_PLUGIN_INDEX` overrides the catalog URL.
+- Package settings appear in Extensions like built-in ones and reach the script as mpv `script-opts` (applied live); action settings are sent as script messages.
+- Three downloadable plugins: **A-B Loop & Frame Step** (#59), **Night Mode** (#60), **Playback Statistics** (#66).
+- Keys Vivi does not use (and all `Alt` combinations) are forwarded to mpv, so key bindings of scripts and packages work.
+- `scripts/package-plugins.py` builds deterministic package zips and regenerates the index entries; the **Plugins workflow** checks Lua syntax and the index, publishes each new version as a release `plugin-<id>-v<version>` (never marked latest) and verifies the uploaded sha256.
+### Fixed
+- Subtitle Search: OpenSubtitles answers `301` unless query parameters are sorted by name, so searches sent `moviehash`/`query`/`languages` in the wrong order and relied on a redirect. Parameters (and the language list) are now sent sorted and lowercase.
+
+### Docs
+- Docs site: catalog cards show an *Install in Vivi* badge, size, minimum version and permissions; new *Plugin distribution* page; plugin guide gained *Package & publish*.
+
 ## [0.8.0] - 2026-10-14
 - Docs site uses inline Lucide icons (no JavaScript), screenshot gallery, credits and mobile layout fixes; build fails on broken local links
 - Screenshots regenerated from the release build with Sintel (CC BY) and Kevin MacLeod music (CC BY); `VIVI_SCREENSHOT=1` enables the screenshot helpers in release builds

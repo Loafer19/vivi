@@ -1,0 +1,52 @@
+name: Plugins
+# Packages every plugins/<id>/ that has a manifest.toml (scripts/package-plugins.py),
+# checks that plugins/index.json lists the same sha256, and publishes each new version
+# as a GitHub release "plugin-<id>-v<version>" with the zip as its asset. Releases that
+# already exist are left alone (bump the version to publish a change). Plugin releases are
+# never marked "latest", so the app's own release stays the latest one.
+on:
+  push:
+    branches: [master]
+    paths: ["plugins/**", "scripts/package-plugins.py", ".github/workflows/plugins.yml"]
+  pull_request:
+    paths: ["plugins/**", "scripts/package-plugins.py"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lua syntax
+        run: |
+          sudo apt-get update && sudo apt-get install -y luajit
+          for f in plugins/*/*.lua ; do luajit -bl "$f" > /dev/null || exit 1; done
+      - name: Build packages, verify index.json
+        run: python3 scripts/package-plugins.py --check
+      - name: Publish new versions
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/package-plugins.py --list | while read -r id ver tag zip; do
+            if gh release view "$tag" > /dev/null 2>&1; then
+              echo "$tag exists"
+              continue
+            fi
+            gh release create "$tag" "$zip" --target "$GITHUB_SHA" --latest=false \
+              --title "Plugin $id $ver" \
+              --notes "Vivi plugin package \`$id\` $ver. Install it from Settings → Extensions → Browse. sha256: \`$(sha256sum "$zip" | cut -d' ' -f1)\`"
+          done
+      - name: Verify published assets
+        if: github.event_name != 'pull_request'
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, urllib.request
+          for p in json.load(open("plugins/index.json"))["plugins"]:
+              if p.get("kind") != "package":
+                  continue
+              data = urllib.request.urlopen(p["url"]).read()
+              assert hashlib.sha256(data).hexdigest() == p["sha256"], p["id"]
+              print("ok", p["id"], p["version"])
+          PY

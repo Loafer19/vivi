@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vivi plugin distribution</title>
+<link rel="icon" href="img/vivi.svg">
+<meta name="theme-color" content="#0e0e0e">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav"><div class="in">
+  <a class="brand" href="index.html"><img src="img/vivi.svg" alt="">Vivi</a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="plugins.html"><i data-lucide="puzzle"></i>Plugins</a>
+    <a href="plugin-dev.html"><i data-lucide="code-xml"></i><span class="wide">Write a plugin</span><span class="narrow">Develop</span></a>
+    <a href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
+  </nav>
+</div></header>
+<main>
+<section class="hero" style="padding-bottom:16px">
+  <h1>Plugin <span>distribution</span></h1>
+  <p>How Vivi downloads, verifies, updates and removes plugins, and why it uses mpv script packages
+  today and WASM later.</p>
+</section>
+<ul class="toc">
+  <li><a href="#core">What stays built in</a></li>
+  <li><a href="#options">Options considered</a></li>
+  <li><a href="#format">Package format</a></li>
+  <li><a href="#registry">Catalog</a></li>
+  <li><a href="#ci">Publishing</a></li>
+  <li><a href="#client">Install, update, rollback</a></li>
+</ul>
+
+<h2 id="core">What stays built in</h2>
+<p>A small core ships inside the binary: <b>Music Visualizer</b>, <b>Skip Intro &amp; Credits</b>,
+<b>Lyrics</b> and <b>Subtitle Search</b>. All four draw Slint UI (visualizer canvas, Skip button,
+karaoke overlay, search results in the Add Subtitles dialog) that a script cannot render. Everything
+else is a downloadable package, so the app stays small and plugins update on their own schedule.</p>
+
+<h2 id="options">Options considered</h2>
+<div class="grid">
+<div class="card"><h3><i data-lucide="code-xml"></i> mpv Lua/JS packages — now</h3>
+<p>mpv already embeds Lua and JavaScript, so packages add no binary size. Full player API, key bindings,
+OSD overlays, audio/video filters, <code>mp.options</code> settings. No sandbox and mpv cannot unload a
+script, so disable/update take effect after a restart.</p></div>
+<div class="card"><h3><i data-lucide="sparkles"></i> WASM (Extism/wasmtime) — later</h3>
+<p>Real sandbox with enforced permissions and a host API (player control, allow-listed HTTP, settings,
+declarative UI messages drawn by Slint). Costs ~10–20 MB and a stable API to maintain. The
+<code>kind</code> field reserves <code>wasm</code>, so catalog and installer will not change.</p></div>
+<div class="card"><h3><i data-lucide="scale"></i> Native libraries — rejected</h3>
+<p>Rust has no stable ABI (a rebuild per Vivi version, compiler and platform) and native code can
+neither be sandboxed nor kept from crashing the player.</p></div>
+</div>
+
+<h2 id="format">Package format</h2>
+<p>A zip named <code>&lt;id&gt;-&lt;version&gt;.zip</code> with <code>manifest.toml</code> at its root and the entry
+script <code>&lt;id&gt;.lua</code>:</p>
+<pre><code>id = "night-mode"          # lowercase-with-dashes
+name = "Night Mode"
+version = "1.0.0"          # semver
+description = "..."
+author = "Vivi"
+kind = "mpv-lua"           # mpv-lua | mpv-js (wasm reserved)
+entry = "night-mode.lua"
+min_vivi = "0.8.0"
+icon = "night"
+lucide = "moon"
+permissions = []           # network | filesystem | subprocess
+
+[[settings]]
+key = "strength"
+title = "Strength"
+type = "choice"            # toggle | choice | text | secret | action
+options = ["Medium", "Light", "Strong"]</code></pre>
+<p>Settings appear in Settings → Extensions and reach the script as <code>script-opts</code>
+(<code>&lt;id&gt;-&lt;key&gt;</code>), updated live; action settings arrive as script messages. Permissions are
+shown before install; with mpv scripts they are reviewed declarations, not a sandbox.</p>
+
+<h2 id="registry">Catalog</h2>
+<p><a href="index.json">index.json</a> (from <code>plugins/index.json</code>) lists built-in plugins and
+packages. A package entry carries <code>version</code>, <code>min_vivi</code>, <code>permissions</code>,
+<code>size</code>, the <code>url</code> of a GitHub release asset (tag <code>plugin-&lt;id&gt;-v&lt;version&gt;</code>)
+and its <code>sha256</code>. Zips are deterministic, so the committed sha256 equals what CI uploads.
+A minisign <code>signature</code> field is reserved.</p>
+
+<h2 id="ci">Publishing</h2>
+<p>The <code>Plugins</code> workflow checks Lua syntax, verifies <code>index.json</code> is current, creates a
+release for every new <code>plugin-&lt;id&gt;-v&lt;version&gt;</code> (never marked “latest”) and re-downloads
+each asset to verify its sha256. The docs workflow publishes the catalog. See
+<a href="plugin-dev.html#package">Package &amp; publish</a>.</p>
+
+<h2 id="client">Install, update, rollback</h2>
+<ul>
+<li><b>Where</b>: <code>~/.local/share/vivi/plugins/&lt;id&gt;/&lt;version&gt;/</code>; <code>&lt;id&gt;/current</code> names the active version.</li>
+<li><b>Update check</b>: at startup at most once a day (can be turned off) and with <em>Check now</em>. A toast announces updates.</li>
+<li><b>Install</b> on a background thread: download → sha256 must match → unpack to a staging folder (no
+<code>..</code>, absolute paths or symlinks; size caps) → manifest must match the catalog and
+<code>min_vivi</code> → rename into place → atomically switch <code>current</code>. Any failure leaves the old version.</li>
+<li><b>Permissions prompt</b> before installing a package that asks for any (or an update adding some).</li>
+<li><b>Rollback</b> to the previous version, which is kept; older ones are pruned.</li>
+<li><b>Uninstall</b> removes the folder; settings stay in <code>config.toml</code>.</li>
+<li>A new install loads immediately; disable, update, rollback and uninstall apply after a restart because mpv cannot unload scripts.</li>
+</ul>
+<p>Full design notes: <a href="https://github.com/Loafer19/vivi/blob/master/docs/plugins-architecture.md">docs/plugins-architecture.md</a>.</p>
+</main>
+<footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
+UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·
+site icons from <a href="https://lucide.dev">Lucide</a> (ISC) ·
+screenshots show <a href="https://durian.blender.org">Sintel</a> (© Blender Foundation, CC BY 3.0) and
+“Local Forecast – Elevator” by <a href="https://incompetech.com">Kevin MacLeod</a> (CC BY 4.0)</footer>
+</body>
+</html>
