@@ -137,20 +137,37 @@ fn api_err(code: u16, body: &str) -> String {
     }
 }
 
+/// Query parameters in the order the API wants (alphabetical, lowercase values).
+fn search_params(hash: Option<&str>, query: &str, langs: &str) -> Vec<(&'static str, String)> {
+    let mut p = Vec::new();
+    if !langs.trim().is_empty() {
+        let mut l: Vec<String> = langs
+            .split(',')
+            .map(|x| x.trim().to_lowercase())
+            .filter(|x| !x.is_empty())
+            .collect();
+        l.sort();
+        l.dedup();
+        p.push(("languages", l.join(",")));
+    }
+    if let Some(h) = hash {
+        p.push(("moviehash", h.to_lowercase()));
+    }
+    if !query.trim().is_empty() {
+        p.push(("query", query.trim().to_lowercase()));
+    }
+    p
+}
+
 fn search(c: &Creds, hash: Option<String>, query: &str, langs: &str) -> Result<Vec<Hit>, String> {
     let a = agent();
     let mut req = a
         .get(format!("{API}/subtitles"))
         .header("Api-Key", &c.key)
         .header("Accept", "application/json");
-    if let Some(h) = &hash {
-        req = req.query("moviehash", h);
-    }
-    if !query.trim().is_empty() {
-        req = req.query("query", query.trim().to_lowercase());
-    }
-    if !langs.trim().is_empty() {
-        req = req.query("languages", langs.replace(' ', "").to_lowercase());
+    // OpenSubtitles answers 301 unless parameters are lowercase and sorted by name.
+    for (k, v) in search_params(hash.as_deref(), query, langs) {
+        req = req.query(k, v);
     }
     let mut r = req.call().map_err(|e| e.to_string())?;
     let body = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
@@ -405,6 +422,17 @@ mod tests {
         std::fs::write(&p, b"tiny").unwrap();
         assert!(moviehash(&p).is_err());
         let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn params_sorted() {
+        let p = search_params(Some("ABC"), " Sintel ", "uk, EN");
+        let keys: Vec<&str> = p.iter().map(|(k, _)| *k).collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        assert_eq!(keys, sorted);
+        assert_eq!(p[0].1, "en,uk");
+        assert_eq!(p[1].1, "abc");
     }
 
     #[test]
