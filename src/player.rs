@@ -192,6 +192,14 @@ impl Player {
             eprintln!("vivi: command {cmd}: {e:?}");
         }
     }
+    /// Run an mpv command with arguments (any characters; uses mpv's `%len%` quoting).
+    pub fn cmd(&self, name: &str, args: &[&str]) {
+        let q: Vec<String> = args.iter().map(|a| format!("%{}%{a}", a.len())).collect();
+        let q: Vec<&str> = q.iter().map(String::as_str).collect();
+        if let Err(e) = self.mpv.command(name, &q) {
+            eprintln!("vivi: command {name}: {e:?}");
+        }
+    }
     /// Tracks of a type ("audio" | "sub" | "video"): (id, label, selected).
     pub fn tracks(&self, kind: &str) -> Vec<(i64, String, bool)> {
         let n: i64 = self.mpv.get_property("track-list/count").unwrap_or(0);

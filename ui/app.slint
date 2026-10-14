@@ -9,6 +9,8 @@ import { SettingsDialog, SettingRow } from "settings.slint";
 import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem, NetworkDialog } from "library.slint";
+import { MenuPanel, MenuItem } from "menu.slint";
+export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem }
 
 component IconButton inherits Rectangle {
@@ -89,24 +91,76 @@ component SeekBar inherits Rectangle {
     }
 }
 
+// Cone volume control (Figma "volume": 88x28 wedge, green→red gradient fill).
+// The fill width follows the Figma states: 10% → 7px … 100% → 63px, 150% → 75px, 200% → 88px.
 component VolumeBar inherits Rectangle {
     in property <float> value;
     in property <float> maximum: 150;
     callback changed(float);
-    width: 96px; height: 6px;
-    border-radius: 3px;
-    background: Theme.divider;
-    Rectangle {
-        x: 0; height: parent.height; border-radius: 3px;
-        width: parent.width * clamp(value / maximum, 0, 1);
-        background: Theme.accent;
+    width: 88px; height: 28px;
+    // volume (percent) → filled width in Figma units (0..88)
+    pure function fill-of(v: float) -> float {
+        if (v <= 0) { return 0; }
+        if (v <= 50) { return v * 0.66; }
+        if (v <= 60) { return 33 + (v - 50) * 0.8; }
+        if (v <= 70) { return 41 + (v - 60) * 0.7; }
+        if (v <= 100) { return 48 + (v - 70) * 0.5; }
+        if (v <= 150) { return 63 + (v - 100) * 0.24; }
+        return min(88, 75 + (v - 150) * 0.26);
+    }
+    // inverse of fill-of
+    pure function volume-of(x: float) -> float {
+        if (x <= 33) { return x / 0.66; }
+        if (x <= 41) { return 50 + (x - 33) / 0.8; }
+        if (x <= 48) { return 60 + (x - 41) / 0.7; }
+        if (x <= 63) { return 70 + (x - 48) / 0.5; }
+        if (x <= 75) { return 100 + (x - 63) / 0.24; }
+        return 150 + (x - 75) / 0.26;
+    }
+    property <float> fx: fill-of(min(root.value, root.maximum));
+    // wedge edges: top y = 10.5 - x*10/88, bottom y = 15.5 + x*11/88
+    Path {
+        width: 100%; height: 100%;
+        viewbox-x: 0; viewbox-y: 0; viewbox-width: 88; viewbox-height: 28;
+        fill: #090909;
+        MoveTo { x: 0; y: 10; }
+        LineTo { x: 88; y: 0; }
+        LineTo { x: 88; y: 28; }
+        LineTo { x: 0; y: 16; }
+        Close { }
+    }
+    // gradient fill, inset ~1.5 units so the black wedge reads as an outline
+    Path {
+        width: 100%; height: 100%;
+        viewbox-x: 0; viewbox-y: 0; viewbox-width: 88; viewbox-height: 28;
+        fill: @linear-gradient(90deg, #95D318 0%, #B2A918 58%, #D37918 79%, #FF3737 100%);
+        opacity: 0.8; // Figma renders the gradient at ~80% over the black wedge
+        MoveTo { x: 1.5; y: 11.5; }
+        LineTo { x: 86.5; y: 2; }
+        LineTo { x: 86.5; y: 26; }
+        LineTo { x: 1.5; y: 14.5; }
+        Close { }
+    }
+    // unfilled part
+    Path {
+        width: 100%; height: 100%;
+        viewbox-x: 0; viewbox-y: 0; viewbox-width: 88; viewbox-height: 28;
+        fill: #090909;
+        MoveTo { x: root.fx; y: 10.5 - root.fx * 10 / 88; }
+        LineTo { x: 88; y: 0.5; }
+        LineTo { x: 88; y: 27.5; }
+        LineTo { x: root.fx; y: 15.5 + root.fx * 12 / 88; }
+        Close { }
     }
     TouchArea {
-        y: -10px; height: 26px;
         mouse-cursor: pointer;
-        moved => { if (self.pressed) { root.changed(clamp(self.mouse-x / self.width, 0, 1) * root.maximum); } }
+        moved => { if (self.pressed) { root.changed(min(root.maximum, root.volume-of(clamp(self.mouse-x / self.width, 0, 1) * 88))); } }
         pointer-event(e) => {
-            if (e.kind == PointerEventKind.down) { root.changed(clamp(self.mouse-x / self.width, 0, 1) * root.maximum); }
+            if (e.kind == PointerEventKind.down) { root.changed(min(root.maximum, root.volume-of(clamp(self.mouse-x / self.width, 0, 1) * 88))); }
+        }
+        scroll-event(e) => {
+            root.changed(clamp(root.value + (e.delta-y > 0 ? 5 : -5), 0, root.maximum));
+            accept
         }
     }
 }
@@ -133,7 +187,7 @@ component BarItem inherits HorizontalLayout {
         clicked => { root.act("mute"); }
     }
     if root.shown && root.wide && root.id == "volume": VolumeBar {
-        y: 17px; value: root.volume; maximum: root.volume-max;
+        y: 6px; value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
     }
     if root.shown && root.id != "volume": IconButton {
@@ -249,7 +303,7 @@ export component AppWindow inherits Window {
     callback customize-add(string);
     callback customize-profile(string);
     callback customize-done(bool);
-    function bar-act(id: string) {
+    public function bar-act(id: string) {
         if (id == "queue") { root.open-panel(4); }
         else if (id == "subtitles") { root.open-panel(0); }
         else if (id == "audio") { root.open-panel(1); }
@@ -284,6 +338,27 @@ export component AppWindow inherits Window {
     in property <[LibItem]> lib-continue;
     in property <[LibItem]> lib-recent;
     in property <[LibItem]> lib-pinned;
+    in property <[LibItem]> lib-listen;
+    in property <[LibItem]> lib-folders;
+    in property <[LibItem]> lib-lists;
+    in property <[LibItem]> lib-artists;
+    in property <bool> lib-can-back;
+    in property <bool> lib-can-forward;
+    // Library as the full home screen (vs. the 427 px sidebar while playing).
+    in-out property <bool> lib-full;
+    // Properties & Metadata dialog
+    in-out property <bool> info-open;
+    in property <string> info-title;
+    in property <[string]> info-keys;
+    in property <[string]> info-values;
+    // "Hide UI" from the main menu (Ctrl+\): bars stay hidden until toggled back.
+    in-out property <bool> ui-hidden;
+    callback stop();
+    callback toggle-record();
+    callback open-folder();
+    callback lib-history(bool);
+    callback lib-add-folder();
+    callback lib-create-playlist();
     in property <string> lib-nav: "home";
     in property <[string]> lib-crumb-keys;
     in property <[string]> lib-crumb-labels;
@@ -295,6 +370,19 @@ export component AppWindow inherits Window {
     in-out property <string> lib-query;
     in property <[Item]> panel-lib;
     in property <[image]> preview-frames;
+    // Menus (built in src/menus.rs): main right-click menu, library context menus,
+    // sort and view options. menu-kind "" = closed.
+    in-out property <string> menu-kind;
+    in property <[MenuItem]> menu-items;
+    in property <[MenuItem]> sub-items;
+    in-out property <string> sub-open;
+    in-out property <length> menu-x;
+    in-out property <length> menu-y;
+    in property <length> menu-width: 265px;
+    in-out property <length> sub-y;
+    callback menu-request(string, length, length, string); // kind, x, y, context
+    callback menu-activate(string);
+    callback menu-sub(string); // ask for the submenu of a row ("" closes it)
     // Miniplayer: compact always-on-top window (391x339, 391x690 with the queue).
     in-out property <bool> mini;
     in-out property <bool> mini-queue;
@@ -359,7 +447,7 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: !root.has-media || root.controls-visible || root.panel-open || root.settings-open || root.customize-open;
+    property <bool> show-ui: (!root.has-media || root.controls-visible || root.panel-open || root.settings-open || root.customize-open) && !(root.ui-hidden && root.has-media);
 
     fs := FocusScope {
         key-pressed(e) => {
@@ -377,24 +465,37 @@ export component AppWindow inherits Window {
         changed mouse-y => { root.activity(); }
         clicked => { fs.focus(); if (root.has-media) { root.toggle-play(); } }
         double-clicked => { root.toggle-fullscreen(); }
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && root.has-media) {
+                root.menu-request("main", self.mouse-x, self.mouse-y, "");
+            }
+        }
     }
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
     if !root.has-media || root.library-open: LibraryView {
-        y: 40px; height: root.height - 40px;
+        property <bool> docked: root.has-media && !root.lib-full;
+        sidebar: self.docked;
+        x: 0; y: 40px;
+        width: self.docked ? min(427px, root.width) : root.width;
+        height: root.height - 40px - (self.docked ? 72px : 0px);
         items: root.lib-items; continue-items: root.lib-continue; recent-items: root.lib-recent; pinned-items: root.lib-pinned;
+        listen-items: root.lib-listen; folder-items: root.lib-folders; list-items: root.lib-lists; artist-items: root.lib-artists;
         nav: root.lib-nav; crumb-keys: root.lib-crumb-keys; crumb-labels: root.lib-crumb-labels;
         sort: root.lib-sort; grid: root.lib-grid; count: root.lib-count; scanning: root.lib-scanning; has-media: root.has-media;
+        can-back: root.lib-can-back; can-forward: root.lib-can-forward;
         query <=> root.lib-query;
         navigate(k) => { root.lib-query = ""; root.lib-navigate(k); }
+        history(f) => { root.lib-query = ""; root.lib-history(f); }
         search(q) => { root.lib-search(q); }
-        set-sort(s) => { root.lib-set-sort(s); }
-        set-grid(g) => { root.lib-set-grid(g); }
         open(k, kind) => { root.lib-open(k, kind); }
-        menu(k, kind, a) => { root.lib-menu(k, kind, a); }
+        menu-request(kind, x, y, c) => { root.menu-request(kind, x, y, c); }
         open-file() => { root.open-file(); }
         open-network() => { root.network-open = true; }
         clear-recent() => { root.clear-recent(); }
+        popout() => {
+            if (root.has-media) { root.lib-full = !root.lib-full; } else { root.open-file(); }
+        }
     }
 
     // ---------- Top bar (title) ----------
@@ -696,5 +797,65 @@ export component AppWindow inherits Window {
         set-theme(t) => { root.setting-changed("interface.theme", t); }
         set-accent(a) => { root.setting-changed("interface.accent", a); }
         finish() => { root.onboarding-done(); fs.focus(); }
+    }
+
+    // ---------- Properties & Metadata ----------
+    if root.info-open: Rectangle {
+        background: #00000080;
+        TouchArea { clicked => { root.info-open = false; } }
+        Rectangle {
+            width: min(520px, root.width - 48px); height: min(icol.preferred-height, root.height - 48px);
+            x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+            background: Theme.bar-solid; border-radius: 10px;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: #00000066;
+            TouchArea { }
+            icol := VerticalLayout {
+                padding: 20px; spacing: 10px;
+                Text { text: root.info-title; color: Theme.fg-1; font-size: 16px; overflow: elide; }
+                Rectangle { height: 1px; background: Theme.bg-a1; }
+                for k[i] in root.info-keys: HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: k; color: Theme.fg-a3; font-size: 14px; width: 110px; }
+                    Text { text: root.info-values[i]; color: Theme.fg-a2; font-size: 14px; wrap: word-wrap; horizontal-stretch: 1; }
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    Rectangle {
+                        width: 80px; height: 32px; border-radius: 6px; background: ita.has-hover ? Theme.accent-bright : Theme.accent;
+                        Text { text: "Close"; color: Theme.bg-b2; }
+                        ita := TouchArea { mouse-cursor: pointer; clicked => { root.info-open = false; } }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------- Menus (topmost) ----------
+    if root.menu-kind != "": TouchArea {
+        clicked => { root.menu-kind = ""; root.sub-open = ""; }
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { root.menu-kind = ""; root.sub-open = ""; }
+        }
+    }
+    if root.menu-kind != "": main-menu := MenuPanel {
+        width: root.menu-width;
+        x: max(4px, min(root.menu-x, root.width - self.width - 4px));
+        y: max(4px, min(root.menu-y, root.height - self.height - 4px));
+        items: root.menu-items;
+        open-sub: root.sub-open;
+        activated(id) => { root.menu-activate(id); }
+        row-hovered(id, y) => {
+            root.sub-y = self.y + y - 4px;
+            root.sub-open = id;
+            root.menu-sub(id);
+        }
+    }
+    if root.menu-kind != "" && root.sub-open != "" && root.sub-items.length > 0: MenuPanel {
+        property <length> right-x: root.menu-x + root.menu-width - 4px;
+        width: 265px;
+        x: self.right-x + self.width > root.width ? max(4px, root.menu-x - self.width + 4px) : self.right-x;
+        y: max(4px, min(root.sub-y, root.height - self.height - 4px));
+        items: root.sub-items;
+        activated(id) => { root.menu-activate(id); }
     }
 }

@@ -3,6 +3,7 @@ mod config;
 mod desktop;
 mod library;
 mod libview;
+mod menus;
 mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
@@ -48,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
     settings::setup(&app, &player, cfg.clone(), log);
     libview::setup(&app, &player, cfg.clone(), log);
+    menus::setup(&app, &player, cfg.clone());
     desktop::setup(&app, &player, log);
     mini::setup(&app, cfg.clone());
     if cfg!(debug_assertions) {
@@ -82,7 +84,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             a.set_has_media(true);
                             refresh_lists(&a, &player, log);
                             on_file_loaded(&a, &player, log);
-                            a.set_library_open(false);
+                            libview::flush_pending(&player);
+                            // The docked library sidebar stays; the full library closes.
+                            if a.get_lib_full() {
+                                a.set_library_open(false);
+                                a.set_lib_full(false);
+                            }
                             a.invoke_lib_refresh();
                             let dur: f64 = player.mpv.get_property("duration").unwrap_or(0.0);
                             preview::start(
@@ -178,6 +185,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let of = open_file.clone();
     app.on_open_file(of);
 
+    {
+        let p = player.clone();
+        app.on_stop(move || {
+            p.save_position();
+            p.run("stop");
+        });
+        let p = player.clone();
+        let weak = app.as_weak();
+        app.on_toggle_record(move || {
+            // mpv stream-record: dump the stream to a file next to the user's videos.
+            let on = p.get("stream-record").is_some_and(|s| !s.is_empty());
+            let msg = if on {
+                p.set("stream-record", "");
+                "Recording stopped".to_string()
+            } else {
+                let dir = store::home().join("Videos");
+                let dir = if dir.is_dir() { dir } else { store::home() };
+                let mut n = 1;
+                let out = loop {
+                    let f = dir.join(format!("vivi-recording-{n}.mkv"));
+                    if !f.exists() {
+                        break f;
+                    }
+                    n += 1;
+                };
+                p.set("stream-record", &out.to_string_lossy());
+                format!("Recording to {}", out.display())
+            };
+            if let Some(a) = weak.upgrade() {
+                a.set_resume_text(msg.into());
+            }
+        });
+        let p = player.clone();
+        app.on_open_folder(move || {
+            let Some(d) = rfd::FileDialog::new()
+                .set_title("Open folder")
+                .pick_folder()
+            else {
+                return;
+            };
+            let mut files: Vec<String> = walk_media(&d);
+            files.sort();
+            for (i, f) in files.iter().enumerate() {
+                if i == 0 {
+                    p.open(f);
+                } else {
+                    p.enqueue(f);
+                }
+            }
+        });
+    }
+
     let p = player.clone();
     let weak = app.as_weak();
     app.on_key(move |text, shift, ctrl| {
@@ -200,6 +259,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             _ if s == "m" => p.toggle_mute(),
+            _ if !ctrl && (s == "s" || s == "S") => {
+                if let Some(a) = weak.upgrade() {
+                    a.invoke_stop();
+                }
+            }
+            _ if !ctrl && (s == "n" || s == "N") => p.playlist_step(!shift),
+            _ if !ctrl && (s == "r" || s == "R") => {
+                if let Some(a) = weak.upgrade() {
+                    a.invoke_toggle_record();
+                }
+            }
+            _ if ctrl && s == "\\" => {
+                if let Some(a) = weak.upgrade() {
+                    a.set_ui_hidden(!a.get_ui_hidden());
+                }
+            }
+            _ if ctrl && s == "q" => {
+                let _ = slint::quit_event_loop();
+            }
             _ if ctrl && s == "o" => open_file(),
             _ if ctrl && s == "," => {
                 if let Some(a) = weak.upgrade() {
@@ -473,6 +551,13 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         app.set_panel_open(true);
     }
     if cfg!(debug_assertions) {
+        if let Some(v) = std::env::var("VIVI_VOLUME")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+        {
+            let p = player.clone();
+            slint::Timer::single_shot(Duration::from_millis(2000), move || p.set_volume(v));
+        }
         if let Ok(m) = std::env::var("VIVI_MINI") {
             let weak = app.as_weak();
             slint::Timer::single_shot(Duration::from_millis(2500), move || {
@@ -527,7 +612,8 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
 
 /// Debug builds only: open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
-/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY.
+/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY,
+/// VIVI_MENU, VIVI_SUB.
 fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
     if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
@@ -564,6 +650,23 @@ fn debug_ui(app: &AppWindow) {
     if var("VIVI_LIBRARY").is_some() {
         app.set_library_open(true);
     }
+    // VIVI_MENU="kind;x;y;ctx" (ctx lines joined by '|'), VIVI_SUB="row-id;y": open a menu.
+    if let Some(m) = var("VIVI_MENU") {
+        let sub = var("VIVI_SUB");
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(2500), move || {
+            let Some(a) = w.upgrade() else { return };
+            let f: Vec<&str> = m.splitn(4, ';').collect();
+            let num = |i: usize| f.get(i).and_then(|v| v.parse().ok()).unwrap_or(100.0);
+            let ctx = f.get(3).copied().unwrap_or("").replace('|', "\n");
+            a.invoke_menu_request(f[0].into(), num(1), num(2), ctx.into());
+            if let Some((id, y)) = sub.as_deref().and_then(|s| s.split_once(';')) {
+                a.set_sub_y(y.parse().unwrap_or(0.0));
+                a.set_sub_open(id.into());
+                a.invoke_menu_sub(id.into());
+            }
+        });
+    }
     if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
         app.set_onboarding_step(n);
         app.set_onboarding_open(true);
@@ -579,7 +682,7 @@ fn recent_items() -> slint::ModelRc<Item> {
     )
 }
 
-fn playlist_items() -> slint::ModelRc<Item> {
+pub(crate) fn playlist_items() -> slint::ModelRc<Item> {
     items(
         store::playlists()
             .into_iter()
@@ -720,4 +823,21 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
             }
         },
     );
+}
+
+/// Media files under a folder (recursive), for "Open Folder".
+fn walk_media(dir: &std::path::Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(walk_media(&p));
+        } else if library::kind_of(&p).is_some() {
+            out.push(p.to_string_lossy().into_owned());
+        }
+    }
+    out
 }
