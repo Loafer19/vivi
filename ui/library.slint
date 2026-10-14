@@ -1,6 +1,11 @@
-// Library per Figma library frames, "Sorting / View Options" and context menus.
+// Library per the Figma "Library Sidebar" frames (docs/design/frames/library-sidebars.png):
+// 50 px icon rail (#191919, 32 px buttons, gap 14), content #0E0E0E with 20 px padding:
+// back/forward + breadcrumb (Inter 16 #8F8F8F, "▸" separators) + more/open icons, item count
+// with sort/view/search icons, a #222 divider, then 32 px rows (32 px thumbnail, gap 10,
+// Inter 14; watched rows dimmer with an orange progress line; "⋯" on hover). Home shows
+// titled sections of three rows each.
 import { ScrollView, LineEdit } from "std-widgets.slint";
-import { Theme, Icon } from "theme.slint";
+import { Theme, Icon, TriIcon } from "theme.slint";
 
 export struct LibItem {
     key: string,
@@ -14,10 +19,19 @@ export struct LibItem {
     pinned: bool,
     // Media path whose thumbnail this item shows (groups use their first song).
     thumb-key: string,
+    watched: bool,
+    // Icon name for rows without a thumbnail ("add", "songs", "album", …); "" = by kind.
+    icon: string,
 }
 
 global KindIcon {
     public pure function of(kind: string) -> image {
+        if kind == "add" { return @image-url("../assets/icons/add.svg"); }
+        if kind == "songs" { return @image-url("../assets/icons/songs.svg"); }
+        if kind == "album" { return @image-url("../assets/icons/album.svg"); }
+        if kind == "artist" { return @image-url("../assets/icons/artist.svg"); }
+        if kind == "genre" { return @image-url("../assets/icons/genre.svg"); }
+        if kind == "streaming" { return @image-url("../assets/icons/streaming.svg"); }
         if kind == "folder" { return @image-url("../assets/icons/folder.svg"); }
         if kind == "audio" { return @image-url("../assets/icons/music.svg"); }
         if kind == "group" { return @image-url("../assets/icons/album.svg"); }
@@ -26,32 +40,7 @@ global KindIcon {
     }
 }
 
-component NavItem inherits Rectangle {
-    in property <string> text;
-    in property <image> icon;
-    in property <bool> active;
-    in property <int> indent: 0;
-    in property <bool> rail; // icon-only sidebar on narrow windows
-    callback clicked();
-    height: 34px; border-radius: Theme.radius-lg;
-    background: active ? Theme.accent-bg : (ta.has-hover ? Theme.bg-a1 : transparent);
-    HorizontalLayout {
-        padding-left: 10px + root.indent * 18px; spacing: 10px;
-        if root.indent == 0: Icon { y: 7px; source: root.icon; width: 20px; height: 20px; tint: root.active ? Theme.accent-bright : Theme.fg-2; }
-        if !root.rail: Text { text: root.text; color: root.active ? Theme.accent-bright : Theme.fg-2; vertical-alignment: center; }
-    }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
-}
 
-component Chip inherits Rectangle {
-    in property <string> text;
-    in property <bool> selected;
-    callback clicked();
-    height: 28px; width: t.preferred-width + 20px; border-radius: Theme.radius-lg;
-    background: selected ? Theme.accent : (ta.has-hover ? Theme.divider : Theme.bg-a1);
-    t := Text { text: root.text; font-size: 13px; color: selected ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
-}
 
 // Grid tile / list row. Right-click opens the context menu.
 component Tile inherits Rectangle {
@@ -122,9 +111,6 @@ component Grid inherits Rectangle {
     }
 }
 
-component SectionTitle inherits Text {
-    color: Theme.fg-1; font-size: 18px; font-weight: 600;
-}
 
 export component NetworkDialog inherits Rectangle {
     in property <bool> ytdlp;
@@ -163,11 +149,133 @@ export component NetworkDialog inherits Rectangle {
     init => { url.focus(); }
 }
 
+
+// One 32 px library row (Figma "media" / "playlist" components).
+component LibRow inherits Rectangle {
+    in property <LibItem> it;
+    in property <bool> dim; // Home sections draw rows in the dimmer #6B6B6B
+    callback open();
+    callback menu(length, length);
+    height: 32px;
+    property <bool> media: (it.kind == "video" || it.kind == "audio") && it.icon == "";
+    property <bool> hover: ta.has-hover || more-ta.has-hover;
+    if root.media || root.it.has-thumb: Rectangle {
+        x: 0; width: 32px; height: 32px; border-radius: 2px; clip: true;
+        background: #303030;
+        if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: cover; }
+        if !root.it.has-thumb: Icon { source: KindIcon.of(root.it.kind); width: 16px; height: 16px; tint: Theme.fg-a3; }
+        if root.it.progress > 0 || root.it.watched: Rectangle {
+            x: 0; y: parent.height - 2px; height: 2px;
+            width: parent.width * (root.it.watched ? 1 : root.it.progress);
+            background: Theme.accent;
+        }
+    }
+    if !root.media && !root.it.has-thumb: Icon {
+        x: 4px; width: 24px; height: 24px;
+        source: KindIcon.of(root.it.icon != "" ? root.it.icon : root.it.kind);
+        tint: Theme.fg-a2;
+    }
+    Text {
+        x: 42px; width: root.width - 42px - (root.hover && root.it.kind != "action" ? 34px : 0px);
+        height: root.height;
+        text: root.it.title; font-size: 14px; overflow: elide; vertical-alignment: center;
+        color: root.it.watched || root.dim ? Theme.fg-a3 : Theme.fg-a2; // hover only adds "⋯" (Figma)
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.open(); }
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && root.it.kind != "action") {
+                root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+            }
+        }
+    }
+    if root.hover && root.it.kind != "action": Icon {
+        x: root.width - 24px; y: 4px; source: @image-url("../assets/icons/more.svg");
+        tint: more-ta.has-hover ? Theme.fg-1 : Theme.fg-a2;
+    }
+    more-ta := TouchArea {
+        x: root.width - 28px; width: 28px;
+        mouse-cursor: pointer;
+        clicked => { root.menu(self.absolute-position.x, self.absolute-position.y + 28px); }
+    }
+}
+
+component Rows inherits VerticalLayout {
+    in property <[LibItem]> items;
+    in property <int> max: 0; // 0 = all
+    in property <bool> dim;
+    callback open(LibItem);
+    callback menu(LibItem, length, length);
+    spacing: 10px;
+    for it[i] in root.items: LibRow {
+        dim: root.dim;
+        visible: root.max == 0 || i < root.max;
+        height: self.visible ? 32px : 0px;
+        it: it;
+        open => { root.open(it); }
+        menu(x, y) => { root.menu(it, x, y); }
+    }
+}
+
+// Home section: "Title ›" (Inter 16) then three rows; the title opens the full list.
+component Section inherits VerticalLayout {
+    in property <string> title;
+    in property <[LibItem]> items;
+    in property <int> max: 3;
+    in property <string> action-text; // e.g. "Clear"
+    callback title-clicked();
+    callback action();
+    callback open(LibItem);
+    callback menu(LibItem, length, length);
+    spacing: 20px;
+    HorizontalLayout {
+        height: 24px; spacing: 4px;
+        Text { text: root.title; color: tta.has-hover ? Theme.fg-1 : Theme.fg-a1; font-size: 16px; vertical-alignment: center; horizontal-stretch: 1;
+            tta := TouchArea { mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
+        if root.action-text != "": Text {
+            text: root.action-text; font-size: 14px; vertical-alignment: center;
+            color: ata.has-hover ? Theme.fg-1 : Theme.fg-a3;
+            ata := TouchArea { mouse-cursor: pointer; clicked => { root.action(); } }
+        }
+        Icon { source: @image-url("../assets/icons/chevron-right.svg"); tint: cta.has-hover ? Theme.fg-1 : Theme.fg-a1;
+            cta := TouchArea { mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
+    }
+    Rows { items: root.items; max: root.max; dim: true; open(it) => { root.open(it); } menu(it, x, y) => { root.menu(it, x, y); } }
+}
+
+component RailButton inherits Rectangle {
+    in property <image> icon;
+    in property <image> active-icon;
+    in property <image> active-accent;
+    in property <image> active-dim;
+    in property <bool> active;
+    callback clicked();
+    width: 32px; height: 32px; border-radius: 4px;
+    background: ta.has-hover && !root.active ? Theme.bg-a1 : transparent;
+    if root.active: TriIcon { base: root.active-icon; accent: root.active-accent; dim: root.active-dim; }
+    if !root.active: Icon { source: root.icon; tint: ta.has-hover ? Theme.fg-1 : Theme.fg-a2; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component HeadIcon inherits Rectangle {
+    in property <image> icon;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 24px; height: 24px;
+    Icon { source: root.icon; tint: ta.has-hover && root.enabled ? Theme.fg-1 : Theme.fg-a2; opacity: root.enabled ? 1 : 0.3; }
+    ta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
 export component LibraryView inherits Rectangle {
     in property <[LibItem]> items;
     in property <[LibItem]> continue-items;
     in property <[LibItem]> recent-items;
     in property <[LibItem]> pinned-items;
+    in property <[LibItem]> listen-items;
+    in property <[LibItem]> folder-items;
+    in property <[LibItem]> list-items;
+    in property <[LibItem]> artist-items;
     in property <string> nav: "home";
     in property <[string]> crumb-keys;
     in property <[string]> crumb-labels;
@@ -176,157 +284,155 @@ export component LibraryView inherits Rectangle {
     in property <int> count;
     in property <bool> scanning;
     in property <bool> has-media;
+    in property <bool> can-back;
+    in property <bool> can-forward;
+    // Docked 427 px sidebar next to the video (Figma "Library Sidebar") vs. the full home screen.
+    in property <bool> sidebar;
     callback navigate(string);
+    callback history(bool); // false = back, true = forward
     callback search(string);
-    callback set-sort(string);
-    callback set-grid(bool);
     callback open(string, string);
-    callback menu(string, string, string);
+    // kind ("lib" | "sort" | "view"), window x, y, context (see src/menus.rs)
+    callback menu-request(string, length, length, string);
     callback open-file();
     callback open-network();
     callback clear-recent();
-
-    property <bool> music-sub: crumb-keys.length > 0 && crumb-keys[0] == "music:songs";
-    property <bool> is-video: crumb-keys.length > 0 && crumb-keys[0] == "video";
-    // context menu
-    property <bool> menu-open;
-    property <LibItem> menu-it;
-    property <length> menu-x;
-    property <length> menu-y;
+    callback popout();
     in-out property <string> query;
-    property <bool> rail: root.width < 700px;
+    property <bool> searching: query != "";
+    property <string> section: nav == "home" ? "home" : (crumb-keys.length > 0 ? crumb-keys[0] : nav);
+    property <bool> show-grid: root.grid && !root.sidebar && root.width >= 520px && root.nav != "home" && root.items.length > 0 && root.items[0].kind != "action";
+    property <int> rows-max: root.sidebar ? 3 : 6;
 
-    background: Theme.bg-b1;
+    function ctx-of(it: LibItem) -> string {
+        return it.key + "\n" + it.kind + "\n" + (it.pinned ? "1" : "0") + "\n" + (it.watched ? "1" : "0") + "\n" + (it.progress > 0 && !it.watched ? "1" : "0");
+    }
+    function item-menu(it: LibItem, x: length, y: length) {
+        root.menu-request("lib", x, y, root.ctx-of(it));
+    }
+    function go(it: LibItem) { root.open(it.key, it.kind); }
+
+    background: root.sidebar ? Theme.bg-b1.with-alpha(0.95) : Theme.bg-b1;
     TouchArea { }
 
     HorizontalLayout {
-        // Sidebar
+        // Icon rail
         Rectangle {
-            width: root.rail ? 64px : 220px; background: Theme.bg-a4;
+            width: 50px; background: Theme.bg-a4;
             VerticalLayout {
-                padding: root.rail ? 10px : 12px; spacing: 2px; alignment: start;
-                NavItem { rail: root.rail; text: "Home"; icon: @image-url("../assets/icons/home.svg"); active: root.nav == "home"; clicked => { root.navigate("home"); } }
-                NavItem { rail: root.rail; text: "Video"; icon: @image-url("../assets/icons/videos.svg"); active: root.is-video; clicked => { root.navigate("video"); } }
-                NavItem { rail: root.rail; text: "Music"; icon: @image-url("../assets/icons/songs.svg"); active: root.music-sub; clicked => { root.navigate("music:songs"); } }
-                if root.music-sub && !root.rail: VerticalLayout {
-                    NavItem { indent: 1; text: "Songs"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:songs"; clicked => { root.navigate("music:songs"); } }
-                    NavItem { indent: 1; text: "Albums"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:albums"; clicked => { root.navigate("music:albums"); } }
-                    NavItem { indent: 1; text: "Artists"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:artists"; clicked => { root.navigate("music:artists"); } }
-                    NavItem { indent: 1; text: "Genres"; active: root.crumb-keys.length > 1 && root.crumb-keys[1] == "music:genres"; clicked => { root.navigate("music:genres"); } }
-                }
-                NavItem { rail: root.rail; text: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active: root.nav == "playlists"; clicked => { root.navigate("playlists"); } }
-                NavItem { rail: root.rail; text: "Network stream"; icon: @image-url("../assets/icons/streaming.svg"); clicked => { root.open-network(); } }
-                Rectangle { height: 12px; }
-                NavItem { rail: root.rail; text: "Open file…"; icon: @image-url("../assets/icons/open.svg"); clicked => { root.open-file(); } }
-                Rectangle { height: 12px; }
-                if !root.rail: Text {
-                    text: root.scanning ? "Scanning library…" : root.count + " files in library";
-                    color: Theme.fg-a3; font-size: 12px; x: 10px;
-                }
+                padding-top: 8px; padding-left: 9px; padding-right: 9px; spacing: 14px; alignment: start;
+                RailButton { icon: @image-url("../assets/icons/home.svg"); active-icon: @image-url("../assets/icons/layers/home-active-b.svg"); active-accent: @image-url("../assets/icons/layers/home-active-a.svg"); active-dim: @image-url("../assets/icons/layers/home-active-d.svg"); active: root.section == "home"; clicked => { root.navigate("home"); } }
+                RailButton { icon: @image-url("../assets/icons/videos.svg"); active-icon: @image-url("../assets/icons/layers/videos-active-b.svg"); active-accent: @image-url("../assets/icons/layers/videos-active-a.svg"); active-dim: @image-url("../assets/icons/layers/videos-active-d.svg"); active: root.section == "video"; clicked => { root.navigate("video"); } }
+                RailButton { icon: @image-url("../assets/icons/songs.svg"); active-icon: @image-url("../assets/icons/layers/songs-active-b.svg"); active-accent: @image-url("../assets/icons/layers/songs-active-a.svg"); active-dim: @image-url("../assets/icons/layers/songs-active-d.svg"); active: root.section == "music"; clicked => { root.navigate("music"); } }
+                RailButton { icon: @image-url("../assets/icons/streaming.svg"); active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "network"; clicked => { root.navigate("network"); } }
+                RailButton { icon: @image-url("../assets/icons/playlist.svg"); active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
+                RailButton { icon: @image-url("../assets/icons/recent.svg"); active-icon: @image-url("../assets/icons/recent.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
+                RailButton { icon: @image-url("../assets/icons/add.svg"); active-icon: @image-url("../assets/icons/add.svg"); clicked => { root.open-file(); } }
             }
         }
         // Content
         VerticalLayout {
-            padding: 20px; padding-bottom: 0; spacing: 12px;
+            padding: 20px; padding-bottom: 0; spacing: 17px;
             HorizontalLayout {
-                spacing: 6px; height: 34px;
-                for k[i] in root.crumb-keys: HorizontalLayout {
-                    spacing: 6px;
-                    if i > 0: Text { text: "›"; color: Theme.fg-a3; font-size: 18px; vertical-alignment: center; }
-                    Text {
-                        text: root.crumb-labels[i]; font-size: 20px; font-weight: i == root.crumb-keys.length - 1 ? 600 : 400;
-                        color: i == root.crumb-keys.length - 1 ? Theme.fg-1 : Theme.fg-a1; vertical-alignment: center;
-                        TouchArea { mouse-cursor: pointer; clicked => { root.navigate(k); } }
+                height: 24px; spacing: 12px;
+                HeadIcon { icon: @image-url("../assets/icons/arrow-left.svg"); enabled: root.can-back; clicked => { root.history(false); } }
+                HeadIcon { icon: @image-url("../assets/icons/arrow-right.svg"); enabled: root.can-forward; clicked => { root.history(true); } }
+                // Breadcrumb ("..." for long paths comes from src/libview.rs).
+                HorizontalLayout {
+                    horizontal-stretch: 1; spacing: 6px;
+                    for k[i] in root.crumb-keys: HorizontalLayout {
+                        spacing: 6px;
+                        if i > 0: Text { text: "▸"; color: Theme.fg-a2; font-size: 8px; vertical-alignment: center; }
+                        Text {
+                            text: root.crumb-labels[i]; font-size: 16px; overflow: elide; vertical-alignment: center;
+                            min-width: min(self.preferred-width, 140px);
+                            color: cta.has-hover ? Theme.fg-1 : Theme.fg-a2;
+                            cta := TouchArea { mouse-cursor: pointer; clicked => { root.navigate(k); } }
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                more := HeadIcon {
+                    icon: @image-url("../assets/icons/more.svg");
+                    clicked => {
+                        if (root.nav.character-count > 6 && root.crumb-keys.length > 1 && root.section == "video") {
+                            root.menu-request("lib", self.absolute-position.x, self.absolute-position.y + 28px,
+                                root.nav + "\nfolder\n0\n0\n0");
+                        } else {
+                            root.menu-request("view", self.absolute-position.x, self.absolute-position.y + 28px, "");
+                        }
                     }
                 }
-                Rectangle { horizontal-stretch: 1; }
-                LineEdit {
-                    width: 240px; placeholder-text: "Search library";
-                    text <=> root.query;
-                    edited(t) => { root.search(t); }
+                HeadIcon { icon: @image-url("../assets/icons/open.svg"); clicked => { root.popout(); } }
+            }
+            HorizontalLayout {
+                height: 24px; spacing: 12px;
+                Text {
+                    horizontal-stretch: 1; vertical-alignment: center; font-size: 14px; color: Theme.fg-a3;
+                    text: root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
+                }
+                HeadIcon {
+                    icon: root.sort != "name" && root.sort != "title" ? @image-url("../assets/icons/sort-active.svg") : @image-url("../assets/icons/sort.svg");
+                    clicked => { root.menu-request("sort", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
+                }
+                HeadIcon {
+                    icon: @image-url("../assets/icons/list.svg");
+                    clicked => { root.menu-request("view", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
+                }
+                HeadIcon {
+                    icon: @image-url("../assets/icons/search.svg");
+                    clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }
             }
-            if root.nav != "home" && root.nav != "playlists": HorizontalLayout {
-                spacing: 6px; alignment: start; height: 28px;
-                Text { text: "Sort"; color: Theme.fg-a1; vertical-alignment: center; }
-                Chip { text: "Name"; selected: root.sort == "name"; clicked => { root.set-sort("name"); } }
-                Chip { text: "Date"; selected: root.sort == "date"; clicked => { root.set-sort("date"); } }
-                Chip { text: "Size"; selected: root.sort == "size"; clicked => { root.set-sort("size"); } }
-                Chip { text: "Watched"; selected: root.sort == "watched"; clicked => { root.set-sort("watched"); } }
-                Rectangle { width: 16px; }
-                Text { text: "View"; color: Theme.fg-a1; vertical-alignment: center; }
-                Chip { text: "Grid"; selected: root.grid; clicked => { root.set-grid(true); } }
-                Chip { text: "List"; selected: !root.grid; clicked => { root.set-grid(false); } }
+            if root.searching: LineEdit {
+                placeholder-text: "Search library"; text <=> root.query;
+                edited(t) => { root.search(t); }
+                init => { self.focus(); }
             }
+            Rectangle { height: 1px; background: Theme.bg-a1; }
             ScrollView {
                 vertical-stretch: 1;
                 VerticalLayout {
-                    alignment: start; spacing: 10px; padding-right: 12px; padding-bottom: 20px;
+                    alignment: start; padding-top: 3px; padding-bottom: 20px; padding-right: 8px; spacing: 30px;
                     if root.nav == "home" && root.query == "": VerticalLayout {
-                        spacing: 10px;
+                        spacing: 33px;
                         if root.count == 0 && root.recent-items.length == 0: VerticalLayout {
-                            spacing: 10px; padding-top: 60px;
+                            spacing: 10px; padding-top: 40px;
                             HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: 72px; height: 72px; } }
-                            Text { text: "Your library is empty"; color: Theme.fg-1; font-size: 22px; horizontal-alignment: center; }
-                            Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; }
+                            Text { text: "Your library is empty"; color: Theme.fg-1; font-size: 20px; horizontal-alignment: center; }
+                            Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; wrap: word-wrap; }
                         }
-                        if root.continue-items.length > 0: SectionTitle { text: "Continue watching"; }
-                        if root.continue-items.length > 0: Grid { items: root.continue-items; max-rows: 1;
-                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
-                        if root.pinned-items.length > 0: SectionTitle { text: "Pinned"; }
-                        if root.pinned-items.length > 0: Grid { items: root.pinned-items;
-                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
-                        if root.items.length > 0: SectionTitle { text: "Recently added"; }
-                        if root.items.length > 0: Grid { items: root.items; max-rows: 1;
-                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
-                        if root.recent-items.length > 0: HorizontalLayout {
-                            SectionTitle { text: "Recent"; horizontal-stretch: 1; }
-                            Text {
-                                text: "Clear"; color: cta.has-hover ? Theme.fg-1 : Theme.fg-a1; vertical-alignment: center;
-                                cta := TouchArea { mouse-cursor: pointer; clicked => { root.clear-recent(); } }
-                            }
-                        }
-                        if root.recent-items.length > 0: Grid { items: root.recent-items; max-rows: 2;
-                            open(it) => { root.open(it.key, it.kind); } menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; } }
+                        if root.continue-items.length > 0: Section { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;
+                            title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.listen-items.length > 0: Section { title: "Listen Again"; items: root.listen-items; max: root.rows-max;
+                            title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.folder-items.length > 0: Section { title: "Frequently Visited Folders"; items: root.folder-items; max: root.rows-max;
+                            title-clicked => { root.navigate("video"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.list-items.length > 0: Section { title: "Frequently Visited Playlists"; items: root.list-items; max: root.rows-max;
+                            title-clicked => { root.navigate("playlists"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.artist-items.length > 0: Section { title: "Frequently Listened Artists"; items: root.artist-items; max: root.rows-max;
+                            title-clicked => { root.navigate("music:artists"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.pinned-items.length > 0: Section { title: "Favorites"; items: root.pinned-items; max: root.rows-max;
+                            open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.items.length > 0: Section { title: "Recently Added"; items: root.items; max: root.rows-max;
+                            title-clicked => { root.navigate("video"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
+                        if root.recent-items.length > 0: Section { title: "Recently Played"; items: root.recent-items; max: root.rows-max; action-text: "Clear";
+                            title-clicked => { root.navigate("recent"); } action => { root.clear-recent(); }
+                            open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                     }
-                    if root.nav != "home" || root.query != "": Grid {
-                        items: root.items; grid: root.grid;
-                        open(it) => { root.open(it.key, it.kind); }
-                        menu(it, x, y) => { root.menu-it = it; root.menu-x = x; root.menu-y = y; root.menu-open = true; }
+                    if (root.nav != "home" || root.query != "") && !root.show-grid: Rows {
+                        items: root.items;
+                        open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
+                    }
+                    if (root.nav != "home" || root.query != "") && root.show-grid: Grid {
+                        items: root.items; grid: true;
+                        open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
                     if (root.nav != "home" || root.query != "") && root.items.length == 0: Text {
                         text: root.scanning ? "Scanning…" : (root.query != "" ? "Nothing matches “" + root.query + "”." : "Nothing here yet.");
                         color: Theme.fg-a3;
                     }
                 }
-            }
-        }
-    }
-
-    // Context menu
-    if root.menu-open: TouchArea {
-        clicked => { root.menu-open = false; }
-        pointer-event(e) => { if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { root.menu-open = false; } }
-    }
-    if root.menu-open: Rectangle {
-        x: min(root.menu-x - root.absolute-position.x, root.width - self.width - 8px);
-        y: min(root.menu-y - root.absolute-position.y, root.height - self.height - 8px);
-        width: 220px; height: mcol.preferred-height;
-        background: Theme.bg-a4; border-radius: Theme.radius-lg; border-width: 1px; border-color: Theme.divider;
-        drop-shadow-blur: 16px; drop-shadow-color: #00000080;
-        mcol := VerticalLayout {
-            padding: 6px;
-            for a in [
-                { id: "play", label: root.menu-it.kind == "folder" || root.menu-it.kind == "group" ? "Open" : "Play", show: true },
-                { id: "enqueue", label: "Add to queue", show: root.menu-it.kind == "video" || root.menu-it.kind == "audio" },
-                { id: "pin", label: "Pin to Home", show: !root.menu-it.pinned && (root.menu-it.kind != "group" && root.menu-it.kind != "playlist") },
-                { id: "unpin", label: "Unpin from Home", show: root.menu-it.pinned },
-                { id: "forget", label: "Remove from Continue watching", show: root.menu-it.progress > 0 },
-            ]: Rectangle {
-                visible: a.show; height: a.show ? 32px : 0px;
-                border-radius: Theme.radius; background: ma.has-hover ? Theme.bg-a1 : transparent;
-                Text { x: 10px; text: a.label; color: Theme.fg-1; vertical-alignment: center; height: parent.height; }
-                ma := TouchArea { mouse-cursor: pointer; clicked => { root.menu-open = false; root.menu(root.menu-it.key, root.menu-it.kind, a.id); } }
             }
         }
     }
