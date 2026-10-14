@@ -1,0 +1,166 @@
+// UI of the built-in plugins (src/plugins): Skip intro button, karaoke lyrics overlay
+// and the Figma "Add Subtitles" dialog (docs/design/frames/dialog-add-subtitles.png)
+// used by the Subtitle Search plugin.
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Icon } from "theme.slint";
+import { Item } from "panel.slint";
+import { Dropdown, TextField, FlatButton, Field } from "controls.slint";
+
+// "Skip intro" / "Skip credits" pill, bottom right above the controls.
+export component SkipButton inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+    callback dismiss();
+    width: row.preferred-width; height: 44px;
+    border-radius: 10px;
+    background: ta.has-hover ? Theme.accent : Theme.bar;
+    border-width: 1px; border-color: Theme.accent;
+    row := HorizontalLayout {
+        padding-left: 18px; padding-right: 6px; spacing: 10px;
+        Text { text: root.text; color: ta.has-hover ? Theme.bg-b2 : Theme.fg-1; font-size: 15px; font-weight: 600; vertical-alignment: center; }
+        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/next.svg"); tint: ta.has-hover ? Theme.bg-b2 : Theme.accent; }
+        Rectangle {
+            width: 28px;
+            Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/close.svg"); tint: xa.has-hover ? Theme.fg-1 : Theme.fg-a3; }
+            xa := TouchArea { mouse-cursor: pointer; clicked => { root.dismiss(); } }
+        }
+    }
+    ta := TouchArea { width: parent.width - 34px; x: 0; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Karaoke lyrics: the current line in the accent color, neighbours fading out; the
+// block scrolls smoothly as lines change. Drawn over video or the visualizer.
+export component LyricsView inherits Rectangle {
+    in property <[string]> lines;
+    in property <int> index: -1;
+    in property <length> size: 22px;
+    property <length> line-h: root.size * 1.7;
+    property <int> visible-lines: 5;
+    // Dim the picture behind the lyrics (off over the visualizer).
+    in property <bool> backdrop;
+    height: self.line-h * self.visible-lines;
+    clip: true;
+    if root.backdrop: Rectangle {
+        x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
+        border-radius: 16px; background: #000000A0;
+    }
+    for l[i] in root.lines: Text {
+        property <int> d: abs(i - root.index);
+        visible: self.d <= 3;
+        x: 0; width: root.width;
+        y: (i - root.index + 2) * root.line-h;
+        height: root.line-h;
+        animate y { duration: 260ms; easing: ease-out; }
+        text: l == "" ? "♪" : l;
+        horizontal-alignment: center; vertical-alignment: center;
+        overflow: elide;
+        font-size: i == root.index ? root.size * 1.15 : root.size;
+        font-weight: i == root.index ? 700 : 500;
+        color: i == root.index ? Theme.accent : #FFFFFF;
+        opacity: i == root.index ? 1 : max(0.15, 0.7 - self.d * 0.2);
+        animate opacity, color { duration: 200ms; }
+    }
+}
+
+component SubRow inherits Rectangle {
+    in property <Item> item;
+    callback clicked();
+    callback activated();
+    property <string> name: root.item.label;
+    height: 36px; border-radius: 6px;
+    background: item.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
+    HorizontalLayout {
+        padding-left: 10px; padding-right: 10px; spacing: 10px;
+        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/subtitle.svg"); tint: item.selected ? Theme.accent : Theme.fg-a2; }
+        Text { horizontal-stretch: 1; text: root.item.key; color: Theme.fg-1; font-size: 13px; vertical-alignment: center; overflow: elide; }
+        Text { text: root.item.label; color: Theme.fg-a3; font-size: 12px; vertical-alignment: center; }
+        if item.selected: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/check-active.svg"); }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
+// Add Subtitles: "To: This file", source dropdown, search + language, result list,
+// Cancel / Done. Results come from the Subtitle Search plugin.
+export component SubtitleDialog inherits Rectangle {
+    in property <[Item]> results;    // key = file name, label = meta (see subtitles.rs)
+    in property <string> status;
+    in property <bool> busy;
+    in-out property <string> query;
+    in-out property <string> lang;
+    callback search();
+    callback select(int);
+    callback done(int);
+    callback from-computer();
+    callback close();
+    property <int> selected: -1;
+    background: #000000A0;
+    TouchArea { clicked => { root.close(); } }
+    dlg := Rectangle {
+        width: min(760px, root.width - 32px); height: min(620px, root.height - 32px);
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
+        clip: true;
+        TouchArea { }
+        VerticalLayout {
+            Rectangle {
+                height: 44px; background: Theme.bg-a3;
+                HorizontalLayout {
+                    padding-left: 16px; padding-right: 8px;
+                    Text { horizontal-stretch: 1; text: "Add Subtitles"; color: Theme.fg-1; font-size: 14px; vertical-alignment: center; }
+                    VerticalLayout { alignment: center;
+                        Rectangle { width: 30px; height: 30px; border-radius: Theme.radius; background: cx.has-hover ? Theme.bg-a1 : transparent;
+                            Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); }
+                            cx := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } } } }
+                }
+            }
+            HorizontalLayout {
+                padding: 12px; spacing: 8px;
+                Dropdown { width: 130px; options: ["To: This file"]; value: "To: This file"; }
+                Dropdown {
+                    width: 196px; options: ["From OpenSubtitles", "From Computer"]; value: "From OpenSubtitles";
+                    selected(i, o) => { if (i == 1) { root.from-computer(); } }
+                }
+                Rectangle {
+                    horizontal-stretch: 1; height: 36px; border-radius: 6px; background: Field.fill;
+                    Icon { x: 8px; width: 18px; height: 18px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
+                    TextField {
+                        x: 28px; width: parent.width - 30px; height: parent.height; background: transparent;
+                        text <=> root.query; placeholder: "Title, episode…";
+                        accepted => { root.selected = -1; root.search(); }
+                    }
+                }
+                TextField { width: 90px; height: 36px; text <=> root.lang; placeholder: "en"; accepted => { root.selected = -1; root.search(); } }
+                FlatButton { height: 36px; text: root.busy ? "…" : "Search"; enabled: !root.busy; clicked => { root.selected = -1; root.search(); } }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                ScrollView {
+                    VerticalLayout {
+                        padding-left: 12px; padding-right: 12px; spacing: 2px; alignment: start;
+                        for r[i] in root.results: SubRow {
+                            item: r;
+                            clicked => { root.selected = i; root.select(i); }
+                            activated => { root.selected = i; root.select(i); root.done(root.selected); }
+                        }
+                    }
+                }
+                if root.status != "": Text {
+                    x: 24px; width: parent.width - 48px; y: root.results.length == 0 ? (parent.height - self.height) / 2 : parent.height - self.height - 4px;
+                    text: root.status; wrap: word-wrap; horizontal-alignment: center;
+                    color: Theme.fg-a2; font-size: 13px;
+                }
+            }
+            HorizontalLayout {
+                padding: 12px; spacing: 8px; alignment: space-between;
+                FlatButton { text: "Cancel"; clicked => { root.close(); } }
+                Rectangle {
+                    width: 72px; height: 32px; border-radius: 6px;
+                    opacity: root.selected >= 0 && !root.busy ? 1 : 0.5;
+                    background: Theme.accent;
+                    Text { text: "Done"; color: Theme.bg-b2; font-weight: 600; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { enabled: root.selected >= 0 && !root.busy; mouse-cursor: pointer; clicked => { root.done(root.selected); } }
+                }
+            }
+        }
+    }
+}

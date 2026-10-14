@@ -23,6 +23,16 @@ pub struct Config {
     pub stubs: BTreeMap<String, String>,
     /// Per-show presets keyed by normalized show name (see [`show_key`]).
     pub presets: BTreeMap<String, Preset>,
+    /// Plugin state keyed by plugin id (see `src/plugins`).
+    pub plugins: BTreeMap<String, PluginState>,
+}
+
+/// Enable flag and settings of one plugin. `enabled = None` uses the plugin's default.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct PluginState {
+    pub enabled: Option<bool>,
+    pub settings: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -342,6 +352,11 @@ impl Default for Subtitles {
             position: 100,
         }
     }
+}
+
+/// Directory with mpv user scripts loaded as external plugins (`~/.config/vivi/scripts`).
+pub fn scripts_dir() -> PathBuf {
+    path().with_file_name("scripts")
 }
 
 pub fn path() -> PathBuf {

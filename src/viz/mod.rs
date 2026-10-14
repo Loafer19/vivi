@@ -1,4 +1,4 @@
-//! Music visualizer "plugin". Self-contained: `setup` wires it to the window and player
+//! Music visualizer, registered as the built-in `visualizer` plugin ([`VizPlugin`]). Self-contained: `setup` wires it to the window and player
 //! and everything else lives here.
 //!
 //! * [`tap`] decodes the playing file a second time (symphonia, worker thread) and keeps
@@ -44,6 +44,39 @@ struct Viz {
     last: Instant,
     paused_for: f32,
     tick: u32,
+}
+
+thread_local! {
+    /// Toggled by the plugin registry (Settings → Extensions).
+    static ENABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// The visualizer as a plugin: enabling/disabling shows or hides it; modes are picked
+/// in the player (dropdown or `V`).
+pub struct VizPlugin;
+
+impl crate::plugins::Plugin for VizPlugin {
+    fn manifest(&self) -> crate::plugins::Manifest {
+        crate::plugins::Manifest::builtin(
+            "visualizer",
+            "Music Visualizer",
+            "Spectrum, scope, waveform and more for audio-only files. Pick a mode with the dropdown or V.",
+            "visualizer",
+        )
+    }
+    fn enable(&mut self, cx: &crate::plugins::Ctx) {
+        ENABLED.with(|e| e.set(true));
+        cx.app
+            .set_viz_audio(cx.app.get_has_media() && audio_only(cx.player));
+    }
+    fn disable(&mut self, cx: &crate::plugins::Ctx) {
+        ENABLED.with(|e| e.set(false));
+        cx.app.set_viz_audio(false);
+    }
+}
+
+fn enabled() -> bool {
+    ENABLED.with(|e| e.get())
 }
 
 fn mode_file() -> std::path::PathBuf {
@@ -100,7 +133,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
 }
 
 /// No video track (cover art does not count as video).
-fn audio_only(p: &Player) -> bool {
+pub(crate) fn audio_only(p: &Player) -> bool {
     let n: i64 = p.mpv.get_property("track-list/count").unwrap_or(0);
     let mut audio = false;
     for i in 0..n {
@@ -125,6 +158,15 @@ impl Viz {
         self.tick = self.tick.wrapping_add(1);
 
         // Media changes: poll cheaply (every ~250 ms while not drawing).
+        if !enabled() {
+            if self.tap_open {
+                self.tap.open(None);
+                self.tap_open = false;
+                self.an = None;
+            }
+            self.path = None;
+            return;
+        }
         let drawing = self.audio_only && self.mode > 0 && a.get_has_media();
         if drawing || self.tick.is_multiple_of(8) {
             let path = a.get_has_media().then(|| p.get("path")).flatten();

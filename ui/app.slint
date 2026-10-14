@@ -11,6 +11,7 @@ import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem, NetworkDialog } from "library.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
+import { SkipButton, LyricsView, SubtitleDialog } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem }
 
@@ -254,6 +255,25 @@ export component AppWindow inherits Window {
     in property <int> viz-mode;
     in property <[string]> viz-modes: ["Disabled"];
     callback viz-select(int);
+    // Plugins (src/plugins). Fields of `plugin-command` args are joined with U+001F.
+    callback plugin-command(string, string, string);
+    in-out property <string> skip-label;
+    in property <float> skip-target;
+    in property <[string]> lyrics-lines;
+    in property <int> lyrics-index: -1;
+    in property <float> lyrics-size: 22;
+    in property <bool> subs-plugin;
+    in-out property <bool> subs-open;
+    in property <[Item]> subs-results;
+    in property <string> subs-status;
+    in property <bool> subs-busy;
+    in-out property <string> subs-query;
+    in-out property <string> subs-lang;
+    // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
+    public function add-subs() {
+        if (root.subs-plugin) { root.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
+        else { root.load-sub(); }
+    }
 
     // Side panel
     in-out property <bool> panel-open: false;
@@ -489,6 +509,14 @@ export component AppWindow inherits Window {
         frame: root.viz-frame; note: root.viz-note;
     }
 
+    // ---------- Lyrics overlay (Lyrics plugin) ----------
+    if root.has-media && root.lyrics-lines.length > 0 && !root.library-open && !root.mini: LyricsView {
+        x: 40px; width: root.width - 80px;
+        y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - 72px - self.height - 60px;
+        lines: root.lyrics-lines; index: root.lyrics-index; size: root.lyrics-size * 1px;
+        backdrop: !(root.viz-audio && root.viz-mode > 0);
+    }
+
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
     if !root.has-media || root.library-open: LibraryView {
         property <bool> docked: root.has-media && !root.lib-full;
@@ -557,7 +585,7 @@ export component AppWindow inherits Window {
         ab-state: root.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
         set-prop(n, v) => { root.set-prop(n, v); }
         run(c) => { root.run(c); }
-        load-sub() => { root.load-sub(); }
+        load-sub() => { root.add-subs(); }
         sleep(m) => { root.sleep(m); }
         bookmarks: root.bookmarks;
         seek-to(k) => { root.seek(k.to-float()); }
@@ -617,6 +645,15 @@ export component AppWindow inherits Window {
                 }
             }
         }
+    }
+
+    // ---------- Skip intro / credits (Skip Intro plugin) ----------
+    if root.has-media && root.skip-label != "" && !root.mini: SkipButton {
+        x: root.width - self.width - 24px;
+        y: root.height - (root.show-ui ? 72px : 0px) - self.height - 24px;
+        text: root.skip-label;
+        clicked => { root.plugin-command("skip-intro", "skip", ""); fs.focus(); }
+        dismiss => { root.plugin-command("skip-intro", "dismiss", ""); fs.focus(); }
     }
 
     // ---------- Controls ----------
@@ -794,6 +831,18 @@ export component AppWindow inherits Window {
         changed(id, v) => { root.setting-changed(id, v); }
         refresh(c, q, adv) => { root.settings-refresh(c, q, adv); }
         close() => { root.settings-open = false; fs.focus(); }
+    }
+
+    // ---------- Add Subtitles (Subtitle Search plugin) ----------
+    if root.subs-open: SubtitleDialog {
+        width: root.width; height: root.height;
+        results: root.subs-results; status: root.subs-status; busy: root.subs-busy;
+        query <=> root.subs-query; lang <=> root.subs-lang;
+        search => { root.plugin-command("subtitle-search", "search", ""); }
+        select(i) => { root.plugin-command("subtitle-search", "select", i); }
+        done(i) => { root.plugin-command("subtitle-search", "download", i); }
+        from-computer => { root.subs-open = false; root.load-sub(); fs.focus(); }
+        close => { root.subs-open = false; fs.focus(); }
     }
 
     // ---------- Customize player ----------

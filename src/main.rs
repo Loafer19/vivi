@@ -8,6 +8,7 @@ mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
 mod player;
+mod plugins;
 mod preview;
 mod render;
 mod settings;
@@ -54,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     desktop::setup(&app, &player, log);
     mini::setup(&app, cfg.clone());
     viz::setup(&app, &player);
+    plugins::setup(&app, &player, cfg.clone());
     if cfg!(debug_assertions) {
         debug_ui(&app);
     }
@@ -103,6 +105,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let c = cfg.borrow();
                             let key = settings::apply_preset(&player, &c, log);
                             settings::sync_panel(&a, &player);
+                            drop(c);
+                            plugins::file_loaded();
                             a.set_preset_name(
                                 key.or_else(|| player.get("path").map(|p| config::show_key(&p)))
                                     .unwrap_or_default()
@@ -308,6 +312,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         a.set_fullscreen(false);
                     } else if a.get_customize_open() {
                         a.invoke_customize_done(false);
+                    } else if a.get_subs_open() {
+                        a.set_subs_open(false);
                     } else if a.get_settings_open() {
                         a.set_settings_open(false);
                     }
@@ -622,7 +628,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
 /// Debug builds only: open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY,
-/// VIVI_MENU, VIVI_SUB.
+/// VIVI_MENU, VIVI_SUB, VIVI_SUBS (Add Subtitles dialog).
 fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
     if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
@@ -673,6 +679,14 @@ fn debug_ui(app: &AppWindow) {
                 a.set_sub_y(y.parse().unwrap_or(0.0));
                 a.set_sub_open(id.into());
                 a.invoke_menu_sub(id.into());
+            }
+        });
+    }
+    if var("VIVI_SUBS").is_some() {
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(2500), move || {
+            if let Some(a) = w.upgrade() {
+                a.invoke_add_subs();
             }
         });
     }

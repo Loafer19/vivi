@@ -2,6 +2,7 @@
 
 use crate::config::{self, Config, Preset};
 use crate::player::Player;
+use crate::plugins;
 use crate::{store, AppWindow, SettingRow, Theme};
 use slint::{Color, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
@@ -642,23 +643,118 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
         );
 
     // ---------- Extensions ----------
-    r.cat("Extensions")
-        .header("Extensions")
-        .push(
-            "",
-            "Extensions and mpv user scripts are not supported yet.",
-            "",
-            "info",
-            String::new(),
-        )
-        .stub_toggle(
-            "stub.extensions.scripts",
-            "Load mpv scripts from ~/.config/mpv/scripts",
-            &s(""),
-            false,
-        );
+    extensions(&mut r);
 
     r.v
+}
+
+/// Docs site with the plugin catalog ("Find more extensions").
+pub const CATALOG_URL: &str = "https://loafer19.github.io/vivi/plugins.html";
+
+/// Extensions page (Figma "Add-ons & Scripts"): one card per plugin with its ON/OFF
+/// toggle, followed by the plugin's own settings while it is enabled.
+fn extensions(r: &mut Rows) {
+    use plugins::{Origin, SettingKind};
+    let all = plugins::manifests();
+    r.cat("Extensions");
+    for (origin, title) in [
+        (Origin::Builtin, "Add-ons"),
+        (Origin::Script, "mpv Scripts"),
+    ] {
+        r.header(title);
+        let list: Vec<_> = all.iter().filter(|m| m.origin == origin).collect();
+        if origin == Origin::Script && list.is_empty() {
+            r.push(
+                "",
+                &format!(
+                    "No scripts yet. Put mpv .lua or .js scripts in {} and press Rescan.",
+                    config::scripts_dir().display()
+                ),
+                "",
+                "info",
+                String::new(),
+            );
+        }
+        for m in list {
+            let on = plugins::is_enabled(r.c, m);
+            r.push(
+                &plugins::toggle_id(&m.id),
+                &m.name,
+                &m.description,
+                "plugin",
+                on.to_string(),
+            );
+            let src = if origin == Origin::Script {
+                "mpv script"
+            } else {
+                "Built-in"
+            };
+            r.last().options = strs(&[&m.version, &m.author, &m.icon, src]);
+            if !on {
+                continue;
+            }
+            for st in &m.settings {
+                let id = plugins::setting_id(&m.id, &st.key);
+                let val = plugins::setting_value(r.c, m, &st.key);
+                match &st.kind {
+                    SettingKind::Toggle => {
+                        r.toggle(&id, &st.title, &st.info, val == "true");
+                    }
+                    SettingKind::Choice(o) => {
+                        let o: Vec<&str> = o.iter().map(String::as_str).collect();
+                        r.choice(&id, &st.title, &st.info, &val, &o);
+                    }
+                    SettingKind::Text(ph) => {
+                        r.text(&id, &st.title, &st.info, &val, ph);
+                    }
+                    SettingKind::Secret => {
+                        r.text(&id, &st.title, &st.info, &val, "");
+                        r.last().kind = "secret".into();
+                    }
+                    SettingKind::Action(l) => {
+                        r.action(&id, &st.title, &st.info, l);
+                    }
+                }
+            }
+        }
+    }
+    let startup = plugins::scripts::load_on_startup(r.c);
+    r.toggle(
+        "scripts.startup",
+        "Load add-ons on startup",
+        "Load enabled mpv scripts when Vivi starts.",
+        startup,
+    )
+    .action(
+        "scripts.folder",
+        "Scripts folder",
+        &config::scripts_dir().display().to_string(),
+        "Open",
+    )
+    .action(
+        "scripts.rescan",
+        "Rescan scripts",
+        "Pick up scripts added since Vivi started.",
+        "Rescan",
+    )
+    .action(
+        "scripts.catalog",
+        "Find more extensions",
+        CATALOG_URL,
+        "Open catalog",
+    );
+}
+
+fn open_url(u: &str) {
+    #[cfg(target_os = "windows")]
+    let r = std::process::Command::new("explorer").arg(u).spawn();
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg(u).spawn();
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let r = std::process::Command::new("xdg-open").arg(u).spawn();
+    if let Err(e) = r {
+        eprintln!("vivi: open {u}: {e}");
+    }
 }
 
 /// "10 s" / "5 %" → 10 / 5.
@@ -1238,6 +1334,38 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             let num = v.parse::<f64>().unwrap_or(0.0);
             if log {
                 eprintln!("setting {id} = {v}");
+            }
+            if id.starts_with("plugin.") {
+                let msg = plugins::setting_changed(&id, v);
+                a.set_settings_status(msg.unwrap_or_default().into());
+                refresh();
+                return;
+            }
+            if let Some(what) = id.strip_prefix("scripts.") {
+                match what {
+                    "startup" => {
+                        cfg.borrow_mut()
+                            .plugins
+                            .entry(plugins::scripts::GLOBAL_ID.into())
+                            .or_default()
+                            .settings
+                            .insert("startup".into(), v.into());
+                        save();
+                    }
+                    "folder" => {
+                        let d = config::scripts_dir();
+                        let _ = std::fs::create_dir_all(&d);
+                        open_url(&d.to_string_lossy());
+                    }
+                    "rescan" => {
+                        let n = plugins::rescan();
+                        a.set_settings_status(format!("{n} mpv scripts found").into());
+                    }
+                    "catalog" => open_url(CATALOG_URL),
+                    _ => {}
+                }
+                refresh();
+                return;
             }
             let mut rescan = false;
             {
