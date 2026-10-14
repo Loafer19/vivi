@@ -60,3 +60,26 @@ th { color: var(--fg2); font-weight: 600; }
 footer { border-top: 1px solid var(--line); color: var(--fg3); font-size: 13px; text-align: center; padding: 28px; }
 .toc { columns: 2; color: var(--fg2); }
 @media (max-width: 640px) { .hero h1 { font-size: 36px; } header.nav nav { gap: 14px; } .toc { columns: 1; } }
+/* Lucide icons (inlined by scripts/build-site.py) */
+svg.lucide { width: 1.1em; height: 1.1em; vertical-align: -.18em; flex: none; }
+header.nav nav a { display: inline-flex; align-items: center; gap: 6px; }
+header.nav nav a svg.lucide { width: 16px; height: 16px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; }
+.card .ic { width: 38px; height: 38px; border-radius: 9px; background: var(--accent-bg); color: var(--accent); display: grid; place-items: center; margin-bottom: 12px; }
+.card .ic svg.lucide, .plugin .icon svg.lucide { width: 20px; height: 20px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+.gallery figure { margin: 0; }
+.gallery .shot { box-shadow: 0 12px 30px rgba(0, 0, 0, .5); transition: border-color .15s; }
+.gallery a:hover .shot { border-color: var(--accent); }
+.gallery figcaption { color: var(--fg2); font-size: 13px; margin-top: 8px; text-align: center; }
+img.shot { height: auto; }
+.narrow { display: none; }
+footer a { color: var(--fg2); }
+@media (max-width: 640px) {
+  header.nav .in { padding: 10px 16px; gap: 12px; }
+  header.nav nav a svg.lucide { display: none; }
+  .wide { display: none; } .narrow { display: inline; }
+  .hero { padding: 48px 0 32px; } .hero p { font-size: 16px; }
+  .grid, .gallery { grid-template-columns: 1fr; }
+  table { display: block; overflow-x: auto; }
+}

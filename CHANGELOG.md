@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Docs site uses inline Lucide icons (no JavaScript), screenshot gallery, credits and mobile layout fixes; build fails on broken local links
+- Screenshots regenerated from the release build with Sintel (CC BY) and Kevin MacLeod music (CC BY); `VIVI_SCREENSHOT=1` enables the screenshot helpers in release builds
 
 Milestone M8 (v0.8): Figma fidelity. Each part has a side-by-side Figma vs Vivi image in `docs/design/compare/`.
 

@@ -8,6 +8,7 @@
       "version": "0.7.0",
       "author": "Vivi",
       "icon": "visualizer",
+      "lucide": "audio-waveform",
       "kind": "builtin",
       "default_enabled": true,
       "settings": []
@@ -19,6 +20,7 @@
       "version": "0.7.0",
       "author": "Vivi",
       "icon": "skip",
+      "lucide": "skip-forward",
       "kind": "builtin",
       "default_enabled": true,
       "settings": [
@@ -36,6 +38,7 @@
       "version": "0.7.0",
       "author": "Vivi",
       "icon": "lyrics",
+      "lucide": "mic-vocal",
       "kind": "builtin",
       "default_enabled": true,
       "settings": [
@@ -51,6 +54,7 @@
       "version": "0.7.0",
       "author": "Vivi",
       "icon": "subtitles",
+      "lucide": "captions",
       "kind": "builtin",
       "default_enabled": true,
       "settings": [
@@ -67,6 +71,7 @@
       "version": "1.0",
       "author": "Vivi",
       "icon": "script",
+      "lucide": "code-xml",
       "kind": "script",
       "default_enabled": true,
       "source": "plugins/examples/now-playing.lua",

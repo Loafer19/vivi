@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vivi — fast, lightweight media player</title>
+<meta name="description" content="Vivi is a fast, lightweight desktop media player written in Rust on top of mpv, with plugins, a music visualizer and a Figma-based dark UI.">
+<meta name="theme-color" content="#0e0e0e">
+<meta property="og:title" content="Vivi media player">
+<meta property="og:image" content="https://loafer19.github.io/vivi/img/player.png">
 <link rel="icon" href="img/vivi.svg">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -12,9 +16,9 @@
   <a class="brand" href="index.html"><img src="img/vivi.svg" alt="">Vivi</a>
   <nav>
     <a href="index.html" class="on">Home</a>
-    <a href="plugins.html">Plugins</a>
-    <a href="plugin-dev.html">Write a plugin</a>
-    <a href="https://github.com/Loafer19/vivi">GitHub</a>
+    <a href="plugins.html"><i data-lucide="puzzle"></i>Plugins</a>
+    <a href="plugin-dev.html"><i data-lucide="code-xml"></i><span class="wide">Write a plugin</span><span class="narrow">Develop</span></a>
+    <a href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
   </nav>
 </div></header>
 <main>
@@ -23,38 +27,54 @@
   <h1>A media player that <span>gets out of the way</span></h1>
   <p>Vivi is a fast, lightweight desktop player written in Rust on top of mpv, with a clean
   interface by default and deep customization when you want it.</p>
-  <a class="btn primary" href="https://github.com/Loafer19/vivi/releases">Download</a>
-  <a class="btn ghost" href="plugins.html">Browse plugins</a>
+  <a class="btn primary" href="https://github.com/Loafer19/vivi/releases"><i data-lucide="download"></i>Download</a>
+  <a class="btn ghost" href="plugins.html"><i data-lucide="puzzle"></i>Browse plugins</a>
 </section>
-<img class="shot" src="img/library-home.png" alt="Vivi library">
+<img class="shot" src="img/player.png" alt="Vivi playing Sintel" width="1280" height="720">
 
 <h2>Features</h2>
-<p class="lead">Everything mpv plays, in a UI based on the Figma “VLC Redesign”.</p>
+<p class="lead">Everything mpv plays, in a dark UI based on the Figma “VLC Redesign”.</p>
 <div class="grid">
-  <div class="card"><h3>Plays everything</h3><p>libmpv with hardware decoding, Wayland and X11, subtitles, chapters, A-B loop, speed and filters.</p></div>
-  <div class="card"><h3>Library</h3><p>Continue Watching, music by artists and albums, folders, playlists, network streams and thumbnails.</p></div>
-  <div class="card"><h3>Music visualizer</h3><p>Spectrum, scope, waveform, radial, particles and pitch visuals for audio files.</p></div>
-  <div class="card"><h3>Plugins</h3><p>Skip intros, karaoke lyrics, subtitle search, plus any mpv Lua or JavaScript script.</p></div>
-  <div class="card"><h3>Remembers</h3><p>Resume positions, per-show presets for delays and track languages, recent files.</p></div>
-  <div class="card"><h3>Everywhere</h3><p>AppImage, Arch packages, Windows and macOS builds; MPRIS media keys on Linux.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="play"></i></div><h3>Plays everything</h3><p>libmpv with hardware decoding, Wayland and X11, subtitles, chapters, A-B loop, speed and filters.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="library"></i></div><h3>Library</h3><p>Continue Watching, music by artists and albums, folders, playlists, network streams and thumbnails.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="audio-waveform"></i></div><h3>Music visualizer</h3><p>Spectrum, scope, waveform, radial, particles and pitch visuals for audio files.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="puzzle"></i></div><h3>Plugins</h3><p>Skip intros, karaoke lyrics, subtitle search, plus any mpv Lua or JavaScript script.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="history"></i></div><h3>Remembers</h3><p>Resume positions, per-show presets for delays and track languages, recent files.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="monitor-smartphone"></i></div><h3>Everywhere</h3><p>AppImage, Arch packages, Windows and macOS builds; MPRIS media keys on Linux; responsive down to 480 px.</p></div>
+</div>
+
+<h2>Screenshots</h2>
+<p class="lead">Captured from the release build. Click to open full size.</p>
+<div class="gallery">
+  <figure><a href="img/library-home.png"><img class="shot" src="img/library-home.png" alt="Library home" loading="lazy"></a><figcaption>Library</figcaption></figure>
+  <figure><a href="img/panel-subtitles.png"><img class="shot" src="img/panel-subtitles.png" alt="Side panel" loading="lazy"></a><figcaption>Side panel</figcaption></figure>
+  <figure><a href="img/settings.png"><img class="shot" src="img/settings.png" alt="Settings" loading="lazy"></a><figcaption>Settings</figcaption></figure>
+  <figure><a href="img/menu-main.png"><img class="shot" src="img/menu-main.png" alt="Main menu" loading="lazy"></a><figcaption>Menus</figcaption></figure>
+  <figure><a href="img/visualizer.png"><img class="shot" src="img/visualizer.png" alt="Music visualizer" loading="lazy"></a><figcaption>Visualizer</figcaption></figure>
+  <figure><a href="img/miniplayer.png"><img class="shot" src="img/miniplayer.png" alt="Miniplayer" loading="lazy"></a><figcaption>Miniplayer</figcaption></figure>
 </div>
 
 <h2>Plugins</h2>
-<p class="lead">Turn them on and off in Settings → Extensions. <a href="plugins.html">See the catalog →</a></p>
-<div class="grid">
-  <div><img class="shot" src="img/extensions.png" alt="Extensions settings"></div>
-  <div><img class="shot" src="img/lyrics.png" alt="Lyrics overlay over the visualizer"></div>
-  <div><img class="shot" src="img/skip-intro.png" alt="Skip intro button"></div>
-  <div><img class="shot" src="img/add-subtitles.png" alt="Add Subtitles dialog"></div>
+<p class="lead">Turn them on and off in Settings → Extensions. <a href="plugins.html">See the catalog <i data-lucide="arrow-right"></i></a></p>
+<div class="gallery">
+  <figure><a href="img/extensions.png"><img class="shot" src="img/extensions.png" alt="Extensions settings" loading="lazy"></a><figcaption>Extensions</figcaption></figure>
+  <figure><a href="img/lyrics.png"><img class="shot" src="img/lyrics.png" alt="Lyrics overlay over the visualizer" loading="lazy"></a><figcaption>Lyrics</figcaption></figure>
+  <figure><a href="img/skip-intro.png"><img class="shot" src="img/skip-intro.png" alt="Skip intro button" loading="lazy"></a><figcaption>Skip Intro</figcaption></figure>
+  <figure><a href="img/add-subtitles.png"><img class="shot" src="img/add-subtitles.png" alt="Add Subtitles dialog" loading="lazy"></a><figcaption>Subtitle Search</figcaption></figure>
 </div>
 
 <h2>Install</h2>
 <pre><code># Arch / Omarchy
 git clone https://github.com/Loafer19/vivi &amp;&amp; cd vivi
-sudo pacman -S --needed mpv rust
+sudo pacman -S --needed mpv sqlite rust
 cargo build --release &amp;&amp; ./target/release/vivi</code></pre>
 <p class="lead">Prebuilt AppImage, tarball, Windows and macOS builds are on the <a href="https://github.com/Loafer19/vivi/releases">releases page</a>.</p>
+<p class="note">Work in progress: not every frame of the Figma design is ported yet (equalizer and filter panels, network stream and new playlist dialogs, miniplayer queue variant). Progress is tracked in the <a href="https://github.com/Loafer19/vivi/milestones">milestones</a>.</p>
 </main>
-<footer>Vivi is MIT licensed · icons from the Figma community file “VLC Redesign” by Juxtopposed</footer>
+<footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
+UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·
+site icons from <a href="https://lucide.dev">Lucide</a> (ISC) ·
+screenshots show <a href="https://durian.blender.org">Sintel</a> (© Blender Foundation, CC BY 3.0) and
+“Local Forecast – Elevator” by <a href="https://incompetech.com">Kevin MacLeod</a> (CC BY 4.0)</footer>
 </body>
 </html>

@@ -17,7 +17,7 @@ instant startup, a simple interface by default with deep customization when you 
   - aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hwdec toggle
   - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
 - Miniplayer (`P`): compact always-on-top window (391×339 by default, resizable down to 280×160, size and position remembered) with an optional queue view; tiny sizes show the video only, with hover controls
-- Figma-matched menus, dropdowns, cone volume control and icons, with comparisons in [docs/design/compare](docs/design/compare)
+- Figma-matched menus (main right-click menu with submenus and shortcut hints, file/folder/playlist context menus, sort/view menus), dropdowns, cone volume control and icons, with comparisons in [docs/design/compare](docs/design/compare)
 - Responsive layout down to 480×320: the bottom bar folds extra buttons into a “⋯” menu, the side panel overlays the video (full width below 800 px), the library switches to an icon rail and list view, Settings uses a category dropdown — see [docs/screenshots/responsive](docs/screenshots/responsive)
 - Seek-bar hover preview: frame thumbnails while hovering the seek bar (needs `ffmpeg`)
 - MPRIS2 (Linux): media keys, `playerctl`, Waybar/desktop widgets with title, artist and cover art
@@ -29,20 +29,32 @@ instant startup, a simple interface by default with deep customization when you 
 - Customizable bottom bar (16 items, re-order/remove/add) with Minimal / Default / Power profiles
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
 - Music visualizer for audio-only files (no video track; cover art does not count): Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
+- Settings window rebuilt per Figma: grouped sidebar (App / Media / System), 13 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
 - Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), the visualizer, plus mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
-| Side panel | Empty state |
+| Library | Side panel |
 |---|---|
-| <img src="docs/screenshots/queue.png" width="420"> | <img src="docs/screenshots/empty.png" width="420"> |
-| **Settings** | **Light theme** |
-| <img src="docs/screenshots/settings.png" width="420"> | <img src="docs/screenshots/light.png" width="420"> |
-| **Library** | **Music** |
-| <img src="docs/screenshots/library-home.png" width="420"> | <img src="docs/screenshots/library-music.png" width="420"> |
-| **Miniplayer** | **Seek preview** |
-| <img src="docs/screenshots/miniplayer-queue.png" width="260"> | <img src="docs/screenshots/seek-preview.png" width="420"> |
-| **Customize player** | **Onboarding** |
-| <img src="docs/screenshots/customize.png" width="420"> | <img src="docs/screenshots/onboarding.png" width="420"> |
+| <img src="docs/screenshots/library-home.png" width="420"> | <img src="docs/screenshots/panel-subtitles.png" width="420"> |
+| **Settings** | **Main menu** |
+| <img src="docs/screenshots/settings.png" width="420"> | <img src="docs/screenshots/menu-main.png" width="420"> |
+| **Visualizer** | **Lyrics** |
+| <img src="docs/screenshots/visualizer.png" width="420"> | <img src="docs/screenshots/lyrics.png" width="420"> |
+| **Queue** | **Seek preview** |
+| <img src="docs/screenshots/queue.png" width="420"> | <img src="docs/screenshots/seek-preview.png" width="420"> |
+| **Customize player** | **Light theme** |
+| <img src="docs/screenshots/customize.png" width="420"> | <img src="docs/screenshots/light.png" width="420"> |
+| **Miniplayer** | **Onboarding** |
+| <img src="docs/screenshots/miniplayer.png" width="260"> | <img src="docs/screenshots/onboarding.png" width="420"> |
+
+All screenshots are in [docs/screenshots](docs/screenshots) (every settings page is there as `settings-<page>.png`).
+They are captured on Xvfb from the release build with `VIVI_SCREENSHOT=1`, which enables the same
+env-driven helpers as debug builds (`VIVI_SETTINGS`, `VIVI_PANEL`, `VIVI_LIBRARY`, `VIVI_MENU`, `VIVI_SUBS`, `VIVI_MINI`, …).
+
+> **Design status:** not every frame of the Figma file has been ported yet. Still missing: the equalizer
+> UI and filter panels from the components frames, the Open Network Stream / New Playlist dialogs as drawn,
+> the miniplayer queue variant and a few other frames in [docs/design/frames](docs/design/frames).
+> See the [v0.9 Figma fidelity II milestone](https://github.com/Loafer19/vivi/milestones).
 
 ## Install
 
@@ -114,7 +126,7 @@ Turn plugins on or off and change their settings in **Settings → Extensions** 
 
 Any mpv Lua or JavaScript script placed in `~/.config/vivi/scripts/` shows up as an **external plugin** with its own toggle. It is loaded with mpv `load-script`, and turning one off takes effect after a restart. Optional `-- @name`, `@description`, `@version` and `@author` header lines fill in the card. See [plugins/examples/now-playing.lua](plugins/examples/now-playing.lua).
 
-The machine-readable catalog is [plugins/index.json](plugins/index.json). The docs site in [docs/site](docs/site) has a landing page, the plugin catalog and a guide to writing plugins. Build it with `python3 scripts/build-site.py` (output in `_site/`). The [Pages workflow](.github/workflows/pages.yml) deploys it once GitHub Pages is enabled for the repository.
+The machine-readable catalog is [plugins/index.json](plugins/index.json). The docs site in [docs/site](docs/site) has a landing page, the plugin catalog and a guide to writing plugins. Build it with `python3 scripts/build-site.py` (output in `_site/`). The [Pages workflow](.github/workflows/pages.yml) deploys it to **<https://loafer19.github.io/vivi/>** on every push to `master`. Site icons are [Lucide](https://lucide.dev) SVGs inlined at build time (no JavaScript); each catalog entry names its Lucide icon in the `lucide` field of `index.json`.
 
 | Extensions | Lyrics | Skip intro | Add Subtitles |
 |---|---|---|---|
@@ -127,7 +139,7 @@ The machine-readable catalog is [plugins/index.json](plugins/index.json). The do
 `ui/*.slint` — UI and design tokens · `assets/icons` — SVGs extracted from Figma.
 Design notes: [docs/design/FIGMA.md](docs/design/FIGMA.md) · research: [docs/RESEARCH.md](docs/RESEARCH.md).
 
-## Roadmap
+## Roadmap & status
 Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones), tasks as [issues](https://github.com/Loafer19/vivi/issues).
 - [x] M1 Playback
 - [x] M2 Figma UI & icons
@@ -135,7 +147,18 @@ Stages are tracked as [milestones](https://github.com/Loafer19/vivi/milestones),
 - [x] M4 Queue / playlists / resume
 - [x] M5 Settings & customization
 - [x] M6 Library
-- [x] M7 Packaging & desktop integration (v0.7)
+- [x] M7 Packaging
+- [x] v0.7 Desktop integration (Flatpak moved to v0.9)
+- [x] v0.8 Figma fidelity: settings window, visualizer, plugin system, menus, library, icons
+- [ ] v0.9 Figma fidelity II: equalizer & filter panels, dialogs, miniplayer queue, remaining frames, Flatpak
+- [ ] Plugins: 4 built-in plugins done, more planned (subtitle auto-sync, Discord, remote control, scrobbling, SponsorBlock, …) — label [`plugin`](https://github.com/Loafer19/vivi/labels/plugin)
 
 ## License
-MIT — see [LICENSE](LICENSE). Icons come from the Figma community file "VLC Redesign" by Juxtopposed.
+MIT — see [LICENSE](LICENSE).
+
+## Credits
+- UI design and app icons: Figma community file “VLC Redesign” by [Juxtopposed](https://www.figma.com/@juxtopposed)
+- Site icons: [Lucide](https://lucide.dev) (ISC license)
+- Screenshot video: [Sintel](https://durian.blender.org) © Blender Foundation, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) — trailer from download.blender.org
+- Screenshot music: “Local Forecast – Elevator” by Kevin MacLeod ([incompetech.com](https://incompetech.com)), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the lyrics in the screenshots are demo text written for them
+- Playback: [mpv](https://mpv.io) · UI toolkit: [Slint](https://slint.dev)
