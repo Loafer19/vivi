@@ -1,21 +1,26 @@
-// Settings dialog per Figma "Settings - global/interface/…" (1048×865) and "Keyboard Shortcuts".
-import { ScrollView, LineEdit } from "std-widgets.slint";
-import { Dropdown } from "menu.slint";
+// Settings window per the Figma frames "Settings - General/Interface/…/Extensions"
+// (docs/design/frames/settings-*.png): search + grouped sidebar, section headers,
+// rows built from the reusable controls in controls.slint.
+import { ScrollView } from "std-widgets.slint";
 import { Theme, Icon } from "theme.slint";
+import { Dropdown, Toggle, AccentSlider, Segmented, TextField, PathField, FlatButton, AdvancedBar, Field } from "controls.slint";
 
 export struct SettingRow {
     id: string,
     category: string,
     title: string,
     info: string,
-    // "toggle" | "choice" | "slider" | "text" | "action" | "key" | "color" | "header"
+    // "toggle" | "choice" | "segmented" | "slider" | "text" | "path" | "action" | "key"
+    // | "color" | "header" | "info" | "advanced" (the collapsible bar)
     kind: string,
     value: string,
     options: [string],
     swatches: [color],
+    labels: [string],
     minimum: float,
     maximum: float,
     step: float,
+    enabled: bool,
 }
 
 component Info inherits Rectangle {
@@ -31,96 +36,79 @@ component Info inherits Rectangle {
     }
 }
 
-component Switch inherits Rectangle {
-    in property <bool> on;
-    callback toggled();
-    width: 40px; height: 22px; border-radius: 11px;
-    background: on ? Theme.accent : Theme.divider;
-    Rectangle {
-        x: on ? parent.width - self.width - 3px : 3px; y: 3px;
-        width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF;
-        animate x { duration: 120ms; }
-    }
-    TouchArea { mouse-cursor: pointer; clicked => { root.toggled(); } }
-}
-
-component Chip inherits Rectangle {
-    in property <string> text;
+component Swatch inherits Rectangle {
+    in property <color> swatch;
     in property <bool> selected;
-    in property <color> swatch: transparent;
     callback clicked();
-    height: 28px; width: swatch == transparent ? t.preferred-width + 20px : 28px;
-    border-radius: Theme.radius;
-    background: swatch != transparent ? swatch : (selected ? Theme.accent : (ta.has-hover ? Theme.divider : Theme.bg-a1));
-    border-width: swatch != transparent && selected ? 2px : 0px;
-    border-color: Theme.fg-1;
-    t := Text { text: swatch == transparent ? root.text : ""; font-size: 13px; color: selected ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    width: 30px; height: 30px; border-radius: 4px;
+    background: selected ? Theme.accent.mix(Field.fill, 30%) : transparent;
+    Rectangle { width: 18px; height: 18px; border-radius: 2px; background: root.swatch; }
+    TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 component Row inherits Rectangle {
     in property <SettingRow> setting;
+    in-out property <bool> advanced;
     callback changed(string, string);
-    height: setting.kind == "header" ? 40px : 52px;
+    callback advanced-toggled(bool);
+    property <length> ctl-w: min(300px, root.width * 0.45);
+    height: setting.kind == "header" ? 48px : setting.kind == "advanced" ? 56px : setting.kind == "slider" && setting.labels.length > 0 ? 58px : 42px;
     if setting.kind == "header": Text {
-        x: 0; y: 16px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: 15px;
+        x: 0; y: 20px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: 15px;
     }
-    if setting.kind != "header": HorizontalLayout {
-        spacing: 10px; padding-top: 6px; padding-bottom: 6px;
+    if setting.kind == "advanced": AdvancedBar {
+        y: 8px; width: parent.width; expanded <=> root.advanced;
+        toggled(e) => { root.advanced-toggled(e); }
+    }
+    if setting.kind != "header" && setting.kind != "advanced": HorizontalLayout {
+        spacing: 10px; padding-top: 5px; padding-bottom: 5px;
         HorizontalLayout {
             spacing: 6px; horizontal-stretch: 1; alignment: start;
-            Text { text: setting.title; color: Theme.fg-2; vertical-alignment: center; }
+            Text { text: setting.title; color: setting.enabled ? Theme.fg-a1 : Theme.fg-a3.with-alpha(0.6); font-size: 13px; vertical-alignment: center; overflow: elide; }
             if setting.info != "": VerticalLayout { alignment: center; Info { text: setting.info; } }
         }
         if setting.kind == "toggle": VerticalLayout { alignment: center;
-            Switch { on: setting.value == "true"; toggled => { root.changed(setting.id, setting.value == "true" ? "false" : "true"); } } }
-        // Up to three options as chips; longer lists use the Figma dropdown.
-        if setting.kind == "choice" && setting.options.length <= 3: HorizontalLayout { spacing: 6px; alignment: end; padding-top: 6px; padding-bottom: 6px;
-            for o in setting.options: Chip { text: o; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } }
-        if setting.kind == "choice" && setting.options.length > 3: VerticalLayout { alignment: center;
-            Dropdown { width: 200px; options: setting.options; value: setting.value; selected(i, o) => { root.changed(setting.id, o); } } }
-        if setting.kind == "color": HorizontalLayout { spacing: 8px; alignment: end; padding-top: 6px; padding-bottom: 6px;
-            for o[i] in setting.options: Chip { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } }
-        if setting.kind == "text": LineEdit {
-            width: 200px; text: setting.value; placeholder-text: "e.g. uk,en";
-            accepted(t) => { root.changed(setting.id, t); }
-            edited(t) => { root.changed(setting.id, t); }
-        }
+            Toggle { on: setting.value == "true"; enabled: setting.enabled; toggled => { root.changed(setting.id, setting.value == "true" ? "false" : "true"); } } }
+        if setting.kind == "choice": VerticalLayout { alignment: center;
+            Dropdown { width: root.ctl-w; options: setting.options; value: setting.value; selected(i, o) => { root.changed(setting.id, o); } } }
+        if setting.kind == "segmented": VerticalLayout { alignment: center;
+            Segmented { width: root.ctl-w; options: setting.options; value: setting.value; enabled: setting.enabled; selected(o) => { root.changed(setting.id, o); } } }
+        if setting.kind == "color": VerticalLayout { alignment: center;
+            Rectangle { width: root.ctl-w; height: 34px; border-radius: 6px; background: Field.fill;
+                HorizontalLayout { padding: 2px; alignment: space-between;
+                    for o[i] in setting.options: Swatch { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } } } }
+        if setting.kind == "text": VerticalLayout { alignment: center;
+            TextField {
+                width: root.ctl-w; text: setting.value; enabled: setting.enabled;
+                placeholder: setting.options.length > 0 ? setting.options[0] : "";
+                accepted(t) => { root.changed(setting.id, t); }
+                edited(t) => { root.changed(setting.id, t); }
+            } }
+        if setting.kind == "path": VerticalLayout { alignment: center;
+            PathField {
+                width: root.ctl-w; text: setting.value; enabled: setting.enabled;
+                edited(t) => { root.changed(setting.id, t); }
+                browse => { root.changed(setting.id, "::browse"); }
+            } }
         if setting.kind == "slider": HorizontalLayout {
-            spacing: 10px; width: 260px;
-            Rectangle {
-                horizontal-stretch: 1;
-                property <float> v: setting.value.to-float();
-                property <float> frac: clamp((v - setting.minimum) / (setting.maximum - setting.minimum), 0, 1);
-                Rectangle { y: (parent.height - 6px) / 2; height: 6px; border-radius: 3px; background: Theme.divider;
-                    Rectangle { x: 0; width: parent.width * frac; height: 6px; border-radius: 3px; background: Theme.accent; } }
-                Rectangle { x: parent.width * frac - 7px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; border-radius: 7px; background: Theme.fg-1; }
-                ta := TouchArea {
-                    mouse-cursor: pointer;
-                    function apply() {
-                        let raw = setting.minimum + clamp(self.mouse-x / self.width, 0, 1) * (setting.maximum - setting.minimum);
-                        root.changed(setting.id, round(raw / setting.step) * setting.step);
-                    }
-                    pointer-event(e) => { if (e.kind == PointerEventKind.up) { self.apply(); } }
-                }
-            }
-            Text { width: 48px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; horizontal-alignment: right; }
+            spacing: 10px; width: root.ctl-w;
+            VerticalLayout { alignment: center; horizontal-stretch: 1;
+                AccentSlider {
+                    value: setting.value.to-float(); minimum: setting.minimum; maximum: setting.maximum; step: setting.step;
+                    labels: setting.labels; enabled: setting.enabled;
+                    changed(v) => { root.changed(setting.id, v); }
+                } }
+            if setting.labels.length == 0: Text { width: 44px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-a2; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; }
         }
-        if setting.kind == "action": Rectangle {
-            width: at.preferred-width + 24px; height: 32px; y: 4px; border-radius: Theme.radius;
-            background: ata.has-hover ? Theme.divider : Theme.bg-a1;
-            at := Text { text: setting.value; color: Theme.fg-1; vertical-alignment: center; horizontal-alignment: center; }
-            ata := TouchArea { mouse-cursor: pointer; clicked => { root.changed(setting.id, "run"); } }
-        }
-        if setting.kind == "key": HorizontalLayout { spacing: 4px; alignment: end; padding-top: 8px; padding-bottom: 8px;
+        if setting.kind == "action": VerticalLayout { alignment: center;
+            FlatButton { text: setting.value; enabled: setting.enabled; clicked => { root.changed(setting.id, "run"); } } }
+        if setting.kind == "key": HorizontalLayout { spacing: 4px; alignment: end; padding-top: 4px; padding-bottom: 4px;
             Rectangle {
-                width: kt.preferred-width + 16px; border-radius: Theme.radius; background: Theme.bg-a1;
-                border-width: 1px; border-color: Theme.divider;
-                kt := Text { text: setting.value; color: Theme.fg-1; font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; }
+                width: kt.preferred-width + 16px; border-radius: Theme.radius; background: Field.fill;
+                kt := Text { text: setting.value; color: Theme.fg-2; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
             }
         }
     }
-    Rectangle { y: parent.height - 1px; height: 1px; background: setting.kind == "header" ? transparent : Theme.bg-a1; }
 }
 
 export component SettingsDialog inherits Rectangle {
@@ -134,87 +122,123 @@ export component SettingsDialog inherits Rectangle {
     callback changed(string, string);
     callback refresh(int, string, bool); // category, search, advanced
     callback close();
+    // Sidebar icons and group labels, in category order (see settings.rs CATEGORIES).
+    property <[image]> icons: [
+        @image-url("../assets/icons/preferences.svg"), @image-url("../assets/icons/interface.svg"),
+        @image-url("../assets/icons/privacy.svg"), @image-url("../assets/icons/hotkeys.svg"),
+        @image-url("../assets/icons/playback.svg"), @image-url("../assets/icons/video.svg"),
+        @image-url("../assets/icons/audio.svg"), @image-url("../assets/icons/subtitles.svg"),
+        @image-url("../assets/icons/folder.svg"), @image-url("../assets/icons/streaming.svg"),
+        @image-url("../assets/icons/speed.svg"), @image-url("../assets/icons/record.svg"),
+        @image-url("../assets/icons/plugins.svg"),
+    ];
+    function group(i: int) -> string {
+        i == 0 ? "App" : i == 4 ? "Media" : i == 9 ? "System" : ""
+    }
+    function go(i: int) { root.search = ""; root.category = i; root.advanced = false; root.refresh(i, "", false); }
 
     background: #000000A0;
     TouchArea { clicked => { root.close(); } }
 
     dlg := Rectangle {
         width: root.narrow ? root.width - 16px : min(1048px, root.width - 48px);
-        height: root.narrow ? root.height - 16px : min(760px, root.height - 48px);
+        height: root.narrow ? root.height - 16px : min(865px, root.height - 48px);
         x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
         background: Theme.bg-a4; border-radius: 12px;
         border-width: 1px; border-color: Theme.bg-a1;
         clip: true;
         TouchArea { }
         HorizontalLayout {
-            // Category sidebar (collapses into a dropdown on narrow windows)
+            // Sidebar: search + grouped categories (a dropdown on narrow windows)
             if !root.narrow: Rectangle {
                 width: 240px; background: Theme.bg-b1;
                 VerticalLayout {
-                    padding: 14px; spacing: 4px; alignment: start;
-                    Text { text: "Settings"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
-                    Rectangle { height: 8px; }
-                    search-edit := LineEdit {
-                        text <=> root.search;
-                        placeholder-text: "Search settings";
-                        edited(t) => { root.refresh(root.category, t, root.advanced); }
-                    }
-                    Rectangle { height: 8px; }
-                    for c[i] in root.categories: Rectangle {
-                        height: 34px; border-radius: Theme.radius-lg;
-                        background: i == root.category && root.search == "" ? Theme.accent-bg : (cta.has-hover ? Theme.bg-a1 : transparent);
-                        Text {
-                            x: 12px; text: c; vertical-alignment: center; height: parent.height;
-                            color: i == root.category && root.search == "" ? Theme.accent-bright : Theme.fg-2;
+                    padding: 8px; spacing: 8px;
+                    Rectangle {
+                        height: 40px; border-radius: 6px; background: Theme.bg-a3;
+                        Icon { x: 10px; width: 20px; height: 20px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
+                        TextField {
+                            x: 30px; width: parent.width - 34px; height: parent.height; background: transparent;
+                            text <=> root.search; placeholder: "Search";
+                            edited(t) => { root.refresh(root.category, t, root.advanced); }
                         }
-                        cta := TouchArea { mouse-cursor: pointer; clicked => { root.search = ""; root.category = i; root.refresh(i, "", root.advanced); } }
+                    }
+                    Rectangle {
+                        vertical-stretch: 1; border-radius: 6px; background: Theme.bg-a3;
+                        Flickable {
+                            VerticalLayout {
+                                padding: 6px; spacing: 2px; alignment: start;
+                                for c[i] in root.categories: VerticalLayout {
+                                    spacing: 2px;
+                                    if root.group(i) != "": Text {
+                                        height: 36px; text: root.group(i); color: Theme.fg-a3; font-size: 13px;
+                                        vertical-alignment: center;
+                                    }
+                                    Rectangle {
+                                        height: 40px; border-radius: 6px;
+                                        property <bool> sel: i == root.category && root.search == "";
+                                        background: sel ? Theme.bg-a1 : (cta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
+                                        Icon { x: 10px; width: 22px; height: 22px; source: root.icons[i]; tint: parent.sel ? Theme.accent : Theme.fg-a2; }
+                                        Text {
+                                            x: 46px; text: c; vertical-alignment: center; height: parent.height; font-size: 14px;
+                                            color: parent.sel ? Theme.fg-1 : Theme.fg-a1;
+                                        }
+                                        cta := TouchArea { mouse-cursor: pointer; clicked => { root.go(i); } }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
             // Content
             VerticalLayout {
-                padding: root.narrow ? 12px : 20px; spacing: 10px;
                 if root.narrow: HorizontalLayout {
-                    spacing: 8px;
+                    padding: 8px; spacing: 8px;
                     Dropdown {
                         horizontal-stretch: 1;
                         options: root.categories;
                         value: root.categories[root.category];
-                        selected(i, c) => { root.search = ""; root.category = i; root.refresh(i, "", root.advanced); }
+                        selected(i, c) => { root.go(i); }
                     }
-                    LineEdit {
+                    TextField {
                         horizontal-stretch: 1;
                         text <=> root.search;
-                        placeholder-text: "Search";
+                        placeholder: "Search";
                         edited(t) => { root.refresh(root.category, t, root.advanced); }
                     }
                 }
-                HorizontalLayout {
-                    spacing: 10px;
-                    Text {
-                        horizontal-stretch: 1;
-                        text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category];
-                        color: Theme.fg-1; font-size: 18px; font-weight: 600; vertical-alignment: center;
-                    }
-                    Text { text: "Advanced"; color: Theme.fg-a1; vertical-alignment: center; }
-                    VerticalLayout { alignment: center;
-                        Switch { on: root.advanced; toggled => { root.advanced = !root.advanced; root.refresh(root.category, root.search, root.advanced); } } }
-                    Rectangle {
-                        width: 32px; height: 32px; border-radius: Theme.radius;
-                        background: xta.has-hover ? Theme.bg-a1 : transparent;
-                        Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
-                        xta := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                Rectangle {
+                    height: 56px; background: Theme.bg-a3;
+                    HorizontalLayout {
+                        padding-left: 24px; padding-right: 12px; spacing: 10px;
+                        Text {
+                            horizontal-stretch: 1;
+                            text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category] + " Settings";
+                            color: Theme.fg-1; font-size: 16px; vertical-alignment: center;
+                        }
+                        VerticalLayout { alignment: center;
+                            Rectangle {
+                                width: 32px; height: 32px; border-radius: Theme.radius;
+                                background: xta.has-hover ? Theme.bg-a1 : transparent;
+                                Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
+                                xta := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                            } }
                     }
                 }
                 ScrollView {
                     vertical-stretch: 1;
                     VerticalLayout {
-                        alignment: start; padding-right: 14px;
-                        if root.rows.length == 0: Text { text: "No matching settings."; color: Theme.fg-a3; }
-                        for r in root.rows: Row { setting: r; changed(id, v) => { root.changed(id, v); } }
+                        alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;
+                        if root.rows.length == 0: Text { height: 40px; vertical-alignment: center; text: "No matching settings."; color: Theme.fg-a3; }
+                        for r in root.rows: Row {
+                            setting: r; advanced: root.advanced;
+                            changed(id, v) => { root.changed(id, v); }
+                            advanced-toggled(e) => { root.advanced = e; root.refresh(root.category, root.search, e); }
+                        }
                     }
                 }
-                if root.status != "": Text { text: root.status; color: Theme.fg-a3; font-size: 12px; }
+                if root.status != "": Text { height: 24px; horizontal-alignment: center; text: root.status; color: Theme.fg-a3; font-size: 12px; }
             }
         }
     }

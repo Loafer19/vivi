@@ -159,7 +159,7 @@ impl Player {
             .command("seek", &[&format!("{secs:.3}"), "relative"]);
     }
     pub fn set_volume(&self, v: f64) {
-        let _ = self.mpv.set_property("volume", v.clamp(0.0, 150.0));
+        let _ = self.mpv.set_property("volume", v.clamp(0.0, 1000.0));
     }
     pub fn add_volume(&self, d: f64) {
         let _ = self.mpv.command("add", &["volume", &format!("{d}")]);

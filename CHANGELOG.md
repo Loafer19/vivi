@@ -10,6 +10,18 @@ Milestone M8 (v0.8): Figma fidelity. Each part has a side-by-side Figma vs Vivi 
 - **Library sidebar** (#36): it was rebuilt with a 50 px icon rail (Home, Videos, Songs, Streaming, Playlists, Recent, Add), back and forward history, a breadcrumb that collapses to "…" when long, an item count, and sort, view and search buttons. The Home screen shows these sections: Continue Watching, Listen Again, Frequently Visited Folders and Playlists, Frequently Listened Artists, Favorites, Recently Added and Recently Played. During playback the sidebar stays docked on the left. The Music root, Network (with recent stream URLs) and Recent views were added.
 - **Cone volume control** (#37): the outline and gradient fill now match the Figma states.
 - **Library rows** (#38): rows are 32 px high, with a thumbnail, a progress line and dimmed text for watched items. Hovering a row shows a "⋯" menu.
+- **Settings window**: rebuilt to match the Figma settings frames. It has a search field and a sidebar grouped into App (General, Interface, Privacy, Controls), Media (Playback, Video, Audio, Subtitles, Library) and System (Network, Performance, Recording, Extensions). Each section ends with a collapsible "Advanced Options" bar. New reusable controls are in `ui/controls.slint`: an ON/OFF toggle, an accent slider with ticks and scale labels, a segmented control, a text field, a path field with Browse, and a flat button. The dropdown with a check mark is reused. New options are applied to mpv live and saved to `config.toml`:
+  - Theme: Dark, Light or System.
+  - Logging: log file and log level.
+  - Playback: repeat, precise seeking and yt-dlp quality.
+  - Video: enable video, stop the screensaver, default picture adjustments, deinterlacing, aspect ratio, and snapshot folder and format.
+  - Audio: enable audio, output device, startup volume, loudness normalization and default delay.
+  - Subtitles: enable subtitles, encoding, font, bold, color, opacity, outline, shadow and position.
+  - Network: buffering, cache, proxy, TLS verification and user agent.
+  - Performance: decoding threads, loop filter, frame dropping and video sync.
+  - Controls: seek and volume step sizes.
+
+  The Recording, Casting, Streaming and Extensions rows, and a few others, are placeholders for now. Their values are saved, but they do not change playback yet.
 - **Icons**: every icon is now sliced from the Figma icon sheet, keeping the two-tone and orange active variants. See `docs/design/icon-map.md` and `docs/design/compare/icons.png`.
 
 ## [0.7.0] - 2026-10-14

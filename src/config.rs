@@ -12,6 +12,15 @@ pub struct Config {
     pub audio: Audio,
     pub subtitles: Subtitles,
     pub library: Library,
+    pub general: General,
+    pub video: Video,
+    pub controls: Controls,
+    pub network: Network,
+    pub performance: Performance,
+    pub recording: Recording,
+    /// Values of settings that are shown in the UI but not implemented yet
+    /// (casting, streaming, extensions, …), keyed by setting id.
+    pub stubs: BTreeMap<String, String>,
     /// Per-show presets keyed by normalized show name (see [`show_key`]).
     pub presets: BTreeMap<String, Preset>,
 }
@@ -41,6 +50,12 @@ pub struct Playback {
     pub resume: bool,
     pub hwdec: String,
     pub speed: f64,
+    /// "Off" | "One" | "All" (mpv `loop-file` / `loop-playlist`).
+    pub repeat: String,
+    /// Precise seeking (mpv `hr-seek`).
+    pub precise_seek: bool,
+    /// Preferred stream quality for yt-dlp (mpv `ytdl-format`).
+    pub quality: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -49,6 +64,17 @@ pub struct Audio {
     /// Preferred languages, mpv `alang` syntax (e.g. "uk,en").
     pub language: String,
     pub volume_max: i64,
+    pub enabled: bool,
+    /// mpv `audio-device` name ("auto" = system default).
+    pub device: String,
+    /// Volume at startup (%).
+    pub startup_volume: i64,
+    /// Arrow-key volume step (%).
+    pub volume_step: i64,
+    /// Dynamic loudness normalization (lavfi dynaudnorm filter).
+    pub normalize: bool,
+    /// Default audio delay in seconds.
+    pub delay: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -58,6 +84,158 @@ pub struct Subtitles {
     pub scale: f64,
     /// mpv `sub-auto`: "no" | "exact" | "fuzzy" | "all"
     pub auto_load: String,
+    pub enabled: bool,
+    /// mpv `sub-codepage` ("auto", "utf8", "cp1251", …).
+    pub encoding: String,
+    pub font: String,
+    pub bold: bool,
+    /// Text color `#RRGGBB`.
+    pub color: String,
+    /// Text opacity 0–100 %.
+    pub opacity: i64,
+    /// mpv `sub-border-size` (0 = none).
+    pub outline: f64,
+    pub outline_color: String,
+    pub shadow: bool,
+    /// Vertical position, mpv `sub-pos` (100 = bottom).
+    pub position: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct General {
+    /// Interface language (only English is available for now).
+    pub language: String,
+    /// Write an mpv log file.
+    pub save_log: bool,
+    pub log_file: String,
+    /// "Errors only" | "Warnings" | "Everything"
+    pub log_level: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Video {
+    pub enabled: bool,
+    pub stop_screensaver: bool,
+    pub hue: i64,
+    pub brightness: i64,
+    pub contrast: i64,
+    pub saturation: i64,
+    pub gamma: i64,
+    /// mpv `deinterlace`: "auto" | "yes" | "no"
+    pub deinterlace: String,
+    /// mpv `video-aspect-override` ("no" = automatic).
+    pub aspect: String,
+    pub screenshot_dir: String,
+    /// mpv `screenshot-format`: "png" | "jpg" | "webp"
+    pub screenshot_format: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Controls {
+    /// Arrow-key seek step in seconds.
+    pub short_skip: u32,
+    /// Shift+arrow seek step in seconds.
+    pub long_skip: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Network {
+    /// "Low" | "Normal" | "High" (demuxer cache size).
+    pub buffering: String,
+    /// mpv `cache`: "auto" | "yes" | "no"
+    pub cache: String,
+    /// Seconds to read ahead (mpv `cache-secs`).
+    pub cache_secs: i64,
+    pub http_proxy: String,
+    pub tls_verify: bool,
+    pub user_agent: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Performance {
+    /// mpv `vd-lavc-threads` (0 = automatic).
+    pub threads: i64,
+    /// mpv `vd-lavc-skiploopfilter`.
+    pub skip_loop_filter: String,
+    /// mpv `framedrop` (vo) when true.
+    pub framedrop: bool,
+    /// mpv `video-sync`.
+    pub video_sync: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Recording {
+    pub dir: String,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            language: "English".into(),
+            save_log: false,
+            log_file: crate::store::cache_dir()
+                .join("vivi.log")
+                .to_string_lossy()
+                .into_owned(),
+            log_level: "Errors only".into(),
+        }
+    }
+}
+impl Default for Video {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            stop_screensaver: true,
+            hue: 0,
+            brightness: 0,
+            contrast: 0,
+            saturation: 0,
+            gamma: 0,
+            deinterlace: "auto".into(),
+            aspect: "no".into(),
+            screenshot_dir: crate::store::home()
+                .join("Pictures")
+                .to_string_lossy()
+                .into_owned(),
+            screenshot_format: "png".into(),
+        }
+    }
+}
+impl Default for Controls {
+    fn default() -> Self {
+        Self {
+            short_skip: 5,
+            long_skip: 60,
+        }
+    }
+}
+impl Default for Network {
+    fn default() -> Self {
+        Self {
+            buffering: "Normal".into(),
+            cache: "auto".into(),
+            cache_secs: 60,
+            http_proxy: String::new(),
+            tls_verify: true,
+            user_agent: String::new(),
+        }
+    }
+}
+impl Default for Performance {
+    fn default() -> Self {
+        Self {
+            threads: 0,
+            skip_loop_filter: "default".into(),
+            framedrop: true,
+            video_sync: "audio".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -126,6 +304,9 @@ impl Default for Playback {
             resume: true,
             hwdec: "auto-safe".into(),
             speed: 1.0,
+            repeat: "Off".into(),
+            precise_seek: false,
+            quality: "Best available".into(),
         }
     }
 }
@@ -134,6 +315,12 @@ impl Default for Audio {
         Self {
             language: String::new(),
             volume_max: 150,
+            enabled: true,
+            device: "auto".into(),
+            startup_volume: 100,
+            volume_step: 5,
+            normalize: false,
+            delay: 0.0,
         }
     }
 }
@@ -143,6 +330,16 @@ impl Default for Subtitles {
             language: String::new(),
             scale: 1.0,
             auto_load: "fuzzy".into(),
+            enabled: true,
+            encoding: "auto".into(),
+            font: "sans-serif".into(),
+            bold: false,
+            color: "#FFFFFF".into(),
+            opacity: 100,
+            outline: 3.0,
+            outline_color: "#000000".into(),
+            shadow: false,
+            position: 100,
         }
     }
 }

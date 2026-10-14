@@ -243,13 +243,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use slint::platform::Key;
         let s = text.as_str();
         let is = |k: Key| s == slint::SharedString::from(k).as_str();
-        let step = if shift { 60.0 } else { 5.0 };
+        let skip =
+            |a: &std::sync::atomic::AtomicU32| a.load(std::sync::atomic::Ordering::Relaxed) as f64;
+        let step = if shift {
+            skip(&settings::LONG_SKIP)
+        } else {
+            skip(&settings::SHORT_SKIP)
+        };
+        let vstep = skip(&settings::VOLUME_STEP);
         match () {
             _ if s == " " || s == "k" => p.toggle_pause(),
             _ if is(Key::RightArrow) => p.seek_rel(step),
             _ if is(Key::LeftArrow) => p.seek_rel(-step),
-            _ if is(Key::UpArrow) => p.add_volume(5.0),
-            _ if is(Key::DownArrow) => p.add_volume(-5.0),
+            _ if is(Key::UpArrow) => p.add_volume(vstep),
+            _ if is(Key::DownArrow) => p.add_volume(-vstep),
             _ if s == "f" => toggle_fs(),
             _ if s == "p" && !ctrl => {
                 if let Some(a) = weak.upgrade() {
