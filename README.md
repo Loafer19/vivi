@@ -17,13 +17,14 @@ instant startup, a simple interface by default with deep customization when you 
   - aspect ratio, rotation, zoom, pan & scan, brightness/contrast/saturation/gamma, hwdec toggle
   - speed, A-B loop, sleep timer, chapters, bookmarks (Ctrl+B)
 - Miniplayer (`P`): compact always-on-top window (391×339 by default, resizable down to 280×160, size and position remembered) with an optional queue view; tiny sizes show the video only, with hover controls
+- Figma-matched menus, dropdowns, cone volume control and icons, with comparisons in [docs/design/compare](docs/design/compare)
 - Responsive layout down to 480×320: the bottom bar folds extra buttons into a “⋯” menu, the side panel overlays the video (full width below 800 px), the library switches to an icon rail and list view, Settings uses a category dropdown — see [docs/screenshots/responsive](docs/screenshots/responsive)
 - Seek-bar hover preview: frame thumbnails while hovering the seek bar (needs `ffmpeg`)
 - MPRIS2 (Linux): media keys, `playerctl`, Waybar/desktop widgets with title, artist and cover art
 - Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files
 - Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11, Windows, macOS; on Wayland see below)
 - Settings (`Ctrl+,`) with search, Basic/Advanced mode and tooltips: dark/light theme, accent color, resume, default speed, hwdec, preferred audio/subtitle languages, volume cap, subtitle size, auto-load, privacy. Saved to `~/.config/vivi/config.toml`
-- Library: home screen (Continue watching, Pinned, Recently added, Recent), Video folders with breadcrumb, Music by songs/albums/artists/genres, playlists, search, sort, grid/list, right-click menu, thumbnails via ffmpeg
+- Library sidebar with an icon rail and history: home screen (Continue Watching, Listen Again, frequent folders/playlists/artists, Favorites, Recently Added/Played), Video folders with breadcrumb, Network streams, Music by songs/albums/artists/genres, playlists, search, sort, grid/list, right-click menu, thumbnails via ffmpeg
 - Open Network Stream (URLs, m3u; YouTube etc. via yt-dlp)
 - Customizable bottom bar (16 items, re-order/remove/add) with Minimal / Default / Power profiles
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)

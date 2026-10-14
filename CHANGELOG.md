@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+Milestone M8 (v0.8): Figma fidelity. Each part has a side-by-side Figma vs Vivi image in `docs/design/compare/`.
+
+### Changed
+- **Menus** (#34): the main menu, its submenus and the library context menus (file, folder, playlist, group) now match the Figma frames, including sizes, icons, shortcut hints and checked rows. New entries: Stop (`S`), Record, Hide UI (`Ctrl+\`), Open Folder, Mark as Watched, Show in File Explorer, Go to Source, Add Subtitle/Audio Tracks, Add to Playlist, Properties & Metadata, and Clear Progress.
+- **Sort, view and dropdowns** (#35): the sort and view menus follow Figma, with the active sort shown as checked and a new "Largest First" sort. The library can sort by unwatched or watched. Settings uses the new Figma dropdown in place of ComboBox.
+- **Library sidebar** (#36): it was rebuilt with a 50 px icon rail (Home, Videos, Songs, Streaming, Playlists, Recent, Add), back and forward history, a breadcrumb that collapses to "…" when long, an item count, and sort, view and search buttons. The Home screen shows these sections: Continue Watching, Listen Again, Frequently Visited Folders and Playlists, Frequently Listened Artists, Favorites, Recently Added and Recently Played. During playback the sidebar stays docked on the left. The Music root, Network (with recent stream URLs) and Recent views were added.
+- **Cone volume control** (#37): the outline and gradient fill now match the Figma states.
+- **Library rows** (#38): rows are 32 px high, with a thumbnail, a progress line and dimmed text for watched items. Hovering a row shows a "⋯" menu.
+- **Icons**: every icon is now sliced from the Figma icon sheet, keeping the two-tone and orange active variants. See `docs/design/icon-map.md` and `docs/design/compare/icons.png`.
+
 ## [0.7.0] - 2026-10-14
 
 Milestone M7: packaging and desktop integration.
