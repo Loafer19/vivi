@@ -29,6 +29,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Customizable bottom bar (16 items, re-order/remove/add) with Minimal / Default / Power profiles
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
 - Music visualizer for audio-only files (no video track; cover art does not count): Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
+- Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), the visualizer, plus mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
 | Side panel | Empty state |
@@ -101,9 +102,28 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | Ctrl+, | Settings |
 | Esc | Leave miniplayer / fullscreen, close settings |
 
+## Plugins
+Turn plugins on or off and change their settings in **Settings → Extensions** (`Ctrl+,`). Each card has an ON/OFF toggle, and a plugin's settings appear below its card while it is on. The state is saved in `~/.config/vivi/config.toml` under `[plugins.<id>]`.
+
+| Plugin | What it does |
+|---|---|
+| **Music Visualizer** | Visuals for audio-only files. Pick a mode with the top-left dropdown, or press `V` to cycle. |
+| **Skip Intro & Credits** | Shows a *Skip intro* / *Skip credits* button inside chapters named Intro, Opening, OP, Credits, Ending or ED, or inside your own per-show ranges (`the wand = 0:30-2:00, 21:10-end`). To mark a range while watching, press **Mark** once at the start and again at the end. *Skip automatically* jumps over these parts without asking. |
+| **Lyrics** | Synced lyrics as a karaoke overlay. It looks for `song.lrc` next to `song.flac` first, then a cache, then [LRCLIB](https://lrclib.net) using the file's tags (music only). Settings: online lookup, text size and clear cache. |
+| **Subtitle Search** | Side panel → *Add subtitle file…* (or the Subtitle menu) opens the Add Subtitles dialog. It searches [OpenSubtitles](https://www.opensubtitles.com) by file hash and name, then downloads and loads the subtitle you pick. It needs a free API key from [opensubtitles.com/consumers](https://www.opensubtitles.com/consumers), entered in the plugin settings. Username and password are optional and raise the daily download limit. |
+
+Any mpv Lua or JavaScript script placed in `~/.config/vivi/scripts/` shows up as an **external plugin** with its own toggle. It is loaded with mpv `load-script`, and turning one off takes effect after a restart. Optional `-- @name`, `@description`, `@version` and `@author` header lines fill in the card. See [plugins/examples/now-playing.lua](plugins/examples/now-playing.lua).
+
+The machine-readable catalog is [plugins/index.json](plugins/index.json). The docs site in [docs/site](docs/site) has a landing page, the plugin catalog and a guide to writing plugins. Build it with `python3 scripts/build-site.py` (output in `_site/`). The [Pages workflow](.github/workflows/pages.yml) deploys it once GitHub Pages is enabled for the repository.
+
+| Extensions | Lyrics | Skip intro | Add Subtitles |
+|---|---|---|---|
+| <img src="docs/screenshots/extensions.png" width="220"> | <img src="docs/screenshots/lyrics.png" width="220"> | <img src="docs/screenshots/skip-intro.png" width="220"> | <img src="docs/screenshots/add-subtitles.png" width="220"> |
+
 ## Architecture
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
 `src/viz/` — music visualizer (a parallel symphonia decode synced to mpv `time-pos` → rustfft analysis → modes behind the `Visual` trait) ·
+`src/plugins/` — plugin registry (`Plugin` trait, manifests, config-backed enable/settings, mpv script loader) and the built-in plugins ·
 `ui/*.slint` — UI and design tokens · `assets/icons` — SVGs extracted from Figma.
 Design notes: [docs/design/FIGMA.md](docs/design/FIGMA.md) · research: [docs/RESEARCH.md](docs/RESEARCH.md).
 
