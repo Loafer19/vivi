@@ -1,0 +1,35 @@
+name: Docs site
+# Builds docs/site (+ plugin catalog from plugins/index.json) and deploys it to GitHub Pages.
+# Pages must be enabled in Settings → Pages with "GitHub Actions" as the source; for a
+# private repository that needs a paid plan (or a public repository).
+on:
+  push:
+    branches: [master]
+    paths: ["docs/site/**", "plugins/**", "scripts/build-site.py", "docs/screenshots/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build-site.py _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

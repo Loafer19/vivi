@@ -3,3 +3,4 @@
 *.webm
 .DS_Store
 *.fig
+/_site

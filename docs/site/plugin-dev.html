@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Write a Vivi plugin</title>
+<link rel="icon" href="img/vivi.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav"><div class="in">
+  <a class="brand" href="index.html"><img src="img/vivi.svg" alt="">Vivi</a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="plugins.html">Plugins</a>
+    <a href="plugin-dev.html" class="on">Write a plugin</a>
+    <a href="https://github.com/Loafer19/vivi">GitHub</a>
+  </nav>
+</div></header>
+<main>
+<section class="hero" style="padding-bottom:16px">
+  <h1>Write a <span>plugin</span></h1>
+  <p>Two kinds: compiled-in Rust plugins with full access to the UI, and mpv user scripts
+  (Lua or JavaScript) that need no rebuild.</p>
+</section>
+<ul class="toc">
+  <li><a href="#arch">Architecture</a></li>
+  <li><a href="#manifest">Manifest format</a></li>
+  <li><a href="#rust">A Rust plugin step by step</a></li>
+  <li><a href="#hooks">Hooks and context</a></li>
+  <li><a href="#ui">Adding UI</a></li>
+  <li><a href="#scripts">mpv script plugins</a></li>
+  <li><a href="#catalog">Listing in the catalog</a></li>
+</ul>
+
+<h2 id="arch">Architecture</h2>
+<p>Plugins live in <code>src/plugins/</code>. Each one is a type implementing the <code>Plugin</code>
+trait and is listed in <code>plugins::builtin()</code>. The <code>Registry</code> owns them, keeps
+their enabled flag and settings in <code>~/.config/vivi/config.toml</code> under
+<code>[plugins.&lt;id&gt;]</code>, and calls the enabled ones from the UI thread:</p>
+<pre><code>mpv events ─▶ main.rs ─▶ plugins::file_loaded() ─▶ Plugin::file_loaded
+timer (100 ms) ────────▶ Plugin::tick
+Settings → Extensions ─▶ plugins::setting_changed() ─▶ enable / disable / setting_changed / command
+Slint callback plugin-command(id, name, args) ─▶ Plugin::command</code></pre>
+<p>The Settings → Extensions page is generated from the manifests: one card with an ON/OFF toggle
+per plugin, followed by its settings while it is enabled. Nothing else needs to be registered.</p>
+
+<h2 id="manifest">Manifest format</h2>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td><code>id</code></td><td>string</td><td>Stable id, lowercase with dashes (<code>skip-intro</code>). Used as the config key.</td></tr>
+  <tr><td><code>name</code></td><td>string</td><td>Display name.</td></tr>
+  <tr><td><code>description</code></td><td>string</td><td>One sentence, shown on the card.</td></tr>
+  <tr><td><code>version</code></td><td>string</td><td>Semver; built-ins use the Vivi version.</td></tr>
+  <tr><td><code>author</code></td><td>string</td><td>Name or handle.</td></tr>
+  <tr><td><code>icon</code></td><td>string</td><td>Icon key: <code>visualizer</code>, <code>skip</code>, <code>lyrics</code>, <code>subtitles</code>, <code>script</code>; anything else shows the generic plugin icon (see <code>PluginIcons</code> in <code>ui/settings.slint</code>).</td></tr>
+  <tr><td><code>settings</code></td><td>list</td><td>Setting specs, below.</td></tr>
+  <tr><td><code>default_enabled</code></td><td>bool</td><td>State before the user touches the toggle.</td></tr>
+</table>
+<p>Setting specs have a <code>key</code>, <code>title</code>, <code>info</code> (tooltip), a kind and a
+default. Values are always strings (<code>"true"</code>/<code>"false"</code> for toggles).</p>
+<table>
+  <tr><th>Kind</th><th>Constructor</th><th>Settings row</th></tr>
+  <tr><td>toggle</td><td><code>SettingSpec::toggle(key, title, info, default)</code></td><td>ON/OFF toggle</td></tr>
+  <tr><td>choice</td><td><code>SettingSpec::choice(key, title, info, &amp;[options])</code></td><td>Dropdown; the first option is the default</td></tr>
+  <tr><td>text</td><td><code>SettingSpec::text(key, title, info, placeholder, default)</code></td><td>Text field</td></tr>
+  <tr><td>secret</td><td><code>SettingSpec::secret(key, title, info)</code></td><td>Hidden text field (API keys)</td></tr>
+  <tr><td>action</td><td><code>SettingSpec::action(key, title, info, label)</code></td><td>Button; runs <code>Plugin::command(cx, key, &amp;[])</code></td></tr>
+</table>
+<p>In config they look like this:</p>
+<pre><code>[plugins.subtitle-search]
+enabled = true
+
+[plugins.subtitle-search.settings]
+api-key = "…"
+languages = "en,uk"</code></pre>
+
+<h2 id="rust">A Rust plugin step by step</h2>
+<p>1. Create <code>src/plugins/hello.rs</code>:</p>
+<pre><code>use super::{Ctx, Manifest, Plugin, SettingSpec};
+
+#[derive(Default)]
+pub struct Hello;
+
+impl Plugin for Hello {
+    fn manifest(&amp;self) -&gt; Manifest {
+        Manifest::builtin("hello", "Hello", "Greets every file you open.", "plugins")
+            .setting(SettingSpec::text("greeting", "Greeting", "", "Hello", "Hello"))
+    }
+    fn file_loaded(&amp;mut self, cx: &amp;Ctx) {
+        let title = cx.player.get("media-title").unwrap_or_default();
+        cx.toast(&amp;format!("{} {title}", cx.get("greeting")));
+    }
+}</code></pre>
+<p>2. Add <code>pub mod hello;</code> to <code>src/plugins/mod.rs</code> and
+<code>Box::new(hello::Hello)</code> to <code>builtin()</code>.</p>
+<p>3. Add an entry to <code>plugins/index.json</code> (a unit test checks that every built-in is listed with
+the same name, icon and setting keys), then run <code>cargo test</code>.</p>
+
+<h2 id="hooks">Hooks and context</h2>
+<table>
+  <tr><th>Hook</th><th>When</th></tr>
+  <tr><td><code>enable(cx)</code></td><td>At startup if enabled, and when switched on (followed by <code>file_loaded</code>).</td></tr>
+  <tr><td><code>disable(cx)</code></td><td>When switched off (and at startup if disabled). Clear your UI here.</td></tr>
+  <tr><td><code>file_loaded(cx)</code></td><td>mpv loaded a new file (tracks, chapters and metadata are available).</td></tr>
+  <tr><td><code>tick(cx)</code></td><td>Every 100 ms while enabled. Keep it cheap; poll channels from worker threads here.</td></tr>
+  <tr><td><code>setting_changed(cx, key)</code></td><td>The user changed one of your settings (already saved).</td></tr>
+  <tr><td><code>command(cx, name, args)</code></td><td>An action button, or a UI callback sent with <code>plugin-command</code>.</td></tr>
+</table>
+<p><code>Ctx</code> gives you <code>cx.app</code> (the Slint <code>AppWindow</code>), <code>cx.player</code>
+(mpv: <code>get</code>, <code>set</code>, <code>cmd</code>, <code>seek_abs</code>, <code>chapters()</code>,
+<code>mpv.get_property</code>), <code>cx.get(key)</code> / <code>cx.flag(key)</code> / <code>cx.set(key, value)</code>
+for your settings, <code>cx.toast(msg)</code> and <code>cx.local_path()</code>.</p>
+<p class="note">Hooks run on the UI thread. Do network and disk work on a <code>std::thread</code> and send the
+result back through an <code>mpsc</code> channel that <code>tick</code> polls (see <code>lyrics.rs</code>
+and <code>subtitles.rs</code>).</p>
+
+<h2 id="ui">Adding UI</h2>
+<p>Put components in <code>ui/plugins.slint</code>, add properties to <code>AppWindow</code> in
+<code>ui/app.slint</code>, and set them from your hooks. To call back into the plugin, use the shared callback:</p>
+<pre><code>clicked =&gt; { root.plugin-command("hello", "wave", ""); }</code></pre>
+<p>which arrives as <code>command(cx, "wave", &amp;[""])</code>. Join several arguments with U+001F.</p>
+
+<h2 id="scripts">mpv script plugins</h2>
+<p>Any mpv Lua (<code>.lua</code>) or JavaScript (<code>.js</code>) script, or a directory with
+<code>main.lua</code> / <code>main.js</code>, placed in <code>~/.config/vivi/scripts/</code> becomes an
+external plugin with its own card and toggle. Enabled scripts are loaded with mpv's
+<code>load-script</code> command at startup (unless “Load add-ons on startup” is off) or as soon as you
+switch them on. mpv cannot unload a script, so switching one off takes effect after a restart.
+Use <b>Rescan</b> to pick up new files without restarting.</p>
+<p>Optional header comments fill in the card:</p>
+<pre><code>-- @name Now Playing OSD
+-- @description Shows the title on mpv's OSD when a file starts
+-- @version 1.0
+-- @author Vivi
+
+mp.register_event("file-loaded", function()
+    mp.osd_message(mp.get_property("media-title", ""), 3)
+end)</code></pre>
+<p>JavaScript scripts use <code>// @name …</code>. Scripts run inside Vivi's mpv, so they see the same
+properties and can bind commands, but mpv's own OSD is drawn under Vivi's UI and Vivi disables mpv's
+default key bindings. Your libmpv must be built with Lua / JavaScript support (most distributions are).</p>
+
+<h2 id="catalog">Listing in the catalog</h2>
+<p>The <a href="plugins.html">catalog</a> is generated from <code>plugins/index.json</code> by
+<code>scripts/build-site.py</code>. Entries use the manifest fields above plus <code>kind</code>
+(<code>builtin</code> or <code>script</code>) and, for scripts, <code>source</code> (a path in the repository).</p>
+<pre><code>python3 scripts/build-site.py   # builds _site/
+python3 -m http.server -d _site</code></pre>
+</main>
+<footer>Vivi is MIT licensed · icons from the Figma community file “VLC Redesign” by Juxtopposed</footer>
+</body>
+</html>
