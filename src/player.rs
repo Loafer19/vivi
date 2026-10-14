@@ -192,9 +192,10 @@ impl Player {
             eprintln!("vivi: command {cmd}: {e:?}");
         }
     }
-    /// Run an mpv command with arguments (any characters; uses mpv's `%len%` quoting).
+    /// Run an mpv command with arguments (any characters; double-quoted with C escapes,
+    /// since `mpv_command_string` does not understand `%len%` quoting).
     pub fn cmd(&self, name: &str, args: &[&str]) {
-        let q: Vec<String> = args.iter().map(|a| format!("%{}%{a}", a.len())).collect();
+        let q: Vec<String> = args.iter().map(|a| quote(a)).collect();
         let q: Vec<&str> = q.iter().map(String::as_str).collect();
         if let Err(e) = self.mpv.command(name, &q) {
             eprintln!("vivi: command {name}: {e:?}");
@@ -302,6 +303,20 @@ impl Player {
     }
 }
 
+/// Quote one argument for mpv's command parser (C-style escapes in double quotes).
 fn quote(path: &str) -> String {
-    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
+    format!(
+        "\"{}\"",
+        path.replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn quoting() {
+        assert_eq!(super::quote(r#"/a b/"x"\y"#), r#""/a b/\"x\"\\y""#);
+    }
 }
