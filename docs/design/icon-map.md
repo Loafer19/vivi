@@ -151,9 +151,9 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `repeat-right.svg` | r08c01 |
 | `repeat-right-twotone.svg` | r08c02 |
 | `replay.svg` | r03c03 |
-| `save.svg` | kept (no equivalent in the sheet) |
+| `save.svg` | hand-drawn in the sheet style (see compare/new-icons.png) |
 | `save-twotone.svg` | r15c11 |
-| `scope-twotone.svg` | kept (no equivalent in the sheet) |
+| `scope-twotone.svg` | hand-drawn in the sheet style (see compare/new-icons.png) |
 | `search.svg` | r09c11 |
 | `settings.svg` | r00c00 |
 | `settings-active.svg` | r00c03 |
@@ -169,8 +169,8 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `songs-selected.svg` | r05c11 |
 | `sort.svg` | r09c09 |
 | `sort-active.svg` | r09c10 |
-| `spectometer-twotone.svg` | kept (no equivalent in the sheet) |
-| `spectrum-twotone.svg` | kept (no equivalent in the sheet) |
+| `spectometer-twotone.svg` | hand-drawn in the sheet style (see compare/new-icons.png) |
+| `spectrum-twotone.svg` | hand-drawn in the sheet style (see compare/new-icons.png) |
 | `speed.svg` | r12c01 |
 | `speed-active.svg` | r12c02 |
 | `stop.svg` | r02c05 |
@@ -195,7 +195,7 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `ui.svg` | r17c00 |
 | `ui-twotone.svg` | r17c01 |
 | `upload-up-twotone.svg` | r07c07 |
-| `video.svg` | kept (no equivalent in the sheet) |
+| `video.svg` | hand-drawn in the sheet style (see compare/new-icons.png) |
 | `video-active.svg` | r05c09 |
 | `video-twotone.svg` | r05c08 |
 | `videos.svg` | r06c01 |
@@ -207,7 +207,7 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `volume-high.svg` | r03c06 |
 | `waveform-twotone.svg` | r01c07 |
 | `window.svg` | r11c05 |
-| `window-twotone.svg` | kept (no equivalent in the sheet) |
+| `window-twotone.svg` | hand-drawn in the sheet style (see compare/new-icons.png) |
 | `wrench.svg` | r11c06 |
 | `zoom.svg` | r10c00 |
 
