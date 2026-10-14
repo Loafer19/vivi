@@ -680,10 +680,14 @@ pub fn action(id: &str, label: &str) {
             with_state(|s| s.confirm = None);
             status(String::new());
         }
-        "Roll back" => status(match rollback(&r, id) {
-            Ok(v) => format!("Rolled back to {v}. Restart Vivi to use it"),
-            Err(e) => format!("Could not roll back: {e}"),
-        }),
+        "Roll back" => {
+            let res = rollback(&r, id);
+            super::rescan();
+            status(match res {
+                Ok(v) => format!("Rolled back to {v}. Restart Vivi to use it"),
+                Err(e) => format!("Could not roll back: {e}"),
+            })
+        }
         "Uninstall" => {
             let res = uninstall(&r, id);
             super::rescan();

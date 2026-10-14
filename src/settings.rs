@@ -764,7 +764,7 @@ fn installed(r: &mut Rows, updates: &[plugins::packages::Entry]) {
         };
         let up = updates.iter().find(|e| e.id == m.id);
         plugin_rows(r, m, "Downloaded", |r| {
-            let mut title = format!("Version {}", m.version);
+            let mut title = format!("Version {}", p.manifest.version);
             let mut labels = Vec::new();
             if let Some(u) = up {
                 title += &format!("  ·  {} available", u.version);
