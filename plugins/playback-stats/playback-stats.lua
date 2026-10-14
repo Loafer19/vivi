@@ -1,5 +1,5 @@
 -- @name Playback Statistics
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Vivi
 -- @description Local watch/listen time statistics (Vivi plugin package).
 --
@@ -7,9 +7,17 @@
 -- (one line per day + item: date, seconds, kind, artist/show, title). Nothing leaves the machine.
 -- Alt+S (script-binding playback_stats/show) shows a summary on the OSD.
 -- Script messages: show, export, clear.
+
 local mp = require "mp"
 local options = require "mp.options"
 local utils = require "mp.utils"
+
+-- mpv's OSD is not always visible in Vivi (no video, UI on top), so messages also go
+-- to Vivi's toast through `script-message vivi-toast <text>`.
+local function osd(msg, secs)
+  mp.osd_message(msg, secs)
+  mp.commandv("script-message", "vivi-toast", msg)
+end
 
 local o = { days = 7 }
 options.read_options(o, "playback-stats")
@@ -117,7 +125,7 @@ local function show()
     local s = per_day[d] or 0
     lines[#lines + 1] = string.format("%s %s %s", d:sub(6), string.rep("█", math.floor(20 * s / maxd + 0.5)), hms(s))
   end
-  mp.osd_message(table.concat(lines, "\n"), 8)
+  osd(table.concat(lines, "\n"), 8)
 end
 
 local function export()
@@ -125,7 +133,7 @@ local function export()
   save()
   local out = home .. "/vivi-stats.csv"
   local f = io.open(out, "w")
-  if not f then mp.osd_message("Could not write " .. out); return end
+  if not f then osd("Could not write " .. out); return end
   local function q(s) return '"' .. tostring(s):gsub('"', '""') .. '"' end
   f:write("date,seconds,kind,artist_or_show,title\n")
   local keys = {}
@@ -136,14 +144,14 @@ local function export()
     f:write(string.format("%s,%d,%s,%s,%s\n", d, math.floor(rows[key] + 0.5), k, q(a), q(t)))
   end
   f:close()
-  mp.osd_message("Statistics exported to " .. out)
+  osd("Statistics exported to " .. out)
 end
 
 local function clear()
   rows = {}
   dirty = false
   os.remove(file)
-  mp.osd_message("Playback statistics cleared")
+  osd("Playback statistics cleared")
 end
 
 load()

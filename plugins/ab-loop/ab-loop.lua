@@ -1,5 +1,5 @@
 -- @name A-B Loop & Frame Step
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Vivi
 -- @description A-B loop editing and frame stepping (Vivi plugin package).
 --
@@ -9,8 +9,16 @@
 --   Alt+c  clear     clear the loop
 --   Alt+Left / Alt+Right   nudge the last set point by one frame
 --   ,  .   step one frame back / forward (only when paused; otherwise seek 1 s)
+
 local mp = require "mp"
 local options = require "mp.options"
+
+-- mpv's OSD is not always visible in Vivi (no video, UI on top), so messages also go
+-- to Vivi's toast through `script-message vivi-toast <text>`.
+local function osd(msg, secs)
+  mp.osd_message(msg, secs)
+  mp.commandv("script-message", "vivi-toast", msg)
+end
 
 local o = { markers = true, ["osd-seconds"] = 3 }
 options.read_options(o, "ab-loop")
@@ -59,7 +67,7 @@ local function set(which)
   if not t then return end
   mp.set_property_native("ab-loop-" .. which, t)
   last = which
-  mp.osd_message(string.upper(which) .. ": " .. fmt(t))
+  osd(string.upper(which) .. ": " .. fmt(t))
   draw()
 end
 
@@ -67,7 +75,7 @@ local function clear()
   mp.set_property("ab-loop-a", "no")
   mp.set_property("ab-loop-b", "no")
   overlay:remove()
-  mp.osd_message("A-B loop cleared")
+  osd("A-B loop cleared")
 end
 
 local function nudge(dir)
@@ -76,7 +84,7 @@ local function nudge(dir)
   if not t then return end
   local fps = num("container-fps") or num("estimated-vf-fps") or 25
   mp.set_property_native(p, math.max(0, t + dir / fps))
-  mp.osd_message(string.upper(last) .. ": " .. fmt(num(p)))
+  osd(string.upper(last) .. ": " .. fmt(num(p)))
   draw()
 end
 

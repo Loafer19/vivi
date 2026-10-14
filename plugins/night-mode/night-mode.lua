@@ -1,12 +1,20 @@
 -- @name Night Mode
--- @version 1.0.1
+-- @version 1.0.2
 -- @author Vivi
 -- @description Dynamic range compression for quiet listening (Vivi plugin package).
 --
 -- Alt+N (script-binding night_mode/toggle) switches it for this session; the
 -- "Night mode on" setting in Vivi decides the state on startup and is applied live.
+
 local mp = require "mp"
 local options = require "mp.options"
+
+-- mpv's OSD is not always visible in Vivi (no video, UI on top), so messages also go
+-- to Vivi's toast through `script-message vivi-toast <text>`.
+local function osd(msg, secs)
+  mp.osd_message(msg, secs)
+  mp.commandv("script-message", "vivi-toast", msg)
+end
 
 local o = { active = true, strength = "Medium" }
 local LABEL = "@vivinight"
@@ -28,7 +36,7 @@ local function apply(state, quiet)
     mp.commandv("af", "add", LABEL .. ":lavfi=[" .. f .. "]")
   end
   if not quiet then
-    mp.osd_message("Night mode " .. (on and ("on (" .. o.strength .. ")") or "off"))
+    osd("Night mode " .. (on and ("on (" .. o.strength .. ")") or "off"))
   end
 end
 
@@ -38,7 +46,7 @@ options.read_options(o, "night-mode", function(changed)
   if changed.active then
     apply(o.active)
   elseif changed.strength then
-    if on then apply(true) else mp.osd_message("Night mode strength: " .. o.strength) end
+    if on then apply(true) else osd("Night mode strength: " .. o.strength) end
   end
 end)
 

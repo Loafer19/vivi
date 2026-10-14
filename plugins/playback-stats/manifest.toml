@@ -1,6 +1,6 @@
 id = "playback-stats"
 name = "Playback Statistics"
-version = "1.0.0"
+version = "1.0.1"
 description = "Counts time watched and listened per day, with top artists and shows. Kept locally in a small TSV file; Alt+S shows a summary, export as CSV or clear any time."
 author = "Vivi"
 kind = "mpv-lua"

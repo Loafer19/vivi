@@ -1,6 +1,6 @@
 id = "night-mode"
 name = "Night Mode"
-version = "1.0.1"
+version = "1.0.2"
 description = "Compresses loud scenes and lifts quiet dialogue so films stay understandable at low volume (mpv dynaudnorm / loudnorm). Toggle with Alt+N."
 author = "Vivi"
 kind = "mpv-lua"
