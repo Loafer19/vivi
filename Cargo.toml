@@ -7,6 +7,7 @@ description = "Fast, lightweight media player inspired by Juxtopposed's VLC rede
 [dependencies]
 slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "unstable-winit-030"] }
 libmpv2 = "4.1"
+libmpv2-sys = "4.0"
 rfd = "0.15"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"

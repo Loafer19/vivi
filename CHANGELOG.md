@@ -11,6 +11,9 @@
 - Keys Vivi does not use (and all `Alt` combinations) are forwarded to mpv, so key bindings of scripts and packages work.
 - `scripts/package-plugins.py` builds deterministic package zips and regenerates the index entries; the **Plugins workflow** checks Lua syntax and the index, publishes each new version as a release `plugin-<id>-v<version>` (never marked latest) and verifies the uploaded sha256.
 ### Fixed
+- Plugin package key combos (A-B Loop Alt+A/B/C, Night Mode Alt+N, Statistics Alt+S) gave no feedback on Wayland: mpv's OSD is only drawn into the video frame, so with no video (idle, audio files, UI on top) their messages were invisible. Packages now also send `script-message vivi-toast <text>`, which Vivi shows as a toast (A-B Loop 1.0.1, Night Mode 1.0.2, Playback Statistics 1.0.1).
+- Alt/Ctrl combos typed with a Cyrillic layout active (e.g. Ukrainian "т" for Alt+N) are mapped to the QWERTY key, so mpv bindings still match. `VIVI_KEY_DEBUG=1` logs every key event and the mpv key name it is forwarded as.
+- Extensions shows whether each downloaded plugin / mpv script is loaded in mpv (Loaded, Not loaded: disabled / startup loading off, Failed / Error with mpv's message); load results and script errors are also logged to stderr.
 - Subtitle Search: OpenSubtitles answers `301` unless query parameters are sorted by name, so searches sent `moviehash`/`query`/`languages` in the wrong order and relied on a redirect. Parameters (and the language list) are now sent sorted and lowercase.
 
 ### Docs

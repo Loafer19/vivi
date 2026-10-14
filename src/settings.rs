@@ -765,6 +765,9 @@ fn installed(r: &mut Rows, updates: &[plugins::packages::Entry]) {
         let up = updates.iter().find(|e| e.id == m.id);
         plugin_rows(r, m, "Downloaded", |r| {
             let mut title = format!("Version {}", p.manifest.version);
+            if let Some(st) = plugins::script_status(&m.id) {
+                title += &format!("  ·  {st}");
+            }
             let mut labels = Vec::new();
             if let Some(u) = up {
                 title += &format!("  ·  {} available", u.version);
@@ -801,7 +804,11 @@ fn installed(r: &mut Rows, updates: &[plugins::packages::Entry]) {
         );
     }
     for m in scripts {
-        plugin_rows(r, m, "mpv script", |_| {});
+        plugin_rows(r, m, "mpv script", |r| {
+            if let Some(st) = plugins::script_status(&m.id) {
+                r.push("", &st, "", "info", String::new());
+            }
+        });
     }
     let startup = plugins::scripts::load_on_startup(r.c);
     r.toggle(

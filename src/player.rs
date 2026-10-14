@@ -20,6 +20,10 @@ pub enum PlayerEvent {
     /// A list-like property changed (tracks, selection, chapters, devices).
     ListsChanged,
     EndFile,
+    /// `script-message` broadcast (e.g. `vivi-toast <text>` from a plugin package).
+    ClientMessage(Vec<String>),
+    /// mpv warning/error log line: (prefix = module or script name, text).
+    Log(String, String),
 }
 
 pub struct Player {
@@ -62,6 +66,11 @@ impl Player {
 
         let mut ev = EventContext::new(mpv.ctx);
         ev.disable_deprecated_events()?;
+        // Warnings and errors (script load/runtime failures) for the Extensions page.
+        // SAFETY: valid handle owned by `mpv`; the level is a NUL-terminated string.
+        unsafe {
+            libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), c"warn".as_ptr());
+        }
         ev.observe_property("time-pos", Format::Double, 1)?;
         ev.observe_property("duration", Format::Double, 2)?;
         ev.observe_property("pause", Format::Flag, 3)?;
@@ -94,6 +103,13 @@ impl Player {
                         Some(Ok(Event::Shutdown)) => break,
                         Some(Ok(Event::FileLoaded)) => Some(PlayerEvent::FileLoaded),
                         Some(Ok(Event::EndFile(_))) => Some(PlayerEvent::EndFile),
+                        Some(Ok(Event::ClientMessage(args))) => Some(PlayerEvent::ClientMessage(
+                            args.iter().map(|a| a.to_string()).collect(),
+                        )),
+                        Some(Ok(Event::LogMessage { prefix, text, .. })) => Some(PlayerEvent::Log(
+                            prefix.to_string(),
+                            text.trim_end().to_string(),
+                        )),
                         Some(Ok(Event::PropertyChange { name, change, .. })) => {
                             match (name, change) {
                                 ("time-pos", PropertyData::Double(v)) => {
@@ -200,6 +216,12 @@ impl Player {
         if let Err(e) = self.mpv.command(name, &q) {
             eprintln!("vivi: command {name}: {e:?}");
         }
+    }
+    /// Like [`Player::cmd`], but returns mpv's error instead of logging it.
+    pub fn try_cmd(&self, name: &str, args: &[&str]) -> Result<(), String> {
+        let q: Vec<String> = args.iter().map(|a| quote(a)).collect();
+        let q: Vec<&str> = q.iter().map(String::as_str).collect();
+        self.mpv.command(name, &q).map_err(|e| format!("{e:?}"))
     }
     /// Tracks of a type ("audio" | "sub" | "video"): (id, label, selected).
     pub fn tracks(&self, kind: &str) -> Vec<(i64, String, bool)> {

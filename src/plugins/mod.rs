@@ -178,16 +178,7 @@ impl Ctx<'_> {
     }
     /// Show a short message in the player toast.
     pub fn toast(&self, msg: &str) {
-        self.app.set_resume_text(msg.into());
-        let w = self.app.as_weak();
-        let m = msg.to_string();
-        slint::Timer::single_shot(Duration::from_secs(4), move || {
-            if let Some(a) = w.upgrade() {
-                if a.get_resume_text().as_str() == m {
-                    a.set_resume_text("".into());
-                }
-            }
-        });
+        show_toast(self.app, msg);
     }
     /// Local path of the playing file, if it is a file.
     pub fn local_path(&self) -> Option<std::path::PathBuf> {
@@ -254,6 +245,8 @@ pub struct Registry {
     scripts: Vec<scripts::Script>,
     /// Ids of scripts mpv has loaded (it cannot unload them).
     loaded: std::collections::HashSet<String>,
+    /// Load status per script id for the Extensions page ("Loaded", "Failed: …").
+    status: std::collections::HashMap<String, String>,
 }
 
 thread_local! {
@@ -308,6 +301,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             entries,
             scripts,
             loaded: Default::default(),
+            status: Default::default(),
         })
     });
     with(|r| {
@@ -320,15 +314,20 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                 e.plugin.disable(&ctx!(r, *app, e));
             }
         }
-        if scripts::load_on_startup(&c) {
-            let list: Vec<_> = r
-                .scripts
-                .iter()
-                .filter(|s| is_enabled(&c, &s.manifest))
-                .cloned()
-                .collect();
-            for s in &list {
+        let startup = scripts::load_on_startup(&c);
+        let list = r.scripts.clone();
+        for s in &list {
+            let on = is_enabled(&c, &s.manifest);
+            if startup && on {
                 r.load_script(s);
+            } else {
+                let why = if on {
+                    "Not loaded: \"Load add-ons on startup\" is off"
+                } else {
+                    "Not loaded: disabled"
+                };
+                eprintln!("vivi: script {}: {why}", s.manifest.id);
+                r.status.insert(s.manifest.id.clone(), why.into());
             }
         }
     });
@@ -439,8 +438,80 @@ impl Registry {
                 );
             }
         }
-        self.player.cmd("load-script", &[&s.path.to_string_lossy()]);
+        let path = s.path.to_string_lossy();
+        let st = match self.player.try_cmd("load-script", &[&path]) {
+            Ok(()) => {
+                eprintln!("vivi: loaded script {} ({path})", s.manifest.id);
+                "Loaded".to_string()
+            }
+            Err(e) => {
+                eprintln!("vivi: load-script {path} failed: {e}");
+                format!("Failed to load: {e}")
+            }
+        };
+        self.status.insert(s.manifest.id.clone(), st);
     }
+}
+
+/// mpv client name of a script (its file name without extension).
+fn client_name(path: &std::path::Path) -> String {
+    path.file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Load status of a script or package for the Extensions page.
+pub fn script_status(id: &str) -> Option<String> {
+    with(|r| r.status.get(id).cloned()).flatten()
+}
+
+/// Toast text of a `script-message vivi-toast <text> [seconds]` from a plugin.
+pub fn toast_text(args: &[String]) -> Option<&str> {
+    match args {
+        [m, text, ..] if m == "vivi-toast" && !text.trim().is_empty() => Some(text.trim()),
+        _ => None,
+    }
+}
+
+/// A `script-message` broadcast reached Vivi's mpv client.
+pub fn client_message(args: &[String]) {
+    let Some(text) = toast_text(args) else { return };
+    with(|r| {
+        if let Some(a) = r.app.upgrade() {
+            show_toast(&a, text);
+        }
+    });
+}
+
+/// An mpv warning/error: a script error marks that script as failed.
+pub fn mpv_log(prefix: &str, text: &str) {
+    with(|r| {
+        let Some(s) = r
+            .scripts
+            .iter()
+            .find(|s| r.loaded.contains(&s.manifest.id) && client_name(&s.path) == prefix)
+        else {
+            return;
+        };
+        eprintln!("vivi: script {}: {text}", s.manifest.id);
+        if text.to_ascii_lowercase().contains("error") {
+            r.status
+                .insert(s.manifest.id.clone(), format!("Error: {text}"));
+        }
+    });
+}
+
+fn show_toast(app: &AppWindow, msg: &str) {
+    app.set_resume_text(msg.into());
+    let w = app.as_weak();
+    let m = msg.to_string();
+    slint::Timer::single_shot(Duration::from_secs(4), move || {
+        if let Some(a) = w.upgrade() {
+            if a.get_resume_text().as_str() == m {
+                a.set_resume_text("".into());
+            }
+        }
+    });
 }
 
 /// mpv loaded a new file.
@@ -640,6 +711,64 @@ mod tests {
                 .collect();
             let want: Vec<&str> = m.settings.iter().map(|s| s.key.as_str()).collect();
             assert_eq!(keys, want, "{}", m.id);
+        }
+    }
+
+    #[test]
+    fn vivi_toast_messages() {
+        let m = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            toast_text(&m(&["vivi-toast", "Night mode on"])),
+            Some("Night mode on")
+        );
+        assert_eq!(
+            toast_text(&m(&["vivi-toast", "A: 0:01", "3"])),
+            Some("A: 0:01")
+        );
+        assert_eq!(toast_text(&m(&["vivi-toast", "  "])), None);
+        assert_eq!(toast_text(&m(&["other", "x"])), None);
+    }
+
+    /// End to end with real libmpv: load the packaged scripts the way Vivi does, send the
+    /// Alt combos Vivi forwards and expect their `vivi-toast` messages.
+    #[test]
+    fn packaged_scripts_answer_forwarded_alt_keys() {
+        use libmpv2::events::{Event, EventContext};
+        let mpv = libmpv2::Mpv::with_initializer(|i| {
+            i.set_property("vo", "null")?;
+            i.set_property("ao", "null")?;
+            i.set_property("idle", "yes")?;
+            i.set_property("input-default-bindings", "no")?;
+            i.set_property("config", "no")?;
+            Ok(())
+        })
+        .expect("libmpv");
+        let mut ev = EventContext::new(mpv.ctx);
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins");
+        for (id, key, want) in [
+            ("night-mode", "Alt+n", "Night mode"),
+            ("ab-loop", "Alt+c", "A-B loop cleared"),
+        ] {
+            let path = root.join(id).join(format!("{id}.lua"));
+            mpv.command("load-script", &[&format!("\"{}\"", path.display())])
+                .expect("load-script");
+            let start = std::time::Instant::now();
+            let mut got = None;
+            let mut next = start;
+            while got.is_none() && start.elapsed() < Duration::from_secs(15) {
+                if std::time::Instant::now() >= next {
+                    mpv.command("keypress", &[key]).unwrap();
+                    next = std::time::Instant::now() + Duration::from_millis(300);
+                }
+                if let Some(Ok(Event::ClientMessage(a))) = ev.wait_event(0.1) {
+                    let a: Vec<String> = a.iter().map(|s| s.to_string()).collect();
+                    if let Some(t) = toast_text(&a) {
+                        got = Some(t.to_string());
+                    }
+                }
+            }
+            let got = got.unwrap_or_else(|| panic!("{id}: no vivi-toast after {key}"));
+            assert!(got.starts_with(want), "{id}: {got:?}");
         }
     }
 }

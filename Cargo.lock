@@ -5230,6 +5230,7 @@ name = "vivi"
 version = "0.8.0"
 dependencies = [
  "libmpv2",
+ "libmpv2-sys",
  "lofty",
  "md5",
  "rfd",

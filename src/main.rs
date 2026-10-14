@@ -120,6 +120,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                         PlayerEvent::EndFile => {}
+                        PlayerEvent::ClientMessage(args) => plugins::client_message(&args),
+                        PlayerEvent::Log(prefix, text) => plugins::mpv_log(&prefix, &text),
                     }
                 }
             },
@@ -249,6 +251,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use slint::platform::Key;
         let s = text.as_str();
         let is = |k: Key| s == slint::SharedString::from(k).as_str();
+        if key_debug() {
+            let cps: Vec<String> = s.chars().map(|c| format!("U+{:04X}", c as u32)).collect();
+            eprintln!(
+                "vivi: key {s:?} [{}] shift={shift} ctrl={ctrl} alt={alt}",
+                cps.join(" ")
+            );
+        }
         // Alt combinations belong to mpv scripts / plugin packages.
         if alt {
             return forward_key(&p, s, ctrl, alt);
@@ -881,6 +890,42 @@ fn walk_media(dir: &std::path::Path) -> Vec<String> {
 /// Send a key Vivi does not use to mpv (`keypress`), so key bindings of mpv scripts and
 /// plugin packages work. Returns whether it was sent.
 fn forward_key(p: &player::Player, text: &str, ctrl: bool, alt: bool) -> bool {
+    let Some(k) = mpv_key(text, ctrl, alt) else {
+        if key_debug() {
+            eprintln!("vivi: key {text:?} (ctrl={ctrl} alt={alt}) has no mpv name");
+        }
+        return false;
+    };
+    if key_debug() {
+        eprintln!("vivi: keypress {k}");
+    }
+    p.cmd("keypress", &[&k]);
+    true
+}
+
+/// `VIVI_KEY_DEBUG=1` logs every key event and what is forwarded to mpv.
+fn key_debug() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VIVI_KEY_DEBUG").is_some())
+}
+
+/// QWERTY letter on the same physical key as a Cyrillic (Ukrainian/Russian ЙЦУКЕН)
+/// letter, so Alt+N etc. still reach mpv scripts while a Cyrillic layout is active.
+fn latin_of(ch: char) -> Option<char> {
+    const CYR: &str = "йцукенгшщзхїфівапролджєячсмитьбюыэъё";
+    const LAT: &str = "qwertyuiop[]asdfghjkl;'zxcvbnm,.s']`";
+    let lower = ch.to_lowercase().next()?;
+    let i = CYR.chars().position(|c| c == lower)?;
+    let l = LAT.chars().nth(i)?;
+    Some(if ch.is_uppercase() {
+        l.to_ascii_uppercase()
+    } else {
+        l
+    })
+}
+
+/// mpv key name (`Alt+n`, `Ctrl+LEFT`, `SPACE`, …) for a Slint key event text.
+fn mpv_key(text: &str, ctrl: bool, alt: bool) -> Option<String> {
     use slint::platform::Key;
     let named = [
         (Key::LeftArrow, "LEFT"),
@@ -892,7 +937,7 @@ fn forward_key(p: &player::Player, text: &str, ctrl: bool, alt: bool) -> bool {
         (Key::PageUp, "PGUP"),
         (Key::PageDown, "PGDWN"),
     ];
-    let name = named
+    let mut k = named
         .iter()
         .find(|(k, _)| text == slint::SharedString::from(*k).as_str())
         .map(|(_, n)| n.to_string())
@@ -902,16 +947,51 @@ fn forward_key(p: &player::Player, text: &str, ctrl: bool, alt: bool) -> bool {
                 (Some(' '), None) => Some("SPACE".into()),
                 (Some('#'), None) => Some("SHARP".into()),
                 (Some(ch), None) if ch.is_ascii_graphic() => Some(ch.to_string()),
+                // Ctrl+letter may arrive as a control character (Ctrl+A = U+0001).
+                (Some(ch @ '\u{1}'..='\u{1a}'), None) if ctrl => {
+                    Some(((ch as u8 - 1 + b'a') as char).to_string())
+                }
+                (Some(ch), None) if alt || ctrl => latin_of(ch).map(|l| l.to_string()),
                 _ => None,
             }
-        });
-    let Some(mut k) = name else { return false };
+        })?;
     if alt {
         k = format!("Alt+{k}");
     }
     if ctrl {
         k = format!("Ctrl+{k}");
     }
-    p.cmd("keypress", &[&k]);
-    true
+    Some(k)
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::mpv_key;
+
+    #[test]
+    fn alt_combos_get_mpv_names() {
+        assert_eq!(mpv_key("n", false, true).as_deref(), Some("Alt+n"));
+        assert_eq!(mpv_key("a", false, true).as_deref(), Some("Alt+a"));
+        assert_eq!(mpv_key("A", false, true).as_deref(), Some("Alt+A"));
+        let left = slint::SharedString::from(slint::platform::Key::LeftArrow);
+        assert_eq!(mpv_key(&left, false, true).as_deref(), Some("Alt+LEFT"));
+        assert_eq!(mpv_key(",", false, false).as_deref(), Some(","));
+        assert_eq!(mpv_key(" ", true, false).as_deref(), Some("Ctrl+SPACE"));
+    }
+
+    #[test]
+    fn cyrillic_layout_maps_to_qwerty() {
+        // Ukrainian layout: N key types "т", A "ф", B "и", C "с", S "і".
+        assert_eq!(mpv_key("т", false, true).as_deref(), Some("Alt+n"));
+        assert_eq!(mpv_key("ф", false, true).as_deref(), Some("Alt+a"));
+        assert_eq!(mpv_key("и", false, true).as_deref(), Some("Alt+b"));
+        assert_eq!(mpv_key("с", false, true).as_deref(), Some("Alt+c"));
+        assert_eq!(mpv_key("і", false, true).as_deref(), Some("Alt+s"));
+        assert_eq!(mpv_key("т", false, false), None);
+    }
+
+    #[test]
+    fn ctrl_control_chars() {
+        assert_eq!(mpv_key("\u{1}", true, false).as_deref(), Some("Ctrl+a"));
+    }
 }
