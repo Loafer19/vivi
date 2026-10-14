@@ -187,7 +187,7 @@
       "id": "night-mode",
       "name": "Night Mode",
       "description": "Compresses loud scenes and lifts quiet dialogue so films stay understandable at low volume (mpv dynaudnorm / loudnorm). Toggle with Alt+N.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Vivi",
       "icon": "night",
       "lucide": "moon",
@@ -197,9 +197,9 @@
       "min_vivi": "0.8.0",
       "permissions": [],
       "source": "plugins/night-mode",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.0/night-mode-1.0.0.zip",
-      "sha256": "894151fb5905de77ce8c243054ce66a19cedce0446ae0b98fe3bc7b016ca8c4e",
-      "size": 2797,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.1/night-mode-1.0.1.zip",
+      "sha256": "e7f3c0ea89b89f030f09a3aee2b26bc15e2deb6216b69a7629d6b00827592714",
+      "size": 2955,
       "settings": [
         {
           "key": "active",

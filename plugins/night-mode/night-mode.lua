@@ -1,5 +1,5 @@
 -- @name Night Mode
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Vivi
 -- @description Dynamic range compression for quiet listening (Vivi plugin package).
 --
@@ -34,7 +34,12 @@ end
 
 options.read_options(o, "night-mode", function(changed)
   -- Vivi changed a setting while playing.
-  if changed.active then apply(o.active) elseif changed.strength and on then apply(true) end
+  -- Changing the strength while off leaves it off but says what will be used.
+  if changed.active then
+    apply(o.active)
+  elseif changed.strength then
+    if on then apply(true) else mp.osd_message("Night mode strength: " .. o.strength) end
+  end
 end)
 
 mp.add_forced_key_binding("Alt+n", "toggle", function() apply(not on) end)
