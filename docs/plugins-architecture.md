@@ -19,10 +19,25 @@ Status: implemented in the Unreleased version (after v0.8.0). Code: `src/plugins
 | Skip Intro & Credits | Draws a Slint button over the video; needs the Rust UI. |
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint), with a results list. |
+| Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
+| Free Music | Search dialog with results, licence details, preview and download; writes tags with lofty. |
 
-These four use the Rust UI directly. Scripts cannot draw Slint widgets, so moving them out
+These use the Rust UI directly. The ListenBrainz Scrobbler needs no UI beyond its settings, so it is a
+downloadable package (`plugins/scrobbler`). Scripts cannot draw Slint widgets, so moving them out
 would mean either a worse UI (mpv OSD text) or a declarative-UI host API, which is the
 WASM step below. They stay built in until that exists.
+
+### Music plugins (#63, #65, #69, #70)
+
+| Plugin | Where | Why | Keys |
+| --- | --- | --- | --- |
+| Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz and Cover Art Archive need none |
+| Free Music (`free-music`, #70) | built in | search/results/licence dialog; downloads are tagged with lofty | Jamendo `client_id` (optional, <https://devportal.jamendo.com>); Internet Archive needs none |
+| ListenBrainz Scrobbler (`scrobbler`, #63) | package (mpv Lua) | no UI: settings, OSD status and HTTP via `curl` are enough | ListenBrainz user token (<https://listenbrainz.org/settings/>) |
+
+MusicBrainz calls share one process-wide limiter (at most one request per second) and send
+`User-Agent: Vivi/<version> ( https://github.com/Loafer19/vivi )`. Last.fm scrobbling needs an
+MD5-signed desktop auth flow through the browser; it is left for a later built-in plugin.
 
 ## Options considered
 

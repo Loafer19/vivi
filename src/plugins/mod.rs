@@ -19,11 +19,14 @@
 //!
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
+pub mod free_music;
 pub mod lyrics;
 pub mod packages;
 pub mod scripts;
 pub mod skip_intro;
 pub mod subtitles;
+pub mod tagger;
+pub mod web;
 
 use crate::config::Config;
 use crate::player::Player;
@@ -228,6 +231,8 @@ pub fn builtin() -> Vec<Box<dyn Plugin>> {
         Box::new(skip_intro::SkipIntro::default()),
         Box::new(lyrics::Lyrics::default()),
         Box::new(subtitles::SubtitleSearch::default()),
+        Box::new(tagger::AutoTagger::default()),
+        Box::new(free_music::FreeMusic::default()),
     ]
 }
 

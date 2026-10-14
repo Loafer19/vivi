@@ -327,6 +327,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         a.invoke_customize_done(false);
                     } else if a.get_subs_open() {
                         a.set_subs_open(false);
+                    } else if a.get_md_open() {
+                        a.set_md_open(false);
+                        crate::plugins::command(&a.get_md_owner(), "close", &[]);
                     } else if a.get_settings_open() {
                         a.set_settings_open(false);
                     }
@@ -650,7 +653,8 @@ fn screenshot_mode() -> bool {
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY,
-/// VIVI_MENU, VIVI_SUB, VIVI_SUBS (Add Subtitles dialog).
+/// VIVI_MENU, VIVI_SUB, VIVI_SUBS (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
+/// [VIVI_MUSICQ=query] (Auto-tagger / Free Music dialog, searched when a query is given).
 fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
     if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
@@ -678,6 +682,17 @@ fn debug_ui(app: &AppWindow) {
         slint::Timer::single_shot(Duration::from_millis(1500), move || {
             if let Some(a) = w.upgrade() {
                 a.invoke_open_url(u.into());
+            }
+        });
+    }
+    if let Some(id) = var("VIVI_MUSIC") {
+        let q = var("VIVI_MUSICQ");
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(2000), move || {
+            plugins::command(&id, "open", &[]);
+            if let (Some(a), Some(q)) = (w.upgrade(), q) {
+                a.set_md_query(q.into());
+                plugins::command(&id, "search", &[]);
             }
         });
     }

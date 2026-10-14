@@ -11,7 +11,7 @@ import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem, NetworkDialog } from "library.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem }
 
@@ -270,6 +270,21 @@ export component AppWindow inherits Window {
     in property <bool> subs-busy;
     in-out property <string> subs-query;
     in-out property <string> subs-lang;
+    // Shared dialog of the music plugins (Auto-tagger, Free Music); md-owner = plugin id.
+    in-out property <bool> md-open;
+    in property <string> md-owner;
+    in property <string> md-title;
+    in property <[Item]> md-results;
+    in property <string> md-status;
+    in property <bool> md-busy;
+    in property <string> md-detail;
+    in property <string> md-placeholder;
+    in property <string> md-search-label;
+    in property <string> md-primary;
+    in property <string> md-secondary;
+    in property <[string]> md-sources;
+    in-out property <string> md-source;
+    in-out property <string> md-query;
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
         if (root.subs-plugin) { root.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
@@ -844,6 +859,20 @@ export component AppWindow inherits Window {
         done(i) => { root.plugin-command("subtitle-search", "download", i); }
         from-computer => { root.subs-open = false; root.load-sub(); fs.focus(); }
         close => { root.subs-open = false; fs.focus(); }
+    }
+
+    // ---------- Auto-tagger / Free Music ----------
+    if root.md-open: MusicDialog {
+        width: root.width; height: root.height;
+        title: root.md-title; results: root.md-results; status: root.md-status; busy: root.md-busy;
+        detail: root.md-detail; placeholder: root.md-placeholder; search-label: root.md-search-label;
+        primary-text: root.md-primary; secondary-text: root.md-secondary; sources: root.md-sources;
+        source <=> root.md-source; query <=> root.md-query;
+        search => { root.plugin-command(root.md-owner, "search", ""); }
+        select(i) => { root.plugin-command(root.md-owner, "select", i); }
+        primary(i) => { root.plugin-command(root.md-owner, "primary", i); }
+        secondary(i) => { root.plugin-command(root.md-owner, "secondary", i); }
+        close => { root.md-open = false; root.plugin-command(root.md-owner, "close", ""); fs.focus(); }
     }
 
     // ---------- Customize player ----------

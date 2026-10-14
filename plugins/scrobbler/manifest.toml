@@ -1,0 +1,47 @@
+id = "scrobbler"
+name = "ListenBrainz Scrobbler"
+version = "1.0.0"
+description = "Sends what you listen to to ListenBrainz: now playing when a track starts and a listen after half the track or 4 minutes. Listens made offline are queued and sent later. Needs your ListenBrainz user token."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "scrobbler.lua"
+min_vivi = "0.8.0"
+icon = "scrobble"
+lucide = "radio-tower"
+permissions = ["network", "filesystem", "subprocess"]
+issue = 63
+default_enabled = true
+
+[[settings]]
+key = "token"
+title = "ListenBrainz user token"
+type = "secret"
+default = ""
+
+[[settings]]
+key = "now_playing"
+title = "Send now playing"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "audio_only"
+title = "Only music (skip videos)"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "api"
+title = "API server"
+type = "text"
+default = "https://api.listenbrainz.org"
+
+[[settings]]
+key = "flush"
+title = "Send queued listens now"
+type = "action"
+
+[[settings]]
+key = "status"
+title = "Show scrobbler status"
+type = "action"

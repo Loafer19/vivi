@@ -127,6 +127,88 @@
       ]
     },
     {
+      "id": "auto-tagger",
+      "name": "Auto-tagger",
+      "description": "Identifies songs by their audio (AcoustID fingerprint) or tags, looks them up on MusicBrainz and writes title, artist, album, date, track, genre and Cover Art Archive covers after a preview. Originals are backed up. AcoustID key optional.",
+      "version": "0.8.0",
+      "author": "Vivi",
+      "icon": "tag",
+      "lucide": "tags",
+      "kind": "builtin",
+      "default_enabled": true,
+      "issue": 69,
+      "settings": [
+        {
+          "key": "acoustid-key",
+          "title": "AcoustID API key",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "cover",
+          "title": "Embed cover art",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "folder",
+          "title": "Library folder",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "open",
+          "title": "Tag the playing file",
+          "type": "action",
+          "default": ""
+        },
+        {
+          "key": "batch",
+          "title": "Tag library folder",
+          "type": "action",
+          "default": ""
+        },
+        {
+          "key": "restore",
+          "title": "Restore original tags",
+          "type": "action",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "id": "free-music",
+      "name": "Free Music",
+      "description": "Search Creative Commons and public-domain music on the Internet Archive and Jamendo, preview it, and download it to your library with tags, cover and licence attribution. Jamendo needs a free client ID.",
+      "version": "0.8.0",
+      "author": "Vivi",
+      "icon": "free-music",
+      "lucide": "library-big",
+      "kind": "builtin",
+      "default_enabled": true,
+      "issue": 70,
+      "settings": [
+        {
+          "key": "jamendo-client-id",
+          "title": "Jamendo client ID",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "folder",
+          "title": "Download folder",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "open",
+          "title": "Find free music",
+          "type": "action",
+          "default": ""
+        }
+      ]
+    },
+    {
       "id": "script-now-playing",
       "name": "Now Playing OSD",
       "description": "Example mpv Lua script: shows the title on the OSD when a file starts.",
@@ -270,6 +352,65 @@
         }
       ],
       "issue": 66
+    },
+    {
+      "id": "scrobbler",
+      "name": "ListenBrainz Scrobbler",
+      "description": "Sends what you listen to to ListenBrainz: now playing when a track starts and a listen after half the track or 4 minutes. Listens made offline are queued and sent later. Needs your ListenBrainz user token.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "scrobble",
+      "lucide": "radio-tower",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.8.0",
+      "permissions": [
+        "network",
+        "filesystem",
+        "subprocess"
+      ],
+      "source": "plugins/scrobbler",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.0.0/scrobbler-1.0.0.zip",
+      "sha256": "8040e0b0a3051d23e39d4172e09f24a6576fc5e8bc044292e6d51dc333a9e66a",
+      "size": 11728,
+      "settings": [
+        {
+          "key": "token",
+          "title": "ListenBrainz user token",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "now_playing",
+          "title": "Send now playing",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "audio_only",
+          "title": "Only music (skip videos)",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "api",
+          "title": "API server",
+          "type": "text",
+          "default": "https://api.listenbrainz.org"
+        },
+        {
+          "key": "flush",
+          "title": "Send queued listens now",
+          "type": "action"
+        },
+        {
+          "key": "status",
+          "title": "Show scrobbler status",
+          "type": "action"
+        }
+      ],
+      "issue": 63
     }
   ]
 }
