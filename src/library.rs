@@ -192,12 +192,31 @@ pub fn progress(m: &Media) -> f32 {
     }
 }
 
-pub fn sort(v: &mut [Media], by: &str) {
-    match by {
-        "date" => v.sort_by_key(|m| std::cmp::Reverse(m.mtime)),
+/// Sort keys (Figma "Sorting Options"): unwatched, watched, newest, oldest, title,
+/// title-desc, artist, artist-desc, album, album-desc, track, track-desc, uri, uri-desc,
+/// size. Legacy keys: name (= title), date (= newest).
+pub fn sort_with(v: &mut [Media], by: &str, watched: &dyn Fn(&Media) -> bool) {
+    let (key, desc) = match by.strip_suffix("-desc") {
+        Some(k) => (k, true),
+        None => (by, false),
+    };
+    match key {
+        "newest" | "date" => v.sort_by_key(|m| std::cmp::Reverse(m.mtime)),
+        "oldest" => v.sort_by_key(|m| m.mtime),
         "size" => v.sort_by_key(|m| std::cmp::Reverse(m.size)),
-        "watched" => v.sort_by(|a, b| progress(b).total_cmp(&progress(a))),
+        "unwatched" | "watched" => {
+            v.sort_by_cached_key(|m| natural(&m.title));
+            let w = key == "watched";
+            v.sort_by_key(|m| watched(m) != w);
+        }
+        "artist" => v.sort_by_cached_key(|m| (natural(&m.artist), natural(&m.title))),
+        "album" => v.sort_by_cached_key(|m| (natural(&m.album), m.track)),
+        "track" => v.sort_by_key(|m| m.track),
+        "uri" => v.sort_by_cached_key(|m| natural(&m.path)),
         _ => v.sort_by_cached_key(|m| natural(&m.title)),
+    }
+    if desc {
+        v.reverse();
     }
 }
 

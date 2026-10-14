@@ -73,6 +73,8 @@ pub struct Library {
     pub sort: String,
     /// Generate thumbnails with ffmpeg (if installed).
     pub thumbnails: bool,
+    /// Files marked as watched from the context menu.
+    pub watched: Vec<String>,
 }
 
 impl Default for Library {
@@ -88,6 +90,7 @@ impl Default for Library {
             pinned: Vec::new(),
             view: "grid".into(),
             sort: "name".into(),
+            watched: Vec::new(),
             thumbnails: true,
         }
     }

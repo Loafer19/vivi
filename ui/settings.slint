@@ -1,5 +1,6 @@
 // Settings dialog per Figma "Settings - global/interface/…" (1048×865) and "Keyboard Shortcuts".
-import { ScrollView, LineEdit, ComboBox } from "std-widgets.slint";
+import { ScrollView, LineEdit } from "std-widgets.slint";
+import { Dropdown } from "menu.slint";
 import { Theme, Icon } from "theme.slint";
 
 export struct SettingRow {
@@ -73,8 +74,11 @@ component Row inherits Rectangle {
         }
         if setting.kind == "toggle": VerticalLayout { alignment: center;
             Switch { on: setting.value == "true"; toggled => { root.changed(setting.id, setting.value == "true" ? "false" : "true"); } } }
-        if setting.kind == "choice": HorizontalLayout { spacing: 6px; alignment: end; padding-top: 6px; padding-bottom: 6px;
+        // Up to three options as chips; longer lists use the Figma dropdown.
+        if setting.kind == "choice" && setting.options.length <= 3: HorizontalLayout { spacing: 6px; alignment: end; padding-top: 6px; padding-bottom: 6px;
             for o in setting.options: Chip { text: o; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } }
+        if setting.kind == "choice" && setting.options.length > 3: VerticalLayout { alignment: center;
+            Dropdown { width: 200px; options: setting.options; value: setting.value; selected(i, o) => { root.changed(setting.id, o); } } }
         if setting.kind == "color": HorizontalLayout { spacing: 8px; alignment: end; padding-top: 6px; padding-bottom: 6px;
             for o[i] in setting.options: Chip { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } }
         if setting.kind == "text": LineEdit {
@@ -172,11 +176,11 @@ export component SettingsDialog inherits Rectangle {
                 padding: root.narrow ? 12px : 20px; spacing: 10px;
                 if root.narrow: HorizontalLayout {
                     spacing: 8px;
-                    ComboBox {
+                    Dropdown {
                         horizontal-stretch: 1;
-                        model: root.categories;
-                        current-index: root.category;
-                        selected(c) => { root.search = ""; root.category = self.current-index; root.refresh(self.current-index, "", root.advanced); }
+                        options: root.categories;
+                        value: root.categories[root.category];
+                        selected(i, c) => { root.search = ""; root.category = i; root.refresh(i, "", root.advanced); }
                     }
                     LineEdit {
                         horizontal-stretch: 1;
