@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     mini::setup(&app, cfg.clone());
     viz::setup(&app, &player);
     plugins::setup(&app, &player, cfg.clone());
-    if cfg!(debug_assertions) {
+    if screenshot_mode() {
         debug_ui(&app);
     }
 
@@ -565,7 +565,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         app.set_panel_tab(t.parse().unwrap_or(0));
         app.set_panel_open(true);
     }
-    if cfg!(debug_assertions) {
+    if screenshot_mode() {
         if let Some(v) = std::env::var("VIVI_VOLUME")
             .ok()
             .and_then(|v| v.parse::<f64>().ok())
@@ -625,7 +625,13 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     }
 }
 
-/// Debug builds only: open dialogs from env vars for screenshots/tests.
+/// Debug builds, or release builds started with `VIVI_SCREENSHOT=1`: the env-driven UI
+/// helpers below (used to capture docs/screenshots) are active.
+fn screenshot_mode() -> bool {
+    cfg!(debug_assertions) || std::env::var_os("VIVI_SCREENSHOT").is_some()
+}
+
+/// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY,
 /// VIVI_MENU, VIVI_SUB, VIVI_SUBS (Add Subtitles dialog).
