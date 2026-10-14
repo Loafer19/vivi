@@ -28,6 +28,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Open Network Stream (URLs, m3u; YouTube etc. via yt-dlp)
 - Customizable bottom bar (16 items, re-order/remove/add) with Minimal / Default / Power profiles
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
+- Music visualizer for audio-only files (no video track; cover art does not count): Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
 | Side panel | Empty state |
@@ -93,6 +94,7 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | ↑ / ↓ | Volume ±5 |
 | F, double-click | Fullscreen |
 | M | Mute |
+| V | Next visualizer mode (audio-only files) |
 | P | Miniplayer on / off |
 | Ctrl+O | Open file |
 | Ctrl+B | Add bookmark |
@@ -101,6 +103,7 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 
 ## Architecture
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
+`src/viz/` — music visualizer (a parallel symphonia decode synced to mpv `time-pos` → rustfft analysis → modes behind the `Visual` trait) ·
 `ui/*.slint` — UI and design tokens · `assets/icons` — SVGs extracted from Figma.
 Design notes: [docs/design/FIGMA.md](docs/design/FIGMA.md) · research: [docs/RESEARCH.md](docs/RESEARCH.md).
 

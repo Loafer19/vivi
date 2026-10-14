@@ -4,6 +4,9 @@
 
 Milestone M8 (v0.8): Figma fidelity. Each part has a side-by-side Figma vs Vivi image in `docs/design/compare/`.
 
+### Added
+- **Music visualizer** (`src/viz/`): audio-only files (no video track; cover art does not count) show a visualizer instead of a blank area. There are seven modes: Spectrometer (scrolling spectrogram), Scope (oscilloscope), Spectrum (bars with peak caps), Waveform (scrolling loudness envelope), Radial (circular spectrum that pulses on beats), Particles (bursts on onsets) and Pitch (12 pitch-class wheel coloured by the dominant note, with the note name shown). Colours follow the theme accent and background. Pick a mode, or Disabled, from the Figma-style dropdown at the top left, or press `V` to cycle. The choice is remembered in `$XDG_STATE_HOME/vivi/visualizer`, and the visualizer fills the window in fullscreen. Audio comes from a second lightweight decode of the file (symphonia) kept in sync with mpv's `time-pos`, so it works with any audio output and needs no PipeWire monitor. The FFT uses rustfft. Analysis and drawing run at about 30 fps on a canvas of at most 800 px, and they stop when paused or when the file has video. New modes implement the `Visual` trait in `src/viz/modes.rs`.
+
 ### Changed
 - **Menus** (#34): the main menu, its submenus and the library context menus (file, folder, playlist, group) now match the Figma frames, including sizes, icons, shortcut hints and checked rows. New entries: Stop (`S`), Record, Hide UI (`Ctrl+\`), Open Folder, Mark as Watched, Show in File Explorer, Go to Source, Add Subtitle/Audio Tracks, Add to Playlist, Properties & Metadata, and Clear Progress.
 - **Sort, view and dropdowns** (#35): the sort and view menus follow Figma, with the active sort shown as checked and a new "Largest First" sort. The library can sort by unwatched or watched. Settings uses the new Figma dropdown in place of ComboBox.

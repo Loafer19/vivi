@@ -10,6 +10,7 @@ import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem, NetworkDialog } from "library.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
+import { VizView, VizDropdown } from "viz.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem }
 
@@ -246,6 +247,13 @@ export component AppWindow inherits Window {
     callback next();
     callback activity();
     callback key(string, bool, bool) -> bool;
+    // Music visualizer (src/viz): shown for audio-only media; mode 0 = Disabled.
+    in property <bool> viz-audio;
+    in property <image> viz-frame;
+    in property <string> viz-note;
+    in property <int> viz-mode;
+    in property <[string]> viz-modes: ["Disabled"];
+    callback viz-select(int);
 
     // Side panel
     in-out property <bool> panel-open: false;
@@ -452,6 +460,10 @@ export component AppWindow inherits Window {
     fs := FocusScope {
         key-pressed(e) => {
             root.activity();
+            if (e.text == "v" && !e.modifiers.control && root.has-media && root.viz-audio) {
+                root.viz-select(mod(root.viz-mode + 1, root.viz-modes.length));
+                return accept;
+            }
             if (root.key(e.text, e.modifiers.shift, e.modifiers.control)) { return accept; }
             reject
         }
@@ -470,6 +482,11 @@ export component AppWindow inherits Window {
                 root.menu-request("main", self.mouse-x, self.mouse-y, "");
             }
         }
+    }
+
+    // ---------- Music visualizer (audio-only media) ----------
+    if root.has-media && root.viz-audio && root.viz-mode > 0: VizView {
+        frame: root.viz-frame; note: root.viz-note;
     }
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
@@ -519,6 +536,12 @@ export component AppWindow inherits Window {
             IconButton { icon: @image-url("../assets/icons/settings.svg"); active: root.settings-open; clicked => { root.settings-open = !root.settings-open; root.settings-refresh(root.settings-category, "", false); } }
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
+    }
+
+    if !root.mini && root.has-media && root.viz-audio && !root.library-open && (root.show-ui || top-ta.has-hover): VizDropdown {
+        x: 12px; y: 50px;
+        modes: root.viz-modes; mode: root.viz-mode;
+        select(i) => { root.viz-select(i); }
     }
 
     // ---------- Side panel ----------

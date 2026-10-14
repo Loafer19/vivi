@@ -1,0 +1,91 @@
+// Music visualizer overlay (src/viz). The frame is rendered in Rust into `frame`;
+// this file only shows it and offers the Figma "Disabled / Spectrometer / Scope /
+// Spectrum / Waveform" dropdown (components-dropdowns-filters frame), plus our extra modes.
+import { Theme, Icon, TriIcon } from "theme.slint";
+
+global VizIcons {
+    // Mode index → icon (0 = Disabled has none).
+    pure public function base(i: int) -> image {
+        if (i == 1) { return @image-url("../assets/icons/layers/spectometer-twotone-b.svg"); }
+        if (i == 2) { return @image-url("../assets/icons/layers/scope-twotone-b.svg"); }
+        if (i == 3) { return @image-url("../assets/icons/layers/spectrum-twotone-b.svg"); }
+        if (i == 4) { return @image-url("../assets/icons/layers/waveform-twotone-b.svg"); }
+        if (i == 5) { return @image-url("../assets/icons/disc.svg"); }
+        if (i == 6) { return @image-url("../assets/icons/genre.svg"); }
+        if (i == 7) { return @image-url("../assets/icons/music.svg"); }
+        @image-url("")
+    }
+    pure public function accent(i: int) -> image {
+        if (i == 1) { return @image-url("../assets/icons/layers/spectometer-twotone-a.svg"); }
+        if (i == 2) { return @image-url("../assets/icons/layers/scope-twotone-a.svg"); }
+        if (i == 3) { return @image-url("../assets/icons/layers/spectrum-twotone-a.svg"); }
+        if (i == 4) { return @image-url("../assets/icons/layers/waveform-twotone-a.svg"); }
+        @image-url("")
+    }
+    pure public function dim(i: int) -> image {
+        if (i == 1) { return @image-url("../assets/icons/layers/spectometer-twotone-d.svg"); }
+        if (i == 2) { return @image-url("../assets/icons/layers/scope-twotone-d.svg"); }
+        if (i == 3) { return @image-url("../assets/icons/layers/spectrum-twotone-d.svg"); }
+        if (i == 4) { return @image-url("../assets/icons/layers/waveform-twotone-d.svg"); }
+        @image-url("")
+    }
+}
+
+component VizRow inherits Rectangle {
+    in property <int> index;
+    in property <string> text;
+    in property <bool> selected;
+    callback clicked();
+    height: 40px; border-radius: 6px;
+    background: ta.has-hover || root.selected ? (Theme.dark ? #1F1F1F : #E2E2E2) : transparent;
+    if root.index > 0: TriIcon {
+        x: 12px; y: (parent.height - 20px) / 2; width: 20px; height: 20px;
+        base: VizIcons.base(root.index); accent: VizIcons.accent(root.index); dim: VizIcons.dim(root.index);
+    }
+    Text { x: 42px; width: parent.width - 42px - 40px; text: root.text; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; overflow: elide; }
+    if root.selected: Icon { x: parent.width - 10px - 20px; y: (parent.height - 20px) / 2; width: 20px; height: 20px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+export component VizDropdown inherits Rectangle {
+    in property <[string]> modes;
+    in property <int> mode;
+    callback select(int);
+    width: 180px; height: 32px; border-radius: 6px;
+    background: ta.has-hover ? (Theme.dark ? #262626 : #DADADA) : Theme.bar;
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 8px; spacing: 6px;
+        Text { text: root.modes[root.mode]; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    pop := PopupWindow {
+        x: 0; y: root.height + 4px;
+        width: root.width;
+        height: root.modes.length * 40px + 8px;
+        Rectangle {
+            background: Theme.bar-solid.with-alpha(0.97); border-radius: 8px;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: #00000066;
+            VerticalLayout {
+                padding: 4px; alignment: start;
+                for m[i] in root.modes: VizRow {
+                    index: i; text: m; selected: i == root.mode;
+                    clicked => { root.select(i); pop.close(); }
+                }
+            }
+        }
+    }
+}
+
+// Full-window visualizer image; sits above the (empty) video underlay.
+export component VizView inherits Rectangle {
+    in property <image> frame;
+    in property <string> note; // dominant pitch name (Pitch mode), "" = none
+    background: Theme.bg-b1;
+    Image { width: 100%; height: 100%; source: root.frame; image-fit: fill; }
+    if root.note != "": Text {
+        text: root.note; font-size: min(root.width, root.height) * 0.09; font-weight: 600;
+        color: Theme.fg-1.with-alpha(0.85);
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+}

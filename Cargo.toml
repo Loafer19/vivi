@@ -14,6 +14,8 @@ walkdir = "2.5.0"
 rusqlite = { version = "0.40.2", default-features = false }
 lofty = "0.25.4"
 md5 = "0.8.1"
+rustfft = "6"
+symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }

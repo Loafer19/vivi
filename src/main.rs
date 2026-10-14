@@ -12,6 +12,7 @@ mod preview;
 mod render;
 mod settings;
 mod store;
+mod viz;
 
 use player::{Player, PlayerEvent};
 use slint::{ComponentHandle, Model};
@@ -52,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     menus::setup(&app, &player, cfg.clone());
     desktop::setup(&app, &player, log);
     mini::setup(&app, cfg.clone());
+    viz::setup(&app, &player);
     if cfg!(debug_assertions) {
         debug_ui(&app);
     }
