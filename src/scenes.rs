@@ -1,6 +1,7 @@
-//! Chapter thumbnails written by the Scene Chapters & Thumbnails package (#62):
-//! `<data>/vivi/plugin-data/scene-chapters/<key>/chapter-<n>.jpg` (n from 1), where the
-//! key is the package's hash of "path|size|mtime" (see plugins/scene-chapters).
+//! Thumbnails written by plugin packages, read here so the core needs no ffmpeg for them:
+//! `<data>/vivi/plugin-data/<plugin>/<key>/chapter-<n>.jpg` (n from 1) by Chapter
+//! Thumbnails (#75) or Scene Chapters (#62), and `seek-NN.jpg` (seek-bar previews) by
+//! Chapter Thumbnails. The key is the packages' hash of "path|size|mtime".
 
 use std::path::{Path, PathBuf};
 
@@ -13,27 +14,46 @@ pub fn key(path: &str, size: u64, mtime: i64) -> String {
     format!("{h:08x}")
 }
 
-pub fn cache_root() -> PathBuf {
-    crate::store::data_dir().join("plugin-data/scene-chapters")
+/// Plugin caches with chapter thumbnails, preferred first.
+pub fn cache_roots() -> Vec<PathBuf> {
+    let d = crate::store::data_dir().join("plugin-data");
+    vec![d.join("chapter-thumbnails"), d.join("scene-chapters")]
 }
 
-/// Thumbnail file per chapter (None where none was generated yet).
-pub fn thumbs(root: &Path, path: &str, chapters: usize) -> Vec<Option<PathBuf>> {
-    let dir = std::fs::metadata(path).ok().map(|m| {
+/// Cache folder of `path` under `root` (None when the file cannot be read).
+fn file_dir(root: &Path, path: &str) -> Option<PathBuf> {
+    std::fs::metadata(path).ok().map(|m| {
         let mtime = m
             .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |d| d.as_secs() as i64);
         root.join(key(path, m.len(), mtime))
-    });
+    })
+}
+
+/// Thumbnail file per chapter (None where none was generated yet), from the first root
+/// that has one.
+pub fn thumbs(roots: &[PathBuf], path: &str, chapters: usize) -> Vec<Option<PathBuf>> {
+    let dirs: Vec<PathBuf> = roots.iter().filter_map(|r| file_dir(r, path)).collect();
     (1..=chapters)
         .map(|i| {
-            dir.as_ref()
+            dirs.iter()
                 .map(|d| d.join(format!("chapter-{i}.jpg")))
-                .filter(|f| f.is_file())
+                .find(|f| f.is_file())
         })
         .collect()
+}
+
+/// Seek-bar preview frames `seek-00.jpg`, `seek-01.jpg`, … of `path` (the contiguous run
+/// from 00), or None when there are fewer than 10.
+pub fn seek_frames(root: &Path, path: &str) -> Option<Vec<PathBuf>> {
+    let dir = file_dir(root, path)?;
+    let v: Vec<PathBuf> = (0..1000)
+        .map(|i| dir.join(format!("seek-{i:02}.jpg")))
+        .take_while(|f| f.is_file())
+        .collect();
+    (v.len() >= 10).then_some(v)
 }
 
 #[cfg(test)]
@@ -65,10 +85,22 @@ mod tests {
         let cd = d.join("root").join(super::key(&p, 2, mt as i64));
         std::fs::create_dir_all(&cd).unwrap();
         std::fs::write(cd.join("chapter-2.jpg"), b"j").unwrap();
-        let t = super::thumbs(&d.join("root"), &p, 3);
+        let other = d.join("other").join(super::key(&p, 2, mt as i64));
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("chapter-3.jpg"), b"j").unwrap();
+        let t = super::thumbs(&[d.join("root"), d.join("other")], &p, 3);
         assert_eq!(
             t.iter().map(Option::is_some).collect::<Vec<_>>(),
-            [false, true, false]
+            [false, true, true]
+        );
+        assert!(super::seek_frames(&d.join("root"), &p).is_none());
+        for i in 0..12 {
+            std::fs::write(cd.join(format!("seek-{i:02}.jpg")), b"j").unwrap();
+        }
+        std::fs::write(cd.join("seek-13.jpg"), b"j").unwrap();
+        assert_eq!(
+            super::seek_frames(&d.join("root"), &p).map(|v| v.len()),
+            Some(12)
         );
         let _ = std::fs::remove_dir_all(&d);
     }

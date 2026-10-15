@@ -1,0 +1,64 @@
+id = "chapter-thumbnails"
+name = "Chapter Thumbnails"
+version = "1.0.0"
+description = "Thumbnail preview while hovering the seek bar and a picture for every chapter in the Chapters tab, generated in the background and cached per file. Alt+H lists the chapters with titles and times. Uses your ffmpeg; without one it downloads Vivi's media ffmpeg build once (about 15 MB, shared with Subtitle Auto-Sync)."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "chapter-thumbnails.lua"
+min_vivi = "0.9.2"
+icon = "chapters"
+lucide = "gallery-horizontal-end"
+permissions = ["network", "filesystem", "subprocess"]
+size_note = "+ ffmpeg if needed"
+issue = 75
+default_enabled = true
+
+[[settings]]
+key = "seekbar"
+title = "Seek-bar hover thumbnails"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "chapters"
+title = "Chapter thumbnails (Chapters tab)"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "frames"
+title = "Seek-bar thumbnails per file"
+type = "choice"
+options = ["50", "100", "25"]
+default = "50"
+
+[[settings]]
+key = "download"
+title = "Download ffmpeg when none is installed"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "max-cache"
+title = "Files kept in the thumbnail cache"
+type = "choice"
+options = ["200", "50", "1000"]
+default = "200"
+
+[[settings]]
+key = "generate"
+title = "Generate the thumbnails of this file now"
+type = "action"
+label = "Generate"
+
+[[settings]]
+key = "list"
+title = "Chapter list (Alt+H)"
+type = "action"
+label = "Show"
+
+[[settings]]
+key = "clear"
+title = "Delete the cached thumbnails of this file"
+type = "action"
+label = "Clear"

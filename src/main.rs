@@ -195,7 +195,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 show_stream_error(&a, &format!("Could not open {name}: {why}"));
                             }
                         }
-                        PlayerEvent::ClientMessage(args) => plugins::client_message(&args),
+                        PlayerEvent::ClientMessage(args) => {
+                            match args.first().map(String::as_str) {
+                                // Chapter Thumbnails package: new files in its cache.
+                                Some("vivi-preview-frames") => {
+                                    preview::load_cached(
+                                        &a,
+                                        &player.get("path").unwrap_or_default(),
+                                    );
+                                }
+                                Some("vivi-chapter-thumbs") => chapter_thumbs(&a, &player),
+                                _ => plugins::client_message(&args),
+                            }
+                        }
                         PlayerEvent::Log(prefix, text) => {
                             if load.url().is_some() && !text.is_empty() {
                                 last_err = text.chars().take(120).collect();
@@ -542,7 +554,7 @@ fn chapter_thumbs(a: &AppWindow, p: &Player) {
     let files = if path.contains("://") || path.is_empty() {
         vec![None; n]
     } else {
-        scenes::thumbs(&scenes::cache_root(), &path, n)
+        scenes::thumbs(&scenes::cache_roots(), &path, n)
     };
     let has: Vec<bool> = files.iter().map(Option::is_some).collect();
     let imgs: Vec<slint::Image> = files

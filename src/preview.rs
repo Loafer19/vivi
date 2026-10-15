@@ -1,5 +1,7 @@
 //! Seek-bar hover preview (#10): evenly spaced frames rendered in the background with the
 //! `ffmpeg` CLI (fast keyframe seeks, small RGBA frames), kept in memory for the current file.
+//! When the Chapter Thumbnails package (#75) has cached frames for the file, those are
+//! shown instead and no ffmpeg runs.
 
 use crate::AppWindow;
 use slint::{ComponentHandle, Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
@@ -49,6 +51,25 @@ fn frame(path: &str, t: f64) -> Option<Vec<u8>> {
     (out.stdout.len() == (W * H * 4) as usize).then_some(out.stdout)
 }
 
+fn plugin_root() -> std::path::PathBuf {
+    crate::store::data_dir().join("plugin-data/chapter-thumbnails")
+}
+
+/// Show the Chapter Thumbnails package's cached frames for `path`; false when it has none.
+/// Stops any ffmpeg workers of this file.
+pub fn load_cached(app: &AppWindow, path: &str) -> bool {
+    let Some(files) = crate::scenes::seek_frames(&plugin_root(), path) else {
+        return false;
+    };
+    GENERATION.fetch_add(1, Ordering::SeqCst);
+    let imgs: Vec<Image> = files
+        .iter()
+        .filter_map(|f| Image::load_from_path(f).ok())
+        .collect();
+    app.set_preview_frames(ModelRc::new(VecModel::from(imgs)));
+    true
+}
+
 /// Start generating previews for `path` (local video files only).
 pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
     let gen = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
@@ -56,6 +77,9 @@ pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
     app.set_preview_frames(ModelRc::from(model.clone()));
     let p = Path::new(path);
     if !enabled || duration <= 1.0 || !p.is_file() || crate::library::kind_of(p) != Some("video") {
+        return;
+    }
+    if load_cached(app, path) {
         return;
     }
     // Placeholder frames are filled in as they arrive (index order), so the

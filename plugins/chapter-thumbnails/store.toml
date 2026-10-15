@@ -1,0 +1,10 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Video", "Tools"]
+tags = ["thumbnails", "chapters", "seek bar", "preview", "ffmpeg"]
+screenshots = ["chapter-thumbnails-settings"]
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-15"
+notes = "First release: seek-bar hover thumbnails and chapter thumbnails cached per file, chapter list on Alt+H, system ffmpeg or Vivi's media build."
