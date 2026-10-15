@@ -1,8 +1,13 @@
 # Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
 # so editing it needs no new plugin version.
 categories = ["Subtitles", "Tools"]
-tags = ["alass", "ffsubsync", "timing"]
+tags = ["alass", "ffsubsync", "timing", "offset"]
 screenshots = ["subtitle-sync-settings"]
+
+[[changelog]]
+version = "1.1.0"
+date = "2026-10-15"
+notes = "Downloads a verified alass (and, if needed, ffmpeg) when no sync tool is installed; manual offset keys Alt+Z / Alt+X remembered per file."
 
 [[changelog]]
 version = "1.0.1"
