@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **MCP server for AI agents** (#68): new `vivi-mcp` binary (stdio transport, std + serde_json only) that controls a running Vivi over a private local socket (`$XDG_RUNTIME_DIR/vivi.sock`, mode 0600). Tools: play/pause/stop, seek, volume, open file or URL, queue list/add/play/next/previous, now-playing status, library search, subtitles on/off, EQ presets; resources `vivi://status` and `vivi://playlist`. Off by default: *Settings → General → Remote control* or `VIVI_IPC=1`. Docs with client configs in `docs/mcp.md` and on the site; scripted client test in `tests/mcp.rs`.
+
 ### Changed
 - **Visualizer reads mpv's real output** (#71): instead of decoding the file a second time with symphonia (local files only, EQ not reflected) and a synthetic animation for streams, a labelled `af` filter (`@vivi-viz`, kept last in the chain) measures 48 log-spaced bands (30 Hz–14 kHz) with lavfi `bandpass` + `astats` and streams them, timestamped, to a localhost socket; the visualizer picks the frame matching `time-pos`. Works for network streams and reflects the EQ, compressor, reverb and other audio filters. The filter is only installed while a visualizer mode is showing.
 

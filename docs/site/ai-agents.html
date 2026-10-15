@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Vivi from AI agents (MCP)</title>
+<link rel="icon" href="img/vivi.svg">
+<meta name="theme-color" content="#0e0e0e">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav"><div class="in">
+  <a class="brand" href="index.html"><img src="img/vivi.svg" alt="">Vivi</a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="plugins.html"><i data-lucide="puzzle"></i>Plugins</a>
+    <a href="plugin-dev.html"><i data-lucide="code-xml"></i><span class="wide">Write a plugin</span><span class="narrow">Develop</span></a>
+    <a href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
+  </nav>
+</div></header>
+<main>
+<section class="hero" style="padding-bottom:16px">
+  <h1>AI <span>agents</span></h1>
+  <p><code>vivi-mcp</code> is a small Model Context Protocol server (stdio) that lets Claude,
+  Cursor and other MCP clients control a running Vivi over a local socket.</p>
+</section>
+<h2 id="enable">1. Enable remote control</h2>
+<p>Off by default. Turn on <em>Settings → General → Remote control</em> and restart Vivi, or run
+<code>VIVI_IPC=1 vivi</code>. The socket <code>$XDG_RUNTIME_DIR/vivi.sock</code> is private to your
+user (mode 0600); override it with <code>VIVI_SOCKET</code>.</p>
+<h2 id="clients">2. Add it to your client</h2>
+<p>Claude Desktop (<code>claude_desktop_config.json</code>), Cursor (<code>~/.cursor/mcp.json</code>) and most others:</p>
+<pre><code>{
+  "mcpServers": {
+    "vivi": { "command": "vivi-mcp" }
+  }
+}</code></pre>
+<p>Claude Code: <code>claude mcp add vivi -- vivi-mcp</code>. VS Code: <code>{"servers": {"vivi": {"type": "stdio", "command": "vivi-mcp"}}}</code>.
+Flatpak: <code>"command": "flatpak", "args": ["run", "--command=vivi-mcp", "io.github.loafer19.vivi"]</code>.</p>
+<h2 id="tools">Tools</h2>
+<p><code>get_status</code>, <code>play</code>, <code>pause</code>, <code>toggle_pause</code>, <code>stop</code>,
+<code>seek</code>, <code>set_volume</code>, <code>open</code> (file or URL), <code>playlist_list</code>,
+<code>playlist_add</code>, <code>playlist_play</code>, <code>next</code>, <code>previous</code>,
+<code>search_library</code>, <code>set_subtitles</code>, <code>list_eq_presets</code>, <code>set_eq_preset</code>;
+resources <code>vivi://status</code> and <code>vivi://playlist</code>.</p>
+<h2 id="test">Try it</h2>
+<pre><code>VIVI_IPC=1 vivi &amp;
+npx @modelcontextprotocol/inspector vivi-mcp</code></pre>
+<p>Full reference and limitations: <a href="https://github.com/Loafer19/vivi/blob/master/docs/mcp.md">docs/mcp.md</a>.</p>
+</main>
+<footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
+site icons from <a href="https://lucide.dev">Lucide</a> (ISC)</footer>
+</body>
+</html>

@@ -43,7 +43,7 @@ jobs:
           VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
           NAME=vivi-${VER}-linux-x86_64
           mkdir -p dist $NAME
-          cp target/release/vivi README.md LICENSE CHANGELOG.md packaging/vivi.desktop packaging/vivi.svg packaging/vivi.png $NAME/
+          cp target/release/vivi target/release/vivi-mcp README.md LICENSE CHANGELOG.md packaging/vivi.desktop packaging/vivi.svg packaging/vivi.png $NAME/
           tar czf dist/$NAME.tar.gz $NAME
       - name: AppImage (bundles the slim libmpv and its libraries)
         run: |

@@ -126,6 +126,7 @@ modules:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
       - cargo --offline build --release --verbose
       - install -Dm755 target/release/vivi /app/bin/vivi
+      - install -Dm755 target/release/vivi-mcp /app/bin/vivi-mcp
       - install -Dm644 packaging/vivi.svg /app/share/icons/hicolor/scalable/apps/io.github.loafer19.vivi.svg
       - install -Dm644 packaging/vivi.png /app/share/icons/hicolor/256x256/apps/io.github.loafer19.vivi.png
       - sed 's/^Icon=vivi$/Icon=io.github.loafer19.vivi/' packaging/vivi.desktop > io.github.loafer19.vivi.desktop

@@ -30,6 +30,7 @@ build() {
 package() {
   cd "${pkgname}-${pkgver}"
   install -Dm755 target/release/vivi "${pkgdir}/usr/bin/vivi"
+  install -Dm755 target/release/vivi-mcp "${pkgdir}/usr/bin/vivi-mcp"
   install -Dm644 packaging/vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"
   install -Dm644 packaging/vivi.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vivi.svg"
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

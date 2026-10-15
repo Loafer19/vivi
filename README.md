@@ -161,6 +161,15 @@ The machine-readable catalog is [plugins/index.json](plugins/index.json). The do
 |---|---|---|---|
 | <img src="docs/screenshots/extensions.png" width="220"> | <img src="docs/screenshots/lyrics.png" width="220"> | <img src="docs/screenshots/skip-intro.png" width="220"> | <img src="docs/screenshots/add-subtitles.png" width="220"> |
 
+## AI agents (MCP)
+
+`vivi-mcp` is a small stdio [MCP](https://modelcontextprotocol.io) server, built alongside
+Vivi, that lets Claude Desktop, Cursor and other agents control a running player (play,
+seek, volume, open files/URLs, queue, library search, subtitles, EQ presets, now playing).
+Enable *Settings → General → Remote control* (or run `VIVI_IPC=1 vivi`), then add
+`{"mcpServers": {"vivi": {"command": "vivi-mcp"}}}` to your client. See
+[docs/mcp.md](docs/mcp.md).
+
 ## Architecture
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
 `src/viz/` — music visualizer (an mpv `af` lavfi tap on the real output, after EQ/filters, sending per-band levels with timestamps over a localhost socket and synced to `time-pos` → rustfft analysis → modes behind the `Visual` trait) ·
