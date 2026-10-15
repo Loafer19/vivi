@@ -782,8 +782,8 @@
     {
       "id": "youtube",
       "name": "YouTube & yt-dlp",
-      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp and ffmpeg when present; otherwise downloads and updates its own verified copies (yt-dlp from its official GitHub releases; a static ffmpeg only when merging 1080p+ or converting audio).",
-      "version": "1.1.0",
+      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp and ffmpeg when present; otherwise downloads and updates verified copies: yt-dlp (18–40 MB) from its official releases on first use, a static ffmpeg (125–195 MB, about 345 MB unpacked) only for 1080p+ or audio conversion.",
+      "version": "1.1.1",
       "author": "Vivi",
       "icon": "streams",
       "lucide": "youtube",
@@ -797,9 +797,9 @@
         "subprocess"
       ],
       "source": "plugins/youtube",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.0/youtube-1.1.0.zip",
-      "sha256": "9c2c5fb4f702cc1b37c577e0de634bc1e6814a2bb725e6991a0cf84246be2385",
-      "size": 43150,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.1/youtube-1.1.1.zip",
+      "sha256": "86148757d5ca3dcb93a79d2bf07ac3e26388fadfe92a1d4eb4235fe169693cdd",
+      "size": 43054,
       "settings": [
         {
           "key": "url",
@@ -916,7 +916,7 @@
           "label": "Show"
         }
       ],
-      "size_note": "+ yt-dlp 18–40 MB on first use, + ffmpeg 125–195 MB download (about 345 MB unpacked) only for 1080p+ or audio conversion; none of it when found on the system"
+      "size_note": "+ yt-dlp, ffmpeg if needed"
     }
   ]
 }
