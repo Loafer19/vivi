@@ -40,14 +40,14 @@ host=()
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
 export CFLAGS="-Os -ffunction-sections -fdata-sections"
 
-(cd opus-$OPUS_VER && ./configure "${host[@]}" --prefix="$PREFIX" --enable-static --disable-shared \
+(cd opus-$OPUS_VER && ./configure ${host[@]+"${host[@]}"} --prefix="$PREFIX" --enable-static --disable-shared \
   --disable-doc --disable-extra-programs && make -j"$JOBS" && make install)
-(cd lame-$LAME_VER && ./configure "${host[@]}" --prefix="$PREFIX" --enable-static --disable-shared \
+(cd lame-$LAME_VER && ./configure ${host[@]+"${host[@]}"} --prefix="$PREFIX" --enable-static --disable-shared \
   --disable-frontend --disable-decoder --disable-gtktest && make -j"$JOBS" && make install)
 
 cross=()
 case "$CROSS" in
-  *mingw32) cross=(--enable-cross-compile --cross-prefix="$CROSS-" --target-os=mingw32 --arch=x86_64) ;;
+  *mingw32) cross=(--enable-cross-compile --cross-prefix="$CROSS-" --pkg-config=pkg-config --target-os=mingw32 --arch=x86_64) ;;
 esac
 ldflags="-L$PREFIX/lib"
 case "$(uname -s)" in
@@ -56,7 +56,7 @@ case "$(uname -s)" in
 esac
 
 cd ffmpeg-$FFMPEG_VER
-./configure "${cross[@]}" --prefix="$PREFIX" --pkg-config-flags=--static \
+./configure ${cross[@]+"${cross[@]}"} --prefix="$PREFIX" --pkg-config-flags=--static \
   --extra-cflags="-I$PREFIX/include $CFLAGS" --extra-ldflags="$ldflags" \
   --disable-everything --disable-autodetect --disable-network --disable-doc --disable-debug \
   --disable-ffplay --disable-avdevice --disable-swscale \
