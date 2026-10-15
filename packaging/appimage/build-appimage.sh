@@ -38,6 +38,15 @@ rm -f "$APPDIR"/usr/lib/libpulsecommon-*.so
 for lib in libsndfile.so.1 libFLAC.so.* libmp3lame.so.0 libmpg123.so.0 libasyncns.so.0; do
   rm -f "$APPDIR"/usr/lib/$lib
 done
+# UI font (Inter), found through SLINT_FONT_PATH = <prefix>/share/vivi/fonts (set by vivi).
+INTER_SHA=9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e
+[ -f "$TOOLS/Inter-4.1.zip" ] || curl -fsSLo "$TOOLS/Inter-4.1.zip" https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+echo "$INTER_SHA  $TOOLS/Inter-4.1.zip" | sha256sum -c -
+mkdir -p "$APPDIR/usr/share/vivi/fonts" "$APPDIR/usr/share/licenses/vivi"
+unzip -o -j -q "$TOOLS/Inter-4.1.zip" InterVariable.ttf -d "$APPDIR/usr/share/vivi/fonts"
+unzip -o -j -q "$TOOLS/Inter-4.1.zip" LICENSE.txt -d "$TOOLS/inter-license"
+cp "$TOOLS/inter-license/LICENSE.txt" "$APPDIR/usr/share/licenses/vivi/Inter-LICENSE.txt"
+
 # Belt and braces: strip anything linuxdeploy left with symbols.
 find "$APPDIR/usr" -type f \( -name '*.so*' -o -path '*/bin/*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true
 

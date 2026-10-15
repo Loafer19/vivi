@@ -42,12 +42,27 @@ fn show_stream_error(app: &AppWindow, msg: &str) {
     });
 }
 
+/// Environment for bundled files, set before any thread starts:
+/// * `SLINT_FONT_PATH`: the Inter font shipped by the Flatpak/AppImage in
+///   `<prefix>/share/vivi/fonts` (next to `<prefix>/bin/vivi`), unless already set.
+fn bundled_env() {
+    if std::env::var_os("SLINT_FONT_PATH").is_none() {
+        let fonts = std::env::current_exe()
+            .ok()
+            .and_then(|e| Some(e.parent()?.parent()?.join("share/vivi/fonts")));
+        if let Some(f) = fonts.filter(|f| f.is_dir()) {
+            std::env::set_var("SLINT_FONT_PATH", f);
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // winit 0.30 has no Wayland drag & drop; VIVI_X11=1 runs under XWayland instead,
     // where dropping files works (#5). Done before any thread or backend starts.
     if std::env::var_os("VIVI_X11").is_some_and(|v| v != "0") {
         std::env::remove_var("WAYLAND_DISPLAY");
     }
+    bundled_env();
     // Prefer winit + femtovg (OpenGL): works on Wayland (Hyprland) and X11.
     slint::BackendSelector::new()
         .backend_name("winit".into())

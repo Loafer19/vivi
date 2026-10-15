@@ -7,6 +7,9 @@
 # FFmpeg comes from the runtime; the runtime's org.freedesktop.Platform.codecs-extra
 # extension (installed automatically with the runtime) adds the patent-encumbered
 # codecs such as H.264/HEVC. libmpv is built here as a module (no mpv CLI).
+# yt-dlp is not bundled: the YouTube plugin downloads it into
+# ~/.var/app/io.github.loafer19.vivi/data/vivi/plugin-data/youtube/bin, which vivi
+# appends to PATH so mpv's ytdl_hook finds it too.
 id: io.github.loafer19.vivi
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
@@ -28,6 +31,9 @@ finish-args:
   - --filesystem=xdg-download
   - --filesystem=/media:ro
   - --filesystem=/run/media:ro
+  # Discord Rich Presence plugin: Discord's IPC socket (native and Flatpak Discord).
+  - --filesystem=xdg-run/discord-ipc-0
+  - --filesystem=xdg-run/app/com.discordapp.Discord:create
   - --own-name=org.mpris.MediaPlayer2.vivi.*
   - --talk-name=org.freedesktop.ScreenSaver
   - --env=GTK_USE_PORTAL=1
@@ -113,6 +119,19 @@ modules:
       - type: git
         url: https://github.com/mpv-player/mpv.git
         tag: v0.40.0
+
+  # UI font (ui/app.slint uses Inter). Found through SLINT_FONT_PATH, which vivi sets to
+  # <prefix>/share/vivi/fonts at startup, so the host's fonts do not matter.
+  - name: inter-font
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 InterVariable.ttf /app/share/vivi/fonts/InterVariable.ttf
+      - install -Dm644 LICENSE.txt /app/share/licenses/io.github.loafer19.vivi/Inter-LICENSE.txt
+    sources:
+      - type: archive
+        url: https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+        sha256: 9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e
+        strip-components: 0
 
   - name: vivi
     buildsystem: simple
