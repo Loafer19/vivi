@@ -1,0 +1,51 @@
+id = "equalizer"
+name = "Equalizer"
+version = "1.0.0"
+description = "Equalizer presets (Bass, Vocal, Rock, Night, Flat) and a custom 10-band EQ from 31 Hz to 16 kHz, through mpv's audio filters (ffmpeg equalizer or superequalizer). Alt+E cycles presets, Alt+Shift+E turns it off; the choice is remembered. Independent of the Audio panel's own EQ."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "equalizer.lua"
+min_vivi = "0.9.0"
+icon = "eq"
+lucide = "sliders-vertical"
+permissions = []
+issue = 74
+default_enabled = true
+
+[[settings]]
+key = "enabled"
+title = "Equalizer on (Alt+Shift+E)"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "preset"
+title = "Preset (Alt+E cycles)"
+type = "choice"
+options = ["Flat", "Bass", "Vocal", "Rock", "Night", "Custom"]
+default = "Flat"
+
+[[settings]]
+key = "custom"
+title = "Custom gains in dB, 10 bands: 31 62 125 250 500 1k 2k 4k 8k 16k Hz (−12…12)"
+type = "text"
+default = "0 0 0 0 0 0 0 0 0 0"
+
+[[settings]]
+key = "engine"
+title = "Filter"
+type = "choice"
+options = ["equalizer (10 bands)", "superequalizer (18 bands)"]
+default = "equalizer (10 bands)"
+
+[[settings]]
+key = "preamp"
+title = "Lower the volume by the largest boost (no clipping)"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "show"
+title = "Show the active preset"
+type = "action"
+label = "Show"

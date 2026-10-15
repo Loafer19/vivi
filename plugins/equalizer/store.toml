@@ -1,0 +1,10 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Music", "Tools"]
+tags = ["equalizer", "eq", "presets", "audio"]
+screenshots = ["equalizer-settings"]
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-15"
+notes = "First release: Flat, Bass, Vocal, Rock and Night presets, custom 10-band EQ (equalizer or superequalizer), anti-clipping pre-amp, remembered across restarts."
