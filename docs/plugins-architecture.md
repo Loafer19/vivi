@@ -35,7 +35,12 @@ WASM step below. They stay built in until that exists.
 
 | Plugin | Where | Why | Keys |
 | --- | --- | --- | --- |
-| Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz and Cover Art Archive need none |
+| Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz, Cover Art Archive, Deezer, iTunes Search and LRCLIB need none; Last.fm API key (genres) and Discogs token optional (#79). The review shows the source of every field; synced LRCLIB lyrics are embedded when *Embed synced lyrics* is on (MP3 SYLT+USLT, FLAC/Ogg/Opus `LYRICS`, M4A `©lyr`, #80) |
+| Equalizer (`equalizer`, #74) | script | presets via mpv `equalizer`/`superequalizer` af | none |
+| Subtitle sync (`subtitle-sync`, #72) | script | alass (system or managed download) + managed media ffmpeg | none |
+| Chapter thumbnails (`chapter-thumbnails`, #75) | script + core | managed media ffmpeg; core reads the cache | none |
+| AcoustID (`acoustid`, #76) | script + tagger | fpcalc (system or Chromaprint download); results open in the tagger review with a rename proposal | AcoustID application key |
+| Scrobbler (`scrobbler`, #77) | script | Last.fm + ListenBrainz | Last.fm API key + secret, ListenBrainz token |
 | Free Music (`free-music`, #70) | built in | search/results/licence dialog; downloads are tagged with lofty | Jamendo `client_id` (optional, <https://devportal.jamendo.com>); Internet Archive needs none |
 | Subtitle Auto-Sync (`subtitle-sync`, #56) | package (mpv Lua) | runs an external tool and `sub-add`s the result; no UI | none; needs `alass`/`alass-cli` or `ffsubsync` in `PATH` |
 | SponsorBlock (`sponsorblock`, #64) | package (mpv Lua) | HTTP via `curl`, seeks and chapters; "ask" mode uses a toast + `Alt+K` instead of a Slint button | none |
@@ -173,6 +178,9 @@ Script messages Vivi handles for packages:
 | Message | Effect |
 | --- | --- |
 | `vivi-toast <text>` | toast |
+| `vivi-preview-frames <dir>` | load cached seek-bar frames `seek-NN.jpg` from `<dir>` (0.9.2) |
+| `vivi-chapter-thumbs <dir>` | reload chapter thumbnails `chapter-N.jpg` from `<dir>` (0.9.2) |
+| `vivi-tagger-acoustid <path> <json>` | open the auto-tagger review for `<path>` with AcoustID ids and a rename pattern (0.9.2) |
 | `vivi-setting <id> <key> <value>` | saves one of the package's declared settings (e.g. a generated PIN) and applies it as script-opt |
 | `vivi-pick-folder <id> <key>` | folder dialog; the result is saved as that setting and sent back as `script-message-to <script> folder-picked <path>` |
 

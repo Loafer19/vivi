@@ -189,7 +189,7 @@
     {
       "id": "auto-tagger",
       "name": "Auto-tagger",
-      "description": "Identifies songs by their audio (AcoustID fingerprint) or tags, looks them up on MusicBrainz and writes title, artist, album, date, track, genre and Cover Art Archive covers after a preview. Originals are backed up. AcoustID key optional.",
+      "description": "Identifies songs by their audio (AcoustID fingerprint) or tags, looks them up on MusicBrainz, Deezer, iTunes, Last.fm and Discogs and writes tags, hi-res covers and optional LRCLIB synced lyrics after a preview that shows each field's source. Originals are backed up. Keys optional.",
       "version": "0.8.0",
       "author": "Vivi",
       "icon": "tag",
@@ -209,6 +209,36 @@
           "title": "Embed cover art",
           "type": "toggle",
           "default": "true"
+        },
+        {
+          "key": "deezer",
+          "title": "Deezer",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "itunes",
+          "title": "iTunes",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "lastfm-key",
+          "title": "Last.fm API key",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "discogs-token",
+          "title": "Discogs token",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "lyrics",
+          "title": "Embed synced lyrics",
+          "type": "toggle",
+          "default": "false"
         },
         {
           "key": "folder",
@@ -424,6 +454,190 @@
       ]
     },
     {
+      "id": "acoustid",
+      "name": "AcoustID Tagger",
+      "description": "Identifies the playing song by its sound: fingerprints it with Chromaprint's fpcalc, looks it up on AcoustID and MusicBrainz and opens the Auto-tagger's before/after review with the tags and a new file name built from your pattern (for example {artist} - {title}), applied only when you confirm. Uses an installed fpcalc, otherwise downloads the official one (1.3–2.6 MB). Needs your free AcoustID application key.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "tag",
+      "lucide": "fingerprint",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.9.2",
+      "permissions": [
+        "network",
+        "filesystem",
+        "subprocess"
+      ],
+      "source": "plugins/acoustid",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-acoustid-v1.0.0/acoustid-1.0.0.zip",
+      "sha256": "e55e4415993c790fab995282b254b7ab753e06d68fa3c63458941dd158de1756",
+      "size": 16945,
+      "settings": [
+        {
+          "key": "api-key",
+          "title": "AcoustID application API key (free: acoustid.org/new-application)",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "pattern",
+          "title": "New file name: {artist} {title} {album} {albumartist} {year} {track} {genre}",
+          "type": "text",
+          "default": "{artist} - {title}"
+        },
+        {
+          "key": "download",
+          "title": "Download fpcalc when it is not installed",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "identify",
+          "title": "Identify the playing file (Alt+I)",
+          "type": "action",
+          "label": "Identify"
+        },
+        {
+          "key": "detect",
+          "title": "Which fpcalc is used",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "issue": 76,
+      "categories": [
+        "Music",
+        "Tools"
+      ],
+      "tags": [
+        "acoustid",
+        "musicbrainz",
+        "chromaprint",
+        "tagging",
+        "rename"
+      ],
+      "screenshots": [
+        "acoustid-settings"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release: fpcalc fingerprint (system or downloaded), AcoustID + MusicBrainz lookup into the Auto-tagger review, file name proposal from a pattern.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-acoustid-v1.0.0/acoustid-1.0.0.zip"
+        }
+      ],
+      "size_note": "+ fpcalc if needed"
+    },
+    {
+      "id": "chapter-thumbnails",
+      "name": "Chapter Thumbnails",
+      "description": "Thumbnail preview while hovering the seek bar and a picture for every chapter in the Chapters tab, generated in the background and cached per file. Alt+H lists the chapters with titles and times. Uses your ffmpeg; without one it downloads Vivi's media ffmpeg build once (about 15 MB, shared with Subtitle Auto-Sync).",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "chapters",
+      "lucide": "gallery-horizontal-end",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.9.2",
+      "permissions": [
+        "network",
+        "filesystem",
+        "subprocess"
+      ],
+      "source": "plugins/chapter-thumbnails",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-chapter-thumbnails-v1.0.0/chapter-thumbnails-1.0.0.zip",
+      "sha256": "6b85b8d3ef59797fd5dd4d6e8bb6f12cce4fcfd1356fc2d26f84236016f84828",
+      "size": 22338,
+      "settings": [
+        {
+          "key": "seekbar",
+          "title": "Seek-bar hover thumbnails",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "chapters",
+          "title": "Chapter thumbnails (Chapters tab)",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "frames",
+          "title": "Seek-bar thumbnails per file",
+          "type": "choice",
+          "options": [
+            "50",
+            "100",
+            "25"
+          ],
+          "default": "50"
+        },
+        {
+          "key": "download",
+          "title": "Download ffmpeg when none is installed",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "max-cache",
+          "title": "Files kept in the thumbnail cache",
+          "type": "choice",
+          "options": [
+            "200",
+            "50",
+            "1000"
+          ],
+          "default": "200"
+        },
+        {
+          "key": "generate",
+          "title": "Generate the thumbnails of this file now",
+          "type": "action",
+          "label": "Generate"
+        },
+        {
+          "key": "list",
+          "title": "Chapter list (Alt+H)",
+          "type": "action",
+          "label": "Show"
+        },
+        {
+          "key": "clear",
+          "title": "Delete the cached thumbnails of this file",
+          "type": "action",
+          "label": "Clear"
+        }
+      ],
+      "issue": 75,
+      "categories": [
+        "Video",
+        "Tools"
+      ],
+      "tags": [
+        "thumbnails",
+        "chapters",
+        "seek bar",
+        "preview",
+        "ffmpeg"
+      ],
+      "screenshots": [
+        "chapter-thumbnails-settings"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release: seek-bar hover thumbnails and chapter thumbnails cached per file, chapter list on Alt+H, system ffmpeg or Vivi's media build.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-chapter-thumbnails-v1.0.0/chapter-thumbnails-1.0.0.zip"
+        }
+      ],
+      "size_note": "+ ffmpeg if needed"
+    },
+    {
       "id": "discord",
       "name": "Discord Rich Presence",
       "description": "Shows the current title, artist and progress in your Discord status. Needs a Discord application ID; Discord must be running on this computer. Ships a small native helper (vivi-discord) that talks to Discord's local IPC.",
@@ -527,6 +741,96 @@
           "url": "https://github.com/Loafer19/vivi/releases/download/plugin-discord-v1.0.0/vivi-discord-macos-aarch64",
           "sha256": "ca2de2eb1f0539e502b4f4cbe703b012494cc2c52ff5d72c6e97af396b96d3f4",
           "size": 353136
+        }
+      ]
+    },
+    {
+      "id": "equalizer",
+      "name": "Equalizer",
+      "description": "Equalizer presets (Bass, Vocal, Rock, Night, Flat) and a custom 10-band EQ from 31 Hz to 16 kHz, through mpv's audio filters (ffmpeg equalizer or superequalizer). Alt+E cycles presets, Alt+Shift+E turns it off; the choice is remembered. Independent of the Audio panel's own EQ.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "eq",
+      "lucide": "sliders-vertical",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.9.0",
+      "permissions": [],
+      "source": "plugins/equalizer",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-equalizer-v1.0.0/equalizer-1.0.0.zip",
+      "sha256": "902f5d99a2147aff2fd180f5899dc6dc3f5971d2c50c8ce3b05bf21ee1a37e9f",
+      "size": 8424,
+      "settings": [
+        {
+          "key": "enabled",
+          "title": "Equalizer on (Alt+Shift+E)",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "preset",
+          "title": "Preset (Alt+E cycles)",
+          "type": "choice",
+          "options": [
+            "Flat",
+            "Bass",
+            "Vocal",
+            "Rock",
+            "Night",
+            "Custom"
+          ],
+          "default": "Flat"
+        },
+        {
+          "key": "custom",
+          "title": "Custom gains in dB, 10 bands: 31 62 125 250 500 1k 2k 4k 8k 16k Hz (−12…12)",
+          "type": "text",
+          "default": "0 0 0 0 0 0 0 0 0 0"
+        },
+        {
+          "key": "engine",
+          "title": "Filter",
+          "type": "choice",
+          "options": [
+            "equalizer (10 bands)",
+            "superequalizer (18 bands)"
+          ],
+          "default": "equalizer (10 bands)"
+        },
+        {
+          "key": "preamp",
+          "title": "Lower the volume by the largest boost (no clipping)",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "show",
+          "title": "Show the active preset",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "issue": 74,
+      "categories": [
+        "Music",
+        "Tools"
+      ],
+      "tags": [
+        "equalizer",
+        "eq",
+        "presets",
+        "audio"
+      ],
+      "screenshots": [
+        "equalizer-settings"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release: Flat, Bass, Vocal, Rock and Night presets, custom 10-band EQ (equalizer or superequalizer), anti-clipping pre-amp, remembered across restarts.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-equalizer-v1.0.0/equalizer-1.0.0.zip"
         }
       ]
     },
@@ -877,9 +1181,9 @@
     },
     {
       "id": "scrobbler",
-      "name": "ListenBrainz Scrobbler",
-      "description": "Sends what you listen to to ListenBrainz: now playing when a track starts and a listen after half the track or 4 minutes. Listens made offline are queued and sent later. Needs your ListenBrainz user token.",
-      "version": "1.0.1",
+      "name": "Scrobbler (Last.fm & ListenBrainz)",
+      "description": "Sends what you listen to to Last.fm and/or ListenBrainz: now playing when a track starts and a scrobble after half the track or 4 minutes. Scrobbles made offline are queued and sent later. Needs your ListenBrainz user token, or your Last.fm API key + shared secret (free) and one browser authorisation.",
+      "version": "1.1.0",
       "author": "Vivi",
       "icon": "scrobble",
       "lucide": "radio-tower",
@@ -893,13 +1197,43 @@
         "subprocess"
       ],
       "source": "plugins/scrobbler",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.0.1/scrobbler-1.0.1.zip",
-      "sha256": "fae650cf485c72c311a23d210da4a78c121a5aa8e98396424996f9c42ecd836b",
-      "size": 11728,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.1.0/scrobbler-1.1.0.zip",
+      "sha256": "cd03edbaef9355df13df7f3d650eb07e1f0f5abd2e82088c99b3f30e4460a2ec",
+      "size": 24111,
       "settings": [
         {
           "key": "token",
-          "title": "ListenBrainz user token",
+          "title": "ListenBrainz user token (listenbrainz.org/settings)",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "lastfm_key",
+          "title": "Last.fm API key (create one free at last.fm/api/account/create)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "lastfm_secret",
+          "title": "Last.fm shared secret",
+          "type": "secret",
+          "default": ""
+        },
+        {
+          "key": "lastfm_connect",
+          "title": "Authorise Vivi in the browser",
+          "type": "action",
+          "label": "Connect Last.fm"
+        },
+        {
+          "key": "lastfm_finish",
+          "title": "After allowing access in the browser",
+          "type": "action",
+          "label": "Finish connecting"
+        },
+        {
+          "key": "lastfm_session",
+          "title": "Last.fm session key (filled in by Connect)",
           "type": "secret",
           "default": ""
         },
@@ -932,12 +1266,13 @@
           "type": "action"
         }
       ],
-      "issue": 63,
+      "issue": 77,
       "categories": [
         "Music",
         "Integrations"
       ],
       "tags": [
+        "lastfm",
         "listenbrainz",
         "scrobbling"
       ],
@@ -945,6 +1280,12 @@
         "scrobbler-settings"
       ],
       "changelog": [
+        {
+          "version": "1.1.0",
+          "date": "2026-10-15",
+          "notes": "Last.fm scrobbling and now playing (your API key + browser authorisation), next to ListenBrainz; separate offline queue per service.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.1.0/scrobbler-1.1.0.zip"
+        },
         {
           "version": "1.0.1",
           "date": "2026-10-15",
@@ -962,8 +1303,8 @@
     {
       "id": "sponsorblock",
       "name": "SponsorBlock",
-      "description": "Skips sponsor, intro, self-promotion and other segments in YouTube videos opened as streams, using the crowd-sourced SponsorBlock database. Segments are marked as chapters on the seek bar.",
-      "version": "1.0.1",
+      "description": "Skips sponsor, intro, self-promotion and other segments in YouTube videos opened as streams, using the crowd-sourced SponsorBlock database. Segments are marked as chapters on the seek bar; every skip shows a notice and can be undone (Alt+Shift+K). Also works for videos the YouTube plugin adds or downloads.",
+      "version": "1.1.0",
       "author": "Vivi",
       "icon": "skip",
       "lucide": "badge-dollar-sign",
@@ -976,9 +1317,9 @@
         "subprocess"
       ],
       "source": "plugins/sponsorblock",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.0.1/sponsorblock-1.0.1.zip",
-      "sha256": "8e05584960420a7782c31baa8896cfdb9eecb1574cbff69fa9bb531a91e21c81",
-      "size": 9060,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.1.0/sponsorblock-1.1.0.zip",
+      "sha256": "fac7123b166e0bbbc34632a65a16d2435fe4a74a0af40d4a424f6e992c402ee2",
+      "size": 11798,
       "settings": [
         {
           "key": "categories",
@@ -1007,9 +1348,27 @@
           "title": "API server",
           "type": "text",
           "default": "https://sponsor.ajay.app"
+        },
+        {
+          "key": "notice",
+          "title": "Show a notice with undo (Alt+Shift+K) after each skip",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "local",
+          "title": "Also for downloaded files named \"… [video id].ext\"",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "undo",
+          "title": "Undo the last skip (Alt+Shift+K)",
+          "type": "action",
+          "label": "Undo"
         }
       ],
-      "issue": 64,
+      "issue": 73,
       "categories": [
         "Video",
         "Streaming"
@@ -1023,6 +1382,12 @@
         "sponsorblock-settings"
       ],
       "changelog": [
+        {
+          "version": "1.1.0",
+          "date": "2026-10-15",
+          "notes": "Skip notice with undo (Alt+Shift+K), works for files downloaded by the YouTube plugin (\"[video id]\" in the name).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.1.0/sponsorblock-1.1.0.zip"
+        },
         {
           "version": "1.0.1",
           "date": "2026-10-15",
@@ -1040,8 +1405,8 @@
     {
       "id": "subtitle-sync",
       "name": "Subtitle Auto-Sync",
-      "description": "Aligns the current external subtitle to the audio with alass or ffsubsync (whichever is installed), in the background, then loads the synced copy saved next to the original.",
-      "version": "1.0.1",
+      "description": "Aligns the current external subtitle to the audio with alass or ffsubsync in the background, then loads the synced copy saved next to the original. Manual offset keys (Alt+Z / Alt+X) are remembered per file. Uses an installed alass or ffsubsync; otherwise downloads alass on first use (3 MB on Linux x86_64, 26 MB on Windows) and, without a system ffmpeg, Vivi's media ffmpeg build (about 15 MB, shared with Chapter Thumbnails).",
+      "version": "1.1.0",
       "author": "Vivi",
       "icon": "subtitles",
       "lucide": "captions",
@@ -1050,13 +1415,14 @@
       "default_enabled": true,
       "min_vivi": "0.9.0",
       "permissions": [
+        "network",
         "filesystem",
         "subprocess"
       ],
       "source": "plugins/subtitle-sync",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.0.1/subtitle-sync-1.0.1.zip",
-      "sha256": "36aeb9d0a9012dcede8c99d3ce5aabb7cae037282b2557cb7f1a9a07a52f7c11",
-      "size": 6173,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.1.0/subtitle-sync-1.1.0.zip",
+      "sha256": "322de5e9e22069c36c1b16ab7361a8bad32ad8eab6bfbf7710a97d1c4cab3d1d",
+      "size": 22733,
       "settings": [
         {
           "key": "tool",
@@ -1070,17 +1436,42 @@
           "default": "Auto"
         },
         {
+          "key": "download",
+          "title": "Download alass when no sync tool is installed",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "step",
+          "title": "Offset step for Alt+Z / Alt+X in seconds (Alt+Shift: 10 steps)",
+          "type": "choice",
+          "options": [
+            "0.1",
+            "0.05",
+            "0.25",
+            "0.5"
+          ],
+          "default": "0.1"
+        },
+        {
           "key": "sync",
           "title": "Sync current subtitle (Alt+Y)",
           "type": "action"
         },
         {
+          "key": "reset",
+          "title": "Reset the subtitle offset of this file (Alt+Backspace)",
+          "type": "action",
+          "label": "Reset"
+        },
+        {
           "key": "detect",
-          "title": "Check installed tools",
-          "type": "action"
+          "title": "Which sync tool and ffmpeg are used",
+          "type": "action",
+          "label": "Show"
         }
       ],
-      "issue": 56,
+      "issue": 72,
       "categories": [
         "Subtitles",
         "Tools"
@@ -1088,12 +1479,19 @@
       "tags": [
         "alass",
         "ffsubsync",
-        "timing"
+        "timing",
+        "offset"
       ],
       "screenshots": [
         "subtitle-sync-settings"
       ],
       "changelog": [
+        {
+          "version": "1.1.0",
+          "date": "2026-10-15",
+          "notes": "Downloads a verified alass (and, if needed, ffmpeg) when no sync tool is installed; manual offset keys Alt+Z / Alt+X remembered per file.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.1.0/subtitle-sync-1.1.0.zip"
+        },
         {
           "version": "1.0.1",
           "date": "2026-10-15",
@@ -1106,7 +1504,8 @@
           "notes": "First release.",
           "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.0.0/subtitle-sync-1.0.0.zip"
         }
-      ]
+      ],
+      "size_note": "+ alass, ffmpeg if needed"
     },
     {
       "id": "youtube",
