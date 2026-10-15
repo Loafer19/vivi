@@ -26,7 +26,7 @@ jobs:
           - { os: macos-14, platform: macos-aarch64 }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build (Alpine, musl static)
         if: startsWith(matrix.platform, 'linux')
         run: |
@@ -61,7 +61,7 @@ jobs:
           mkdir dist; ext=""; [ -f out/ffmpeg.exe ] && ext=.exe
           for p in ffmpeg ffprobe ffmpeg-media ffprobe-media; do cp "out/$p$ext" "dist/$p-${{ matrix.platform }}$ext"; done
           ls -l dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ffmpeg-${{ matrix.platform }}
           path: dist/*
@@ -72,8 +72,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

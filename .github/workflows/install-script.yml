@@ -12,7 +12,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: shellcheck -s sh docs/site/install.sh
   linux:
     strategy:
@@ -27,7 +27,7 @@ jobs:
     container: ${{ matrix.image }}
     steps:
       - run: ${{ matrix.setup }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install as a user, then uninstall
         run: |
           useradd -m tester
@@ -51,7 +51,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - run: pacman -Syu --noconfirm --needed git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: makepkg -si through the script, then uninstall
         run: |
           useradd -m tester

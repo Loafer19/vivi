@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build and namcap
         run: |
           pacman -Syu --noconfirm --needed namcap git rust
@@ -45,7 +45,7 @@ jobs:
   flathub:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: flatpak-builder-lint (manifest) and appstream validation
         run: |
           docker run --rm -v "$PWD/packaging/flathub:/w" -w /w ghcr.io/flathub/flatpak-builder-lint:latest \

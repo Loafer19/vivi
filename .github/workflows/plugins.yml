@@ -40,7 +40,7 @@ jobs:
         shell: bash
         working-directory: helpers
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - if: startsWith(matrix.os, 'ubuntu')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - uses: dtolnay/rust-toolchain@stable
@@ -59,7 +59,7 @@ jobs:
           ext=""; [[ "${{ matrix.platform }}" == windows-* ]] && ext=".exe"
           for b in vivi-discord vivi-remote; do cp "target/${{ matrix.target }}/release/$b$ext" "$out/"; done
           ls -la "$out"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: helpers-${{ matrix.platform }}
           path: dist/helpers
@@ -67,7 +67,7 @@ jobs:
     needs: helpers
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Lua syntax
         run: |
           sudo apt-get update && sudo apt-get install -y luajit
@@ -75,7 +75,7 @@ jobs:
           bash tests/plugins/run.sh
       - name: Build packages, verify index.json
         run: python3 scripts/package-plugins.py --check
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: helpers-*
           path: dist/helpers
