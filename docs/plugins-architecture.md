@@ -34,6 +34,9 @@ WASM step below. They stay built in until that exists.
 | --- | --- | --- | --- |
 | Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz and Cover Art Archive need none |
 | Free Music (`free-music`, #70) | built in | search/results/licence dialog; downloads are tagged with lofty | Jamendo `client_id` (optional, <https://devportal.jamendo.com>); Internet Archive needs none |
+| Subtitle Auto-Sync (`subtitle-sync`, #56) | package (mpv Lua) | runs an external tool and `sub-add`s the result; no UI | none; needs `alass`/`alass-cli` or `ffsubsync` in `PATH` |
+| SponsorBlock (`sponsorblock`, #64) | package (mpv Lua) | HTTP via `curl`, seeks and chapters; "ask" mode uses a toast + `Alt+K` instead of a Slint button | none |
+| Scene Chapters (`scene-chapters`, #62) | package (mpv Lua) | ffmpeg subprocess, `chapter-list`; thumbnails cached for a future Chapters-panel view | none; needs `ffmpeg` |
 | ListenBrainz Scrobbler (`scrobbler`, #63) | package (mpv Lua) | no UI: settings, OSD status and HTTP via `curl` are enough | ListenBrainz user token (<https://listenbrainz.org/settings/>) |
 
 MusicBrainz calls share one process-wide limiter (at most one request per second) and send

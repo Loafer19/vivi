@@ -1,0 +1,30 @@
+id = "subtitle-sync"
+name = "Subtitle Auto-Sync"
+version = "1.0.0"
+description = "Aligns the current external subtitle to the audio with alass or ffsubsync (whichever is installed), in the background, then loads the synced copy saved next to the original."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "subtitle-sync.lua"
+min_vivi = "0.8.0"
+icon = "subtitles"
+lucide = "captions"
+permissions = ["filesystem", "subprocess"]
+issue = 56
+default_enabled = true
+
+[[settings]]
+key = "tool"
+title = "Sync tool"
+type = "choice"
+options = ["Auto", "alass", "ffsubsync"]
+default = "Auto"
+
+[[settings]]
+key = "sync"
+title = "Sync current subtitle (Alt+Y)"
+type = "action"
+
+[[settings]]
+key = "detect"
+title = "Check installed tools"
+type = "action"

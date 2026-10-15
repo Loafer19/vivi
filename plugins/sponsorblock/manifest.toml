@@ -1,0 +1,38 @@
+id = "sponsorblock"
+name = "SponsorBlock"
+version = "1.0.0"
+description = "Skips sponsor, intro, self-promotion and other segments in YouTube videos opened as streams, using the crowd-sourced SponsorBlock database. Segments are marked as chapters on the seek bar."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "sponsorblock.lua"
+min_vivi = "0.8.0"
+icon = "skip"
+lucide = "badge-dollar-sign"
+permissions = ["network", "subprocess"]
+issue = 64
+default_enabled = true
+
+[[settings]]
+key = "categories"
+title = "Categories (space separated: sponsor selfpromo interaction intro outro preview music_offtopic filler)"
+type = "text"
+default = "sponsor selfpromo interaction"
+
+[[settings]]
+key = "mode"
+title = "When a segment starts"
+type = "choice"
+options = ["Skip automatically", "Ask (Alt+K skips)"]
+default = "Skip automatically"
+
+[[settings]]
+key = "chapters"
+title = "Mark segments as chapters"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "api"
+title = "API server"
+type = "text"
+default = "https://sponsor.ajay.app"
