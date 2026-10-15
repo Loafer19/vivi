@@ -8,21 +8,21 @@ pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64')
 url="https://github.com/Loafer19/vivi"
 license=('MIT')
-# libxkbcommon is loaded at runtime (dlopen), so namcap cannot see it.
-depends=('mpv' 'sqlite' 'fontconfig' 'gcc-libs' 'glibc' 'libxkbcommon' 'hicolor-icon-theme')
+# libxkbcommon and the Wayland/X11 libraries are loaded at runtime and come with mpv.
+depends=('mpv' 'sqlite' 'fontconfig' 'libgcc' 'glibc' 'hicolor-icon-theme')
 optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'yt-dlp: YouTube and other sites in Open Network Stream'
             'xdg-desktop-portal: native file and folder dialogs')
 provides=('vivi')
 conflicts=('vivi' 'vivi-git')
 options=('!debug' '!strip')
-source=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz"
-        "io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
-sha256sums=('dea45ac3ca2781135b2eff7b4661b06400c31666efaa803d2730a3ee852de49f'
-            'c95a35f2e6dc90fd7576ef64cc4f2a3b925bd29eb5223dec9f5bd67f3666fcfd')
+source_x86_64=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-${CARCH}.tar.gz")
+source=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
+sha256sums=('c95a35f2e6dc90fd7576ef64cc4f2a3b925bd29eb5223dec9f5bd67f3666fcfd')
+sha256sums_x86_64=('dea45ac3ca2781135b2eff7b4661b06400c31666efaa803d2730a3ee852de49f')
 
 package() {
-  cd "vivi-v${pkgver}-linux-x86_64"
+  cd "vivi-v${pkgver}-linux-${CARCH}"
   install -Dm755 vivi "${pkgdir}/usr/bin/vivi"
   install -Dm755 vivi-mcp "${pkgdir}/usr/bin/vivi-mcp"
   install -Dm644 vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"

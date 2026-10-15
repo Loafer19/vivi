@@ -36,10 +36,11 @@ jobs:
           fi
           namcap PKGBUILD | tee /tmp/namcap-pkgbuild
           sudo -u builder makepkg -s --noconfirm
-          namcap -i ./*.pkg.tar.zst | tee /tmp/namcap-pkg
-          pacman -Qlp ./*.pkg.tar.zst
+          pkg=$(ls ./*.pkg.tar.zst | grep -v -- '-debug-')  # the -debug split package only holds symlinks
+          namcap -i "$pkg" | tee /tmp/namcap-pkg
+          pacman -Qlp "$pkg"
           if grep -E ' E: ' /tmp/namcap-pkgbuild /tmp/namcap-pkg; then exit 1; fi
-          pacman -U --noconfirm ./*.pkg.tar.zst
+          pacman -U --noconfirm "$pkg"
           test -x /usr/bin/vivi -a -x /usr/bin/vivi-mcp
   flathub:
     runs-on: ubuntu-24.04
@@ -48,7 +49,7 @@ jobs:
       - name: flatpak-builder-lint (manifest) and appstream validation
         run: |
           docker run --rm -v "$PWD/packaging/flathub:/w" -w /w ghcr.io/flathub/flatpak-builder-lint:latest \
-            flatpak-builder-lint --exceptions manifest io.github.loafer19.vivi.yml
+            --exceptions manifest io.github.loafer19.vivi.yml
           docker run --rm -v "$PWD/packaging/flathub:/w" -w /w ghcr.io/flathub/flatpak-builder-lint:latest \
-            appstreamcli validate --explain io.github.loafer19.vivi.metainfo.xml
+            appstream io.github.loafer19.vivi.metainfo.xml
           python3 -c "import json; json.load(open('packaging/scoop/vivi.json'))"

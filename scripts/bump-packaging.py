@@ -36,10 +36,14 @@ for f in ("PKGBUILD", ".SRCINFO"):
     p = P / "aur/vivi-bin" / f
     s = p.read_text().replace(f"v{old}", f"v{ver}").replace(f"vivi-v{old}-", f"vivi-v{ver}-")
     p.write_text(s)
-sub(P / "aur/vivi-bin/PKGBUILD", [(r"^pkgver=.*", f"pkgver={ver}"), (r"^pkgrel=.*", "pkgrel=1"),
-    (r"^sha256sums=\('[0-9a-f]+'\n(\s+)'[0-9a-f]+'\)", f"sha256sums=('{tar}'\n\\1'{meta_sha}')")])
-sub(P / "aur/vivi-bin/.SRCINFO", [(r"^\tpkgver = .*", f"\tpkgver = {ver}"), (r"^\tpkgrel = .*", "\tpkgrel = 1"),
-    (r"^\tsha256sums = [0-9a-f]+\n\tsha256sums = [0-9a-f]+", f"\tsha256sums = {tar}\n\tsha256sums = {meta_sha}")])
+pb = (P / "aur/vivi-bin/PKGBUILD").read_text()
+old_meta = re.search(r"^sha256sums=\('([0-9a-f]+)'\)", pb, re.M).group(1)
+old_tar = re.search(r"^sha256sums_x86_64=\('([0-9a-f]+)'\)", pb, re.M).group(1)
+for f in ("PKGBUILD", ".SRCINFO"):
+    p = P / "aur/vivi-bin" / f
+    p.write_text(p.read_text().replace(old_meta, meta_sha).replace(old_tar, tar))
+sub(P / "aur/vivi-bin/PKGBUILD", [(r"^pkgver=.*", f"pkgver={ver}"), (r"^pkgrel=.*", "pkgrel=1")])
+sub(P / "aur/vivi-bin/.SRCINFO", [(r"^\tpkgver = .*", f"\tpkgver = {ver}"), (r"^\tpkgrel = .*", "\tpkgrel = 1")])
 gitver = f"{ver}.r0.g{commit[:7]}"
 sub(P / "aur/vivi-git/PKGBUILD", [(r"^pkgver=.*", f"pkgver={gitver}")])
 sub(P / "aur/vivi-git/.SRCINFO", [(r"^\tpkgver = .*", f"\tpkgver = {gitver}")])

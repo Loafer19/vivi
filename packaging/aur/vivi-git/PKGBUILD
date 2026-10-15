@@ -7,8 +7,8 @@ pkgdesc="Fast, minimal media player built on mpv (Slint UI) - development versio
 arch=('x86_64' 'aarch64')
 url="https://github.com/Loafer19/vivi"
 license=('MIT')
-# libxkbcommon is loaded at runtime (dlopen), so namcap cannot see it.
-depends=('mpv' 'sqlite' 'fontconfig' 'gcc-libs' 'glibc' 'libxkbcommon' 'hicolor-icon-theme')
+# libxkbcommon and the Wayland/X11 libraries are loaded at runtime and come with mpv.
+depends=('mpv' 'sqlite' 'fontconfig' 'libgcc' 'glibc' 'hicolor-icon-theme')
 makedepends=('cargo' 'git')
 optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'yt-dlp: YouTube and other sites in Open Network Stream'
