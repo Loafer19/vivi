@@ -274,7 +274,7 @@ export component PresetDropdown inherits Rectangle {
         Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
-    property <int> rows: 1 + FxState.custom.length + FxState.builtin.length;
+    property <int> rows: 3 + FxState.custom.length + FxState.builtin.length;
     pop := PopupWindow {
         x: 0; y: root.height + 4px; width: root.width;
         height: min(root.rows * 30px + 24px, 380px);
@@ -290,6 +290,14 @@ export component PresetDropdown inherits Rectangle {
                     PresetRow {
                         text: "New Preset"; icon: @image-url("../assets/icons/add.svg"); dim: true;
                         clicked => { FxState.preset-action("new", "", ""); pop.close(); }
+                    }
+                    PresetRow {
+                        text: "Import presets (JSON)…"; icon: @image-url("../assets/icons/open.svg"); dim: true;
+                        clicked => { pop.close(); FxState.preset-action("import", "", ""); }
+                    }
+                    PresetRow {
+                        text: "Export presets (JSON)…"; icon: @image-url("../assets/icons/save.svg"); dim: true;
+                        clicked => { pop.close(); FxState.preset-action("export", "", ""); }
                     }
                     for c in FxState.custom: PresetRow {
                         text: c; icon: @image-url("../assets/icons/more.svg"); editable: true;

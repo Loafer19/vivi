@@ -310,6 +310,92 @@ impl Fx {
         }
     }
 
+    /// Presets as shareable JSON: `{"format": "vivi-eq-presets", "version": 1, "presets":
+    /// [{"name", "preamp", "bands": [10 × dB]}]}`. Exports the custom presets, or the
+    /// current bands (under the selected preset name) when there are none.
+    pub fn export_json(&self) -> String {
+        let list: Vec<(String, Vec<f32>)> = if self.custom.is_empty() {
+            vec![(self.preset.clone(), self.get("eq")[..11].to_vec())]
+        } else {
+            self.custom
+                .iter()
+                .map(|c| (c.name.clone(), c.values.clone()))
+                .collect()
+        };
+        let presets: Vec<serde_json::Value> = list
+            .into_iter()
+            .map(|(name, v)| {
+                serde_json::json!({ "name": name, "preamp": v[0], "bands": v[1..11.min(v.len())] })
+            })
+            .collect();
+        serde_json::to_string_pretty(&serde_json::json!({
+            "format": "vivi-eq-presets",
+            "version": 1,
+            "bands_hz": BANDS,
+            "presets": presets,
+        }))
+        .unwrap_or_default()
+    }
+
+    /// Add presets from JSON (the export format, a bare list of presets, or one preset).
+    /// Names that clash get " (2)", " (3)", …; values are clamped. Returns the names added.
+    pub fn import_json(&mut self, text: &str) -> Result<Vec<String>, String> {
+        let v: serde_json::Value =
+            serde_json::from_str(text).map_err(|e| format!("not JSON: {e}"))?;
+        let list = match &v {
+            serde_json::Value::Array(a) => a.clone(),
+            serde_json::Value::Object(o) if o.contains_key("presets") => {
+                o["presets"].as_array().cloned().unwrap_or_default()
+            }
+            serde_json::Value::Object(_) => vec![v.clone()],
+            _ => Vec::new(),
+        };
+        let mut added = Vec::new();
+        for p in list {
+            let bands: Vec<f32> = p["bands"]
+                .as_array()
+                .map(|b| {
+                    b.iter()
+                        .filter_map(|x| x.as_f64())
+                        .map(|x| x as f32)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if bands.len() != 10 {
+                return Err("each preset needs 10 band values".into());
+            }
+            let pre = p["preamp"].as_f64().unwrap_or(12.0) as f32;
+            let base = p["name"].as_str().unwrap_or("Imported").trim().to_string();
+            let base = if base.is_empty() {
+                "Imported".into()
+            } else {
+                base
+            };
+            let taken = |n: &str| {
+                PRESETS.iter().any(|(b, _)| *b == n) || self.custom.iter().any(|c| c.name == n)
+            };
+            let name = if taken(&base) {
+                (2..)
+                    .map(|i| format!("{base} ({i})"))
+                    .find(|n| !taken(n))
+                    .unwrap_or_default()
+            } else {
+                base
+            };
+            let mut values = vec![pre.clamp(0.0, 20.0)];
+            values.extend(bands.iter().map(|b| b.clamp(-20.0, 20.0)));
+            self.custom.push(Preset {
+                name: name.clone(),
+                values,
+            });
+            added.push(name);
+        }
+        if added.is_empty() {
+            return Err("no presets found".into());
+        }
+        Ok(added)
+    }
+
     /// mpv filter for a group: (kind "af"/"vf", label, filter or None when inactive).
     pub fn filter(&self, group: &str) -> Option<(&'static str, String, Option<String>)> {
         let (_, kind, _) = GROUPS.iter().find(|(g, _, _)| *g == group)?;
@@ -672,6 +758,35 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                         fx.rename_preset(&name, &arg);
                     }
                     "delete" => fx.delete_preset(&name),
+                    "export" => {
+                        if let Some(f) = rfd::FileDialog::new()
+                            .set_title("Export equalizer presets")
+                            .set_file_name("vivi-eq-presets.json")
+                            .add_filter("JSON", &["json"])
+                            .save_file()
+                        {
+                            if let Err(e) = std::fs::write(&f, fx.export_json()) {
+                                eprintln!("vivi: export presets: {e}");
+                            }
+                        }
+                    }
+                    "import" => {
+                        if let Some(f) = rfd::FileDialog::new()
+                            .set_title("Import equalizer presets")
+                            .add_filter("JSON", &["json"])
+                            .pick_file()
+                        {
+                            let r = std::fs::read_to_string(&f)
+                                .map_err(|e| e.to_string())
+                                .and_then(|t| fx.import_json(&t));
+                            match r {
+                                Ok(names) => {
+                                    fx.select_preset(&names[0]);
+                                }
+                                Err(e) => eprintln!("vivi: import presets: {e}"),
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -766,6 +881,27 @@ mod tests {
         fx.set("color", 0, 1.0);
         let c = fx.filter("color").unwrap().2.unwrap();
         assert!(c.starts_with("lavfi=[colorchannelmixer=rr=0.393:"), "{c}");
+    }
+
+    #[test]
+    fn json_roundtrip() {
+        let mut a = Fx::default();
+        a.select_preset("Rock");
+        let one = a.export_json();
+        assert!(one.contains("\"vivi-eq-presets\""));
+        let mut b = Fx::default();
+        assert_eq!(b.import_json(&one).unwrap(), ["Rock (2)"]);
+        assert_eq!(b.custom[0].values, PRESETS[13].1.to_vec());
+        b.custom[0].name = "Mine".into();
+        let mut c = Fx::default();
+        c.import_json(&b.export_json()).unwrap();
+        c.import_json(&b.export_json()).unwrap();
+        assert_eq!(c.custom[1].name, "Mine (2)");
+        let bare = r#"[{"name": "Loud", "bands": [30,0,0,0,0,0,0,0,0,0]}]"#;
+        assert_eq!(c.import_json(bare).unwrap(), ["Loud"]);
+        assert_eq!(c.custom[2].values[..2], [12.0, 20.0]);
+        assert!(c.import_json(r#"{"name":"x","bands":[1,2]}"#).is_err());
+        assert!(c.import_json("nope").is_err());
     }
 
     #[test]
