@@ -1,21 +1,31 @@
 # Changelog
 
-## Unreleased
-
-- **viviplayer.app**: the site moves to <https://viviplayer.app> (Dokploy, `deploy/site`), with descriptions, canonical URLs, Open Graph/Twitter cards, `sitemap.xml`, `robots.txt` and SoftwareApplication JSON-LD; `install.sh` is at <https://viviplayer.app/install.sh>. GitHub Pages stays as a mirror with canonicals to the new domain.
-- **Plugin marketplace** at <https://plugins.viviplayer.app> (`scripts/build-marketplace.py`, `deploy/plugins`): searchable grid with categories (Music, Video, Subtitles, Streaming, Integrations, Tools), sorting, a page per plugin with screenshots, changelog with older downloads, permissions and an *Open in Vivi* button, plus an Atom feed of plugin updates (`/feed.xml`).
-- Plugin listings live in `plugins/<id>/store.toml` (categories, tags, screenshots, changelog; not part of the package zip). `index.json` entries carry `categories`, `tags`, `screenshots` and `changelog`.
-- The app reads the catalog from <https://plugins.viviplayer.app/index.json> and falls back to the GitHub Pages copy; `vivi://plugin/<id>` links open the plugin in Settings → Extensions → Browse, and a pending update shows *What's new* from the catalog changelog (`x-scheme-handler/vivi` in the desktop file).
-
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-15
+
+Highlights: new Equalizer, Chapter Thumbnails and AcoustID plugins; SponsorBlock undo, Scrobbler with Last.fm, and Subtitle Auto-Sync with managed helpers; Auto-tagger Deezer/iTunes/Last.fm/Discogs sources with per-field source and optional LRCLIB synced lyrics; plugin marketplace at plugins.viviplayer.app with What’s new and vivi://plugin deep links; viviplayer.app site; install.sh, AUR/Flathub/winget/Scoop packaging.
+
 ### Added
-- **Auto-tagger review dialog**: *Review changes…* (or *Review all files…* for a folder) opens a before/after review. Per file: the match source and confidence (AcoustID + MusicBrainz or MusicBrainz search, colour-coded), one row per field (title, artist, album, album artist, year, track, genre) with the current value next to the proposed one; changed rows highlighted and ticked, unchanged ones dimmed. Checkboxes per file and per field; *Apply selected*, *Apply all*, *Skip*. **Cover art**: the current cover and up to six candidates (all Cover Art Archive images of the release, front first, the release-group front and the fronts of the other matched releases, fetched in parallel), each with resolution, size and format; click to pick, the magnifier or a double-click shows it large; *Keep current* is the default when the file has a cover, otherwise the front is embedded. After writing, a summary (N files, M fields changed, covers, per-field lines) with **Undo**, which restores the previous tags and cover from a per-apply backup (the one-time original backup stays for *Restore original tags*).
-- **Add Subtitles → From Computer** (Figma "Add Subtitles to Playlist/Folder", #51): the dialog gets the *To This File / To This Folder* and *From Computer / From OpenSubtitles* dropdowns and a folder breadcrumb (click to pick another folder). *To This File* lists the folder's subtitle files with checks (the matching one preselected) and adds the checked ones; *To This Folder* pairs every video with its subtitle (`Name.srt`, `Name.en.srt`, `Name_English.srt`) over a dashed leader and attaches each pair when that video plays. Without an OpenSubtitles key the dialog opens on *From Computer*. Save button styled as in Figma.
-- Distribution packaging: AUR `vivi-bin` and `vivi-git` (`packaging/aur/`), Flathub submission files (`packaging/flathub/`), winget and Scoop manifests; checked in CI (makepkg + namcap, flatpak-builder-lint) and bumped on every release by the release workflow.
+- **Equalizer** plugin (`equalizer` 1.0.0, #74): Flat, Bass, Vocal, Rock, Night and Custom presets via mpv `equalizer` / `superequalizer` (`Alt+E` / `Alt+Shift+E`). Uses labelled filter `@vivi-eqplug`, separate from the built-in Audio-panel EQ (`@vivi-eq`), which stays.
+- **Chapter Thumbnails** plugin (`chapter-thumbnails` 1.0.0, #75): seek-bar hover previews and chapter list thumbnails cached per file (system ffmpeg or Vivi’s media build from `helper-ffmpeg-v8.0-2`); `Alt+H` shows the chapter list. Core loads the cache via `vivi-preview-frames` / `vivi-chapter-thumbs`.
+- **AcoustID** plugin (`acoustid` 1.0.0, #76): `Alt+I` fingerprints the playing file (system `fpcalc` or a managed Chromaprint download), looks up AcoustID + MusicBrainz, opens the Auto-tagger review with a rename proposal from a pattern.
+- **Auto-tagger** (#79, #80): extra sources Deezer, iTunes Search, Last.fm (genres) and Discogs (optional token); each proposed field shows its source. Optional *Embed synced lyrics* from LRCLIB into MP3 (SYLT+USLT), FLAC/Ogg/Opus (`LYRICS`) and M4A (`©lyr`).
+- **Auto-tagger review dialog**: *Review changes…* / *Review all files…* with before/after per field, checkboxes, cover candidates (Cover Art Archive), Apply selected/all/Skip, and Undo from a per-apply backup.
+- **Plugin marketplace** at <https://plugins.viviplayer.app>: searchable catalog with categories, per-plugin pages (screenshots, changelog, older downloads, permissions, *Open in Vivi*), Atom feed (`/feed.xml`). Listings in `plugins/<id>/store.toml`. Browse shows **What’s new** for pending updates from the catalog changelog.
+- **vivi://plugin/<id>** deep links open the plugin in Settings → Extensions → Browse (`x-scheme-handler/vivi`). Catalog URL is <https://plugins.viviplayer.app/index.json> with GitHub Pages fallback (<https://loafer19.github.io/vivi/index.json>).
+- **viviplayer.app** (<https://viviplayer.app>): SEO site (canonicals, Open Graph, sitemap, SoftwareApplication JSON-LD); `install.sh` at <https://viviplayer.app/install.sh>. GitHub Pages remains a mirror.
+- **install.sh**: on Arch builds `vivi-bin` with makepkg; elsewhere installs the release tarball into `~/.local` with SHA256SUMS check; `--uninstall`; container tests in CI.
+- **Add Subtitles → From Computer** (Figma, #51): *To This File / To This Folder*, *From Computer / From OpenSubtitles*, folder breadcrumb, video–subtitle pairing and Save.
+- Distribution packaging: AUR `vivi-bin` / `vivi-git`, Flathub submission files, winget and Scoop manifests; CI checks (makepkg + namcap, flatpak-builder-lint); release workflow bumps versions and checksums.
+- Helper **ffmpeg-media** / **ffprobe-media** (`helper-ffmpeg-v8.0-2`): video decoders, swscale, JPEG/raw frames and PCM out for Chapter Thumbnails and Subtitle Auto-Sync (#75, #72).
 
 ### Changed
-- YouTube plugin 1.2.0: the managed ffmpeg is Vivi's own minimal static ffmpeg + ffprobe (mp4/mov/m4a, matroska/webm, mp3, ogg/opus muxers and demuxers; aac, libopus, libmp3lame; no network), about 6 MB per platform instead of 125–195 MB (345 MB unpacked). Built by `helpers/ffmpeg/build.sh` in CI (`.github/workflows/ffmpeg.yml`) for Linux x86_64/aarch64, Windows x64 and macOS arm64 and published as release `helper-ffmpeg-v8.0-1`; the checksums are pinned in the plugin.
+- **SponsorBlock** 1.1.0 (#73): skip notice with undo (`Alt+Shift+K`); works for local files named with `[video id]` (YouTube plugin downloads).
+- **Scrobbler** 1.1.0 (#77): Last.fm (desktop auth, signed scrobbles) alongside ListenBrainz; separate offline queue per service.
+- **Subtitle Auto-Sync** 1.1.0 (#72): system alass first, else verified alass 2.0.0 + shared media ffmpeg download; manual offset nudging (`Alt+Z` / `Alt+X`, larger steps with Shift) saved per file.
+- **YouTube** plugin 1.2.0: managed ffmpeg is Vivi’s minimal static build (~6 MB per platform instead of ~150 MB), checksums pinned (`helper-ffmpeg-v8.0-1`).
+- Marketplace: real plugin screenshots (Xvfb), hidden cards stay hidden under category/search filters.
 
 ## [0.9.1] - 2026-10-15
 
