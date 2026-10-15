@@ -73,14 +73,67 @@ pub fn license_name(url: &str) -> String {
 
 // ---------- Internet Archive ----------
 
-const IA_MAX_ITEMS: usize = 8;
-const IA_TRACKS_PER_ITEM: usize = 6;
+const IA_MAX_ITEMS: usize = 16;
+const IA_TRACKS_PER_ITEM: usize = 12;
+/// Longest track kept (seconds); longer files are mixes, lectures or shows.
+const IA_MAX_LEN: f64 = 20.0 * 60.0;
+
+/// Advanced-search query: music collections only, no spoken word.
+pub fn ia_query(query: &str) -> String {
+    let q: String = query
+        .chars()
+        .map(|c| {
+            if "():\"\\[]{}^~*?!".contains(c) {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    let q = q.split_whitespace().collect::<Vec<_>>().join(" ");
+    format!(
+        "(title:({q}) OR creator:({q}) OR subject:({q}) OR description:({q})) AND mediatype:audio \
+         AND (licenseurl:*creativecommons* OR licenseurl:*publicdomain*) \
+         AND collection:(netlabels OR opensource_audio OR audio_music OR jamendo-albums OR freemusicarchive OR 78rpm OR etree) \
+         AND NOT collection:(podcasts OR librivoxaudio OR oldtimeradio OR audio_bookspoetry OR radioprograms OR audio_religion OR audio_podcast OR audio_tech OR audio_news) \
+         AND NOT subject:(podcast OR lecture OR lectures OR sermon OR audiobook OR interview OR talk OR speech OR radio show)"
+    )
+}
+
+/// Relevance of a track to `query`: whole-query and word hits in title and artist
+/// count most, album less. 0 = no word matches.
+pub fn score(t: &Track, query: &str) -> u32 {
+    let q = query.trim().to_lowercase();
+    let (ti, ar, al) = (
+        t.title.to_lowercase(),
+        t.artist.to_lowercase(),
+        t.album.to_lowercase(),
+    );
+    let mut sc = 0;
+    if !q.is_empty() && (ti.contains(&q) || ar.contains(&q)) {
+        sc += 10;
+    }
+    if !q.is_empty() && (ti == q || ar == q) {
+        sc += 5;
+    }
+    for w in q.split_whitespace().filter(|w| w.len() > 1) {
+        sc += 3 * ti.contains(w) as u32 + 3 * ar.contains(w) as u32 + al.contains(w) as u32;
+    }
+    sc
+}
+
+/// Sort by [`score`] (stable); drop non-matching tracks when some do match.
+pub fn rank(mut v: Vec<Track>, query: &str) -> Vec<Track> {
+    let mut sc: Vec<(u32, Track)> = v.drain(..).map(|t| (score(&t, query), t)).collect();
+    if sc.iter().any(|(s, _)| *s > 0) {
+        sc.retain(|(s, _)| *s > 0);
+    }
+    sc.sort_by(|a, b| b.0.cmp(&a.0));
+    sc.into_iter().map(|(_, t)| t).collect()
+}
 
 pub fn ia_search(query: &str) -> Result<Vec<Track>, String> {
-    let q = format!(
-        "({}) AND mediatype:audio AND (licenseurl:*creativecommons* OR licenseurl:*publicdomain*) AND (collection:(netlabels OR audio_music OR jamendo-albums OR freemusicarchive) OR subject:music)",
-        query.trim()
-    );
+    let q = ia_query(query);
     let rows = IA_MAX_ITEMS.to_string();
     let v = web::get_json(
         "https://archive.org/advancedsearch.php",
@@ -88,6 +141,7 @@ pub fn ia_search(query: &str) -> Result<Vec<Track>, String> {
             ("q", &q),
             ("fl[]", "identifier"),
             ("rows", &rows),
+            ("sort[]", "downloads desc"),
             ("output", "json"),
         ],
         "Internet Archive",
@@ -113,10 +167,36 @@ pub fn ia_search(query: &str) -> Result<Vec<Track>, String> {
             })
         })
         .collect();
-    Ok(handles
+    let all: Vec<Track> = handles
         .into_iter()
         .flat_map(|h| h.join().unwrap_or_default())
-        .collect())
+        .collect();
+    Ok(rank(all, query))
+}
+
+/// Track length in seconds from an IA `length` field ("245.3" or "4:05").
+fn ia_len(v: &serde_json::Value) -> Option<f64> {
+    let l = s(v);
+    if l.contains(':') {
+        Some(
+            l.split(':')
+                .fold(0.0, |a, p| a * 60.0 + p.parse::<f64>().unwrap_or(0.0)),
+        )
+    } else {
+        l.parse().ok()
+    }
+}
+
+/// Title of a file name stem: drops a leading track number and separators.
+fn tidy_stem(stem: &str) -> String {
+    let t = stem.replace('_', " ");
+    let t = t.trim_start_matches(|c: char| c.is_ascii_digit());
+    let t = t.trim_start_matches(|c: char| " -.".contains(c));
+    if t.is_empty() {
+        stem.to_string()
+    } else {
+        t.trim().to_string()
+    }
 }
 
 fn s(v: &serde_json::Value) -> String {
@@ -138,9 +218,18 @@ pub fn ia_tracks(m: &serde_json::Value) -> Vec<Track> {
     let files: Vec<&serde_json::Value> = m["files"].as_array().into_iter().flatten().collect();
     let fmt = |f: &serde_json::Value| s(&f["format"]);
     // Prefer VBR MP3 derivatives, else any MP3.
-    let mut mp3: Vec<&&serde_json::Value> = files.iter().filter(|f| fmt(f) == "VBR MP3").collect();
+    let short = |f: &&&serde_json::Value| ia_len(&f["length"]).is_none_or(|l| l <= IA_MAX_LEN);
+    let mut mp3: Vec<&&serde_json::Value> = files
+        .iter()
+        .filter(|f| fmt(f) == "VBR MP3")
+        .filter(short)
+        .collect();
     if mp3.is_empty() {
-        mp3 = files.iter().filter(|f| fmt(f).contains("MP3")).collect();
+        mp3 = files
+            .iter()
+            .filter(|f| fmt(f).contains("MP3"))
+            .filter(short)
+            .collect();
     }
     let item_artist = s(&md["creator"]);
     mp3.into_iter()
@@ -158,7 +247,11 @@ pub fn ia_tracks(m: &serde_json::Value) -> Vec<Track> {
             let title = s(&f["title"]);
             let artist = s(&f["artist"]);
             Track {
-                title: if title.is_empty() { stem } else { title },
+                title: if title.is_empty() {
+                    tidy_stem(&stem)
+                } else {
+                    title
+                },
                 artist: if artist.is_empty() {
                     item_artist.clone()
                 } else {
@@ -389,7 +482,7 @@ impl Plugin for FreeMusic {
         .setting(SettingSpec::secret(
             "jamendo-client-id",
             "Jamendo client ID",
-            "Only for Jamendo search. Create a free app at devportal.jamendo.com. The Internet Archive needs no key.",
+            "Only for Jamendo search (used by default once set). Get a free client ID at https://devportal.jamendo.com (sign up → My Apps → Add application). The Internet Archive needs no key.",
         ))
         .setting(SettingSpec::text(
             "folder",
@@ -425,9 +518,9 @@ impl Plugin for FreeMusic {
                 a.set_md_secondary("Preview".into());
                 let src: Vec<SharedString> = SOURCES.iter().map(|s| (*s).into()).collect();
                 a.set_md_sources(ModelRc::new(VecModel::from(src)));
-                if !SOURCES.contains(&a.get_md_source().as_str()) {
-                    a.set_md_source(SOURCES[0].into());
-                }
+                // Jamendo is the default once a client ID is set (better song search).
+                let keyed = !cx.get("jamendo-client-id").trim().is_empty();
+                a.set_md_source(SOURCES[keyed as usize].into());
                 a.set_md_detail("".into());
                 a.set_md_open(true);
                 self.show(cx, None);
@@ -457,7 +550,7 @@ impl Plugin for FreeMusic {
                 self.rx = Some(rx);
                 std::thread::spawn(move || {
                     let r = if jamendo {
-                        jamendo_search(&key, &q)
+                        jamendo_search(&key, &q).map(|v| rank(v, &q))
                     } else {
                         ia_search(&q)
                     };
@@ -604,5 +697,56 @@ mod tests {
         assert!(p.with_extension("licence.txt").exists());
         eprintln!("saved {} ({dur:.0}s) {:?}", p.display(), tags);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn relevance() {
+        let t = |ti: &str, ar: &str| Track {
+            title: ti.into(),
+            artist: ar.into(),
+            ..Default::default()
+        };
+        let v = rank(
+            vec![
+                t("Lecture 3", "Prof"),
+                t("Other", "Kevin MacLeod"),
+                t("Kevin MacLeod Medley", "X"),
+            ],
+            "kevin macleod",
+        );
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0].artist, "Kevin MacLeod");
+        assert_eq!(rank(vec![t("a", "b")], "zzz").len(), 1);
+        let q = ia_query("ac/dc: (live)");
+        assert!(q.contains("title:(ac/dc live)") && q.contains("NOT subject:(podcast"));
+        assert!(q.contains("opensource_audio"));
+        assert_eq!(tidy_stem("03_-_My_Song"), "My Song");
+        assert_eq!(ia_len(&serde_json::json!("4:05")), Some(245.0));
+        let m = serde_json::json!({"metadata": {"identifier": "i", "licenseurl": "http://creativecommons.org/licenses/by/4.0/"},
+            "files": [{"name": "long.mp3", "format": "VBR MP3", "length": "3600"}, {"name": "01 Tune.mp3", "format": "VBR MP3", "length": "200.5"}]});
+        let v = ia_tracks(&m);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].title, "Tune");
+    }
+
+    /// Live Jamendo search; needs `JAMENDO_CLIENT_ID` in the environment. `--ignored`.
+    #[test]
+    #[ignore]
+    fn live_jamendo() {
+        let Ok(key) = std::env::var("JAMENDO_CLIENT_ID") else {
+            return;
+        };
+        let v = rank(jamendo_search(&key, "piano").unwrap(), "piano");
+        assert!(!v.is_empty());
+        for t in v.iter().take(5) {
+            eprintln!(
+                "{} — {} [{}] dl={}",
+                t.artist,
+                t.title,
+                t.license(),
+                !t.download.is_empty()
+            );
+        }
+        assert!(v[0].stream.starts_with("http"));
     }
 }

@@ -6,6 +6,7 @@
 - **Stream loading overlay** (core player): while a network stream opens or buffers (before the first frame/audio, or paused for cache) a spinner with the stream name is shown instead of a black screen; it hides on playback start, and a failed open shows an error toast.
 
 ### Fixed
+- **Free Music relevance**: Internet Archive search is limited to audio in music collections (netlabels, opensource_audio, audio_music, Jamendo/FMA mirrors, 78rpm, etree), excludes podcasts, lectures, audiobooks and radio shows, skips files over 20 minutes, expands each item into its individual tracks with tidied titles, and ranks results by artist/title match. Jamendo is the default source once a client ID is set; the setting links to https://devportal.jamendo.com.
 - The docked Library panel now hides with the other controls after inactivity during playback and comes back on mouse move (it used to stay, leaving half the window black during audio streams).
 
 ## [Unreleased]
