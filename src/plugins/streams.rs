@@ -76,7 +76,7 @@ impl Stream {
         p.join("  ·  ")
     }
     fn detail(&self) -> String {
-        let mut s = format!("{}\n\n{}\n", self.name, self.url);
+        let mut s = format!("{}\n\n{}\n", display_name(&self.name), self.url);
         for (k, v) in [
             ("Country", &self.country),
             ("Codec", &self.codec),
@@ -94,6 +94,33 @@ impl Stream {
         }
         s
     }
+}
+
+/// Decode `%XX` escapes (file names taken from URLs); invalid escapes stay as they are.
+pub fn pct_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            if let Some(v) = s
+                .get(i + 1..i + 3)
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+            {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Name for display: percent-decoded, trimmed.
+pub fn display_name(n: &str) -> String {
+    pct_decode(n).trim().to_string()
 }
 
 // ---------- radio-browser.info ----------
@@ -152,6 +179,45 @@ pub fn radio_search(mode: usize, q: &str) -> Result<Vec<Stream>, String> {
     Err(err)
 }
 
+/// Stations whose name or tag matches `q` (name matches first, no duplicates).
+pub fn radio_any(q: &str) -> Result<Vec<Stream>, String> {
+    let mut v = radio_search(0, q)?;
+    if let Ok(t) = radio_search(3, &q.to_lowercase()) {
+        for s in t {
+            if !v.iter().any(|o| o.url == s.url) {
+                v.push(s);
+            }
+        }
+    }
+    Ok(v)
+}
+
+/// Whether `q` names a playlist we can load (URL or existing file).
+pub fn is_playlist_source(q: &str) -> bool {
+    let q = q.trim();
+    if q.starts_with("http://") || q.starts_with("https://") {
+        return true;
+    }
+    let p = match q.strip_prefix("~/") {
+        Some(r) => crate::store::home().join(r),
+        None => PathBuf::from(q),
+    };
+    p.is_file()
+}
+
+/// Placeholder of the query field per source.
+pub fn placeholder(mode: usize) -> &'static str {
+    match mode {
+        0 => "Station name, e.g. jazz fm",
+        1 => "Press Go for the most popular stations",
+        2 => "Country or code, e.g. Ukraine or UA",
+        3 => "Genre tag, e.g. folk, rock, news",
+        4 => "Playlist file path or URL (.m3u / .m3u8), or Choose file…",
+        5 => "Press Go to show saved streams",
+        _ => "Press Go to show recently played streams",
+    }
+}
+
 /// Tell the directory a station was played (its click counter); best effort.
 fn radio_click(url: &str) {
     let url = url.to_string();
@@ -202,7 +268,7 @@ pub fn parse_m3u(text: &str) -> Vec<Stream> {
                 name
             };
             pending = Some(Stream {
-                name,
+                name: display_name(&name),
                 logo: attr(info, "tvg-logo"),
                 group: attr(info, "group-title"),
                 country: attr(info, "tvg-country"),
@@ -218,11 +284,7 @@ pub fn parse_m3u(text: &str) -> Vec<Stream> {
             });
             s.url = line.to_string();
             if s.name.is_empty() {
-                s.name = line
-                    .rsplit('/')
-                    .find(|p| !p.is_empty())
-                    .unwrap_or(line)
-                    .into();
+                s.name = display_name(line.rsplit('/').find(|p| !p.is_empty()).unwrap_or(line));
             }
             out.push(s);
         } else {
@@ -325,6 +387,15 @@ pub struct Streams {
     /// Source index the current list came from.
     mode: usize,
     rx: Option<Receiver<Result<Vec<Stream>, String>>>,
+    /// Status shown when the results arrive instead of the count (fallback searches).
+    note: Option<String>,
+    /// Source shown in the dropdown last tick (placeholder/button follow it).
+    last_source: String,
+    /// Station picked in the browser, for the now-playing card.
+    playing: Option<Stream>,
+    np_url: String,
+    logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
+    poll: u32,
 }
 
 impl Streams {
@@ -337,14 +408,23 @@ impl Streams {
             .list
             .iter()
             .map(|s| Item {
-                key: s.name.clone().into(),
+                key: display_name(&s.name).into(),
                 label: s.label().into(),
                 selected: false,
             })
             .collect();
         cx.app.set_md_results(ModelRc::new(VecModel::from(items)));
-        cx.app
-            .set_md_secondary(if self.mode >= 5 { "Remove" } else { "Save" }.into());
+        Self::secondary(cx, self.mode, false);
+    }
+    /// Secondary button: Remove (saved/recent), Choose file… (playlist source without a
+    /// selection) or Save.
+    fn secondary(cx: &Ctx, mode: usize, selected: bool) {
+        let t = match mode {
+            5 | 6 => "Remove",
+            4 if !selected => "Choose file…",
+            _ => "Save",
+        };
+        cx.app.set_md_secondary(t.into());
     }
     fn mode(cx: &Ctx) -> usize {
         let s = cx.app.get_md_source();
@@ -372,6 +452,95 @@ impl Streams {
     }
 }
 
+/// Station of `url` in the saved and recent lists.
+fn known_station(url: &str) -> Option<Stream> {
+    load_list("saved.json")
+        .into_iter()
+        .chain(load_list("recent.json"))
+        .find(|s| s.url == url)
+}
+
+/// Download a station logo into the cache (once); `None` when it cannot be fetched.
+fn fetch_logo(url: &str) -> Option<PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    url.hash(&mut h);
+    let dir = crate::store::cache_dir().join("stream-logos");
+    let p = dir.join(format!("{:016x}", h.finish()));
+    if p.is_file() {
+        return Some(p);
+    }
+    let b = web::get_bytes(url, 2 * 1024 * 1024).ok()??;
+    std::fs::create_dir_all(&dir).ok()?;
+    std::fs::write(&p, b).ok()?;
+    Some(p)
+}
+
+impl Streams {
+    /// Fill the now-playing card while an audio-only network stream plays.
+    fn now_playing(&mut self, cx: &Ctx) {
+        let a = cx.app;
+        let path = cx.player.get("path").unwrap_or_default();
+        let show = a.get_has_media() && a.get_viz_audio() && path.contains("://");
+        if !show {
+            if a.get_np_show() {
+                a.set_np_show(false);
+            }
+            return;
+        }
+        if path != self.np_url {
+            self.np_url = path.clone();
+            let st = self
+                .playing
+                .clone()
+                .filter(|s| s.url == path)
+                .or_else(|| self.list.iter().find(|s| s.url == path).cloned())
+                .or_else(|| known_station(&path));
+            a.set_np_has_logo(false);
+            self.logo_rx = None;
+            let name = st
+                .as_ref()
+                .map(|s| display_name(&s.name))
+                .unwrap_or_default();
+            a.set_np_station(name.into());
+            if let Some(logo) = st.map(|s| s.logo).filter(|l| l.starts_with("http")) {
+                let (tx, rx) = channel();
+                self.logo_rx = Some(rx);
+                let u = path.clone();
+                std::thread::spawn(move || {
+                    let _ = tx.send((u, fetch_logo(&logo)));
+                });
+            }
+        }
+        let g = |k: &str| cx.player.get(k).filter(|v| !v.trim().is_empty());
+        if a.get_np_station().is_empty() {
+            let n = g("metadata/by-key/icy-name")
+                .or_else(|| g("media-title"))
+                .unwrap_or_else(|| display_name(path.rsplit('/').next().unwrap_or(&path)));
+            a.set_np_station(n.into());
+        }
+        let track = g("metadata/by-key/icy-title").unwrap_or_default();
+        let mut info = Vec::new();
+        if let Some(c) = g("audio-codec-name") {
+            info.push(c.to_uppercase());
+        }
+        if let Some(b) = g("audio-bitrate")
+            .and_then(|b| b.parse::<f64>().ok())
+            .filter(|b| *b > 0.0)
+        {
+            info.push(format!("{:.0} kbps", b / 1000.0));
+        }
+        if let Some(r) = g("audio-params/samplerate").and_then(|r| r.parse::<f64>().ok()) {
+            info.push(format!("{:.1} kHz", r / 1000.0));
+        }
+        a.set_np_track(track.into());
+        a.set_np_info(info.join(" · ").into());
+        if !a.get_np_show() {
+            a.set_np_show(true);
+        }
+    }
+}
+
 impl Plugin for Streams {
     fn manifest(&self) -> Manifest {
         Manifest::builtin(
@@ -395,6 +564,7 @@ impl Plugin for Streams {
     }
     fn disable(&mut self, cx: &Ctx) {
         self.rx = None;
+        cx.app.set_np_show(false);
         if cx.app.get_md_owner() == ID {
             cx.app.set_md_open(false);
         }
@@ -407,9 +577,8 @@ impl Plugin for Streams {
                 a.set_settings_open(false);
                 a.set_md_owner(ID.into());
                 a.set_md_title("Network Streams".into());
-                a.set_md_placeholder(
-                    "Station name · country (or code) · genre · playlist file or URL".into(),
-                );
+                a.set_md_placeholder(placeholder(Self::mode(cx)).into());
+                self.last_source.clear(); // the next tick sets placeholder and button
                 a.set_md_search_label("Go".into());
                 a.set_md_primary("Play".into());
                 let src: Vec<SharedString> = SOURCES.iter().map(|s| (*s).into()).collect();
@@ -438,6 +607,18 @@ impl Plugin for Streams {
                     Self::ui(cx, "Type something first", false);
                     return;
                 }
+                let mut mode = mode;
+                self.note = None;
+                if mode == 4 && !is_playlist_source(&q) {
+                    // Not a file or URL: search stations by name and genre instead.
+                    mode = 0;
+                    cx.app.set_md_source(SOURCES[0].into());
+                    self.last_source = SOURCES[0].into();
+                    cx.app.set_md_placeholder(placeholder(0).into());
+                    self.note = Some(format!(
+                        "“{q}” is not a playlist file or URL, so here are radio stations for it. Use Choose file… to import a playlist."
+                    ));
+                }
                 self.mode = mode;
                 self.list.clear();
                 self.show(cx);
@@ -454,16 +635,17 @@ impl Plugin for Streams {
                 let (tx, rx) = channel();
                 self.rx = Some(rx);
                 std::thread::spawn(move || {
-                    let r = if mode == 4 {
-                        load_m3u(&q)
-                    } else {
-                        radio_search(mode, &q)
+                    let r = match mode {
+                        4 => load_m3u(&q),
+                        0 => radio_any(&q),
+                        _ => radio_search(mode, &q),
                     };
                     let _ = tx.send(r);
                 });
             }
             "select" => {
                 if let Some(s) = idx().and_then(|i| self.list.get(i)) {
+                    Self::secondary(cx, self.mode, true);
                     let mut d = s.detail();
                     if cx.player.get("path").as_deref() == Some(s.url.as_str()) {
                         d += &format!("\n\n— Playing —\n{}", now_info(|p| cx.player.get(p)));
@@ -477,6 +659,7 @@ impl Plugin for Streams {
                     return;
                 };
                 cx.player.cmd("loadfile", &[&s.url]);
+                self.playing = Some(s.clone());
                 if s.source == "radio-browser.info" {
                     radio_click(&s.url);
                 }
@@ -485,6 +668,17 @@ impl Plugin for Streams {
                 save_list("recent.json", &r);
                 cx.toast(&format!("Playing {}", s.name));
                 Self::ui(cx, &format!("Playing {}", s.name), false);
+            }
+            "secondary" if cx.app.get_md_secondary().as_str() == "Choose file…" => {
+                let Some(f) = rfd::FileDialog::new()
+                    .set_title("Import a playlist")
+                    .add_filter("Playlists", &["m3u", "m3u8"])
+                    .pick_file()
+                else {
+                    return;
+                };
+                cx.app.set_md_query(f.to_string_lossy().as_ref().into());
+                self.command(cx, "search", &[]);
             }
             "secondary" => {
                 let Some(i) = idx().filter(|i| *i < self.list.len()) else {
@@ -517,6 +711,33 @@ impl Plugin for Streams {
         }
     }
     fn tick(&mut self, cx: &Ctx) {
+        self.poll = self.poll.wrapping_add(1);
+        if cx.app.get_md_open() && cx.app.get_md_owner() == ID {
+            let src = cx.app.get_md_source();
+            if src.as_str() != self.last_source {
+                self.last_source = src.to_string();
+                let m = Self::mode(cx);
+                cx.app.set_md_placeholder(placeholder(m).into());
+                Self::secondary(cx, m, false);
+            }
+        }
+        if self.poll.is_multiple_of(5) {
+            self.now_playing(cx);
+        }
+        if let Some(rx) = &self.logo_rx {
+            if let Ok((url, path)) = rx.try_recv() {
+                self.logo_rx = None;
+                if url == self.np_url {
+                    match path.and_then(|p| slint::Image::load_from_path(&p).ok()) {
+                        Some(img) => {
+                            cx.app.set_np_logo(img);
+                            cx.app.set_np_has_logo(true);
+                        }
+                        None => cx.app.set_np_has_logo(false),
+                    }
+                }
+            }
+        }
         let Some(rx) = &self.rx else { return };
         let Ok(r) = rx.try_recv() else { return };
         self.rx = None;
@@ -527,7 +748,9 @@ impl Plugin for Streams {
                 self.show(cx);
                 Self::ui(
                     cx,
-                    &if n == 0 {
+                    &if let Some(note) = self.note.take() {
+                        note
+                    } else if n == 0 {
                         "Nothing found".to_string()
                     } else {
                         format!("{n} streams. Double-click to play.")
@@ -554,6 +777,24 @@ mod tests {
         assert_eq!(v[0].group, "News, World");
         assert_eq!(v[1].name, "radio.mp3");
         assert_eq!(v[2].url, "http://s/c");
+    }
+
+    #[test]
+    fn names_and_sources() {
+        assert_eq!(
+            pct_decode("01.%20J.%20S.%20BACH%20-%20Air.mp3"),
+            "01. J. S. BACH - Air.mp3"
+        );
+        assert_eq!(pct_decode("100%25 %zz %"), "100% %zz %");
+        let v = parse_m3u("#EXTM3U\nhttp://h/My%20Song.mp3\n");
+        assert_eq!(v[0].name, "My Song.mp3");
+        assert!(!is_playlist_source("folk"));
+        assert!(is_playlist_source("https://x/a.m3u"));
+        let f = std::env::temp_dir().join(format!("vivi-pl-{}.m3u", std::process::id()));
+        std::fs::write(&f, "http://a/b\n").unwrap();
+        assert!(is_playlist_source(f.to_str().unwrap()));
+        let _ = std::fs::remove_file(f);
+        assert!(placeholder(4).contains("Choose file"));
     }
 
     #[test]
@@ -618,6 +859,7 @@ mod tests {
     #[test]
     #[ignore]
     fn live_radio_browser() {
+        assert!(!radio_any("folk").unwrap().is_empty());
         for (m, q) in [(0, "jazz"), (1, ""), (2, "UA"), (3, "rock")] {
             let v = radio_search(m, q).unwrap();
             assert!(!v.is_empty(), "{m} {q}");

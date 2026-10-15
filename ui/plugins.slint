@@ -254,7 +254,7 @@ export component MusicDialog inherits Rectangle {
                 padding: 12px; spacing: 8px;
                 Text { horizontal-stretch: 1; text: root.status; color: Theme.fg-a2; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
                 FlatButton { text: "Close"; clicked => { root.close(); } }
-                FlatButton { text: root.secondary-text; enabled: !root.busy && (root.selected >= 0 || root.secondary-text == "Write all") && root.results.length > 0; clicked => { root.secondary(root.selected); } }
+                FlatButton { text: root.secondary-text; enabled: !root.busy && (root.secondary-text == "Choose file…" || ((root.selected >= 0 || root.secondary-text == "Write all") && root.results.length > 0)); clicked => { root.secondary(root.selected); } }
                 Rectangle {
                     width: max(96px, pt.preferred-width + 24px); height: 32px; border-radius: 6px;
                     opacity: root.selected >= 0 && !root.busy ? 1 : 0.5;
@@ -263,6 +263,37 @@ export component MusicDialog inherits Rectangle {
                     TouchArea { enabled: root.selected >= 0 && !root.busy; mouse-cursor: pointer; clicked => { root.primary(root.selected); } }
                 }
             }
+        }
+    }
+}
+
+// "Now playing" card for audio-only network streams (Network Streams plugin): station
+// logo or a radio icon, station name, current ICY title and codec / bitrate.
+export component NowPlayingCard inherits Rectangle {
+    in property <string> station;
+    in property <string> track;
+    in property <string> info;
+    in property <image> logo;
+    in property <bool> has-logo;
+    height: 120px;
+    border-radius: 16px;
+    background: Theme.bg-a4.with-alpha(0.88);
+    border-width: 1px; border-color: Theme.accent.with-alpha(0.45);
+    drop-shadow-blur: 24px; drop-shadow-color: #00000060;
+    HorizontalLayout {
+        padding: 16px; spacing: 16px;
+        Rectangle {
+            width: 88px; height: 88px; border-radius: 12px; clip: true;
+            background: Theme.accent.with-alpha(0.18);
+            if root.has-logo: Image { width: parent.width; height: parent.height; source: root.logo; image-fit: contain; }
+            if !root.has-logo: Icon { x: 22px; y: 22px; width: 44px; height: 44px; source: @image-url("../assets/icons/streaming.svg"); tint: Theme.accent; }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 4px;
+            Text { text: "NOW PLAYING"; color: Theme.accent; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+            Text { text: root.station; color: Theme.fg-1; font-size: 17px; font-weight: 600; overflow: elide; }
+            if root.track != "": Text { text: root.track; color: Theme.fg-a2; font-size: 14px; overflow: elide; }
+            if root.info != "": Text { text: root.info; color: Theme.fg-a3; font-size: 12px; overflow: elide; }
         }
     }
 }

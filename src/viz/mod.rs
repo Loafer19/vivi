@@ -44,6 +44,7 @@ struct Viz {
     last: Instant,
     paused_for: f32,
     tick: u32,
+    synth: Synth,
 }
 
 thread_local! {
@@ -107,6 +108,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         last: Instant::now(),
         paused_for: 0.0,
         tick: 0,
+        synth: Synth::default(),
     }));
 
     let (w, v) = (app.as_weak(), viz.clone());
@@ -130,6 +132,54 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
             viz.borrow_mut().tick(&a, &p);
         }
     });
+}
+
+/// A gently changing mix of tones and noise, standing in for PCM that cannot be read
+/// (network streams), so the visualizer animates instead of staying flat.
+#[derive(Default)]
+struct Synth {
+    seed: u32,
+    phase: f64,
+    amp: [f32; 6],
+    target: [f32; 6],
+    left: f32,
+}
+
+impl Synth {
+    const FREQ: [f32; 6] = [60.0, 140.0, 330.0, 800.0, 2000.0, 5200.0];
+    fn rnd(&mut self) -> f32 {
+        self.seed = self
+            .seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        (self.seed >> 8) as f32 / (1u32 << 24) as f32
+    }
+    fn fill(&mut self, out: &mut [f32], rate: u32, dt: f32) {
+        self.left -= dt;
+        if self.left <= 0.0 {
+            // New "beat": pick fresh band levels every 120–360 ms.
+            self.left = 0.12 + self.rnd() * 0.24;
+            for i in 0..6 {
+                self.target[i] = self.rnd() * (1.0 - i as f32 * 0.12);
+            }
+        }
+        for i in 0..6 {
+            self.amp[i] += (self.target[i] - self.amp[i]) * (dt * 8.0).min(1.0);
+        }
+        let step = 1.0 / rate as f64;
+        for o in out.iter_mut() {
+            self.phase += step;
+            let t = self.phase as f32 * std::f32::consts::TAU;
+            let mut v = 0.0;
+            for i in 0..6 {
+                v += self.amp[i] * (t * Self::FREQ[i]).sin();
+            }
+            *o = v * 0.12 + (self.rnd() - 0.5) * 0.08;
+        }
+        if self.phase > 3600.0 {
+            self.phase = 0.0;
+        }
+    }
 }
 
 /// No video track (cover art does not count as video).
@@ -205,7 +255,19 @@ impl Viz {
         // Analysis
         let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
         let delay: f64 = p.mpv.get_property("audio-delay").unwrap_or(0.0);
-        let got = if paused || !self.tap.ok() {
+        let stream = self.path.as_deref().is_some_and(|p| p.contains("://"));
+        let got = if paused {
+            false
+        } else if stream && !self.tap.ok() {
+            // Network streams cannot be decoded a second time: animate from a synthetic
+            // signal so the visual still moves (it does not follow the music).
+            if self.an.as_ref().map(|a| a.rate()) != Some(48_000) {
+                self.an = Some(Analyzer::new(48_000));
+            }
+            self.samples.resize(Analyzer::window_len(48_000), 0.0);
+            self.synth.fill(&mut self.samples, 48_000, dt);
+            true
+        } else if !self.tap.ok() {
             false
         } else {
             let rate = match &self.an {

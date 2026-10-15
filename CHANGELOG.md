@@ -1,5 +1,8 @@
 # Changelog
 
+### Fixed
+- The docked Library panel now hides with the other controls after inactivity during playback and comes back on mouse move (it used to stay, leaving half the window black during audio streams).
+
 ## [Unreleased]
 
 ### Added
@@ -18,6 +21,8 @@
 - **Auto-tagger** built-in plugin (#69, includes AcoustID tagging #65): identifies songs by Chromaprint fingerprint (`fpcalc` when installed, else the bundled `rusty-chromaprint`) on AcoustID, or by tags / file name with a MusicBrainz search; MusicBrainz lookups (≤ 1 request/s, descriptive User-Agent) give title, artist, album, album artist, date, track, genre and ids, and the Cover Art Archive the front cover. A preview dialog lists candidates with a per-field diff; *Write tags* / *Write all* write with lofty. Originals are backed up once to `~/.local/share/vivi/tag-backups/` and *Restore* puts them back. *Tag folder…* batch-identifies a library folder and lists only confident matches. The AcoustID application key is an optional setting.
 - **Free Music** built-in plugin (#70): searches CC / public-domain music on the Internet Archive (no key) and Jamendo (client ID setting), shows each track's licence and attribution, previews the stream in the player and downloads to `~/Music/Free Music/<Artist>/` with tags, cover, licence URL and attribution (also in a `.licence.txt`).
 - **Network Streams** built-in plugin (#67): a streams browser (separate from the Open Network Stream dialog) with Internet radio from radio-browser.info (search, top voted, by country, by genre; no key), M3U / IPTV playlist import from a file or URL, saved and recent streams, and stream info (ICY title, codec, bitrate, buffer).
+  - Audio-only network streams show a *Now playing* card (station name and logo, current ICY title, codec / bitrate / sample rate) and the visualizer animates from a synthetic signal, since streams cannot be decoded a second time.
+  - With *M3U / IPTV playlist* selected, text that is not a file or URL searches radio stations by name and genre instead (the source switches to *Radio: search*); *Choose file…* picks a playlist; the placeholder follows the source; percent-encoded names (`01.%20J.%20S.%20BACH…`) are decoded.
 - **Discord Rich Presence** built-in plugin (#57, off by default): title, artist and progress in Discord via its IPC socket (`discord-rich-presence` crate, worker thread, reconnects), privacy option to hide names; needs a Discord application ID.
 - **Remote Control** built-in plugin (#58, off by default): local web page for phones (play/pause, seek, volume, previous/next, queue, cover art), LAN-only connections, PIN with lockout, port setting. No new dependencies (std TCP server).
 - **Subtitle Auto-Sync** package (#56): `Alt+Y` / *Sync current subtitle* aligns the selected external subtitle to the audio with `alass` (or `alass-cli`) or `ffsubsync`, whichever is installed, in the background; the result is saved as `<name>.synced.<ext>` next to the original and loaded. A clear message with install hints when neither tool is found.

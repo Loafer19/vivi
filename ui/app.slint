@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog } from "dialogs.slint";
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, NowPlayingCard } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
@@ -287,6 +287,13 @@ export component AppWindow inherits Window {
     in property <[string]> md-sources;
     in-out property <string> md-source;
     in-out property <string> md-query;
+    // Now-playing card for audio-only network streams (Network Streams plugin).
+    in property <bool> np-show;
+    in property <string> np-station;
+    in property <string> np-track;
+    in property <string> np-info;
+    in property <image> np-logo;
+    in property <bool> np-has-logo;
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
         if (root.subs-plugin) { root.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
@@ -559,6 +566,17 @@ export component AppWindow inherits Window {
         frame: root.viz-frame; note: root.viz-note;
     }
 
+    // ---------- Now playing card (audio-only network streams) ----------
+    if root.has-media && root.np-show && !root.mini: NowPlayingCard {
+        // Centred in the space right of the docked library while that is shown.
+        property <length> left: root.library-open && !root.lib-full && root.show-ui ? min(427px, root.width) : 0px;
+        x: self.left + (root.width - self.left - self.width) / 2;
+        y: root.viz-mode > 0 ? 64px : (root.height - self.height) / 2;
+        width: min(460px, root.width - self.left - 48px);
+        station: root.np-station; track: root.np-track; info: root.np-info;
+        logo: root.np-logo; has-logo: root.np-has-logo;
+    }
+
     // ---------- Lyrics overlay (Lyrics plugin) ----------
     if root.has-media && root.lyrics-lines.length > 0 && !root.library-open && !root.mini: LyricsView {
         x: 40px; width: root.width - 80px;
@@ -570,6 +588,8 @@ export component AppWindow inherits Window {
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
     if !root.has-media || root.library-open: LibraryView {
         property <bool> docked: root.has-media && !root.lib-full;
+        // The docked library hides with the other controls during playback.
+        visible: !self.docked || root.show-ui;
         sidebar: self.docked;
         x: 0; y: 40px;
         width: self.docked ? min(427px, root.width) : root.width;
