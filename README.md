@@ -28,7 +28,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Open Network Stream (URLs, m3u; YouTube etc. via yt-dlp)
 - Customizable bottom bar (16 items, re-order/remove/add) with Minimal / Default / Power profiles
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
-- Music visualizer for audio-only files (no video track; cover art does not count): Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
+- Music visualizer for audio-only files and streams (no video track; cover art does not count), fed from what mpv actually plays, so EQ and audio filters show up: Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
 - Settings window rebuilt per Figma: grouped sidebar (App / Media / System), 13 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
 - Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), Auto-tagger (AcoustID + MusicBrainz + Cover Art Archive), Free Music (Internet Archive / Jamendo), Network Streams (Internet radio, iptv-org TV, music genres, SomaFM, M3U/IPTV, saved streams), Discord Rich Presence, Remote Control (phone web page), the visualizer, plus downloadable plugins installed and updated from Settings → Extensions → Browse (A-B Loop, Night Mode, Playback Statistics, ListenBrainz Scrobbler, Subtitle Auto-Sync, SponsorBlock, Scene Chapters & Thumbnails) and mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
 - 10-band equalizer with VLC presets and custom presets, plus video filters (adjust, crop, colour effects) and audio effects (compressor, reverb, delay), saved in `~/.config/vivi/fx.toml`
@@ -163,7 +163,7 @@ The machine-readable catalog is [plugins/index.json](plugins/index.json). The do
 
 ## Architecture
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
-`src/viz/` — music visualizer (a parallel symphonia decode synced to mpv `time-pos` → rustfft analysis → modes behind the `Visual` trait) ·
+`src/viz/` — music visualizer (an mpv `af` lavfi tap on the real output, after EQ/filters, sending per-band levels with timestamps over a localhost socket and synced to `time-pos` → rustfft analysis → modes behind the `Visual` trait) ·
 `src/plugins/` — plugin registry (`Plugin` trait, manifests, config-backed enable/settings, mpv script loader) and the built-in plugins ·
 `ui/*.slint` — UI and design tokens · `assets/icons` — SVGs extracted from Figma.
 Design notes: [docs/design/FIGMA.md](docs/design/FIGMA.md) · research: [docs/RESEARCH.md](docs/RESEARCH.md).

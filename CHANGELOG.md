@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Visualizer reads mpv's real output** (#71): instead of decoding the file a second time with symphonia (local files only, EQ not reflected) and a synthetic animation for streams, a labelled `af` filter (`@vivi-viz`, kept last in the chain) measures 48 log-spaced bands (30 Hz–14 kHz) with lavfi `bandpass` + `astats` and streams them, timestamped, to a localhost socket; the visualizer picks the frame matching `time-pos`. Works for network streams and reflects the EQ, compressor, reverb and other audio filters. The filter is only installed while a visualizer mode is showing.
+
 ## [0.9.0] - 2026-10-15
 
 Highlights: Network Streams (radio now-playing card and visualizer, IPTV via iptv-org, music genres and SomaFM, M3U import), a loading spinner and error toast for streams, physical-keycode shortcuts, chapter thumbnails, EQ preset import/export, Figma-accurate dialogs, filters and miniplayer, Discord Rich Presence and Remote Control, downloadable plugins (Auto-tagger, Free Music, ListenBrainz, Subtitle Sync, SponsorBlock, Scene Chapters, A-B Loop, Night Mode, Playback Stats), an AppImage cut from 106 MB to 44 MB, and a Flatpak build.

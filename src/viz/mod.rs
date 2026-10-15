@@ -1,10 +1,11 @@
 //! Music visualizer, registered as the built-in `visualizer` plugin ([`VizPlugin`]). Self-contained: `setup` wires it to the window and player
 //! and everything else lives here.
 //!
-//! * [`tap`] decodes the playing file a second time (symphonia, worker thread) and keeps
-//!   a few seconds of mono PCM around mpv's `time-pos`.
-//! * [`analysis`] turns a window of samples into features (FFT bands, loudness,
-//!   onsets/beats, chroma/dominant pitch).
+//! * [`tap`] measures mpv's actual output (after EQ and the other audio filters) with an
+//!   `af` lavfi filter: per-band levels with timestamps, for files and streams alike.
+//! * [`Resynth`] turns those band levels back into a short signal (one sine per band),
+//!   so [`analysis`] can keep deriving features (FFT bands, loudness, onsets/beats,
+//!   chroma/dominant pitch) and the modes stay unchanged.
 //! * [`modes`] holds the visual modes behind the [`modes::Visual`] trait; they draw
 //!   into a small software [`canvas`] that Slint scales to the window.
 //!
@@ -44,7 +45,7 @@ struct Viz {
     last: Instant,
     paused_for: f32,
     tick: u32,
-    synth: Synth,
+    synth: Resynth,
 }
 
 thread_local! {
@@ -108,7 +109,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         last: Instant::now(),
         paused_for: 0.0,
         tick: 0,
-        synth: Synth::default(),
+        synth: Resynth::default(),
     }));
 
     let (w, v) = (app.as_weak(), viz.clone());
@@ -134,52 +135,51 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     });
 }
 
-/// A gently changing mix of tones and noise, standing in for PCM that cannot be read
-/// (network streams), so the visualizer animates instead of staying flat.
+/// Rebuilds a mono window from the tap's band levels: one sine per band centre with
+/// that band's RMS, phases running continuously between frames.
 #[derive(Default)]
-struct Synth {
-    seed: u32,
-    phase: f64,
-    amp: [f32; 6],
-    target: [f32; 6],
-    left: f32,
+struct Resynth {
+    phase: Vec<f64>,
 }
 
-impl Synth {
-    const FREQ: [f32; 6] = [60.0, 140.0, 330.0, 800.0, 2000.0, 5200.0];
-    fn rnd(&mut self) -> f32 {
-        self.seed = self
-            .seed
-            .wrapping_mul(1_664_525)
-            .wrapping_add(1_013_904_223);
-        (self.seed >> 8) as f32 / (1u32 << 24) as f32
-    }
-    fn fill(&mut self, out: &mut [f32], rate: u32, dt: f32) {
-        self.left -= dt;
-        if self.left <= 0.0 {
-            // New "beat": pick fresh band levels every 120–360 ms.
-            self.left = 0.12 + self.rnd() * 0.24;
-            for i in 0..6 {
-                self.target[i] = self.rnd() * (1.0 - i as f32 * 0.12);
+impl Resynth {
+    fn fill(&mut self, fr: &tap::Frame, out: &mut [f32], rate: u32) {
+        self.phase.resize(tap::BANDS, 0.0);
+        out.iter_mut().for_each(|o| *o = 0.0);
+        for (i, &lvl) in fr.bands.iter().enumerate() {
+            let w = std::f64::consts::TAU * tap::band_freq(i) as f64 / rate as f64;
+            let ph = &mut self.phase[i];
+            if lvl > 1e-5 {
+                let amp = lvl * std::f32::consts::SQRT_2;
+                for (k, o) in out.iter_mut().enumerate() {
+                    *o += amp * (*ph + w * k as f64).sin() as f32;
+                }
             }
-        }
-        for i in 0..6 {
-            self.amp[i] += (self.target[i] - self.amp[i]) * (dt * 8.0).min(1.0);
-        }
-        let step = 1.0 / rate as f64;
-        for o in out.iter_mut() {
-            self.phase += step;
-            let t = self.phase as f32 * std::f32::consts::TAU;
-            let mut v = 0.0;
-            for i in 0..6 {
-                v += self.amp[i] * (t * Self::FREQ[i]).sin();
-            }
-            *o = v * 0.12 + (self.rnd() - 0.5) * 0.08;
-        }
-        if self.phase > 3600.0 {
-            self.phase = 0.0;
+            // Advance by one display frame's worth of samples (keeps the scope moving).
+            *ph = (*ph + w * (rate as f64 / 30.0)) % std::f64::consts::TAU;
         }
     }
+}
+
+/// Puts the tap filter at the end of mpv's `af` chain (after EQ etc.); re-adds it when
+/// another filter was appended behind it.
+fn ensure_tap(p: &Player, filter: &str) {
+    let chain = p.get("af").unwrap_or_default();
+    if tap_is_last(&chain) {
+        return;
+    }
+    if chain.contains(&format!("{}:", tap::LABEL)) {
+        p.cmd("af", &["remove", tap::LABEL]);
+    }
+    p.cmd("af", &["add", &format!("{}:{filter}", tap::LABEL)]);
+}
+
+/// `af` property string → our filter is present and nothing follows it.
+fn tap_is_last(chain: &str) -> bool {
+    let Some(pos) = chain.find(&format!("{}:", tap::LABEL)) else {
+        return false;
+    };
+    !chain[pos + 1..].contains('@') && chain.trim_end().ends_with("[vo]anull")
 }
 
 /// No video track (cover art does not count as video).
@@ -201,6 +201,15 @@ pub(crate) fn audio_only(p: &Player) -> bool {
 }
 
 impl Viz {
+    fn remove_tap(&mut self, p: &Player) {
+        if self.tap_open {
+            p.cmd("af", &["remove", tap::LABEL]);
+            self.tap.clear();
+            self.tap_open = false;
+            self.an = None;
+        }
+    }
+
     fn tick(&mut self, a: &AppWindow, p: &Player) {
         let now = Instant::now();
         let dt = (now - self.last).as_secs_f32().min(0.2);
@@ -209,11 +218,7 @@ impl Viz {
 
         // Media changes: poll cheaply (every ~250 ms while not drawing).
         if !enabled() {
-            if self.tap_open {
-                self.tap.open(None);
-                self.tap_open = false;
-                self.an = None;
-            }
+            self.remove_tap(p);
             self.path = None;
             return;
         }
@@ -223,7 +228,7 @@ impl Viz {
             let tc: i64 = p.mpv.get_property("track-list/count").unwrap_or(0);
             if path != self.path || tc != self.track_count {
                 if path != self.path {
-                    self.tap_open = false;
+                    self.tap.clear();
                     self.an = None;
                 }
                 self.path = path;
@@ -234,15 +239,14 @@ impl Viz {
         }
         let active = self.audio_only && self.mode > 0 && a.get_has_media();
         if !active {
-            if self.tap_open {
-                self.tap.open(None);
-                self.tap_open = false;
-                self.an = None;
-            }
+            self.remove_tap(p);
             return;
         }
-        if !self.tap_open {
-            self.tap.open(self.path.clone());
+        // Install the tap, and every ~2 s make sure it is still last in the chain.
+        if !self.tap_open || self.tick.is_multiple_of(60) {
+            if let Some(f) = self.tap.filter() {
+                ensure_tap(p, &f);
+            }
             self.tap_open = true;
         }
 
@@ -255,34 +259,18 @@ impl Viz {
         // Analysis
         let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
         let delay: f64 = p.mpv.get_property("audio-delay").unwrap_or(0.0);
-        let stream = self.path.as_deref().is_some_and(|p| p.contains("://"));
+        let rate = 48_000;
         let got = if paused {
             false
-        } else if stream && !self.tap.ok() {
-            // Network streams cannot be decoded a second time: animate from a synthetic
-            // signal so the visual still moves (it does not follow the music).
-            if self.an.as_ref().map(|a| a.rate()) != Some(48_000) {
-                self.an = Some(Analyzer::new(48_000));
+        } else if let Some(fr) = self.tap.read(t - delay) {
+            if self.an.as_ref().map(|a| a.rate()) != Some(rate) {
+                self.an = Some(Analyzer::new(rate));
             }
-            self.samples.resize(Analyzer::window_len(48_000), 0.0);
-            self.synth.fill(&mut self.samples, 48_000, dt);
-            true
-        } else if !self.tap.ok() {
-            false
-        } else {
-            let rate = match &self.an {
-                Some(an) => an.rate(),
-                None => 48_000,
-            };
             self.samples.resize(Analyzer::window_len(rate), 0.0);
-            match self.tap.read(t - delay, &mut self.samples) {
-                Some(r) if r == rate => true,
-                Some(r) => {
-                    self.an = Some(Analyzer::new(r));
-                    false
-                }
-                None => false,
-            }
+            self.synth.fill(&fr, &mut self.samples, rate);
+            true
+        } else {
+            false
         };
         let an = self.an.get_or_insert_with(|| Analyzer::new(48_000));
         if got {
