@@ -1,0 +1,92 @@
+id = "cut-export"
+name = "Cut & Export Clip"
+version = "1.0.0"
+description = "Cut a fragment of the current file into a new file: set In / Out (Alt+[ / Alt+]) or reuse the A-B loop points, then export (Alt+W) by fast lossless stream copy or a frame-accurate re-encode. Uses your ffmpeg; without one it downloads Vivi's media ffmpeg build once (about 15 MB, shared with Chapter Thumbnails and Subtitle Auto-Sync; it re-encodes audio only, video re-encoding needs a system ffmpeg)."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "cut-export.lua"
+min_vivi = "0.9.2"
+icon = "chapters"
+lucide = "scissors"
+permissions = ["network", "filesystem", "subprocess"]
+size_note = "+ ffmpeg if needed"
+default_enabled = true
+
+[[settings]]
+key = "in"
+title = "In (h:mm:ss.s; empty: A-B loop point A, else the start)"
+type = "text"
+default = ""
+
+[[settings]]
+key = "set-in"
+title = "Set In at the current position (Alt+[)"
+type = "action"
+label = "Set In"
+
+[[settings]]
+key = "out"
+title = "Out (empty: A-B loop point B, else the end)"
+type = "text"
+default = ""
+
+[[settings]]
+key = "set-out"
+title = "Set Out at the current position (Alt+])"
+type = "action"
+label = "Set Out"
+
+[[settings]]
+key = "use-ab"
+title = "Copy the A-B loop points into In / Out"
+type = "action"
+label = "Use A-B"
+
+[[settings]]
+key = "clear"
+title = "Clear In / Out"
+type = "action"
+label = "Clear"
+
+[[settings]]
+key = "mode"
+title = "Cut mode"
+type = "choice"
+options = ["Stream copy (fast, keyframe)", "Re-encode (frame-accurate)"]
+default = "Stream copy (fast, keyframe)"
+
+[[settings]]
+key = "folder"
+title = "Output folder (empty: next to the original)"
+type = "text"
+default = ""
+
+[[settings]]
+key = "pick-folder"
+title = "Choose the output folder"
+type = "action"
+label = "Choose…"
+
+[[settings]]
+key = "download"
+title = "Download Vivi's media ffmpeg when none is installed"
+type = "toggle"
+default = "true"
+
+[[settings]]
+key = "export"
+title = "Export the clip (Alt+W)"
+type = "action"
+label = "Export"
+
+[[settings]]
+key = "cancel"
+title = "Stop the running export"
+type = "action"
+label = "Cancel"
+
+[[settings]]
+key = "detect"
+title = "Which ffmpeg is used"
+type = "action"
+label = "Show"

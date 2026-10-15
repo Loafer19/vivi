@@ -638,6 +638,132 @@
       "size_note": "+ ffmpeg if needed"
     },
     {
+      "id": "cut-export",
+      "name": "Cut & Export Clip",
+      "description": "Cut a fragment of the current file into a new file: set In / Out (Alt+[ / Alt+]) or reuse the A-B loop points, then export (Alt+W) by fast lossless stream copy or a frame-accurate re-encode. Uses your ffmpeg; without one it downloads Vivi's media ffmpeg build once (about 15 MB, shared with Chapter Thumbnails and Subtitle Auto-Sync; it re-encodes audio only, video re-encoding needs a system ffmpeg).",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "chapters",
+      "lucide": "scissors",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.9.2",
+      "permissions": [
+        "network",
+        "filesystem",
+        "subprocess"
+      ],
+      "source": "plugins/cut-export",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-cut-export-v1.0.0/cut-export-1.0.0.zip",
+      "sha256": "be9eed1173c09bd8ae6b817e734224708a58bdf87297a6db06d26a7e412ca9f9",
+      "size": 21781,
+      "settings": [
+        {
+          "key": "in",
+          "title": "In (h:mm:ss.s; empty: A-B loop point A, else the start)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "set-in",
+          "title": "Set In at the current position (Alt+[)",
+          "type": "action",
+          "label": "Set In"
+        },
+        {
+          "key": "out",
+          "title": "Out (empty: A-B loop point B, else the end)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "set-out",
+          "title": "Set Out at the current position (Alt+])",
+          "type": "action",
+          "label": "Set Out"
+        },
+        {
+          "key": "use-ab",
+          "title": "Copy the A-B loop points into In / Out",
+          "type": "action",
+          "label": "Use A-B"
+        },
+        {
+          "key": "clear",
+          "title": "Clear In / Out",
+          "type": "action",
+          "label": "Clear"
+        },
+        {
+          "key": "mode",
+          "title": "Cut mode",
+          "type": "choice",
+          "options": [
+            "Stream copy (fast, keyframe)",
+            "Re-encode (frame-accurate)"
+          ],
+          "default": "Stream copy (fast, keyframe)"
+        },
+        {
+          "key": "folder",
+          "title": "Output folder (empty: next to the original)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "pick-folder",
+          "title": "Choose the output folder",
+          "type": "action",
+          "label": "Choose…"
+        },
+        {
+          "key": "download",
+          "title": "Download Vivi's media ffmpeg when none is installed",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "export",
+          "title": "Export the clip (Alt+W)",
+          "type": "action",
+          "label": "Export"
+        },
+        {
+          "key": "cancel",
+          "title": "Stop the running export",
+          "type": "action",
+          "label": "Cancel"
+        },
+        {
+          "key": "detect",
+          "title": "Which ffmpeg is used",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "categories": [
+        "Video",
+        "Tools"
+      ],
+      "tags": [
+        "ffmpeg",
+        "cut",
+        "trim",
+        "clip",
+        "export"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release: In/Out or A-B loop range, stream copy or re-encode, shared media ffmpeg.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-cut-export-v1.0.0/cut-export-1.0.0.zip"
+        }
+      ],
+      "size_note": "+ ffmpeg if needed"
+    },
+    {
       "id": "discord",
       "name": "Discord Rich Presence",
       "description": "Shows the current title, artist and progress in your Discord status. Needs a Discord application ID; Discord must be running on this computer. Ships a small native helper (vivi-discord) that talks to Discord's local IPC.",
@@ -910,6 +1036,152 @@
           "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.0/night-mode-1.0.0.zip"
         }
       ]
+    },
+    {
+      "id": "offline-downloads",
+      "name": "Offline Downloads",
+      "description": "A download queue for offline listening and watching: YouTube and other yt-dlp sites, direct music files (Jamendo, Internet Archive and any audio/video link) and radio streams recorded for a set time. Pending / active / paused / done / failed list with pause, cancel and retry, progress and a download folder. Paste a URL or press Alt+D with one in the clipboard. Downloads no tools of its own: it uses curl and your yt-dlp, or the copy the YouTube & yt-dlp plugin manages.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "streams",
+      "lucide": "download",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.9.1",
+      "permissions": [
+        "network",
+        "filesystem",
+        "subprocess"
+      ],
+      "source": "plugins/offline-downloads",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-offline-downloads-v1.0.0/offline-downloads-1.0.0.zip",
+      "sha256": "165d8c0c47d9aa97338ff422b0251fbfd2ba25d6ba1b07ca0b2d2ec5354d0134",
+      "size": 24860,
+      "settings": [
+        {
+          "key": "url",
+          "title": "URL to download (Alt+D adds the one in the clipboard)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "add",
+          "title": "Add the URL to the queue",
+          "type": "action",
+          "label": "Add"
+        },
+        {
+          "key": "add-current",
+          "title": "Add the playing online item",
+          "type": "action",
+          "label": "Add current"
+        },
+        {
+          "key": "show",
+          "title": "Show the queue (Alt+Shift+D)",
+          "type": "action",
+          "label": "Show"
+        },
+        {
+          "key": "pause",
+          "title": "Pause the active download / resume paused ones",
+          "type": "action",
+          "label": "Pause / Resume"
+        },
+        {
+          "key": "cancel",
+          "title": "Cancel the active download (or remove waiting ones)",
+          "type": "action",
+          "label": "Cancel"
+        },
+        {
+          "key": "retry",
+          "title": "Retry failed downloads",
+          "type": "action",
+          "label": "Retry"
+        },
+        {
+          "key": "clear-done",
+          "title": "Remove finished downloads from the list (files are kept)",
+          "type": "action",
+          "label": "Clear"
+        },
+        {
+          "key": "folder",
+          "title": "Download folder (empty: Downloads/Vivi)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "pick-folder",
+          "title": "Choose the download folder",
+          "type": "action",
+          "label": "Choose…"
+        },
+        {
+          "key": "open-folder",
+          "title": "Open the download folder",
+          "type": "action",
+          "label": "Open"
+        },
+        {
+          "key": "video-quality",
+          "title": "yt-dlp quality (merging video + audio needs ffmpeg; without it single files are used)",
+          "type": "choice",
+          "options": [
+            "Best single file",
+            "Best",
+            "1080p",
+            "720p",
+            "480p",
+            "Audio only"
+          ],
+          "default": "Best single file"
+        },
+        {
+          "key": "radio-minutes",
+          "title": "Radio / live stream recording length (minutes)",
+          "type": "choice",
+          "options": [
+            "30",
+            "10",
+            "60",
+            "120",
+            "240"
+          ],
+          "default": "30"
+        },
+        {
+          "key": "info",
+          "title": "Which yt-dlp and ffmpeg are used",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "categories": [
+        "Music",
+        "Streaming",
+        "Tools"
+      ],
+      "tags": [
+        "download",
+        "offline",
+        "queue",
+        "yt-dlp",
+        "radio",
+        "jamendo",
+        "archive.org"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release: queue with pause / cancel / retry for yt-dlp sites, direct files and radio recordings.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-offline-downloads-v1.0.0/offline-downloads-1.0.0.zip"
+        }
+      ],
+      "size_note": "uses yt-dlp if present"
     },
     {
       "id": "playback-stats",

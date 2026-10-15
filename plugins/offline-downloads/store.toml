@@ -1,0 +1,9 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Music", "Streaming", "Tools"]
+tags = ["download", "offline", "queue", "yt-dlp", "radio", "jamendo", "archive.org"]
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-15"
+notes = "First release: queue with pause / cancel / retry for yt-dlp sites, direct files and radio recordings."
