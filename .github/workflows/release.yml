@@ -15,10 +15,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: System deps
-        run: sudo apt-get update && sudo apt-get install -y libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev libfuse2t64 desktop-file-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev libfuse2t64 desktop-file-utils \
+            nasm meson ninja-build pkg-config libass-dev libplacebo-dev libpulse-dev libasound2-dev libdrm-dev libgbm-dev \
+            libva-dev libvdpau-dev libvulkan-dev libwayland-dev wayland-protocols libx11-dev libxext-dev libxrandr-dev \
+            libxss-dev libxpresent-dev libxv-dev libxinerama-dev libegl-dev libuchardet-dev liblua5.2-dev libgnutls28-dev \
+            libdav1d-dev libvpx-dev libopus-dev libvorbis-dev libwebp-dev libxml2-dev libbz2-dev liblzma-dev zlib1g-dev \
+            libjpeg-dev liblcms2-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Slim libmpv (decoders only FFmpeg, no mpv CLI) for the AppImage; cached by script hash.
+      - uses: actions/cache@v4
+        id: deps
+        with:
+          path: deps
+          key: libmpv-${{ runner.os }}-${{ hashFiles('packaging/appimage/build-libmpv.sh') }}
+      - name: Build slim libmpv
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: PREFIX=$PWD/deps SRC=$RUNNER_TEMP/deps-src packaging/appimage/build-libmpv.sh
       - run: cargo build --release
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/deps/lib/pkgconfig
+          LIBRARY_PATH: ${{ github.workspace }}/deps/lib
       - name: Tarball
         run: |
           VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
@@ -26,19 +45,15 @@ jobs:
           mkdir -p dist $NAME
           cp target/release/vivi README.md LICENSE CHANGELOG.md packaging/vivi.desktop packaging/vivi.svg packaging/vivi.png $NAME/
           tar czf dist/$NAME.tar.gz $NAME
-      - name: AppImage (bundles libmpv and its libraries)
+      - name: AppImage (bundles the slim libmpv and its libraries)
         run: |
           VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
           desktop-file-validate packaging/vivi.desktop
-          curl -fsSLo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy
-          export LDAI_OUTPUT=dist/Vivi-${VER}-x86_64.AppImage APPIMAGE_EXTRACT_AND_RUN=1
-          ./linuxdeploy --appdir AppDir --executable target/release/vivi \
-            --desktop-file packaging/vivi.desktop --icon-file packaging/vivi.svg --output appimage
+          DEPS=$PWD/deps packaging/appimage/build-appimage.sh dist/Vivi-${VER}-x86_64.AppImage
           ls -la dist
-          # Smoke test: the bundled binary must resolve all libraries.
+          # Smoke test: the extracted image must resolve every library.
           ./dist/Vivi-${VER}-x86_64.AppImage --appimage-extract >/dev/null
-          ! ldd squashfs-root/usr/bin/vivi | grep "not found"
+          ! LD_LIBRARY_PATH=squashfs-root/usr/lib ldd squashfs-root/usr/bin/vivi | grep "not found"
       - name: PKGBUILD (vivi-bin) with checksum
         run: |
           VER=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || VER=0.0.0
@@ -78,7 +93,8 @@ jobs:
           $name = "vivi-$ver-windows-x86_64"
           New-Item -ItemType Directory -Force $name, dist | Out-Null
           Copy-Item target\release\vivi.exe, mpv\libmpv-2.dll, README.md, LICENSE, CHANGELOG.md $name
-          Compress-Archive -Path $name -DestinationPath "dist\$name.zip"
+          # 7-Zip's maximum Deflate is ~4 MB smaller than Compress-Archive and still a plain zip.
+          7z a -tzip -mx=9 -mfb=258 "dist\$name.zip" $name | Out-Null
       - uses: actions/upload-artifact@v7
         with: { name: windows, path: dist/* }
 
@@ -128,8 +144,28 @@ jobs:
       - uses: actions/upload-artifact@v7
         with: { name: macos, path: dist/* }
 
+  flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+        with:
+          bundle: vivi.flatpak
+          manifest-path: packaging/flatpak/io.github.loafer19.vivi.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+          upload-artifact: false
+      - name: Name the bundle
+        run: |
+          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          mkdir -p dist && mv vivi.flatpak dist/vivi-${VER}-x86_64.flatpak
+      - uses: actions/upload-artifact@v7
+        with: { name: flatpak, path: dist/* }
+
   publish:
-    needs: [linux, windows, macos]
+    needs: [linux, windows, macos, flatpak]
     if: always() && startsWith(github.ref, 'refs/tags/v') && needs.linux.result == 'success'
     runs-on: ubuntu-24.04
     steps:
@@ -157,6 +193,7 @@ jobs:
             echo "| Linux (any distro) | \`Vivi-${T}-x86_64.AppImage\`: \`chmod +x\` and run. libmpv is bundled. |"
             echo "| Linux tarball | \`vivi-${T}-linux-x86_64.tar.gz\`: needs mpv and sqlite installed. |"
             echo "| Arch / Omarchy | \`PKGBUILD\` (vivi-bin): \`makepkg -si\` in a folder with it. |"
+            [ -n "$(ls dist/*.flatpak 2>/dev/null)" ] && echo "| Linux Flatpak | \`vivi-${T}-x86_64.flatpak\`: \`flatpak install --user vivi-${T}-x86_64.flatpak\` (needs the Flathub remote for the runtime). |"
             [ -n "$(ls dist/*windows* 2>/dev/null)" ] && echo "| Windows x64 | \`vivi-${T}-windows-x86_64.zip\`: unzip and run \`vivi.exe\` (libmpv-2.dll included). |"
             [ -n "$(ls dist/*macos* 2>/dev/null)" ] && echo "| macOS (Apple Silicon, experimental) | \`vivi-${T}-macos-arm64.zip\`: unsigned; right-click → Open the first time. |"
             echo

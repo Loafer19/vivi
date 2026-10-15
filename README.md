@@ -61,7 +61,8 @@ env-driven helpers as debug builds (`VIVI_SETTINGS`, `VIVI_PANEL`, `VIVI_LIBRARY
 | Platform | Package |
 |---|---|
 | Arch / Omarchy | `packaging/arch/vivi-bin` (prebuilt) or `packaging/arch/vivi` (from source): `makepkg -si`. The release also ships a ready `PKGBUILD` with checksums. |
-| Any Linux | `Vivi-<version>-x86_64.AppImage` (libmpv bundled): `chmod +x` and run |
+| Any Linux | `Vivi-<version>-x86_64.AppImage` (slim libmpv bundled, ~35 MB): `chmod +x` and run |
+| Linux Flatpak | `vivi-<version>-x86_64.flatpak`: `flatpak install --user vivi-<version>-x86_64.flatpak` (runtime from Flathub). Build it yourself with `packaging/flatpak/` (see `packaging/README.md`) |
 | Linux tarball | `vivi-<version>-linux-x86_64.tar.gz` (needs system `mpv`) with `.desktop` file and icons |
 | Windows 10/11 | `vivi-<version>-windows-x86_64.zip` — unzip, run `vivi.exe` (`libmpv-2.dll` included) |
 | macOS (Apple Silicon, best effort) | `vivi-<version>-macos-arm64.zip` — unsigned `Vivi.app`; right-click → Open the first time |

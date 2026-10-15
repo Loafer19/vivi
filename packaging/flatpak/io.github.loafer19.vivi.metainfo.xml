@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.loafer19.vivi</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Vivi</name>
+  <summary>Fast, lightweight media player</summary>
+  <developer id="io.github.loafer19">
+    <name>Loafer19</name>
+  </developer>
+  <description>
+    <p>
+      Vivi is a fast, minimal media player built on mpv, inspired by Juxtopposed's VLC redesign.
+      It plays nearly any video or audio file, remembers where you stopped and stays out of your way.
+    </p>
+    <ul>
+      <li>Hardware-accelerated playback powered by libmpv</li>
+      <li>Music and video library with artwork</li>
+      <li>Audio equalizer and video filters</li>
+      <li>Subtitles, chapters and playlists</li>
+      <li>MPRIS media keys and a compact miniplayer</li>
+      <li>Downloadable plugins</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.loafer19.vivi.desktop</launchable>
+  <url type="homepage">https://github.com/Loafer19/vivi</url>
+  <url type="bugtracker">https://github.com/Loafer19/vivi/issues</url>
+  <url type="vcs-browser">https://github.com/Loafer19/vivi</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/library-home.png</image>
+      <caption>Library home</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Player</category>
+  </categories>
+  <provides>
+    <binary>vivi</binary>
+  </provides>
+  <releases>
+    <release version="0.8.0" date="2026-10-14">
+      <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.8.0</url>
+    </release>
+    <release version="0.7.0" date="2026-10-14"/>
+  </releases>
+</component>

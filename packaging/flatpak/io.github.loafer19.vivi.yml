@@ -1,0 +1,138 @@
+# Flatpak manifest for Vivi.
+# Build:  flatpak-builder --user --install-deps-from=flathub --force-clean build-dir packaging/flatpak/io.github.loafer19.vivi.yml
+# Bundle: flatpak build-bundle repo vivi.flatpak io.github.loafer19.vivi
+# Regenerate cargo-sources.json after Cargo.lock changes:
+#   python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json
+#
+# FFmpeg comes from the runtime; the runtime's org.freedesktop.Platform.codecs-extra
+# extension (installed automatically with the runtime) adds the patent-encumbered
+# codecs such as H.264/HEVC. libmpv is built here as a module (no mpv CLI).
+id: io.github.loafer19.vivi
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: vivi
+finish-args:
+  - --share=ipc
+  - --share=network # network streams, plugin catalog, artwork lookups
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # Media library folders and files opened from the command line / file manager.
+  - --filesystem=xdg-music
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-pictures # screenshots
+  - --filesystem=xdg-download
+  - --filesystem=/media:ro
+  - --filesystem=/run/media:ro
+  - --own-name=org.mpris.MediaPlayer2.vivi.*
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --env=GTK_USE_PORTAL=1
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - /share/doc
+  - '*.a'
+  - '*.la'
+
+modules:
+  - name: luajit # mpv's ytdl_hook and built-in scripts need Lua
+    no-autogen: true
+    make-args: [PREFIX=/app]
+    make-install-args: [PREFIX=/app]
+    cleanup: [/bin]
+    sources:
+      - type: git
+        url: https://github.com/LuaJIT/LuaJIT.git
+        branch: v2.1
+        commit: 2a8e017ef1ece6a95b983ffca073d30609dce7c4
+      - type: shell
+        commands:
+          # LuaJIT derives its version from the git commit time; pin it for offline builds.
+          - echo 1730000000 > .relver
+
+  - name: uchardet
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_STATIC=OFF
+      - -DBUILD_BINARY=OFF
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/uchardet/uchardet.git
+        tag: v0.0.8
+
+  - name: libass
+    buildsystem: meson
+    config-opts: [-Ddefault_library=shared]
+    sources:
+      - type: git
+        url: https://github.com/libass/libass.git
+        tag: 0.17.4
+
+  - name: libplacebo
+    buildsystem: meson
+    config-opts:
+      - -Dvulkan=enabled
+      - -Dopengl=enabled
+      - -Ddemos=false
+      - -Dtests=false
+    sources:
+      - type: git
+        url: https://code.videolan.org/videolan/libplacebo.git
+        tag: v7.360.1
+
+  - name: libmpv
+    buildsystem: meson
+    config-opts:
+      - -Dlibmpv=true
+      - -Dcplayer=false
+      - -Dtests=false
+      - -Dmanpage-build=disabled
+      - -Dhtml-build=disabled
+      - -Dlua=luajit
+      - -Djavascript=disabled
+      - -Dlibarchive=disabled
+      - -Dlibbluray=disabled
+      - -Ddvdnav=disabled
+      - -Dcdda=disabled
+      - -Dsdl2-audio=disabled
+      - -Dsdl2-video=disabled
+      - -Dpulse=enabled
+      - -Dpipewire=enabled
+      - -Dalsa=enabled
+      - -Dvulkan=enabled
+      - -Dvaapi=enabled
+      - -Duchardet=enabled
+    sources:
+      - type: git
+        url: https://github.com/mpv-player/mpv.git
+        tag: v0.40.0
+
+  - name: vivi
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/vivi/cargo
+        CARGO_NET_OFFLINE: 'true'
+        LIBRARY_PATH: /app/lib # libmpv module
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --verbose
+      - cargo --offline build --release --verbose
+      - install -Dm755 target/release/vivi /app/bin/vivi
+      - install -Dm644 packaging/vivi.svg /app/share/icons/hicolor/scalable/apps/io.github.loafer19.vivi.svg
+      - install -Dm644 packaging/vivi.png /app/share/icons/hicolor/256x256/apps/io.github.loafer19.vivi.png
+      - sed 's/^Icon=vivi$/Icon=io.github.loafer19.vivi/' packaging/vivi.desktop > io.github.loafer19.vivi.desktop
+      - install -Dm644 io.github.loafer19.vivi.desktop /app/share/applications/io.github.loafer19.vivi.desktop
+      - install -Dm644 packaging/flatpak/io.github.loafer19.vivi.metainfo.xml /app/share/metainfo/io.github.loafer19.vivi.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..
+        skip: [target, .git, build-dir, .flatpak-builder, repo]
+      - cargo-sources.json
