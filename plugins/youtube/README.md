@@ -24,9 +24,8 @@ Merging separate best video + audio streams and converting audio need ffmpeg. A 
 
 | Platform | Source | Verified with |
 | --- | --- | --- |
-| Linux x86_64 / aarch64, Windows x64 / arm64 | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest), newest `ffmpeg-n<ver>-latest-<platform>-gpl-<ver>` archive (125–195 MB) | the release's `checksums.sha256` (archive) |
-| macOS arm64 / Intel | [osxexperts.net](https://www.osxexperts.net) `ffmpeg…arm/intel.zip` + `ffprobe…zip` | the SHA256 listed on that page (binaries) |
+| Linux x86_64 / aarch64, Windows x64, macOS arm64 | Vivi's own minimal build, release [`helper-ffmpeg-v8.0-1`](https://github.com/Loafer19/vivi/releases/tag/helper-ffmpeg-v8.0-1) (`ffmpeg-<platform>`, `ffprobe-<platform>`, about 6 MB for both; built by `helpers/ffmpeg/build.sh`) | sha256 pinned in `youtube.lua` (`FF_BUILD`), checked before it is installed |
 
-`ffmpeg` and `ffprobe` (about 345 MB unpacked on Linux) go to `$XDG_DATA_HOME/vivi/plugin-data/youtube/ffmpeg/` and are passed to yt-dlp with `--ffmpeg-location`. The download size is announced before it starts. Only this managed copy is updated: *Update the managed ffmpeg* re-downloads when the published build changed, and with auto-update on that is checked every 30 days. *Which yt-dlp and ffmpeg are used → Show* tells which copies are used.
+`ffmpeg` and `ffprobe` (about 6 MB) go to `$XDG_DATA_HOME/vivi/plugin-data/youtube/ffmpeg/` and are passed to yt-dlp with `--ffmpeg-location`. The download size is announced before it starts. Only this managed copy is updated: *Update the managed ffmpeg* re-downloads when a plugin update pins a new build, and with auto-update on that is checked every 30 days. Windows arm64 and Intel Macs have no managed build: install ffmpeg there for 1080p+ and audio conversion. *Which yt-dlp and ffmpeg are used → Show* tells which copies are used.
 
 Needs `curl` and `tar` (and `sh` on Linux/macOS).

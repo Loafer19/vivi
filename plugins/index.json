@@ -782,8 +782,8 @@
     {
       "id": "youtube",
       "name": "YouTube & yt-dlp",
-      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp and ffmpeg when present; otherwise downloads and updates verified copies: yt-dlp (18–40 MB) from its official releases on first use, a static ffmpeg (125–195 MB, about 345 MB unpacked) only for 1080p+ or audio conversion.",
-      "version": "1.1.2",
+      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp and ffmpeg when present; otherwise downloads and updates verified copies: yt-dlp (18–40 MB) from its official releases on first use, Vivi's own minimal static ffmpeg + ffprobe (about 6 MB) only for 1080p+ or audio conversion.",
+      "version": "1.2.0",
       "author": "Vivi",
       "icon": "streams",
       "lucide": "youtube",
@@ -797,9 +797,9 @@
         "subprocess"
       ],
       "source": "plugins/youtube",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.2/youtube-1.1.2.zip",
-      "sha256": "ee4751481313a840f177595bea35ba8f1044d2a1975690a9fc07eab71afa3b62",
-      "size": 43084,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.2.0/youtube-1.2.0.zip",
+      "sha256": "a3d40879ab81380ba8f8453d015a9b302f5d2e1a23d733981b41637742e64857",
+      "size": 41956,
       "settings": [
         {
           "key": "url",
