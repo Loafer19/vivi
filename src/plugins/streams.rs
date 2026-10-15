@@ -16,15 +16,34 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
 
 pub const ID: &str = "network-streams";
-pub const SOURCES: [&str; 7] = [
+pub const SOURCES: [&str; 11] = [
     "Radio: search",
     "Radio: top voted",
     "Radio: by country",
     "Radio: by genre",
     "M3U / IPTV playlist",
+    "TV: by country",
+    "TV: by category",
+    "Music: genres",
+    "Music: SomaFM",
     "Saved",
     "Recent",
 ];
+const M3U: usize = 4;
+const TV_COUNTRY: usize = 5;
+const TV_CATEGORY: usize = 6;
+const GENRES: usize = 7;
+const SOMAFM: usize = 8;
+const SAVED: usize = 9;
+const RECENT: usize = 10;
+/// Sources whose list is filtered locally as the user types.
+fn live_filter(mode: usize) -> bool {
+    (TV_COUNTRY..=SOMAFM).contains(&mode)
+}
+/// `source` of picker entries (a country / category / genre to open).
+const PICK: &str = "pick";
+const IPTV: &str = "https://iptv-org.github.io/iptv";
+const IPTV_API: &str = "https://iptv-org.github.io/api";
 /// radio-browser.info mirrors, tried in order.
 const SERVERS: [&str; 3] = [
     "https://de1.api.radio-browser.info",
@@ -212,8 +231,12 @@ pub fn placeholder(mode: usize) -> &'static str {
         1 => "Press Go for the most popular stations",
         2 => "Country or code, e.g. Ukraine or UA",
         3 => "Genre tag, e.g. folk, rock, news",
-        4 => "Playlist file path or URL (.m3u / .m3u8), or Choose file…",
-        5 => "Press Go to show saved streams",
+        M3U => "Playlist path or URL (.m3u / .m3u8), Choose file…, or a TV channel name",
+        TV_COUNTRY => "Filter countries, then channels by name (Go = back to countries)",
+        TV_CATEGORY => "Filter categories, then channels by name (Go = back to categories)",
+        GENRES => "Filter genres, then stations (Go = back to genres)",
+        SOMAFM => "Filter SomaFM channels by name or genre",
+        SAVED => "Press Go to show saved streams",
         _ => "Press Go to show recently played streams",
     }
 }
@@ -228,6 +251,230 @@ fn radio_click(url: &str) {
             "radio-browser.info",
         );
     });
+}
+
+/// Picker of genres: Popular, Trending, then the biggest radio-browser tags.
+pub fn parse_tags(v: &serde_json::Value) -> Vec<Stream> {
+    let mut out = vec![
+        pick("Popular", "Most voted stations", "@topvote"),
+        pick("Trending", "Most played right now", "@topclick"),
+    ];
+    for t in v.as_array().into_iter().flatten() {
+        let name = t["name"].as_str().unwrap_or("").trim();
+        let n = t["stationcount"].as_u64().unwrap_or(0);
+        if name.len() > 1 && n > 0 {
+            out.push(pick(name, &format!("{n} stations"), name));
+        }
+    }
+    out
+}
+
+fn pick(name: &str, label: &str, key: &str) -> Stream {
+    Stream {
+        name: name.into(),
+        url: key.into(),
+        group: label.into(),
+        source: PICK.into(),
+        ..Default::default()
+    }
+}
+
+fn genre_list() -> Result<Vec<Stream>, String> {
+    let p = [
+        ("order", "stationcount"),
+        ("reverse", "true"),
+        ("limit", "120"),
+        ("hidebroken", "true"),
+    ];
+    let mut err = String::new();
+    for srv in SERVERS {
+        match web::get_json(&format!("{srv}/json/tags"), &p, "radio-browser.info") {
+            Ok(v) => return Ok(parse_tags(&v)),
+            Err(e) => err = e,
+        }
+    }
+    Err(err)
+}
+
+/// Stations of a genre picker key (`@topvote`, `@topclick` or a tag).
+fn genre_stations(key: &str) -> Result<Vec<Stream>, String> {
+    let path = match key {
+        "@topvote" => "/json/stations/topvote",
+        "@topclick" => "/json/stations/topclick",
+        _ => return radio_search(3, key),
+    };
+    let mut err = String::new();
+    for srv in SERVERS {
+        let p = [("limit", "100"), ("hidebroken", "true")];
+        match web::get_json(&format!("{srv}{path}"), &p, "radio-browser.info") {
+            Ok(v) => return Ok(parse_stations(&v)),
+            Err(e) => err = e,
+        }
+    }
+    Err(err)
+}
+
+// ---------- SomaFM ----------
+
+/// SomaFM `channels.json`: one stream per channel, best MP3/AAC playlist.
+pub fn parse_somafm(v: &serde_json::Value) -> Vec<Stream> {
+    let s = |x: &serde_json::Value| x.as_str().unwrap_or("").trim().to_string();
+    let rank = |q: &str| match q {
+        "highest" => 3,
+        "high" => 2,
+        "low" => 1,
+        _ => 0,
+    };
+    v["channels"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|c| {
+            let pl = c["playlists"].as_array()?;
+            let best = pl
+                .iter()
+                .filter(|p| p["url"].as_str().is_some())
+                .max_by_key(|p| (s(&p["format"]) == "mp3") as u8 * 10 + rank(&s(&p["quality"])))?;
+            Some(Stream {
+                name: s(&c["title"]),
+                url: s(&best["url"]),
+                logo: Some(s(&c["largeimage"]))
+                    .filter(|l| !l.is_empty())
+                    .unwrap_or_else(|| s(&c["image"])),
+                group: format!(
+                    "{} — {}",
+                    s(&c["genre"]).replace('|', ", "),
+                    s(&c["description"])
+                ),
+                codec: s(&best["format"]).to_uppercase(),
+                homepage: format!("https://somafm.com/{}/", s(&c["id"])),
+                source: "SomaFM".into(),
+                ..Default::default()
+            })
+        })
+        .collect()
+}
+
+fn somafm() -> Result<Vec<Stream>, String> {
+    let v = cached_json(
+        "somafm.json",
+        "https://api.somafm.com/channels.json",
+        "SomaFM",
+    )?;
+    Ok(parse_somafm(&v))
+}
+
+// ---------- iptv-org ----------
+
+const TTL: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
+/// Fetch `url` into the cache as `name` (reused for a day; stale copy on errors).
+fn cached(name: &str, url: &str) -> Result<String, String> {
+    let p = crate::store::cache_dir().join("iptv").join(name);
+    let fresh = std::fs::metadata(&p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|e| e < TTL);
+    if fresh {
+        if let Ok(t) = std::fs::read_to_string(&p) {
+            return Ok(t);
+        }
+    }
+    match web::get_bytes(url, 64 * 1024 * 1024) {
+        Ok(Some(b)) => {
+            let t = String::from_utf8_lossy(&b).into_owned();
+            let _ = std::fs::create_dir_all(p.parent().unwrap());
+            let _ = std::fs::write(&p, &t);
+            Ok(t)
+        }
+        r => std::fs::read_to_string(&p).map_err(|_| match r {
+            Err(e) => e,
+            _ => format!("Not found: {url}"),
+        }),
+    }
+}
+
+fn cached_json(name: &str, url: &str, what: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_str(&cached(name, url)?).map_err(|e| format!("{what}: {e}"))
+}
+
+/// Countries (`code`, `name`, `flag`) or categories (`id`, `name`) of the iptv-org API.
+pub fn parse_iptv_index(v: &serde_json::Value, countries: bool) -> Vec<Stream> {
+    let mut out: Vec<Stream> = v
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|e| {
+            let name = e["name"].as_str()?.trim();
+            let id = e[if countries { "code" } else { "id" }]
+                .as_str()?
+                .to_lowercase();
+            let (dir, label) = if countries {
+                (
+                    "countries",
+                    format!("{} {}", e["flag"].as_str().unwrap_or(""), id.to_uppercase()),
+                )
+            } else {
+                ("categories", String::new())
+            };
+            Some(pick(name, label.trim(), &format!("{IPTV}/{dir}/{id}.m3u")))
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+fn iptv_index(countries: bool) -> Result<Vec<Stream>, String> {
+    let f = if countries {
+        "countries.json"
+    } else {
+        "categories.json"
+    };
+    let v = cached_json(f, &format!("{IPTV_API}/{f}"), "iptv-org")?;
+    let v = parse_iptv_index(&v, countries);
+    if v.is_empty() {
+        return Err("iptv-org returned no entries".into());
+    }
+    Ok(v)
+}
+
+/// Channels of an iptv-org playlist URL (cached).
+fn iptv_playlist(url: &str) -> Result<Vec<Stream>, String> {
+    let name = url.rsplit('/').take(2).collect::<Vec<_>>().join("-");
+    let mut v = parse_m3u(&cached(&name, url)?);
+    for s in &mut v {
+        s.source = "iptv-org".into();
+    }
+    Ok(v)
+}
+
+/// Channels of the whole iptv-org index whose name matches `q`.
+fn iptv_search(q: &str) -> Result<Vec<Stream>, String> {
+    let all = iptv_playlist(&format!("{IPTV}/index.m3u"))?;
+    Ok(filter(&all, q))
+}
+
+/// Entries whose name (or group) contains every word of `q`, name matches first.
+pub fn filter(all: &[Stream], q: &str) -> Vec<Stream> {
+    let words: Vec<String> = q.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return all.to_vec();
+    }
+    let (mut a, mut b) = (Vec::new(), Vec::new());
+    for s in all {
+        let n = s.name.to_lowercase();
+        if words.iter().all(|w| n.contains(w)) {
+            a.push(s.clone());
+        } else {
+            let g = format!("{n} {}", s.group.to_lowercase());
+            if words.iter().all(|w| g.contains(w)) {
+                b.push(s.clone());
+            }
+        }
+    }
+    a.extend(b);
+    a
 }
 
 // ---------- M3U ----------
@@ -396,6 +643,13 @@ pub struct Streams {
     np_url: String,
     logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
     poll: u32,
+    /// Unfiltered list of live-filter sources; `list` is its filtered view.
+    all: Vec<Stream>,
+    filtered_by: String,
+    /// Row logos (by logo URL) and their background loader.
+    logos: std::collections::HashMap<String, slint::Image>,
+    row_logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
+    logos_dirty: bool,
 }
 
 impl Streams {
@@ -403,7 +657,40 @@ impl Streams {
         cx.app.set_md_status(status.into());
         cx.app.set_md_busy(busy);
     }
-    fn show(&self, cx: &Ctx) {
+    fn show(&mut self, cx: &Ctx) {
+        self.show_rows(cx);
+        self.load_row_logos();
+    }
+    /// Start fetching logos of the first rows that are not cached yet.
+    fn load_row_logos(&mut self) {
+        let want: Vec<String> = self
+            .list
+            .iter()
+            .take(80)
+            .map(|s| s.logo.clone())
+            .filter(|l| l.starts_with("http") && !self.logos.contains_key(l))
+            .collect();
+        if want.is_empty() {
+            return;
+        }
+        let (tx, rx) = channel();
+        self.row_logo_rx = Some(rx);
+        std::thread::spawn(move || {
+            for l in want {
+                let p = fetch_logo(&l);
+                if tx.send((l, p)).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    fn show_rows(&self, cx: &Ctx) {
+        let logos: Vec<slint::Image> = self
+            .list
+            .iter()
+            .map(|s| self.logos.get(&s.logo).cloned().unwrap_or_default())
+            .collect();
+        cx.app.set_md_logos(ModelRc::new(VecModel::from(logos)));
         let items: Vec<Item> = self
             .list
             .iter()
@@ -420,8 +707,8 @@ impl Streams {
     /// selection) or Save.
     fn secondary(cx: &Ctx, mode: usize, selected: bool) {
         let t = match mode {
-            5 | 6 => "Remove",
-            4 if !selected => "Choose file…",
+            SAVED | RECENT => "Remove",
+            M3U if !selected => "Choose file…",
             _ => "Save",
         };
         cx.app.set_md_secondary(t.into());
@@ -432,14 +719,14 @@ impl Streams {
     }
     fn local(&mut self, cx: &Ctx, mode: usize) {
         self.mode = mode;
-        self.list = load_list(if mode == 5 {
+        self.list = load_list(if mode == SAVED {
             "saved.json"
         } else {
             "recent.json"
         });
         self.show(cx);
         cx.app.set_md_detail("".into());
-        let what = if mode == 5 { "saved" } else { "recent" };
+        let what = if mode == SAVED { "saved" } else { "recent" };
         Self::ui(
             cx,
             &if self.list.is_empty() {
@@ -587,7 +874,7 @@ impl Plugin for Streams {
                     a.set_md_source(SOURCES[0].into());
                 }
                 a.set_md_open(true);
-                self.local(cx, 5);
+                self.local(cx, SAVED);
                 if self.list.is_empty() {
                     Self::ui(
                         cx,
@@ -598,25 +885,41 @@ impl Plugin for Streams {
             }
             "search" => {
                 let mode = Self::mode(cx);
-                if mode >= 5 {
+                if mode >= SAVED {
                     self.local(cx, mode);
                     return;
                 }
                 let q = cx.app.get_md_query().trim().to_string();
+                if live_filter(mode) {
+                    // Go = (re)load the picker; typing filters it.
+                    self.all.clear();
+                    self.filtered_by = q.clone();
+                    self.mode = mode;
+                    self.list.clear();
+                    self.show(cx);
+                    cx.app.set_md_detail("".into());
+                    Self::ui(cx, "Loading…", true);
+                    let (tx, rx) = channel();
+                    self.rx = Some(rx);
+                    std::thread::spawn(move || {
+                        let _ = tx.send(match mode {
+                            TV_COUNTRY => iptv_index(true),
+                            TV_CATEGORY => iptv_index(false),
+                            GENRES => genre_list(),
+                            _ => somafm(),
+                        });
+                    });
+                    return;
+                }
                 if q.is_empty() && mode != 1 {
                     Self::ui(cx, "Type something first", false);
                     return;
                 }
-                let mut mode = mode;
                 self.note = None;
-                if mode == 4 && !is_playlist_source(&q) {
-                    // Not a file or URL: search stations by name and genre instead.
-                    mode = 0;
-                    cx.app.set_md_source(SOURCES[0].into());
-                    self.last_source = SOURCES[0].into();
-                    cx.app.set_md_placeholder(placeholder(0).into());
+                let tv_search = mode == M3U && !is_playlist_source(&q);
+                if tv_search {
                     self.note = Some(format!(
-                        "“{q}” is not a playlist file or URL, so here are radio stations for it. Use Choose file… to import a playlist."
+                        "TV channels named “{q}” from iptv-org. Paste a URL or use Choose file… to import a playlist."
                     ));
                 }
                 self.mode = mode;
@@ -625,7 +928,9 @@ impl Plugin for Streams {
                 cx.app.set_md_detail("".into());
                 Self::ui(
                     cx,
-                    if mode == 4 {
+                    if tv_search {
+                        "Searching iptv-org channels…"
+                    } else if mode == M3U {
                         "Loading playlist…"
                     } else {
                         "Searching radio-browser.info…"
@@ -636,7 +941,8 @@ impl Plugin for Streams {
                 self.rx = Some(rx);
                 std::thread::spawn(move || {
                     let r = match mode {
-                        4 => load_m3u(&q),
+                        M3U if tv_search => iptv_search(&q),
+                        M3U => load_m3u(&q),
                         0 => radio_any(&q),
                         _ => radio_search(mode, &q),
                     };
@@ -658,6 +964,32 @@ impl Plugin for Streams {
                     Self::ui(cx, "Select a stream first", false);
                     return;
                 };
+                if s.source == PICK {
+                    // Open the picked country / category / genre.
+                    self.all.clear();
+                    self.list.clear();
+                    self.show(cx);
+                    cx.app.set_md_query("".into());
+                    self.filtered_by.clear();
+                    cx.app.set_md_detail("".into());
+                    Self::ui(cx, &format!("Loading {}…", s.name), true);
+                    self.note = Some(format!(
+                        "{}: {{n}} streams. Type to filter, Go to go back.",
+                        s.name
+                    ));
+                    let (tx, rx) = channel();
+                    self.rx = Some(rx);
+                    let key = s.url.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(if key.starts_with("http") {
+                            iptv_playlist(&key)
+                        } else {
+                            genre_stations(&key)
+                        });
+                    });
+                    return;
+                }
+                crate::loading::set_name(&s.url, &display_name(&s.name));
                 cx.player.cmd("loadfile", &[&s.url]);
                 self.playing = Some(s.clone());
                 if s.source == "radio-browser.info" {
@@ -685,8 +1017,8 @@ impl Plugin for Streams {
                     Self::ui(cx, "Select a stream first", false);
                     return;
                 };
-                if self.mode >= 5 {
-                    let file = if self.mode == 5 {
+                if self.mode >= SAVED {
+                    let file = if self.mode == SAVED {
                         "saved.json"
                     } else {
                         "recent.json"
@@ -698,6 +1030,10 @@ impl Plugin for Streams {
                     Self::ui(cx, &format!("Removed {}", s.name), false);
                 } else {
                     let s = self.list[i].clone();
+                    if s.source == PICK {
+                        Self::ui(cx, "Open it first, then save a stream", false);
+                        return;
+                    }
                     let mut v = load_list("saved.json");
                     v.retain(|o| o.url != s.url);
                     v.push(s.clone());
@@ -720,6 +1056,34 @@ impl Plugin for Streams {
                 cx.app.set_md_placeholder(placeholder(m).into());
                 Self::secondary(cx, m, false);
             }
+        }
+        if live_filter(self.mode) && !self.all.is_empty() && cx.app.get_md_open() {
+            let q = cx.app.get_md_query().to_string();
+            if q != self.filtered_by {
+                self.filtered_by = q.clone();
+                self.list = filter(&self.all, &q);
+                self.show(cx);
+                Self::ui(
+                    cx,
+                    &format!("{} of {}", self.list.len(), self.all.len()),
+                    false,
+                );
+            }
+        }
+        if let Some(rx) = &self.row_logo_rx {
+            let mut got = false;
+            while let Ok((url, p)) = rx.try_recv() {
+                let img = p
+                    .and_then(|p| slint::Image::load_from_path(&p).ok())
+                    .unwrap_or_default();
+                self.logos.insert(url, img);
+                got = true;
+            }
+            self.logos_dirty |= got;
+        }
+        if self.logos_dirty && self.poll.is_multiple_of(10) {
+            self.logos_dirty = false;
+            self.show_rows(cx);
         }
         if self.poll.is_multiple_of(5) {
             self.now_playing(cx);
@@ -744,12 +1108,18 @@ impl Plugin for Streams {
         match r {
             Ok(v) => {
                 let n = v.len();
-                self.list = v;
+                if live_filter(self.mode) {
+                    self.all = v.clone();
+                    self.filtered_by = cx.app.get_md_query().to_string();
+                    self.list = filter(&self.all, &self.filtered_by);
+                } else {
+                    self.list = v;
+                }
                 self.show(cx);
                 Self::ui(
                     cx,
                     &if let Some(note) = self.note.take() {
-                        note
+                        note.replace("{n}", &n.to_string())
                     } else if n == 0 {
                         "Nothing found".to_string()
                     } else {
@@ -794,7 +1164,7 @@ mod tests {
         std::fs::write(&f, "http://a/b\n").unwrap();
         assert!(is_playlist_source(f.to_str().unwrap()));
         let _ = std::fs::remove_file(f);
-        assert!(placeholder(4).contains("Choose file"));
+        assert!(placeholder(M3U).contains("Choose file"));
     }
 
     #[test]
@@ -853,6 +1223,58 @@ mod tests {
         });
         assert_eq!(s, "Now playing: Artist - Song\nAudio: mp3 128 kbps");
         assert_eq!(now_info(|_| None), "Nothing is playing");
+    }
+
+    #[test]
+    fn pickers_and_filter() {
+        let v = serde_json::json!([{"code":"UA","name":"Ukraine","flag":"🇺🇦"},{"code":"AD","name":"Andorra"}]);
+        let c = parse_iptv_index(&v, true);
+        assert_eq!(c[0].name, "Andorra");
+        assert_eq!(c[1].url, format!("{IPTV}/countries/ua.m3u"));
+        assert_eq!(c[1].source, PICK);
+        let t = parse_tags(
+            &serde_json::json!([{"name":"jazz","stationcount":5},{"name":"x","stationcount":3}]),
+        );
+        assert_eq!(t.len(), 3);
+        assert_eq!(t[2].url, "jazz");
+        let all = parse_m3u("#EXTINF:-1 group-title=\"News\",BBC One\nhttp://a\n#EXTINF:-1,Euronews\nhttp://b\n#EXTINF:-1 group-title=\"BBC\",Other\nhttp://c\n");
+        let f = filter(&all, "bbc");
+        assert_eq!(
+            f.iter().map(|s| s.url.as_str()).collect::<Vec<_>>(),
+            ["http://a", "http://c"]
+        );
+        assert_eq!(filter(&all, " ").len(), 3);
+        assert!(live_filter(TV_COUNTRY) && !live_filter(M3U) && SOURCES[SAVED] == "Saved");
+    }
+
+    #[test]
+    fn somafm_json() {
+        let v = serde_json::json!({"channels":[{"id":"groovesalad","title":"Groove Salad","genre":"ambient|electronica","description":"d","image":"http://i/s.png","largeimage":"",
+            "playlists":[{"url":"http://p/gs.pls","format":"aac","quality":"highest"},{"url":"http://p/gs130.pls","format":"mp3","quality":"high"}]}]});
+        let s = parse_somafm(&v);
+        assert_eq!(s[0].url, "http://p/gs130.pls");
+        assert_eq!(s[0].logo, "http://i/s.png");
+        assert!(s[0].group.starts_with("ambient, electronica"));
+    }
+
+    /// Live iptv-org and SomaFM. `--ignored`.
+    #[test]
+    #[ignore]
+    fn live_iptv_somafm() {
+        let c = iptv_index(true).unwrap();
+        let ua = c.iter().find(|s| s.name == "Ukraine").unwrap();
+        let ch = iptv_playlist(&ua.url).unwrap();
+        eprintln!(
+            "UA: {} channels, {} with logos",
+            ch.len(),
+            ch.iter().filter(|s| !s.logo.is_empty()).count()
+        );
+        assert!(!ch.is_empty());
+        assert!(!iptv_index(false).unwrap().is_empty());
+        assert!(!iptv_search("news").unwrap().is_empty());
+        assert!(genre_list().unwrap().len() > 10);
+        assert!(!genre_stations("@topclick").unwrap().is_empty());
+        assert!(somafm().unwrap().len() > 10);
     }
 
     /// Live radio-browser.info search (no key). `--ignored`.

@@ -67,12 +67,14 @@ component SubRow inherits Rectangle {
     callback clicked();
     callback activated();
     in property <image> icon: @image-url("../assets/icons/subtitle.svg");
+    in property <image> logo;
     property <string> name: root.item.label;
     height: 36px; border-radius: 6px;
     background: item.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
     HorizontalLayout {
         padding-left: 10px; padding-right: 10px; spacing: 10px;
-        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: item.selected ? Theme.accent : Theme.fg-a2; }
+        if root.logo.width == 0: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: item.selected ? Theme.accent : Theme.fg-a2; }
+        if root.logo.width > 0: Image { y: (parent.height - 24px) / 2; width: 32px; height: 24px; source: root.logo; image-fit: contain; }
         Text { horizontal-stretch: 1; text: root.item.key; color: Theme.fg-1; font-size: 13px; vertical-alignment: center; overflow: elide; }
         Text { text: root.item.label; color: Theme.fg-a3; font-size: 12px; vertical-alignment: center; }
         if item.selected: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/check-active.svg"); }
@@ -172,6 +174,7 @@ export component SubtitleDialog inherits Rectangle {
 export component MusicDialog inherits Rectangle {
     in property <string> title;
     in property <[Item]> results;
+    in property <[image]> logos;
     in property <string> status;
     in property <bool> busy;
     in property <string> detail;
@@ -235,6 +238,7 @@ export component MusicDialog inherits Rectangle {
                             for r[i] in root.results: SubRow {
                                 item: { key: r.key, label: r.label, selected: i == root.selected };
                                 icon: @image-url("../assets/icons/music.svg");
+                                logo: i < root.logos.length ? root.logos[i] : @image-url("");
                                 clicked => { root.selected = i; root.select(i); }
                                 activated => { root.selected = i; root.select(i); root.primary(i); }
                             }

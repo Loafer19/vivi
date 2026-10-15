@@ -1,5 +1,10 @@
 # Changelog
 
+### Added
+- **Network Streams: TV (iptv-org)**: *TV: by country* and *TV: by category* list the iptv-org countries/categories (iptv-org.github.io/api); *Play* on one loads its playlist (cached for a day in `~/.cache/vivi/iptv/`), typing filters channels by name, rows show channel logos, and channels play as video. A word typed into the *M3U* source now searches iptv-org channels instead of radio stations; pasted URLs and files still import as before.
+- **Network Streams: music**: *Music: genres* browses radio-browser.info tags by station count plus *Popular* (top voted) and *Trending* (top clicked) and opens the top stations of a genre; *Music: SomaFM* lists SomaFM channels with logos.
+- **Stream loading overlay** (core player): while a network stream opens or buffers (before the first frame/audio, or paused for cache) a spinner with the stream name is shown instead of a black screen; it hides on playback start, and a failed open shows an error toast.
+
 ### Fixed
 - The docked Library panel now hides with the other controls after inactivity during playback and comes back on mouse move (it used to stay, leaving half the window black during audio streams).
 

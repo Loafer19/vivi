@@ -277,6 +277,7 @@ export component AppWindow inherits Window {
     in property <string> md-owner;
     in property <string> md-title;
     in property <[Item]> md-results;
+    in property <[image]> md-logos; // optional row logos (Network Streams)
     in property <string> md-status;
     in property <bool> md-busy;
     in property <string> md-detail;
@@ -287,6 +288,11 @@ export component AppWindow inherits Window {
     in property <[string]> md-sources;
     in-out property <string> md-source;
     in-out property <string> md-query;
+    // Network stream loading overlay (core, see loading.rs).
+    in property <bool> loading-show;
+    in property <bool> loading-buffering;
+    in property <string> loading-name;
+    in-out property <string> stream-error;
     // Now-playing card for audio-only network streams (Network Streams plugin).
     in property <bool> np-show;
     in property <string> np-station;
@@ -693,6 +699,33 @@ export component AppWindow inherits Window {
         close() => { root.panel-open = false; }
     }
 
+    // ---------- Network stream loading spinner / error ----------
+    if root.loading-show && !root.mini: Rectangle {
+        background: transparent;
+        VerticalLayout {
+            alignment: center; spacing: 14px;
+            HorizontalLayout { alignment: center;
+                Rectangle { width: 48px; height: 48px;
+                    Image {
+                        width: 48px; height: 48px; source: @image-url("../assets/icons/spinner.svg");
+                        colorize: Theme.accent;
+                        transform-rotation: mod(animation-tick() / 1ms, 1000) * 0.36deg;
+                    }
+                }
+            }
+            Text { text: root.loading-buffering ? "Buffering…" : "Opening…"; color: Theme.fg-a2; font-size: 13px; horizontal-alignment: center; }
+            Text { text: root.loading-name; color: Theme.fg-1; font-size: 18px; horizontal-alignment: center; overflow: elide; }
+        }
+    }
+    if root.stream-error != "": Rectangle {
+        width: min(se.preferred-width + 40px, root.width - 32px); height: 48px;
+        x: (root.width - self.width) / 2;
+        y: root.height - 72px - self.height - 16px;
+        border-radius: 16px; background: Theme.bar;
+        se := Text { text: root.stream-error; color: #FF8A80; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; overflow: elide; }
+        TouchArea { clicked => { root.stream-error = ""; } }
+    }
+
     // ---------- Resume toast ----------
     if root.has-media && root.resume-text != "": Rectangle {
         width: toast.preferred-width; height: 52px;
@@ -969,7 +1002,7 @@ export component AppWindow inherits Window {
     // ---------- Auto-tagger / Free Music ----------
     if root.md-open: MusicDialog {
         width: root.width; height: root.height;
-        title: root.md-title; results: root.md-results; status: root.md-status; busy: root.md-busy;
+        title: root.md-title; results: root.md-results; logos: root.md-owner == "network-streams" ? root.md-logos : []; status: root.md-status; busy: root.md-busy;
         detail: root.md-detail; placeholder: root.md-placeholder; search-label: root.md-search-label;
         primary-text: root.md-primary; secondary-text: root.md-secondary; sources: root.md-sources;
         source <=> root.md-source; query <=> root.md-query;

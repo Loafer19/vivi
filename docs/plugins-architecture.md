@@ -56,7 +56,15 @@ asks), M3U / extended M3U / IPTV playlists from a path or URL (`#EXTINF` name, `
 `group-title`, `tvg-country`; relative entries skipped), and JSON lists `saved.json` /
 `recent.json` (30 entries, de-duplicated by URL) under `$XDG_DATA_HOME/vivi/streams/`.
 Stream info reads mpv's `icy-title`, `icy-name`, codec, bitrate and `demuxer-cache-duration`.
-No key. Later: EPG for IPTV, podcasts (RSS), logos in the list.
+TV comes from iptv-org: `api/countries.json` / `api/categories.json` as pickers, then
+`iptv/countries/<code>.m3u` / `iptv/categories/<id>.m3u` (and `index.m3u` for a word typed
+into the M3U source), cached for 24 h under `$XDG_CACHE_HOME/vivi/iptv/` with the stale
+copy used offline. Music adds radio-browser `/json/tags` (by station count) with
+`topvote` / `topclick`, and SomaFM `channels.json` (MP3 playlist preferred). Picker sources
+filter locally as the user types; row logos load in the background into
+`stream-logos/`. The loading spinner / error toast for network streams is core
+(`src/loading.rs`, mpv `start-file`, `playback-restart`, `paused-for-cache`, `end-file`
+error). No key. Later: EPG for IPTV, podcasts (RSS).
 
 ## Options considered
 

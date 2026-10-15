@@ -5,6 +5,7 @@ mod dialogs;
 mod fx;
 mod library;
 mod libview;
+mod loading;
 mod menus;
 mod mini;
 #[cfg(target_os = "linux")]
@@ -25,6 +26,20 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 slint::include_modules!();
+
+/// Error toast of a network stream that failed to open (shown without media too).
+fn show_stream_error(app: &AppWindow, msg: &str) {
+    app.set_stream_error(msg.into());
+    let w = app.as_weak();
+    let m = msg.to_string();
+    slint::Timer::single_shot(Duration::from_secs(6), move || {
+        if let Some(a) = w.upgrade() {
+            if a.get_stream_error().as_str() == m {
+                a.set_stream_error("".into());
+            }
+        }
+    });
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // winit 0.30 has no Wayland drag & drop; VIVI_X11=1 runs under XWayland instead,
@@ -71,11 +86,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let player = player.clone();
         let cfg = cfg.clone();
         let timer = Box::leak(Box::new(slint::Timer::default()));
+        let mut load = loading::Loading::default();
+        let mut last_err = String::new();
         timer.start(
             slint::TimerMode::Repeated,
             std::time::Duration::from_millis(30),
             move || {
                 let Some(a) = weak.upgrade() else { return };
+                let was = (load.visible(), load.buffering());
                 while let Ok(ev) = events.try_recv() {
                     match ev {
                         PlayerEvent::TimePos(t) => {
@@ -124,10 +142,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 eprintln!("tracks {n}");
                             }
                         }
-                        PlayerEvent::EndFile => {}
+                        PlayerEvent::StartFile => {
+                            last_err.clear();
+                            let path = player.get("path").unwrap_or_default();
+                            load.start(&path);
+                            if load.url().is_some() {
+                                a.set_stream_error("".into());
+                                let t = player.get("media-title").unwrap_or_default();
+                                a.set_loading_name(loading::name_for(&path, &t).into());
+                            }
+                        }
+                        PlayerEvent::PlaybackRestart => load.restart(),
+                        PlayerEvent::Buffering(b) => load.cache(b),
+                        PlayerEvent::EndFile(err) => {
+                            let name = a.get_loading_name().to_string();
+                            if load.end(err).is_some() {
+                                let why = if last_err.is_empty() {
+                                    "the stream did not respond".to_string()
+                                } else {
+                                    last_err.clone()
+                                };
+                                show_stream_error(&a, &format!("Could not open {name}: {why}"));
+                            }
+                        }
                         PlayerEvent::ClientMessage(args) => plugins::client_message(&args),
-                        PlayerEvent::Log(prefix, text) => plugins::mpv_log(&prefix, &text),
+                        PlayerEvent::Log(prefix, text) => {
+                            if load.url().is_some() && !text.is_empty() {
+                                last_err = text.chars().take(120).collect();
+                            }
+                            plugins::mpv_log(&prefix, &text)
+                        }
                     }
+                }
+                if was != (load.visible(), load.buffering()) {
+                    a.set_loading_show(load.visible());
+                    a.set_loading_buffering(load.buffering());
                 }
             },
         );

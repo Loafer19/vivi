@@ -19,7 +19,14 @@ pub enum PlayerEvent {
     FileLoaded,
     /// A list-like property changed (tracks, selection, chapters, devices).
     ListsChanged,
-    EndFile,
+    /// The file ended; `true` when it failed to open or play.
+    EndFile(bool),
+    /// A new file starts loading.
+    StartFile,
+    /// Playback (re)started: first frame / audio out after load or seek.
+    PlaybackRestart,
+    /// `paused-for-cache` changed (network buffering).
+    Buffering(bool),
     /// `script-message` broadcast (e.g. `vivi-toast <text>` from a plugin package).
     ClientMessage(Vec<String>),
     /// mpv warning/error log line: (prefix = module or script name, text).
@@ -78,6 +85,7 @@ impl Player {
         ev.observe_property("mute", Format::Flag, 5)?;
         ev.observe_property("media-title", Format::String, 6)?;
         ev.observe_property("track-list/count", Format::Int64, 7)?;
+        ev.observe_property("paused-for-cache", Format::Flag, 8)?;
         for (i, p) in [
             "aid",
             "sid",
@@ -102,7 +110,11 @@ impl Player {
                     let msg = match ev.wait_event(1.0) {
                         Some(Ok(Event::Shutdown)) => break,
                         Some(Ok(Event::FileLoaded)) => Some(PlayerEvent::FileLoaded),
-                        Some(Ok(Event::EndFile(_))) => Some(PlayerEvent::EndFile),
+                        Some(Ok(Event::EndFile(r))) => Some(PlayerEvent::EndFile(
+                            r == libmpv2::mpv_end_file_reason::Error,
+                        )),
+                        Some(Ok(Event::StartFile)) => Some(PlayerEvent::StartFile),
+                        Some(Ok(Event::PlaybackRestart)) => Some(PlayerEvent::PlaybackRestart),
                         Some(Ok(Event::ClientMessage(args))) => Some(PlayerEvent::ClientMessage(
                             args.iter().map(|a| a.to_string()).collect(),
                         )),
@@ -121,6 +133,9 @@ impl Player {
                                 ("pause", PropertyData::Flag(v)) => Some(PlayerEvent::Pause(v)),
                                 ("volume", PropertyData::Double(v)) => Some(PlayerEvent::Volume(v)),
                                 ("mute", PropertyData::Flag(v)) => Some(PlayerEvent::Mute(v)),
+                                ("paused-for-cache", PropertyData::Flag(v)) => {
+                                    Some(PlayerEvent::Buffering(v))
+                                }
                                 ("media-title", PropertyData::Str(v)) => {
                                     Some(PlayerEvent::Title(v.to_owned()))
                                 }
