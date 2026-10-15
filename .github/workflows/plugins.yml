@@ -72,6 +72,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y luajit
           for f in plugins/*/*.lua ; do luajit -bl "$f" > /dev/null || exit 1; done
+          bash tests/plugins/run.sh
       - name: Build packages, verify index.json
         run: python3 scripts/package-plugins.py --check
       - uses: actions/download-artifact@v4

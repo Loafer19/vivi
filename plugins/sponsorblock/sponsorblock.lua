@@ -1,9 +1,13 @@
 -- @name SponsorBlock
--- @version 1.0.1
+-- @version 1.1.0
 -- @author Vivi
 -- @description Skip SponsorBlock segments in YouTube streams (Vivi plugin package).
 --
--- Keys: Alt+k  skip   skip the current (or announced) segment
+-- Keys: Alt+k        skip   skip the current (or announced) segment
+--       Alt+Shift+k  undo   go back to the start of the last skipped segment (it is
+--                           then played, not skipped again)
+-- Works for YouTube URLs (also the entries the YouTube plugin adds to the playlist) and
+-- for files downloaded by it / yt-dlp, whose names end in "[<video id>]".
 -- Network: GET <api>/api/skipSegments/<sha256 prefix>?categories=[...] via curl.
 local mp = require "mp"
 local options = require "mp.options"
@@ -14,12 +18,16 @@ local o = {
   mode = "Skip automatically",
   chapters = true,
   api = "https://sponsor.ajay.app",
+  ["local"] = true,
+  notice = true,
 }
 
 local segments = {}   -- { {a, b, category}, ... }
 local skipped = {}    -- index -> true (auto mode: skip each once per file)
 local announced = nil -- index of the segment offered for Alt+K
 local video_id = nil
+local last_skip = nil -- { index, from } of the last automatic/manual skip (undo)
+local allowed = {}    -- index -> true: undone, play it through
 
 local function toast(msg, secs)
   mp.osd_message(msg, secs or 3)
@@ -47,6 +55,15 @@ local function youtube_id(url)
   end
   local ytdl = url:match("^ytdl://([%w_-]+)$")
   if ytdl and #ytdl == 11 then return ytdl end
+  return nil
+end
+
+-- Video id of a local file named by yt-dlp's default template: "Title [dQw4w9WgXcQ].mp4".
+local function file_id(path)
+  if not path or path:find("://") then return nil end
+  local name = path:match("([^/\\]+)$") or path
+  local id = name:match("%[([%w_-]+)%][^%[%]]*%.[%w]+$")
+  if id and #id == 11 then return id end
   return nil
 end
 
@@ -136,15 +153,35 @@ local function skip_to(i)
   if not s then return end
   skipped[i] = true
   announced = nil
+  local from = mp.get_property_number("time-pos") or s[1]
+  last_skip = { i, from }
   mp.set_property_number("time-pos", s[2])
-  toast("Skipped " .. (NAMES[s[3]] or s[3]):lower())
+  local what = (NAMES[s[3]] or s[3]):lower()
+  if o.notice then
+    toast(string.format("Skipped %s (%.0f s) — Alt+Shift+K to undo", what, s[2] - s[1]), 5)
+  else
+    mp.msg.info("skipped " .. what)
+  end
+end
+
+-- Undo the last skip: back to where it happened; that segment is then played through.
+local function undo()
+  if not last_skip then toast("Nothing to undo") return end
+  local i, from = last_skip[1], last_skip[2]
+  last_skip = nil
+  allowed[i] = true
+  announced = i
+  mp.set_property_number("time-pos", math.max(0, math.min(from, segments[i] and segments[i][1] or from)))
+  toast("Skip undone — playing the segment")
 end
 
 local function on_time(_, t)
   if not t or #segments == 0 then return end
   for i, s in ipairs(segments) do
     if t >= s[1] and t < s[2] - 0.5 then
-      if o.mode:find("^Skip") then
+      if allowed[i] then
+        -- undone: play through
+      elseif o.mode:find("^Skip") then
         if not skipped[i] then skip_to(i) end
       elseif announced ~= i then
         announced = i
@@ -168,12 +205,16 @@ end
 options.read_options(o, "sponsorblock", function() if video_id then fetch(video_id) end end)
 
 mp.register_event("file-loaded", function()
-  segments, skipped, announced = {}, {}, nil
-  video_id = youtube_id(mp.get_property("path")) or youtube_id(mp.get_property("stream-open-filename"))
+  segments, skipped, announced, last_skip, allowed = {}, {}, nil, nil, {}
+  local path = mp.get_property("path")
+  video_id = youtube_id(path) or youtube_id(mp.get_property("stream-open-filename"))
+    or (o["local"] and file_id(path)) or nil
   if video_id then fetch(video_id) end
 end)
 mp.observe_property("time-pos", "number", on_time)
 mp.add_forced_key_binding("Alt+k", "skip", skip_key)
+mp.add_forced_key_binding("Alt+K", "undo", undo)
+mp.register_script_message("undo", undo)
 
 -- For tests: `script-message-to sponsorblock selftest` prints parser results and quits.
 mp.register_script_message("selftest", function()
@@ -185,3 +226,9 @@ mp.register_script_message("selftest", function()
   print("SELFTEST prefix " .. show(sha_prefix("aqz-KE-bpKQ")))
   mp.command("quit")
 end)
+
+if VIVI_TEST then
+  return { youtube_id = youtube_id, file_id = file_id, parse = parse, categories = categories,
+    set_segments = function(v) segments = v end, on_time = on_time, undo = undo,
+    skipped = function() return skipped end }
+end
