@@ -1,0 +1,81 @@
+name: Helper ffmpeg
+# Minimal static ffmpeg + ffprobe for the YouTube plugin (helpers/ffmpeg/build.sh), built for
+# linux-x86_64, linux-aarch64, windows-x86_64 and macos-aarch64 and published as release
+# "helper-ffmpeg-v<RELEASE>" (helpers/ffmpeg/RELEASE) with SHA256SUMS. A release that
+# already exists is never replaced: bump RELEASE to publish a new build, then pin the new
+# tag and checksums in plugins/youtube/youtube.lua (FF_BUILD).
+on:
+  push:
+    branches: [master]
+    paths: ["helpers/ffmpeg/**", ".github/workflows/ffmpeg.yml"]
+  pull_request:
+    paths: ["helpers/ffmpeg/**", ".github/workflows/ffmpeg.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x86_64 }
+          - { os: ubuntu-24.04-arm, platform: linux-aarch64 }
+          - { os: ubuntu-24.04, platform: windows-x86_64 }
+          - { os: macos-14, platform: macos-aarch64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (Alpine, musl static)
+        if: startsWith(matrix.platform, 'linux')
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w alpine:3.22 sh -c '
+            apk add --no-cache bash build-base nasm pkgconf curl xz tar perl coreutils &&
+            WORK=/tmp/b bash helpers/ffmpeg/build.sh out && chown -R '"$(id -u):$(id -g)"' out'
+      - name: Build (MinGW cross)
+        if: matrix.platform == 'windows-x86_64'
+        run: |
+          sudo apt-get update && sudo apt-get install -y mingw-w64 nasm pkg-config
+          WORK=/tmp/b helpers/ffmpeg/build.sh out x86_64-w64-mingw32
+      - name: Build (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        run: |
+          brew install pkgconf || true
+          MACOSX_DEPLOYMENT_TARGET=11.0 WORK=/tmp/b helpers/ffmpeg/build.sh out
+      - name: Check
+        if: matrix.platform != 'windows-x86_64'
+        run: |
+          out/ffmpeg -hide_banner -version | head -1
+          out/ffmpeg -hide_banner -muxers | grep -E ' (mp4|ipod|matroska|webm|mp3|opus) '
+          out/ffmpeg -hide_banner -encoders | grep -E 'libmp3lame|libopus| aac '
+          out/ffprobe -version | head -1
+          if [ "$(uname)" = Linux ]; then file out/ffmpeg | grep -q 'statically linked'; else otool -L out/ffmpeg; fi
+      - name: Name assets
+        run: |
+          mkdir dist; ext=""; [ -f out/ffmpeg.exe ] && ext=.exe
+          for p in ffmpeg ffprobe; do cp "out/$p$ext" "dist/$p-${{ matrix.platform }}$ext"; done
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.platform }}
+          path: dist/*
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        run: |
+          tag="helper-ffmpeg-v$(cat helpers/ffmpeg/RELEASE)"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "$tag exists, left alone"; exit 0; fi
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+          gh release create "$tag" --latest=false --target "$GITHUB_SHA" \
+            --title "Helper: minimal ffmpeg $(cat ../helpers/ffmpeg/RELEASE)" \
+            --notes "Minimal static ffmpeg + ffprobe for the YouTube plugin (remux/merge mp4, webm, mkv, m4a; mp3 via LAME, aac, opus via libopus; no network). Built by helpers/ffmpeg/build.sh. LGPL-2.1+; sources: FFmpeg, libopus, LAME (versions in the script)." *
