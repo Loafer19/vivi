@@ -1,5 +1,5 @@
 -- @name YouTube & yt-dlp
--- @version 1.1.2
+-- @version 1.2.0
 -- @author Vivi
 -- @description List, size and download YouTube (and other yt-dlp) videos and playlists.
 --
@@ -16,12 +16,12 @@
 -- ffmpeg (merging separate video + audio, audio conversion): a system ffmpeg is used when
 -- there is one (not inside the Flatpak, whose runtime has no ffmpeg program). A managed
 -- static build is downloaded only when needed: video at 1080p or more / "Best", or
--- audio converted to mp3/m4a/opus. Sources: BtbN/FFmpeg-Builds (Linux x86_64/aarch64,
--- Windows x64/arm64; archive checked against checksums.sha256) and osxexperts.net
--- (macOS arm64/Intel; binaries checked against the sha256 on that page). Kept in
+-- audio converted to mp3/m4a/opus. It is Vivi's own minimal build (release
+-- helper-ffmpeg-v<build>, Linux x86_64/aarch64, Windows x64, macOS arm64; about 6-12 MB),
+-- checked against the sha256 pinned in this file (FF_BUILD). Kept in
 -- plugin-data/youtube/ffmpeg (ffmpeg + ffprobe), passed to yt-dlp with
--- --ffmpeg-location; only this copy is updated (*Update ffmpeg*, or every 30 days with
--- auto-update when the published build changed). Lower qualities without ffmpeg use
+-- --ffmpeg-location; only this copy is updated: when a plugin update pins a new build
+-- (*Update ffmpeg*, or checked every 30 days with auto-update). Lower qualities without ffmpeg use
 -- single-file formats.
 --
 -- Sizes: from yt-dlp's filesize / filesize_approx (or bitrate × duration) of the formats
@@ -403,8 +403,6 @@ end
 
 local FF_DIR = DATA .. SEP .. "ffmpeg"
 local FF_MANAGED = FF_DIR .. SEP .. "ffmpeg" .. EXE
-local BTBN = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/"
-local OSXEXPERTS = "https://www.osxexperts.net/"
 local FF_UPDATE_EVERY = 30 * 86400
 
 local function rmtree(dir, cb)
@@ -467,62 +465,43 @@ local function remote_size(url, cb)
   end)
 end
 
--- What to download for this computer: cb({ files = { {url, sha, member, name, archive} }, id }) or cb(nil, err).
--- BtbN: one archive (sha of the archive) with <top>/bin/ffmpeg and ffprobe.
--- osxexperts: one zip per program (sha of the binary inside).
+-- Vivi's own minimal static ffmpeg + ffprobe (helpers/ffmpeg/build.sh, release
+-- helper-ffmpeg-v<build>): only the muxers/demuxers and audio codecs yt-dlp needs, about
+-- 6-12 MB for both. The checksums are pinned here, so a new build comes with a plugin update.
+local FF_BUILD = {
+  tag = "helper-ffmpeg-v@TAG@",
+  base = "https://github.com/Loafer19/vivi/releases/download/",
+  sha = {
+@SHAS@
+  },
+}
+
+-- What to download for this computer: cb({ files = { {url, sha, members} }, id }) or cb(nil, err).
 local function ff_source(cb)
-  local function btbn(plat, ext)
-    run({ "curl", "-fsSL", BTBN .. "checksums.sha256" }, function(r)
-      if r.status ~= 0 then return cb(nil, "cannot reach the BtbN ffmpeg builds") end
-      local best, bestv, bestsha
-      for sha, name in (r.stdout or ""):gmatch("(%x+)%s+%*?([^\r\n]+)") do
-        local v = name:match("^ffmpeg%-n([%d%.]+)%-latest%-" .. plat .. "%-gpl%-[%d%.]+" .. ext:gsub("%.", "%%.") .. "$")
-        if v then
-          local a, b = v:match("^(%d+)%.?(%d*)")
-          local num = tonumber(a) * 1000 + (tonumber(b) or 0)
-          if not bestv or num > bestv then best, bestv, bestsha = name, num, sha:lower() end
-        end
-      end
-      if not best then return cb(nil, "no ffmpeg build for " .. plat) end
-      local top = best:sub(1, #best - #ext)
-      cb({ id = bestsha, files = { {
-        url = BTBN .. best, sha = bestsha, archive = true,
-        members = { top .. "/bin/ffmpeg" .. EXE, top .. "/bin/ffprobe" .. EXE },
-      } } })
-    end)
+  local function pick(plat)
+    local files = {}
+    for _, prog in ipairs({ "ffmpeg", "ffprobe" }) do
+      local asset = prog .. "-" .. plat .. EXE
+      local sha = FF_BUILD.sha[asset]
+      if not sha then return cb(nil, "no managed ffmpeg for " .. plat .. "; install ffmpeg to merge or convert") end
+      files[#files + 1] = { url = FF_BUILD.base .. FF_BUILD.tag .. "/" .. asset, sha = sha, members = { prog .. EXE } }
+    end
+    cb({ id = FF_BUILD.tag .. ":" .. plat, files = files })
   end
   if windows then
     local a = (os.getenv("PROCESSOR_ARCHITEW6432") or os.getenv("PROCESSOR_ARCHITECTURE") or ""):upper()
-    return btbn(a == "ARM64" and "winarm64" or "win64", ".zip")
+    return pick(a == "ARM64" and "windows-aarch64" or "windows-x86_64")
   end
   run({ "uname", "-sm" }, function(u)
     local s = u.stdout or ""
-    if s:match("Linux") and s:match("x86_64") then return btbn("linux64", ".tar.xz") end
-    if s:match("Linux") and (s:match("aarch64") or s:match("arm64")) then return btbn("linuxarm64", ".tar.xz") end
-    if not s:match("Darwin") then return cb(nil, "no ffmpeg build for " .. s:gsub("%s+$", "")) end
-    local arm = s:match("arm64") ~= nil
-    run({ "curl", "-fsSL", OSXEXPERTS }, function(r)
-      local page = r.stdout or ""
-      local text = page:gsub("<[^>]+>", " ")
-      local sums = { FFmpeg = {}, ffprobe = {} }
-      for prog, sha in text:gmatch("SHA256 checksum of (%w+) file%s*:%s*(%x+)") do
-        if sums[prog] and #sha == 64 then table.insert(sums[prog], sha:lower()) end
-      end
-      local files = {}
-      for _, prog in ipairs({ "ffmpeg", "ffprobe" }) do
-        local url = page:match('href="(https://www%.osxexperts%.net/' .. prog .. '%d*' .. (arm and "arm" or "intel") .. '%.zip)"')
-        -- The page lists each program's arm64 checksum first, then Intel.
-        local sha = sums[prog == "ffmpeg" and "FFmpeg" or "ffprobe"][arm and 1 or 2]
-        if not url or not sha then return cb(nil, "cannot read the osxexperts.net ffmpeg page") end
-        files[#files + 1] = { url = url, sha = sha, archive = false, members = { prog } }
-      end
-      cb({ id = files[1].sha .. files[2].sha, files = files })
-    end)
+    local arch = (s:match("x86_64") and "x86_64") or ((s:match("aarch64") or s:match("arm64")) and "aarch64") or "?"
+    if s:match("Linux") then return pick("linux-" .. arch) end
+    if s:match("Darwin") then return pick("macos-" .. arch) end
+    cb(nil, "no managed ffmpeg for " .. s:gsub("%s+$", ""))
   end)
 end
 
 -- Download, verify and install the managed ffmpeg + ffprobe. cb(ff | nil, err)
--- Archives (BtbN) are checked before unpacking, osxexperts binaries after.
 local function install_ffmpeg(src, cb)
   local tmp = FF_DIR .. SEP .. ".x"
   local function fail(msg) rmtree(tmp) cb(nil, msg) end
@@ -565,21 +544,10 @@ local function install_ffmpeg(src, cb)
   local function fetch(i)
     local f = src.files[i]
     if not f then return finish() end
-    local dl = tmp .. SEP .. "download" .. i .. (f.url:match("%.tar%.xz$") and ".tar.xz" or ".zip")
+    local dl = tmp .. SEP .. f.members[1]
     run({ "curl", "-fsSL", "--retry", "2", "-o", dl, f.url }, function(r)
       if r.status ~= 0 then return fail("ffmpeg download failed: " .. (r.stderr or "")) end
-      local function unpack(after)
-        run(concat({ "tar", "-xf", dl, "-C", tmp }, f.members), function(x)
-          os.remove(dl)
-          if x.status ~= 0 then return fail("cannot unpack ffmpeg: " .. (x.stderr or "")) end
-          after()
-        end)
-      end
-      if f.archive then
-        verify(dl, f.sha, function() unpack(function() fetch(i + 1) end) end)
-      else
-        unpack(function() verify(tmp .. SEP .. f.members[1], f.sha, function() fetch(i + 1) end) end)
-      end
+      verify(dl, f.sha, function() fetch(i + 1) end)
     end)
   end
   rmtree(tmp, function()

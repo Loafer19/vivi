@@ -38,7 +38,11 @@ done
 host=()
 [ -n "$CROSS" ] && host=(--host="$CROSS")
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
-export CFLAGS="-Os -ffunction-sections -fdata-sections"
+# Section GC on ELF/Mach-O; MinGW turns -fdata-sections zero tables into file data (17 MB).
+case "$CROSS" in
+  *mingw32) export CFLAGS="-Os" ;;
+  *) export CFLAGS="-Os -ffunction-sections -fdata-sections" ;;
+esac
 
 (cd opus-$OPUS_VER && ./configure ${host[@]+"${host[@]}"} --prefix="$PREFIX" --enable-static --disable-shared \
   --disable-doc --disable-extra-programs && make -j"$JOBS" && make install)
@@ -52,7 +56,7 @@ esac
 ldflags="-L$PREFIX/lib"
 case "$(uname -s)" in
   Darwin) ldflags="$ldflags -Wl,-dead_strip" ;;
-  *) ldflags="$ldflags -Wl,--gc-sections -static" ;;
+  *) case "$CROSS" in *mingw32) ldflags="$ldflags -static" ;; *) ldflags="$ldflags -Wl,--gc-sections -static" ;; esac ;;
 esac
 
 cd ffmpeg-$FFMPEG_VER
