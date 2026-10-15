@@ -1,5 +1,5 @@
 -- @name YouTube & yt-dlp
--- @version 1.1.1
+-- @version 1.1.2
 -- @author Vivi
 -- @description List, size and download YouTube (and other yt-dlp) videos and playlists.
 --
@@ -40,6 +40,7 @@ local o = {
   folder = "",
   source = "Auto (system if recent, else managed)",
   ["auto-update"] = true,
+  pkgdir = "", -- set by Vivi
 }
 
 local windows = package.config:sub(1, 1) == "\\"
