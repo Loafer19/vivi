@@ -13,6 +13,7 @@ mod player;
 mod plugins;
 mod preview;
 mod render;
+mod scenes;
 mod settings;
 mod store;
 mod viz;
@@ -449,6 +450,28 @@ fn items(v: impl IntoIterator<Item = (String, String, bool)>) -> slint::ModelRc<
     slint::ModelRc::new(slint::VecModel::from(v))
 }
 
+/// Chapter thumbnails from the Scene Chapters package cache (empty images where missing).
+fn chapter_thumbs(a: &AppWindow, p: &Player) {
+    let n = p.chapters().len();
+    let path = p.get("path").unwrap_or_default();
+    let files = if path.contains("://") || path.is_empty() {
+        vec![None; n]
+    } else {
+        scenes::thumbs(&scenes::cache_root(), &path, n)
+    };
+    let has: Vec<bool> = files.iter().map(Option::is_some).collect();
+    let imgs: Vec<slint::Image> = files
+        .iter()
+        .map(|f| {
+            f.as_deref()
+                .and_then(|f| slint::Image::load_from_path(f).ok())
+                .unwrap_or_default()
+        })
+        .collect();
+    a.set_chapter_thumbs(slint::ModelRc::new(slint::VecModel::from(imgs)));
+    a.set_chapter_has_thumb(slint::ModelRc::new(slint::VecModel::from(has)));
+}
+
 /// Re-read tracks, devices and chapters from mpv into the side panel models.
 fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
     let tr = |kind| {
@@ -477,6 +500,7 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
             )
         },
     )));
+    chapter_thumbs(a, p);
     a.set_hwdec(p.get("hwdec").unwrap_or_default().into());
     let q = p.queue();
     a.set_queue(items(
@@ -516,6 +540,14 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     });
     let p = player.clone();
     let weak = app.as_weak();
+    {
+        let (p, w) = (p.clone(), weak.clone());
+        app.on_chapters_refresh(move || {
+            if let Some(a) = w.upgrade() {
+                chapter_thumbs(&a, &p);
+            }
+        });
+    }
     app.on_run(move |cmd| {
         p.run(&cmd);
         if let Some(a) = weak.upgrade() {

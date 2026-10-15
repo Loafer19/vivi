@@ -168,6 +168,9 @@ export component SidePanel inherits Rectangle {
     in property <[Item]> audio-tracks;
     in property <[Item]> audio-devices;
     in property <[Item]> chapters;
+    in property <[image]> chapter-thumbs;
+    in property <[bool]> chapter-has-thumb;
+    callback chapters-refresh();
     in property <[Item]> bookmarks;
     in property <[Item]> queue;
     in property <[Item]> playlists;
@@ -224,7 +227,7 @@ export component SidePanel inherits Rectangle {
             Tab { icon: @image-url("../assets/icons/subtitles.svg"); label: "Subtitles"; active: root.tab == 0; clicked => { root.tab = 0; } }
             Tab { icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == 1; clicked => { root.tab = 1; } }
             Tab { icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == 2; clicked => { root.tab = 2; } }
-            Tab { icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; } }
+            Tab { icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; root.chapters-refresh(); } }
             Tab { icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == 4; clicked => { root.tab = 4; } }
             Tab { icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == 5; clicked => { root.tab = 5; root.library-search(""); } }
             Rectangle {
@@ -441,7 +444,30 @@ export component SidePanel inherits Rectangle {
                     }
                     if root.sleep-state != "": Text { text: root.sleep-state; color: Theme.accent-bright; }
                     Section { text: "Chapters"; }
-                    OptionList { items: root.chapters; empty-text: "No chapters"; pick(it) => { root.set-prop("chapter", it.key); } }
+                    // Chapters, with thumbnails from the Scene Chapters package when cached (#62).
+                    VerticalLayout {
+                        spacing: 2px; alignment: start;
+                        if root.chapters.length == 0: Text { text: "No chapters"; color: Theme.fg-a3; }
+                        for it[i] in root.chapters: crow := Rectangle {
+                            property <bool> thumb: i < root.chapter-has-thumb.length && root.chapter-has-thumb[i];
+                            height: self.thumb ? 48px : 32px;
+                            border-radius: Theme.radius;
+                            background: cta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg : transparent);
+                            HorizontalLayout {
+                                padding-left: crow.thumb ? 4px : 10px; padding-right: 8px; spacing: 10px;
+                                if crow.thumb: Rectangle {
+                                    y: 4px; width: 71px; height: 40px; border-radius: 3px; clip: true; background: #000000;
+                                    Image { width: parent.width; height: parent.height; source: root.chapter-thumbs[i]; image-fit: ImageFit.cover; }
+                                }
+                                Text {
+                                    text: it.label; overflow: elide; vertical-alignment: center; horizontal-stretch: 1;
+                                    color: it.selected ? Theme.accent-bright : Theme.fg-2;
+                                }
+                                if it.selected: Icon { source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; width: 18px; height: 32px; y: (parent.height - 32px) / 2; }
+                            }
+                            cta := TouchArea { mouse-cursor: pointer; clicked => { root.set-prop("chapter", it.key); } }
+                        }
+                    }
                     Section { text: "Bookmarks"; }
                     OptionList { items: root.bookmarks; empty-text: "No bookmarks yet (Ctrl+B)"; pick(it) => { root.seek-to(it.key); } }
                     Button { text: "Add bookmark (Ctrl+B)"; icon: @image-url("../assets/icons/bookmark.svg"); clicked => { root.add-bookmark(); } }

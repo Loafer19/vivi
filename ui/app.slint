@@ -301,6 +301,9 @@ export component AppWindow inherits Window {
     in property <[Item]> audio-tracks;
     in property <[Item]> audio-devices;
     in property <[Item]> chapters;
+    in property <[image]> chapter-thumbs;
+    in property <[bool]> chapter-has-thumb;
+    callback chapters-refresh();
     in property <[Item]> bookmarks;
     in property <[Item]> queue;
     in property <[Item]> playlists;
@@ -629,7 +632,8 @@ export component AppWindow inherits Window {
         height: root.height - 40px - 72px;
         tab <=> root.panel-tab;
         sub-tracks: root.sub-tracks; audio-tracks: root.audio-tracks;
-        audio-devices: root.audio-devices; chapters: root.chapters;
+        audio-devices: root.audio-devices; chapters: root.chapters; chapter-thumbs: root.chapter-thumbs; chapter-has-thumb: root.chapter-has-thumb;
+        chapters-refresh => { root.chapters-refresh(); }
         ab-state: root.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
         set-prop(n, v) => { root.set-prop(n, v); }
         run(c) => { root.run(c); }
