@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Music", "Integrations"]
 tags = ["listenbrainz", "scrobbling"]
-screenshots = []
+screenshots = ["scrobbler-settings"]
 
 [[changelog]]
 version = "1.0.1"

@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Streaming", "Video"]
 tags = ["youtube", "yt-dlp", "download"]
-screenshots = []
+screenshots = ["youtube-settings"]
 
 [[changelog]]
 version = "1.2.0"

@@ -211,7 +211,7 @@ def main() -> None:
             f = shot_path(s)
             if f:
                 shutil.copy(f, OUT / f"img/shots/{s}.png")
-                w = f.parent / "webp" / f"{s}.webp"
+                w = ROOT / "docs/screenshots/plugins/webp" / f"{s}.webp"
                 if w.exists():
                     shutil.copy(w, OUT / f"img/shots/{s}.webp")
                 else:

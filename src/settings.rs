@@ -925,10 +925,16 @@ fn browse(r: &mut Rows) {
                 None => (String::new(), vec!["Install"]),
             }
         };
+        // Pending update: show "What's new" from the catalog changelog instead of the description.
+        let news = have
+            .filter(|h| cmp_version(&e.version, &h.manifest.version).is_gt())
+            .map(|h| e.whats_new(&h.manifest.version))
+            .filter(|n| !n.is_empty())
+            .map(|n| format!("What's new: {n}"));
         r.push(
             &format!("pkg.{}", e.id),
             &e.name,
-            &e.description,
+            news.as_deref().unwrap_or(&e.description),
             "package",
             if confirm.as_deref() == Some(&e.id) {
                 "confirm".into()

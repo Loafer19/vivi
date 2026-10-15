@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Video", "Streaming"]
 tags = ["youtube", "sponsorblock", "skip"]
-screenshots = []
+screenshots = ["sponsorblock-settings"]
 
 [[changelog]]
 version = "1.0.1"

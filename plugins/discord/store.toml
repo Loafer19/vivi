@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Integrations", "Music"]
 tags = ["discord", "rich-presence", "status"]
-screenshots = []
+screenshots = ["discord-settings"]
 
 [[changelog]]
 version = "1.0.0"

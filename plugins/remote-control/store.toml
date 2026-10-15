@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Integrations", "Tools"]
 tags = ["remote", "phone", "web"]
-screenshots = []
+screenshots = ["remote-control-settings"]
 
 [[changelog]]
 version = "1.0.0"

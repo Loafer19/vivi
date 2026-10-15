@@ -5,7 +5,7 @@
 - **viviplayer.app**: the site moves to <https://viviplayer.app> (Dokploy, `deploy/site`), with descriptions, canonical URLs, Open Graph/Twitter cards, `sitemap.xml`, `robots.txt` and SoftwareApplication JSON-LD; `install.sh` is at <https://viviplayer.app/install.sh>. GitHub Pages stays as a mirror with canonicals to the new domain.
 - **Plugin marketplace** at <https://plugins.viviplayer.app> (`scripts/build-marketplace.py`, `deploy/plugins`): searchable grid with categories (Music, Video, Subtitles, Streaming, Integrations, Tools), sorting, a page per plugin with screenshots, changelog with older downloads, permissions and an *Open in Vivi* button, plus an Atom feed of plugin updates (`/feed.xml`).
 - Plugin listings live in `plugins/<id>/store.toml` (categories, tags, screenshots, changelog; not part of the package zip). `index.json` entries carry `categories`, `tags`, `screenshots` and `changelog`.
-- The app reads the catalog from <https://plugins.viviplayer.app/index.json> and falls back to the GitHub Pages copy; `vivi://plugin/<id>` links open the plugin in Settings → Extensions → Browse (`x-scheme-handler/vivi` in the desktop file).
+- The app reads the catalog from <https://plugins.viviplayer.app/index.json> and falls back to the GitHub Pages copy; `vivi://plugin/<id>` links open the plugin in Settings → Extensions → Browse, and a pending update shows *What's new* from the catalog changelog (`x-scheme-handler/vivi` in the desktop file).
 
 ## [Unreleased]
 

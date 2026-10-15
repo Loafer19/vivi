@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Subtitles", "Tools"]
 tags = ["alass", "ffsubsync", "timing"]
-screenshots = []
+screenshots = ["subtitle-sync-settings"]
 
 [[changelog]]
 version = "1.0.1"

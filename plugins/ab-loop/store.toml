@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Video", "Tools"]
 tags = ["loop", "frame-step", "practice"]
-screenshots = []
+screenshots = ["ab-loop-player", "ab-loop-settings"]
 
 [[changelog]]
 version = "1.0.2"

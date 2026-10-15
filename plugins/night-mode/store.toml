@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Video", "Tools"]
 tags = ["audio", "dynamic-range", "dialogue"]
-screenshots = []
+screenshots = ["night-mode-settings"]
 
 [[changelog]]
 version = "1.0.3"

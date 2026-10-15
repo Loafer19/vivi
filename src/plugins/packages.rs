@@ -168,6 +168,31 @@ pub struct Entry {
     /// Extra download the plugin does itself, e.g. "+ yt-dlp ~35 MB unless a system yt-dlp is used".
     #[serde(default)]
     pub size_note: String,
+    /// Version history, newest first (from `plugins/<id>/store.toml`).
+    #[serde(default)]
+    pub changelog: Vec<Change>,
+}
+
+/// One `changelog` item of a catalog entry.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Change {
+    pub version: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub notes: String,
+}
+
+impl Entry {
+    /// "What's new" since `installed`: notes of every newer version, newest first.
+    pub fn whats_new(&self, installed: &str) -> String {
+        self.changelog
+            .iter()
+            .filter(|c| cmp_version(&c.version, installed).is_gt())
+            .map(|c| format!("{}: {}", c.version, c.notes))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    }
 }
 
 impl Entry {
@@ -1079,5 +1104,16 @@ mod deep_link_tests {
         assert_eq!(deep_link("vivi://plugin/"), None);
         assert_eq!(deep_link("vivi://status"), None);
         assert_eq!(deep_link("https://example.com/a"), None);
+    }
+
+    #[test]
+    fn whats_new_lists_newer_versions() {
+        let e: super::Entry = serde_json::from_str(
+            r#"{"id":"x","name":"X","version":"1.2.0","kind":"package","changelog":[
+            {"version":"1.2.0","notes":"B"},{"version":"1.1.0","notes":"A"},{"version":"1.0.0","notes":"first"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(e.whats_new("1.0.0"), "1.2.0: B · 1.1.0: A");
+        assert_eq!(e.whats_new("1.2.0"), "");
     }
 }

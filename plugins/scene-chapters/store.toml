@@ -2,7 +2,7 @@
 # so editing it needs no new plugin version.
 categories = ["Video", "Tools"]
 tags = ["chapters", "thumbnails", "ffmpeg"]
-screenshots = []
+screenshots = ["scene-chapters-settings"]
 
 [[changelog]]
 version = "1.0.1"

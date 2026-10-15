@@ -398,6 +398,10 @@
         "frame-step",
         "practice"
       ],
+      "screenshots": [
+        "ab-loop-player",
+        "ab-loop-settings"
+      ],
       "changelog": [
         {
           "version": "1.0.2",
@@ -473,6 +477,9 @@
         "discord",
         "rich-presence",
         "status"
+      ],
+      "screenshots": [
+        "discord-settings"
       ],
       "changelog": [
         {
@@ -570,6 +577,9 @@
         "dynamic-range",
         "dialogue"
       ],
+      "screenshots": [
+        "night-mode-settings"
+      ],
       "changelog": [
         {
           "version": "1.0.3",
@@ -654,6 +664,10 @@
         "history",
         "csv"
       ],
+      "screenshots": [
+        "playback-stats-player",
+        "playback-stats-settings"
+      ],
       "changelog": [
         {
           "version": "1.0.2",
@@ -724,6 +738,9 @@
         "remote",
         "phone",
         "web"
+      ],
+      "screenshots": [
+        "remote-control-settings"
       ],
       "changelog": [
         {
@@ -840,6 +857,9 @@
         "thumbnails",
         "ffmpeg"
       ],
+      "screenshots": [
+        "scene-chapters-settings"
+      ],
       "changelog": [
         {
           "version": "1.0.1",
@@ -921,6 +941,9 @@
         "listenbrainz",
         "scrobbling"
       ],
+      "screenshots": [
+        "scrobbler-settings"
+      ],
       "changelog": [
         {
           "version": "1.0.1",
@@ -996,6 +1019,9 @@
         "sponsorblock",
         "skip"
       ],
+      "screenshots": [
+        "sponsorblock-settings"
+      ],
       "changelog": [
         {
           "version": "1.0.1",
@@ -1063,6 +1089,9 @@
         "alass",
         "ffsubsync",
         "timing"
+      ],
+      "screenshots": [
+        "subtitle-sync-settings"
       ],
       "changelog": [
         {
@@ -1224,6 +1253,9 @@
         "youtube",
         "yt-dlp",
         "download"
+      ],
+      "screenshots": [
+        "youtube-settings"
       ],
       "changelog": [
         {
