@@ -321,8 +321,8 @@
     {
       "id": "network-streams",
       "name": "Network Streams",
-      "description": "Browse Internet radio (radio-browser.info), import M3U/IPTV playlists, keep saved and recent streams, and see stream info (now-playing title, codec, bitrate, buffer). No key needed.",
-      "version": "0.8.0",
+      "description": "Internet radio (radio-browser.info, SomaFM), iptv-org TV by country and category, your own M3U/IPTV playlists that refresh themselves, favorites, group and category chips, channel logos, an XMLTV program guide (now / next) and stream info. No key needed; nothing bundled, everything fetched and cached on demand.",
+      "version": "0.9.0",
       "author": "Vivi",
       "icon": "streams",
       "lucide": "radio",
@@ -341,18 +341,46 @@
           "title": "Stream info",
           "type": "action",
           "default": ""
+        },
+        {
+          "key": "epg",
+          "title": "Program guide (XMLTV)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "refresh",
+          "title": "Refresh my playlists",
+          "type": "choice",
+          "options": [
+            "24 hours",
+            "6 hours",
+            "7 days"
+          ],
+          "default": "24 hours"
         }
       ],
       "categories": [
         "Streaming"
       ],
       "tags": [
-        "radio",
+        "epg",
+        "favorites",
         "iptv",
-        "m3u"
+        "m3u",
+        "radio",
+        "tv",
+        "xmltv"
       ],
       "screenshots": [
         "network"
+      ],
+      "changelog": [
+        {
+          "version": "0.9.0",
+          "date": "2026-10-15",
+          "notes": "XMLTV program guide (now / next from the playlist url-tvg or a guide URL setting; only 12 hours kept), favorites pinned on top, group-title chips and iptv-org category chips, My playlists (custom M3U URLs that refresh themselves, last updated, broken links keep the last good copy), Search all (TV + radio), Add to queue and Mini player actions, broken logos remembered and a 64 MB logo cache cap."
+        }
       ]
     },
     {

@@ -316,6 +316,9 @@ export component AppWindow inherits Window {
     in property <[string]> md-sources;
     in-out property <string> md-source;
     in-out property <string> md-query;
+    in property <[string]> md-chips;
+    in property <string> md-chip;
+    in property <[string]> md-actions;
     // Network stream loading overlay (core, see loading.rs).
     in property <bool> loading-show;
     in property <bool> loading-buffering;
@@ -1061,6 +1064,10 @@ export component AppWindow inherits Window {
         detail: root.md-detail; placeholder: root.md-placeholder; search-label: root.md-search-label;
         primary-text: root.md-primary; secondary-text: root.md-secondary; sources: root.md-sources;
         source <=> root.md-source; query <=> root.md-query;
+        chips: root.md-owner == "network-streams" ? root.md-chips : []; chip: root.md-chip;
+        actions: root.md-owner == "network-streams" ? root.md-actions : [];
+        chip-clicked(c) => { root.plugin-command(root.md-owner, "chip", c); }
+        action(n, i) => { root.plugin-command(root.md-owner, "act:" + n, i); }
         search => { root.plugin-command(root.md-owner, "search", ""); }
         select(i) => { root.plugin-command(root.md-owner, "select", i); }
         primary(i) => { root.plugin-command(root.md-owner, "primary", i); }

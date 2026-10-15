@@ -3,9 +3,15 @@
 //! `group-title`), saved streams and recently played streams, plus a stream info
 //! readout (ICY now-playing title, codec, bitrate, buffer).
 //!
+//! Also: an on-demand XMLTV program guide (now / next per `tvg-id`, see [`super::epg`]),
+//! favorites pinned on top, `group-title` chips, iptv-org category chips, custom M3U
+//! playlists that refresh themselves ("My playlists"), a TV + radio search, and Play /
+//! Add to queue / Mini player actions. Nothing is bundled: lists, logos and guides are
+//! fetched when needed and cached under `$XDG_CACHE_HOME/vivi/{iptv,stream-logos,epg}`.
+//!
 //! It is its own dialog (the shared plugin dialog), separate from the Open Network
 //! Stream dialog. Saved and recent streams live in
-//! `$XDG_DATA_HOME/vivi/streams/{saved,recent}.json`.
+//! `$XDG_DATA_HOME/vivi/streams/{saved,recent,playlists}.json` (favorites are `saved`).
 
 use super::web;
 use super::{Ctx, Manifest, Plugin, SettingSpec};
@@ -16,7 +22,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
 
 pub const ID: &str = "network-streams";
-pub const SOURCES: [&str; 11] = [
+pub const SOURCES: [&str; 13] = [
     "Radio: search",
     "Radio: top voted",
     "Radio: by country",
@@ -26,8 +32,10 @@ pub const SOURCES: [&str; 11] = [
     "TV: by category",
     "Music: genres",
     "Music: SomaFM",
-    "Saved",
+    "Favorites",
     "Recent",
+    "My playlists",
+    "Search all (TV + radio)",
 ];
 const M3U: usize = 4;
 const TV_COUNTRY: usize = 5;
@@ -36,9 +44,29 @@ const GENRES: usize = 7;
 const SOMAFM: usize = 8;
 const SAVED: usize = 9;
 const RECENT: usize = 10;
+const MY_PL: usize = 11;
+const ALL: usize = 12;
+/// iptv-org categories offered as chips (label, category id).
+const CATEGORY_CHIPS: [(&str, &str); 12] = [
+    ("News", "news"),
+    ("Sports", "sports"),
+    ("Movies", "movies"),
+    ("Kids", "kids"),
+    ("Music", "music"),
+    ("Entertainment", "entertainment"),
+    ("Documentary", "documentary"),
+    ("Series", "series"),
+    ("Comedy", "comedy"),
+    ("Animation", "animation"),
+    ("Education", "education"),
+    ("Culture", "culture"),
+];
+const MAX_CHIPS: usize = 12;
+/// Key prefix of "My playlists" picker entries.
+const PL: &str = "pl:";
 /// Sources whose list is filtered locally as the user types.
 fn live_filter(mode: usize) -> bool {
-    (TV_COUNTRY..=SOMAFM).contains(&mode)
+    (TV_COUNTRY..=SOMAFM).contains(&mode) || mode == MY_PL
 }
 /// `source` of picker entries (a country / category / genre to open).
 const PICK: &str = "pick";
@@ -71,6 +99,12 @@ pub struct Stream {
     pub homepage: String,
     #[serde(default)]
     pub source: String,
+    /// `tvg-id` of IPTV channels (program guide key).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tvg_id: String,
+    /// XMLTV guide URL from the playlist header (`url-tvg` / `x-tvg-url`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub epg: String,
 }
 
 impl Stream {
@@ -167,6 +201,7 @@ pub fn parse_stations(v: &serde_json::Value) -> Vec<Stream> {
                 bitrate: e["bitrate"].as_u64().unwrap_or(0) as u32,
                 homepage: s(&e["homepage"]),
                 source: "radio-browser.info".into(),
+                ..Default::default()
             })
         })
         .collect()
@@ -236,8 +271,10 @@ pub fn placeholder(mode: usize) -> &'static str {
         TV_CATEGORY => "Filter categories, then channels by name (Go = back to categories)",
         GENRES => "Filter genres, then stations (Go = back to genres)",
         SOMAFM => "Filter SomaFM channels by name or genre",
-        SAVED => "Press Go to show saved streams",
-        _ => "Press Go to show recently played streams",
+        SAVED => "Press Go to show favorites",
+        RECENT => "Press Go to show recently played streams",
+        MY_PL => "Filter your playlists, then channels (Go = back). Add one from the M3U source.",
+        _ => "Channel or station name, e.g. news, jazz, bbc",
     }
 }
 
@@ -493,8 +530,13 @@ fn attr(line: &str, key: &str) -> String {
 pub fn parse_m3u(text: &str) -> Vec<Stream> {
     let mut out = Vec::new();
     let mut pending: Option<Stream> = None;
+    let mut guide = String::new();
     for line in text.lines().map(str::trim) {
         if line.is_empty() {
+            continue;
+        }
+        if line.starts_with("#EXTM3U") {
+            guide = epg_url(line);
             continue;
         }
         if let Some(info) = line.strip_prefix("#EXTINF:") {
@@ -519,6 +561,8 @@ pub fn parse_m3u(text: &str) -> Vec<Stream> {
                 logo: attr(info, "tvg-logo"),
                 group: attr(info, "group-title"),
                 country: attr(info, "tvg-country"),
+                tvg_id: attr(info, "tvg-id"),
+                epg: guide.clone(),
                 source: "M3U".into(),
                 ..Default::default()
             });
@@ -539,6 +583,55 @@ pub fn parse_m3u(text: &str) -> Vec<Stream> {
         }
     }
     out
+}
+
+/// First guide URL of an `#EXTM3U` header (`url-tvg` or `x-tvg-url`, comma lists allowed).
+pub fn epg_url(header: &str) -> String {
+    let v = Some(attr(header, "url-tvg"))
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(|| attr(header, "x-tvg-url"));
+    v.split(',')
+        .map(str::trim)
+        .find(|u| u.starts_with("http"))
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Group names of a `group-title` (iptv-org joins several with `;`).
+fn groups_of(s: &Stream) -> impl Iterator<Item = &str> {
+    s.group.split(';').map(str::trim).filter(|g| !g.is_empty())
+}
+
+/// The most common groups of a channel list, biggest first (at most `max`).
+pub fn top_groups(all: &[Stream], max: usize) -> Vec<String> {
+    let mut n: std::collections::HashMap<&str, usize> = Default::default();
+    for s in all {
+        for g in groups_of(s) {
+            *n.entry(g).or_default() += 1;
+        }
+    }
+    let mut v: Vec<(&str, usize)> = n.into_iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    v.into_iter()
+        .take(max)
+        .map(|(g, _)| g.to_string())
+        .collect()
+}
+
+/// Entries in group `g` (all when empty).
+pub fn by_group(all: &[Stream], g: &str) -> Vec<Stream> {
+    if g.is_empty() {
+        return all.to_vec();
+    }
+    all.iter()
+        .filter(|s| groups_of(s).any(|x| x.eq_ignore_ascii_case(g)))
+        .cloned()
+        .collect()
+}
+
+/// Favorites first (stable), keeping the order otherwise.
+pub fn pin_favorites(v: &mut [Stream], favs: &std::collections::HashSet<String>) {
+    v.sort_by_key(|s| !favs.contains(&s.url));
 }
 
 /// Load a playlist from a URL or a local path (`~/` expanded).
@@ -643,13 +736,26 @@ pub struct Streams {
     np_url: String,
     logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
     poll: u32,
-    /// Unfiltered list of live-filter sources; `list` is its filtered view.
+    /// Unfiltered results; `list` is its view (group chip + live filter + favorites first).
     all: Vec<Stream>,
     filtered_by: String,
     /// Row logos (by logo URL) and their background loader.
     logos: std::collections::HashMap<String, slint::Image>,
     row_logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
     logos_dirty: bool,
+    /// Active group chip ("" = all).
+    chip: String,
+    /// Chips are iptv-org categories (open a playlist) rather than groups (filter).
+    category_chips: bool,
+    /// Program guide (merged guides) and the guide URLs already requested.
+    epg: super::epg::Guide,
+    epg_asked: std::collections::HashSet<String>,
+    epg_rx: Option<Receiver<Result<super::epg::Guide, String>>>,
+    /// Favorite URLs.
+    favs: std::collections::HashSet<String>,
+    /// Playlist path / URL the current M3U results came from.
+    loaded_src: String,
+    selected: Option<usize>,
 }
 
 impl Streams {
@@ -657,9 +763,64 @@ impl Streams {
         cx.app.set_md_status(status.into());
         cx.app.set_md_busy(busy);
     }
+    fn reload_favs(&mut self) {
+        self.favs = load_list("saved.json").into_iter().map(|s| s.url).collect();
+    }
+    fn ttl(cx: &Ctx) -> u64 {
+        match cx.get("refresh").as_str() {
+            "6 hours" => 6 * 3600,
+            "7 days" => 7 * 86400,
+            _ => 24 * 3600,
+        }
+    }
+    fn is_picker(&self) -> bool {
+        self.all.first().is_some_and(|s| s.source == PICK)
+    }
     fn show(&mut self, cx: &Ctx) {
+        self.selected = None;
         self.show_rows(cx);
         self.load_row_logos();
+        self.show_chips(cx);
+        self.buttons(cx);
+    }
+    /// Rebuild `list` from `all`: group chip, live filter, favorites first.
+    fn apply_view(&mut self, cx: &Ctx) {
+        let mut v = by_group(&self.all, &self.chip);
+        if live_filter(self.mode) {
+            v = filter(&v, &self.filtered_by);
+        }
+        if !self.is_picker() && self.mode != SAVED && self.mode != RECENT {
+            pin_favorites(&mut v, &self.favs);
+        }
+        self.list = v;
+        self.show(cx);
+    }
+    fn show_chips(&mut self, cx: &Ctx) {
+        let groups = if self.is_picker() {
+            Vec::new()
+        } else {
+            top_groups(&self.all, MAX_CHIPS)
+        };
+        let chips: Vec<SharedString> = if groups.len() >= 2 {
+            self.category_chips = false;
+            std::iter::once("All".to_string())
+                .chain(groups)
+                .map(Into::into)
+                .collect()
+        } else if self.mode == TV_CATEGORY {
+            self.category_chips = true;
+            CATEGORY_CHIPS.iter().map(|c| c.0.into()).collect()
+        } else {
+            self.category_chips = false;
+            Vec::new()
+        };
+        cx.app.set_md_chips(ModelRc::new(VecModel::from(chips)));
+        cx.app
+            .set_md_chip(if self.chip.is_empty() && !self.category_chips {
+                "All".into()
+            } else {
+                self.chip.as_str().into()
+            });
     }
     /// Start fetching logos of the first rows that are not cached yet.
     fn load_row_logos(&mut self) {
@@ -684,6 +845,9 @@ impl Streams {
             }
         });
     }
+    fn guide_for(&self, s: &Stream) -> Option<&Vec<super::epg::Prog>> {
+        super::epg::lookup(&self.epg, &s.tvg_id)
+    }
     fn show_rows(&self, cx: &Ctx) {
         let logos: Vec<slint::Image> = self
             .list
@@ -691,27 +855,55 @@ impl Streams {
             .map(|s| self.logos.get(&s.logo).cloned().unwrap_or_default())
             .collect();
         cx.app.set_md_logos(ModelRc::new(VecModel::from(logos)));
+        let now = super::epg::now();
         let items: Vec<Item> = self
             .list
             .iter()
-            .map(|s| Item {
-                key: display_name(&s.name).into(),
-                label: s.label().into(),
-                selected: false,
+            .map(|s| {
+                let star = if s.source != PICK && self.favs.contains(&s.url) {
+                    "★ "
+                } else {
+                    ""
+                };
+                let mut label = s.label();
+                if let Some(v) = self.guide_for(s) {
+                    if let Some(p) = super::epg::now_next(v, now).0 {
+                        label = format!("▶ {}  ·  {label}", p.title);
+                    }
+                }
+                Item {
+                    key: format!("{star}{}", display_name(&s.name)).into(),
+                    label: label.into(),
+                    selected: false,
+                }
             })
             .collect();
         cx.app.set_md_results(ModelRc::new(VecModel::from(items)));
-        Self::secondary(cx, self.mode, false);
     }
-    /// Secondary button: Remove (saved/recent), Choose file… (playlist source without a
-    /// selection) or Save.
-    fn secondary(cx: &Ctx, mode: usize, selected: bool) {
-        let t = match mode {
-            SAVED | RECENT => "Remove",
-            M3U if !selected => "Choose file…",
-            _ => "Save",
+    /// Secondary button and the extra actions for the current selection.
+    fn buttons(&self, cx: &Ctx) {
+        let sel = self.selected.and_then(|i| self.list.get(i));
+        let picker = sel.is_some_and(|s| s.source == PICK);
+        let t = match (self.mode, sel) {
+            (SAVED | RECENT, _) => "Remove",
+            (MY_PL, Some(_)) if picker => "Remove",
+            (M3U, None) => "Choose file…",
+            (_, Some(s)) if !picker && self.favs.contains(&s.url) => "Unfavorite",
+            _ => "Favorite",
         };
         cx.app.set_md_secondary(t.into());
+        let mut acts: Vec<SharedString> = Vec::new();
+        if sel.is_some() && !picker {
+            acts.push("Add to queue".into());
+            acts.push("Mini player".into());
+        }
+        if self.mode == MY_PL && picker {
+            acts.push("Refresh".into());
+        }
+        if self.mode == M3U && !self.loaded_src.is_empty() && !self.all.is_empty() {
+            acts.push("Add to My playlists".into());
+        }
+        cx.app.set_md_actions(ModelRc::new(VecModel::from(acts)));
     }
     fn mode(cx: &Ctx) -> usize {
         let s = cx.app.get_md_source();
@@ -719,14 +911,18 @@ impl Streams {
     }
     fn local(&mut self, cx: &Ctx, mode: usize) {
         self.mode = mode;
-        self.list = load_list(if mode == SAVED {
+        self.reload_favs();
+        self.chip.clear();
+        self.loaded_src.clear();
+        self.all = load_list(if mode == SAVED {
             "saved.json"
         } else {
             "recent.json"
         });
-        self.show(cx);
+        self.apply_view(cx);
+        self.want_epg(cx);
         cx.app.set_md_detail("".into());
-        let what = if mode == SAVED { "saved" } else { "recent" };
+        let what = if mode == SAVED { "favorite" } else { "recent" };
         Self::ui(
             cx,
             &if self.list.is_empty() {
@@ -736,6 +932,94 @@ impl Streams {
             },
             false,
         );
+    }
+    /// Run `job` in the background; its result fills the list in `tick`.
+    fn spawn(&mut self, job: impl FnOnce() -> Result<Vec<Stream>, String> + Send + 'static) {
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+        std::thread::spawn(move || {
+            let _ = tx.send(job());
+        });
+    }
+    fn clear(&mut self, cx: &Ctx) {
+        self.all.clear();
+        self.list.clear();
+        self.chip.clear();
+        self.show(cx);
+        cx.app.set_md_detail("".into());
+    }
+    /// Request guides for the channels shown (playlist `url-tvg` + the EPG setting).
+    fn want_epg(&mut self, cx: &Ctx) {
+        if !self.all.iter().any(|s| !s.tvg_id.is_empty()) {
+            return;
+        }
+        let mut urls: Vec<String> = self
+            .all
+            .iter()
+            .map(|s| s.epg.clone())
+            .chain(cx.get("epg").split_whitespace().map(String::from))
+            .filter(|u| u.starts_with("http") && !self.epg_asked.contains(u))
+            .collect();
+        urls.sort();
+        urls.dedup();
+        if urls.is_empty() || self.epg_rx.is_some() {
+            return;
+        }
+        self.epg_asked.extend(urls.iter().cloned());
+        let (tx, rx) = channel();
+        self.epg_rx = Some(rx);
+        std::thread::spawn(move || {
+            for u in urls {
+                if tx.send(super::epg::load(&u)).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    /// Play `s`: 0 = now, 1 = add to queue, 2 = now in the mini player.
+    fn play(&mut self, cx: &Ctx, s: &Stream, how: u8) {
+        crate::loading::set_name(&s.url, &display_name(&s.name));
+        if how == 1 {
+            cx.player.enqueue(&s.url);
+            cx.toast(&format!("Added {} to the queue", display_name(&s.name)));
+            Self::ui(cx, &format!("Queued {}", s.name), false);
+            return;
+        }
+        cx.player.cmd("loadfile", &[&s.url]);
+        self.playing = Some(s.clone());
+        if s.source == "radio-browser.info" {
+            radio_click(&s.url);
+        }
+        let mut r = load_list("recent.json");
+        push_front(&mut r, s, MAX_RECENT);
+        save_list("recent.json", &r);
+        cx.toast(&format!("Playing {}", s.name));
+        Self::ui(cx, &format!("Playing {}", s.name), false);
+        if how == 2 {
+            cx.app.set_md_open(false);
+            if !cx.app.get_mini() {
+                cx.app.invoke_toggle_mini();
+            }
+        }
+    }
+    fn open_playlist(&mut self, cx: &Ctx, name: &str, key: String) {
+        self.clear(cx);
+        cx.app.set_md_query("".into());
+        self.filtered_by.clear();
+        Self::ui(cx, &format!("Loading {name}…"), true);
+        self.note = Some(format!(
+            "{name}: {{n}} streams. Type to filter, Go to go back."
+        ));
+        let ttl = Self::ttl(cx);
+        self.spawn(move || {
+            if let Some(src) = key.strip_prefix(PL) {
+                fetch_playlist(src, ttl, false)
+            } else if key.starts_with("http") {
+                iptv_playlist(&key)
+            } else {
+                genre_stations(&key)
+            }
+        });
     }
 }
 
@@ -749,18 +1033,266 @@ fn known_station(url: &str) -> Option<Stream> {
 
 /// Download a station logo into the cache (once); `None` when it cannot be fetched.
 fn fetch_logo(url: &str) -> Option<PathBuf> {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    url.hash(&mut h);
     let dir = crate::store::cache_dir().join("stream-logos");
-    let p = dir.join(format!("{:016x}", h.finish()));
+    let p = dir.join(hash_name(url));
+    let miss = p.with_extension("none");
     if p.is_file() {
         return Some(p);
     }
-    let b = web::get_bytes(url, 2 * 1024 * 1024).ok()??;
+    // Broken logo URLs are remembered for a week instead of being retried every time.
+    if std::fs::metadata(&miss)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|e| e.as_secs() < 7 * 86400)
+    {
+        return None;
+    }
     std::fs::create_dir_all(&dir).ok()?;
-    std::fs::write(&p, b).ok()?;
-    Some(p)
+    match web::get_bytes(url, 2 * 1024 * 1024) {
+        Ok(Some(b)) if !b.is_empty() => {
+            std::fs::write(&p, b).ok()?;
+            Some(p)
+        }
+        _ => {
+            let _ = std::fs::write(&miss, b"");
+            None
+        }
+    }
+}
+
+/// Short stable file name for a URL.
+pub fn hash_name(url: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    url.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+/// Keep the logo cache under `max` bytes (oldest files go first).
+fn prune_logos(max: u64) {
+    let dir = crate::store::cache_dir().join("stream-logos");
+    let Ok(rd) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let mut v: Vec<(std::time::SystemTime, u64, PathBuf)> = rd
+        .flatten()
+        .filter_map(|e| {
+            let m = e.metadata().ok()?;
+            Some((m.modified().ok()?, m.len(), e.path()))
+        })
+        .collect();
+    let mut total: u64 = v.iter().map(|x| x.1).sum();
+    v.sort();
+    for (_, n, p) in v {
+        if total <= max {
+            break;
+        }
+        if std::fs::remove_file(&p).is_ok() {
+            total -= n;
+        }
+    }
+}
+
+// ---------- My playlists ----------
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Playlist {
+    pub name: String,
+    pub url: String,
+    #[serde(default)]
+    pub added: u64,
+    /// Last successful refresh (Unix seconds, 0 = never).
+    #[serde(default)]
+    pub updated: u64,
+    #[serde(default)]
+    pub count: usize,
+    /// Last refresh error ("" when it worked).
+    #[serde(default)]
+    pub error: String,
+}
+
+fn now_secs() -> u64 {
+    super::epg::now().max(0) as u64
+}
+
+fn playlists() -> Vec<Playlist> {
+    std::fs::read_to_string(dir().join("playlists.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_playlists(v: &[Playlist]) {
+    let d = dir();
+    let _ = std::fs::create_dir_all(&d);
+    if let Ok(t) = serde_json::to_string_pretty(v) {
+        let tmp = d.join(".playlists.json.tmp");
+        if std::fs::write(&tmp, t).is_ok() {
+            let _ = std::fs::rename(&tmp, d.join("playlists.json"));
+        }
+    }
+}
+
+fn update_playlist(url: &str, f: impl FnOnce(&mut Playlist)) {
+    let mut v = playlists();
+    if let Some(p) = v.iter_mut().find(|p| p.url == url) {
+        f(p);
+        save_playlists(&v);
+    }
+}
+
+/// "3 h ago" style age of a Unix time.
+pub fn ago(t: u64, now: u64) -> String {
+    if t == 0 {
+        return "never".into();
+    }
+    let s = now.saturating_sub(t);
+    match s {
+        0..=59 => "just now".into(),
+        60..=3599 => format!("{} min ago", s / 60),
+        3600..=86399 => format!("{} h ago", s / 3600),
+        _ => format!("{} d ago", s / 86400),
+    }
+}
+
+/// Name for a playlist URL / path: its file name without the extension.
+pub fn playlist_name(src: &str) -> String {
+    let base = src
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or(src)
+        .split('?')
+        .next()
+        .unwrap_or("");
+    let base = display_name(base);
+    let n = base
+        .strip_suffix(".m3u8")
+        .or_else(|| base.strip_suffix(".m3u"))
+        .unwrap_or(&base);
+    if n.is_empty() {
+        src.to_string()
+    } else {
+        n.to_string()
+    }
+}
+
+fn playlist_cache(url: &str) -> PathBuf {
+    crate::store::cache_dir()
+        .join("iptv")
+        .join(format!("custom-{}.m3u", hash_name(url)))
+}
+
+/// Channels of a custom playlist. URLs are cached and refreshed after `ttl` (or when
+/// `force`); a failed refresh keeps the last good copy and records the error.
+pub fn fetch_playlist(src: &str, ttl: u64, force: bool) -> Result<Vec<Stream>, String> {
+    if !(src.starts_with("http://") || src.starts_with("https://")) {
+        let r = load_m3u(src);
+        let now = now_secs();
+        update_playlist(src, |p| match &r {
+            Ok(v) => {
+                p.updated = now;
+                p.count = v.len();
+                p.error.clear();
+            }
+            Err(e) => p.error = e.clone(),
+        });
+        return r;
+    }
+    let c = playlist_cache(src);
+    let age = std::fs::metadata(&c)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .map(|e| e.as_secs());
+    if !force && age.is_some_and(|a| a < ttl) {
+        if let Ok(t) = std::fs::read_to_string(&c) {
+            return Ok(parse_m3u(&t));
+        }
+    }
+    let got = web::get_bytes(src, 32 * 1024 * 1024).and_then(|b| {
+        let t = String::from_utf8_lossy(&b.ok_or("Playlist not found (404)")?).into_owned();
+        let v = parse_m3u(&t);
+        if v.is_empty() {
+            return Err("No stream URLs in the playlist".into());
+        }
+        Ok((t, v))
+    });
+    let now = now_secs();
+    match got {
+        Ok((t, v)) => {
+            let _ = std::fs::create_dir_all(c.parent().unwrap());
+            let _ = std::fs::write(&c, t);
+            update_playlist(src, |p| {
+                p.updated = now;
+                p.count = v.len();
+                p.error.clear();
+            });
+            Ok(v)
+        }
+        Err(e) => {
+            update_playlist(src, |p| p.error = e.clone());
+            match std::fs::read_to_string(&c) {
+                Ok(t) => Ok(parse_m3u(&t)),
+                Err(_) => Err(e),
+            }
+        }
+    }
+}
+
+/// Picker rows of "My playlists".
+fn playlist_picks(v: &[Playlist]) -> Vec<Stream> {
+    let now = now_secs();
+    v.iter()
+        .map(|p| {
+            let mut l = format!("{} channels · updated {}", p.count, ago(p.updated, now));
+            if !p.error.is_empty() {
+                l += &format!(" · ⚠ {}", p.error.chars().take(80).collect::<String>());
+            }
+            let mut s = pick(&p.name, &l, &format!("{PL}{}", p.url));
+            s.homepage = p.url.clone();
+            s
+        })
+        .collect()
+}
+
+/// Refresh playlists older than `ttl`, then list them.
+fn my_playlists(ttl: u64) -> Result<Vec<Stream>, String> {
+    let now = now_secs();
+    for p in playlists() {
+        if now.saturating_sub(p.updated) >= ttl {
+            let _ = fetch_playlist(&p.url, ttl, true);
+        }
+    }
+    Ok(playlist_picks(&playlists()))
+}
+
+/// Favorites, iptv-org TV, your playlists (cached copies) and radio-browser stations
+/// matching `q`, without duplicates.
+pub fn search_all(q: &str) -> Result<Vec<Stream>, String> {
+    let mut out = filter(&load_list("saved.json"), q);
+    let mut errs = Vec::new();
+    match iptv_search(q) {
+        Ok(v) => out.extend(v),
+        Err(e) => errs.push(e),
+    }
+    for p in playlists() {
+        if let Ok(t) = std::fs::read_to_string(playlist_cache(&p.url)) {
+            out.extend(filter(&parse_m3u(&t), q));
+        }
+    }
+    match radio_any(q) {
+        Ok(v) => out.extend(v),
+        Err(e) => errs.push(e),
+    }
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|s| seen.insert(s.url.clone()));
+    out.truncate(500);
+    if out.is_empty() && !errs.is_empty() {
+        return Err(errs.join("; "));
+    }
+    Ok(out)
 }
 
 impl Streams {
@@ -833,7 +1365,7 @@ impl Plugin for Streams {
         Manifest::builtin(
             ID,
             "Network Streams",
-            "Browse Internet radio (radio-browser.info), import M3U/IPTV playlists, keep saved and recent streams, and see stream info (now-playing title, codec, bitrate, buffer).",
+            "Internet radio (radio-browser.info, SomaFM), iptv-org TV by country and category, your own M3U/IPTV playlists that refresh themselves, favorites, groups, channel logos, an XMLTV program guide (now / next) and stream info.",
             "streams",
         )
         .setting(SettingSpec::action(
@@ -848,6 +1380,19 @@ impl Plugin for Streams {
             "Shows the now-playing title, codec, bitrate and buffer of the current stream.",
             "Show",
         ))
+        .setting(SettingSpec::text(
+            "epg",
+            "Program guide (XMLTV)",
+            "Optional XMLTV guide URL(s) (.xml or .xml.gz) for channels with a tvg-id, in addition to the playlist's own url-tvg. Only the next 12 hours are kept.",
+            "https://example.com/guide.xml.gz",
+            "",
+        ))
+        .setting(SettingSpec::choice(
+            "refresh",
+            "Refresh my playlists",
+            "How often saved M3U playlist URLs are downloaded again. A broken link keeps the last good copy.",
+            &["24 hours", "6 hours", "7 days"],
+        ))
     }
     fn disable(&mut self, cx: &Ctx) {
         self.rx = None;
@@ -857,7 +1402,12 @@ impl Plugin for Streams {
         }
     }
     fn command(&mut self, cx: &Ctx, name: &str, args: &[String]) {
-        let idx = || args.first().and_then(|a| a.parse::<usize>().ok());
+        let idx = || {
+            args.first()
+                .and_then(|a| a.parse::<i64>().ok())
+                .filter(|i| *i >= 0)
+                .map(|i| i as usize)
+        };
         match name {
             "open" => {
                 let a = cx.app;
@@ -874,40 +1424,54 @@ impl Plugin for Streams {
                     a.set_md_source(SOURCES[0].into());
                 }
                 a.set_md_open(true);
+                std::thread::spawn(|| prune_logos(64 * 1024 * 1024));
                 self.local(cx, SAVED);
                 if self.list.is_empty() {
                     Self::ui(
                         cx,
-                        "Pick a source, type and press Go. Saved streams show here.",
+                        "Pick a source, type and press Go. Favorites show here.",
                         false,
                     );
                 }
             }
             "search" => {
                 let mode = Self::mode(cx);
-                if mode >= SAVED {
+                if mode == SAVED || mode == RECENT {
                     self.local(cx, mode);
                     return;
                 }
+                self.reload_favs();
                 let q = cx.app.get_md_query().trim().to_string();
+                self.loaded_src.clear();
                 if live_filter(mode) {
                     // Go = (re)load the picker; typing filters it.
-                    self.all.clear();
                     self.filtered_by = q.clone();
                     self.mode = mode;
-                    self.list.clear();
-                    self.show(cx);
-                    cx.app.set_md_detail("".into());
-                    Self::ui(cx, "Loading…", true);
-                    let (tx, rx) = channel();
-                    self.rx = Some(rx);
-                    std::thread::spawn(move || {
-                        let _ = tx.send(match mode {
-                            TV_COUNTRY => iptv_index(true),
-                            TV_CATEGORY => iptv_index(false),
-                            GENRES => genre_list(),
-                            _ => somafm(),
-                        });
+                    self.clear(cx);
+                    Self::ui(
+                        cx,
+                        if mode == MY_PL {
+                            "Refreshing your playlists…"
+                        } else {
+                            "Loading…"
+                        },
+                        true,
+                    );
+                    let ttl = Self::ttl(cx);
+                    if mode == MY_PL && playlists().is_empty() {
+                        Self::ui(
+                            cx,
+                            "No playlists yet. Load an M3U URL in the M3U / IPTV source, then Add to My playlists.",
+                            false,
+                        );
+                        return;
+                    }
+                    self.spawn(move || match mode {
+                        TV_COUNTRY => iptv_index(true),
+                        TV_CATEGORY => iptv_index(false),
+                        GENRES => genre_list(),
+                        MY_PL => my_playlists(ttl),
+                        _ => somafm(),
                     });
                     return;
                 }
@@ -921,38 +1485,64 @@ impl Plugin for Streams {
                     self.note = Some(format!(
                         "TV channels named “{q}” from iptv-org. Paste a URL or use Choose file… to import a playlist."
                     ));
+                } else if mode == M3U {
+                    self.loaded_src = q.clone();
                 }
                 self.mode = mode;
-                self.list.clear();
-                self.show(cx);
-                cx.app.set_md_detail("".into());
+                self.clear(cx);
                 Self::ui(
                     cx,
                     if tv_search {
                         "Searching iptv-org channels…"
                     } else if mode == M3U {
                         "Loading playlist…"
+                    } else if mode == ALL {
+                        "Searching TV and radio…"
                     } else {
                         "Searching radio-browser.info…"
                     },
                     true,
                 );
-                let (tx, rx) = channel();
-                self.rx = Some(rx);
-                std::thread::spawn(move || {
-                    let r = match mode {
-                        M3U if tv_search => iptv_search(&q),
-                        M3U => load_m3u(&q),
-                        0 => radio_any(&q),
-                        _ => radio_search(mode, &q),
-                    };
-                    let _ = tx.send(r);
+                self.spawn(move || match mode {
+                    M3U if tv_search => iptv_search(&q),
+                    M3U => load_m3u(&q),
+                    ALL => search_all(&q),
+                    0 => radio_any(&q),
+                    _ => radio_search(mode, &q),
                 });
             }
+            "chip" => {
+                let c = args.first().cloned().unwrap_or_default();
+                if self.category_chips {
+                    if let Some((label, id)) = CATEGORY_CHIPS.iter().find(|x| x.0 == c) {
+                        self.chip.clear();
+                        self.open_playlist(cx, label, format!("{IPTV}/categories/{id}.m3u"));
+                    }
+                    return;
+                }
+                self.chip = if c == "All" { String::new() } else { c };
+                self.apply_view(cx);
+                cx.app.set_md_detail("".into());
+                Self::ui(
+                    cx,
+                    &format!("{} of {}", self.list.len(), self.all.len()),
+                    false,
+                );
+            }
             "select" => {
-                if let Some(s) = idx().and_then(|i| self.list.get(i)) {
-                    Self::secondary(cx, self.mode, true);
+                self.selected = idx().filter(|i| *i < self.list.len());
+                self.buttons(cx);
+                if let Some(s) = self.selected.and_then(|i| self.list.get(i)) {
                     let mut d = s.detail();
+                    if !s.tvg_id.is_empty() {
+                        d += &format!("\nGuide id: {}", s.tvg_id);
+                    }
+                    if let Some(v) = self.guide_for(s) {
+                        let l = super::epg::describe(v, super::epg::now());
+                        if !l.is_empty() {
+                            d += &format!("\n\n— Program guide —\n{}", l.join("\n"));
+                        }
+                    }
                     if cx.player.get("path").as_deref() == Some(s.url.as_str()) {
                         d += &format!("\n\n— Playing —\n{}", now_info(|p| cx.player.get(p)));
                     }
@@ -965,41 +1555,63 @@ impl Plugin for Streams {
                     return;
                 };
                 if s.source == PICK {
-                    // Open the picked country / category / genre.
-                    self.all.clear();
-                    self.list.clear();
-                    self.show(cx);
-                    cx.app.set_md_query("".into());
-                    self.filtered_by.clear();
-                    cx.app.set_md_detail("".into());
-                    Self::ui(cx, &format!("Loading {}…", s.name), true);
-                    self.note = Some(format!(
-                        "{}: {{n}} streams. Type to filter, Go to go back.",
-                        s.name
-                    ));
-                    let (tx, rx) = channel();
-                    self.rx = Some(rx);
-                    let key = s.url.clone();
-                    std::thread::spawn(move || {
-                        let _ = tx.send(if key.starts_with("http") {
-                            iptv_playlist(&key)
-                        } else {
-                            genre_stations(&key)
-                        });
-                    });
+                    self.open_playlist(cx, &s.name, s.url.clone());
                     return;
                 }
-                crate::loading::set_name(&s.url, &display_name(&s.name));
-                cx.player.cmd("loadfile", &[&s.url]);
-                self.playing = Some(s.clone());
-                if s.source == "radio-browser.info" {
-                    radio_click(&s.url);
+                self.play(cx, &s, 0);
+            }
+            n if n.starts_with("act:") => {
+                let sel = idx().and_then(|i| self.list.get(i)).cloned();
+                match &n[4..] {
+                    "Add to queue" | "Mini player" => {
+                        let Some(s) = sel.filter(|s| s.source != PICK) else {
+                            Self::ui(cx, "Select a stream first", false);
+                            return;
+                        };
+                        self.play(cx, &s, if n.ends_with("queue") { 1 } else { 2 });
+                    }
+                    "Refresh" => {
+                        let Some(src) = sel.and_then(|s| s.url.strip_prefix(PL).map(String::from))
+                        else {
+                            return;
+                        };
+                        Self::ui(cx, "Refreshing…", true);
+                        self.note = Some("Refreshed. {n} playlists.".into());
+                        self.clear(cx);
+                        let ttl = Self::ttl(cx);
+                        self.spawn(move || {
+                            let r = fetch_playlist(&src, ttl, true);
+                            let picks = playlist_picks(&playlists());
+                            r.map(|_| picks)
+                        });
+                    }
+                    "Add to My playlists" => {
+                        let src = self.loaded_src.clone();
+                        let mut v = playlists();
+                        if v.iter().any(|p| p.url == src) {
+                            Self::ui(cx, "Already in My playlists", false);
+                            return;
+                        }
+                        v.push(Playlist {
+                            name: playlist_name(&src),
+                            url: src.clone(),
+                            added: now_secs(),
+                            ..Default::default()
+                        });
+                        save_playlists(&v);
+                        let ttl = Self::ttl(cx);
+                        std::thread::spawn(move || {
+                            let _ = fetch_playlist(&src, ttl, true);
+                        });
+                        Self::ui(
+                            cx,
+                            "Added to My playlists. It refreshes itself; see the My playlists source.",
+                            false,
+                        );
+                        self.buttons(cx);
+                    }
+                    _ => {}
                 }
-                let mut r = load_list("recent.json");
-                push_front(&mut r, &s, MAX_RECENT);
-                save_list("recent.json", &r);
-                cx.toast(&format!("Playing {}", s.name));
-                Self::ui(cx, &format!("Playing {}", s.name), false);
             }
             "secondary" if cx.app.get_md_secondary().as_str() == "Choose file…" => {
                 let Some(f) = rfd::FileDialog::new()
@@ -1017,28 +1629,52 @@ impl Plugin for Streams {
                     Self::ui(cx, "Select a stream first", false);
                     return;
                 };
-                if self.mode >= SAVED {
+                let s = self.list[i].clone();
+                if self.mode == SAVED || self.mode == RECENT {
                     let file = if self.mode == SAVED {
                         "saved.json"
                     } else {
                         "recent.json"
                     };
-                    let s = self.list.remove(i);
-                    save_list(file, &self.list);
-                    self.show(cx);
+                    self.all.retain(|o| o.url != s.url);
+                    save_list(file, &self.all);
+                    self.reload_favs();
+                    self.apply_view(cx);
                     cx.app.set_md_detail("".into());
                     Self::ui(cx, &format!("Removed {}", s.name), false);
-                } else {
-                    let s = self.list[i].clone();
-                    if s.source == PICK {
-                        Self::ui(cx, "Open it first, then save a stream", false);
-                        return;
+                } else if s.source == PICK {
+                    if let Some(src) = s.url.strip_prefix(PL) {
+                        let mut v = playlists();
+                        v.retain(|p| p.url != src);
+                        save_playlists(&v);
+                        let _ = std::fs::remove_file(playlist_cache(src));
+                        self.all.retain(|o| o.url != s.url);
+                        self.apply_view(cx);
+                        Self::ui(cx, &format!("Removed playlist {}", s.name), false);
+                    } else {
+                        Self::ui(cx, "Open it first, then favorite a stream", false);
                     }
+                } else {
                     let mut v = load_list("saved.json");
+                    let was = v.iter().any(|o| o.url == s.url);
                     v.retain(|o| o.url != s.url);
-                    v.push(s.clone());
+                    if !was {
+                        v.push(s.clone());
+                    }
                     save_list("saved.json", &v);
-                    Self::ui(cx, &format!("Saved {}", s.name), false);
+                    self.reload_favs();
+                    self.show_rows(cx);
+                    self.selected = Some(i);
+                    self.buttons(cx);
+                    Self::ui(
+                        cx,
+                        &if was {
+                            format!("Removed {} from favorites", s.name)
+                        } else {
+                            format!("★ {} added to favorites", s.name)
+                        },
+                        false,
+                    );
                 }
             }
             "info" => cx.toast(&now_info(|p| cx.player.get(p)).replace('\n', " · ")),
@@ -1054,15 +1690,23 @@ impl Plugin for Streams {
                 self.last_source = src.to_string();
                 let m = Self::mode(cx);
                 cx.app.set_md_placeholder(placeholder(m).into());
-                Self::secondary(cx, m, false);
+                if self.mode != m {
+                    cx.app.set_md_secondary(
+                        if m == M3U {
+                            "Choose file…"
+                        } else {
+                            "Favorite"
+                        }
+                        .into(),
+                    );
+                }
             }
         }
         if live_filter(self.mode) && !self.all.is_empty() && cx.app.get_md_open() {
             let q = cx.app.get_md_query().to_string();
             if q != self.filtered_by {
                 self.filtered_by = q.clone();
-                self.list = filter(&self.all, &q);
-                self.show(cx);
+                self.apply_view(cx);
                 Self::ui(
                     cx,
                     &format!("{} of {}", self.list.len(), self.all.len()),
@@ -1080,6 +1724,22 @@ impl Plugin for Streams {
                 got = true;
             }
             self.logos_dirty |= got;
+        }
+        if let Some(rx) = &self.epg_rx {
+            loop {
+                match rx.try_recv() {
+                    Ok(Ok(g)) => {
+                        self.epg.extend(g);
+                        self.logos_dirty = true;
+                    }
+                    Ok(Err(e)) => eprintln!("vivi: EPG: {e}"),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(_) => {
+                        self.epg_rx = None;
+                        break;
+                    }
+                }
+            }
         }
         if self.logos_dirty && self.poll.is_multiple_of(10) {
             self.logos_dirty = false;
@@ -1108,14 +1768,13 @@ impl Plugin for Streams {
         match r {
             Ok(v) => {
                 let n = v.len();
+                self.all = v;
+                self.chip.clear();
                 if live_filter(self.mode) {
-                    self.all = v.clone();
                     self.filtered_by = cx.app.get_md_query().to_string();
-                    self.list = filter(&self.all, &self.filtered_by);
-                } else {
-                    self.list = v;
                 }
-                self.show(cx);
+                self.apply_view(cx);
+                self.want_epg(cx);
                 Self::ui(
                     cx,
                     &if let Some(note) = self.note.take() {
@@ -1128,7 +1787,10 @@ impl Plugin for Streams {
                     false,
                 );
             }
-            Err(e) => Self::ui(cx, &e, false),
+            Err(e) => {
+                self.note = None;
+                Self::ui(cx, &e, false)
+            }
         }
     }
 }
@@ -1244,7 +1906,46 @@ mod tests {
             ["http://a", "http://c"]
         );
         assert_eq!(filter(&all, " ").len(), 3);
-        assert!(live_filter(TV_COUNTRY) && !live_filter(M3U) && SOURCES[SAVED] == "Saved");
+        assert!(live_filter(TV_COUNTRY) && !live_filter(M3U) && SOURCES[SAVED] == "Favorites");
+    }
+
+    #[test]
+    fn epg_groups_favorites_playlists() {
+        let t = "#EXTM3U x-tvg-url=\"https://g/a.xml.gz,https://g/b.xml\"\n#EXTINF:-1 tvg-id=\"A.uk@HD\" group-title=\"News;General\",A\nhttp://a\n#EXTINF:-1 group-title=\"News\",B\nhttp://b\n#EXTINF:-1 group-title=\"Kids\",C\nhttp://c\n";
+        let v = parse_m3u(t);
+        assert_eq!(v[0].tvg_id, "A.uk@HD");
+        assert_eq!(v[0].epg, "https://g/a.xml.gz");
+        assert_eq!(
+            epg_url("#EXTM3U url-tvg=\"http://x/g.xml\""),
+            "http://x/g.xml"
+        );
+        assert_eq!(top_groups(&v, 5), ["News", "General", "Kids"]);
+        assert_eq!(by_group(&v, "news").len(), 2);
+        assert_eq!(by_group(&v, "").len(), 3);
+        let mut w = v.clone();
+        let favs = ["http://c".to_string()].into_iter().collect();
+        pin_favorites(&mut w, &favs);
+        assert_eq!(w[0].url, "http://c");
+        assert_eq!(w[1].url, "http://a");
+        assert_eq!(ago(0, 100), "never");
+        assert_eq!(ago(100, 7300), "2 h ago");
+        assert_eq!(playlist_name("https://h/p/My%20TV.m3u8?x=1"), "My TV");
+        assert_eq!(
+            playlist_picks(&[Playlist {
+                name: "P".into(),
+                url: "u".into(),
+                count: 3,
+                error: "404".into(),
+                ..Default::default()
+            }])[0]
+                .url,
+            "pl:u"
+        );
+        // Saved favorites stay readable without the new fields.
+        let old: Stream = serde_json::from_str(r#"{"name":"n","url":"u"}"#).unwrap();
+        assert!(old.tvg_id.is_empty());
+        assert!(!serde_json::to_string(&old).unwrap().contains("tvg_id"));
+        assert!(live_filter(MY_PL) && SOURCES[ALL].starts_with("Search all"));
     }
 
     #[test]

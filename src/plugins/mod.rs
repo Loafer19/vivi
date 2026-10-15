@@ -19,6 +19,7 @@
 //!
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
+pub mod epg;
 pub mod free_music;
 pub mod lyrics;
 pub mod packages;
@@ -285,6 +286,23 @@ pub fn manifests() -> Vec<Manifest> {
             .iter()
             .map(|e| e.manifest.clone())
             .chain(r.scripts.iter().map(|s| s.manifest.clone()))
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// All plugins with whether each is enabled (for the control socket).
+pub fn states() -> Vec<(Manifest, bool)> {
+    with(|r| {
+        let c = r.cfg.borrow();
+        r.entries
+            .iter()
+            .map(|e| (e.manifest.clone(), e.active))
+            .chain(
+                r.scripts
+                    .iter()
+                    .map(|s| (s.manifest.clone(), is_enabled(&c, &s.manifest))),
+            )
             .collect()
     })
     .unwrap_or_default()
