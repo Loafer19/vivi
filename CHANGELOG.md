@@ -1,15 +1,10 @@
 # Changelog
 
-### Added
-- **Network Streams: TV (iptv-org)**: *TV: by country* and *TV: by category* list the iptv-org countries/categories (iptv-org.github.io/api); *Play* on one loads its playlist (cached for a day in `~/.cache/vivi/iptv/`), typing filters channels by name, rows show channel logos, and channels play as video. A word typed into the *M3U* source now searches iptv-org channels instead of radio stations; pasted URLs and files still import as before.
-- **Network Streams: music**: *Music: genres* browses radio-browser.info tags by station count plus *Popular* (top voted) and *Trending* (top clicked) and opens the top stations of a genre; *Music: SomaFM* lists SomaFM channels with logos.
-- **Stream loading overlay** (core player): while a network stream opens or buffers (before the first frame/audio, or paused for cache) a spinner with the stream name is shown instead of a black screen; it hides on playback start, and a failed open shows an error toast.
-
-### Fixed
-- **Free Music relevance**: Internet Archive search is limited to audio in music collections (netlabels, opensource_audio, audio_music, Jamendo/FMA mirrors, 78rpm, etree), excludes podcasts, lectures, audiobooks and radio shows, skips files over 20 minutes, expands each item into its individual tracks with tidied titles, and ranks results by artist/title match. Jamendo is the default source once a client ID is set; the setting links to https://devportal.jamendo.com.
-- The docked Library panel now hides with the other controls after inactivity during playback and comes back on mouse move (it used to stay, leaving half the window black during audio streams).
-
 ## [Unreleased]
+
+## [0.9.0] - 2026-10-15
+
+Highlights: Network Streams (radio now-playing card and visualizer, IPTV via iptv-org, music genres and SomaFM, M3U import), a loading spinner and error toast for streams, physical-keycode shortcuts, chapter thumbnails, EQ preset import/export, Figma-accurate dialogs, filters and miniplayer, Discord Rich Presence and Remote Control, downloadable plugins (Auto-tagger, Free Music, ListenBrainz, Subtitle Sync, SponsorBlock, Scene Chapters, A-B Loop, Night Mode, Playback Stats), an AppImage cut from 106 MB to 34 MB, and a Flatpak build.
 
 ### Added
 - **Equalizer** per the Figma components frame (#45): preamp + 10 vertical band sliders (60 Hz–16 kHz) with editable dB boxes, ON/OFF switch, *Open/Close Equalizer* bar and a presets dropdown with VLC's 18 presets (Flat, Classical, Club, Dance, Full bass, Full bass & treble, …) and their icons, plus custom presets (*New Preset*, rename, delete; edits follow the selected custom preset). Applied as a labelled mpv `af` (`@vivi-eq`, lavfi `volume` + `equalizer` chain; preamp uses VLC's convention, 12 dB = unity) and saved in `~/.config/vivi/fx.toml`.
@@ -35,11 +30,21 @@
 - **SponsorBlock** package (#64): skips sponsor / self-promotion / interaction (configurable) segments in YouTube streams, automatically or on `Alt+K`, and marks them as chapters on the seek bar. Uses the privacy-preserving hash-prefix API; no key.
 - **Scene Chapters & Thumbnails** package (#62): ffmpeg scene detection (`Alt+J` or automatic) adds `Scene N` chapters to videos without chapters and saves a JPEG thumbnail per chapter, cached under `~/.local/share/vivi/plugin-data/scene-chapters/`.
 - **ListenBrainz Scrobbler** package (#63): now playing, listens after 50 % or 4 min, offline queue sent in batches, status and *Send queued listens now* actions. Last.fm is not included (needs a signed browser auth flow).
+- **Network Streams: TV (iptv-org)**: *TV: by country* and *TV: by category* list the iptv-org countries/categories (iptv-org.github.io/api); *Play* on one loads its playlist (cached for a day in `~/.cache/vivi/iptv/`), typing filters channels by name, rows show channel logos, and channels play as video. A word typed into the *M3U* source now searches iptv-org channels instead of radio stations; pasted URLs and files still import as before.
+- **Network Streams: music**: *Music: genres* browses radio-browser.info tags by station count plus *Popular* (top voted) and *Trending* (top clicked) and opens the top stations of a genre; *Music: SomaFM* lists SomaFM channels with logos.
+- **Stream loading overlay** (core player): while a network stream opens or buffers (before the first frame/audio, or paused for cache) a spinner with the stream name is shown instead of a black screen; it hides on playback start, and a failed open shows an error toast.
+- **Equalizer preset import/export** (#61): custom presets can be exported to and imported from JSON files.
+- **Chapter thumbnails** (#62): the side panel's Chapters list shows the thumbnails saved by Scene Chapters.
+- **Packaging**: Flatpak manifest, AppStream metainfo and a CI job that builds a `.flatpak` bundle (#29). The AppImage now bundles a slim libmpv (decoders-only FFmpeg, no mpv CLI, zstd -19), cutting it from 106 MB to 34 MB; the Windows zip is smaller too.
+
 ### Fixed
+- Shortcuts with modifiers are forwarded to mpv by physical key (winit KeyCode mapped to US-QWERTY mpv names), so they work with any keyboard layout; the Cyrillic table stays as a fallback.
 - Plugin package key combos (A-B Loop Alt+A/B/C, Night Mode Alt+N, Statistics Alt+S) gave no feedback on Wayland: mpv's OSD is only drawn into the video frame, so with no video (idle, audio files, UI on top) their messages were invisible. Packages now also send `script-message vivi-toast <text>`, which Vivi shows as a toast (A-B Loop 1.0.1, Night Mode 1.0.2, Playback Statistics 1.0.1).
 - Alt/Ctrl combos typed with a Cyrillic layout active (e.g. Ukrainian "т" for Alt+N) are mapped to the QWERTY key, so mpv bindings still match. `VIVI_KEY_DEBUG=1` logs every key event and the mpv key name it is forwarded as.
 - Extensions shows whether each downloaded plugin / mpv script is loaded in mpv (Loaded, Not loaded: disabled / startup loading off, Failed / Error with mpv's message); load results and script errors are also logged to stderr.
 - Subtitle Search: OpenSubtitles answers `301` unless query parameters are sorted by name, so searches sent `moviehash`/`query`/`languages` in the wrong order and relied on a redirect. Parameters (and the language list) are now sent sorted and lowercase.
+- **Free Music relevance**: Internet Archive search is limited to audio in music collections (netlabels, opensource_audio, audio_music, Jamendo/FMA mirrors, 78rpm, etree), excludes podcasts, lectures, audiobooks and radio shows, skips files over 20 minutes, expands each item into its individual tracks with tidied titles, and ranks results by artist/title match. Jamendo is the default source once a client ID is set; the setting links to https://devportal.jamendo.com.
+- The docked Library panel now hides with the other controls after inactivity during playback and comes back on mouse move (it used to stay, leaving half the window black during audio streams).
 
 ### Docs
 - Screenshots refreshed with Sintel, including `docs/screenshots/responsive` (#50); new `panel-audio`, `audio-effects`, `equalizer-presets`, `new-playlist` and `miniplayer-queue` images and Figma compare images for the equalizer, filters, dialogs and miniplayer.

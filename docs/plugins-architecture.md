@@ -1,6 +1,6 @@
 # Plugin distribution: how plugins are downloaded and updated
 
-Status: implemented in the Unreleased version (after v0.8.0). Code: `src/plugins/packages.rs`,
+Status: implemented in v0.9.0. Code: `src/plugins/packages.rs`,
 `scripts/package-plugins.py`, `.github/workflows/plugins.yml`.
 
 ## Goals
