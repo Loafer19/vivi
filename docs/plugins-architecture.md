@@ -20,6 +20,8 @@ Status: implemented in the Unreleased version (after v0.8.0). Code: `src/plugins
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint), with a results list. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
+| Discord Rich Presence | Needs a Unix socket / Windows named pipe client (Lua cannot open them); `discord-rich-presence` crate on a worker thread. |
+| Remote Control | Runs an HTTP server thread and drives the player; scripts cannot listen on sockets. |
 | Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
 | Free Music | Search dialog with results, licence details, preview and download; writes tags with lofty. |
 

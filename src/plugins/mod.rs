@@ -19,9 +19,11 @@
 //!
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
+pub mod discord;
 pub mod free_music;
 pub mod lyrics;
 pub mod packages;
+pub mod remote;
 pub mod scripts;
 pub mod skip_intro;
 pub mod streams;
@@ -144,7 +146,6 @@ impl Manifest {
         self
     }
     /// Start disabled until the user turns it on.
-    #[allow(dead_code)] // part of the plugin API; no built-in plugin needs it yet
     pub fn default_off(mut self) -> Self {
         self.default_enabled = false;
         self
@@ -235,6 +236,8 @@ pub fn builtin() -> Vec<Box<dyn Plugin>> {
         Box::new(tagger::AutoTagger::default()),
         Box::new(free_music::FreeMusic::default()),
         Box::new(streams::Streams::default()),
+        Box::new(discord::Discord::default()),
+        Box::new(remote::Remote::default()),
     ]
 }
 

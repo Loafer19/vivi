@@ -235,6 +235,76 @@
       ]
     },
     {
+      "id": "discord",
+      "name": "Discord Rich Presence",
+      "description": "Shows the current title, artist and progress in your Discord status. Off by default; needs a Discord application ID and Discord running on this computer.",
+      "version": "0.8.0",
+      "author": "Vivi",
+      "icon": "discord",
+      "lucide": "gamepad-2",
+      "kind": "builtin",
+      "default_enabled": false,
+      "issue": 57,
+      "settings": [
+        {
+          "key": "app-id",
+          "title": "Discord application ID",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "hide-names",
+          "title": "Hide titles and file names",
+          "type": "toggle",
+          "default": "false"
+        },
+        {
+          "key": "image",
+          "title": "Large image key",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "status",
+          "title": "Connection status",
+          "type": "action",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "id": "remote-control",
+      "name": "Remote Control",
+      "description": "Control playback from your phone: a web page on your local network with play/pause, seek, volume, next/previous, the queue and cover art. Off by default, PIN protected, LAN only.",
+      "version": "0.8.0",
+      "author": "Vivi",
+      "icon": "remote",
+      "lucide": "smartphone",
+      "kind": "builtin",
+      "default_enabled": false,
+      "issue": 58,
+      "settings": [
+        {
+          "key": "port",
+          "title": "Port",
+          "type": "text",
+          "default": "8765"
+        },
+        {
+          "key": "pin",
+          "title": "PIN",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "address",
+          "title": "Phone address",
+          "type": "action",
+          "default": ""
+        }
+      ]
+    },
+    {
       "id": "script-now-playing",
       "name": "Now Playing OSD",
       "description": "Example mpv Lua script: shows the title on the OSD when a file starts.",
