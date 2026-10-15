@@ -385,3 +385,190 @@ export component NowPlayingCard inherits Rectangle {
         }
     }
 }
+
+// ---------- Auto-tagger review (src/plugins/tagger.rs) ----------
+export struct TagField { name: string, old: string, new: string, changed: bool, checked: bool }
+export struct TagCover { img: image, label: string, info: string }
+export struct TagFile {
+    name: string, source: string, confidence: int, checked: bool, fields: [TagField],
+    has-old-cover: bool, old-cover: image, old-cover-info: string,
+    covers: [TagCover], cover-pick: int,   // -1 keeps the existing cover
+}
+
+component Check inherits Rectangle {
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled();
+    width: 18px; height: 18px; border-radius: 4px;
+    border-width: 1px; border-color: root.checked ? Theme.accent : Theme.divider;
+    background: root.checked ? Theme.accent : transparent;
+    opacity: root.enabled ? 1 : 0.35;
+    if root.checked: Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.bg-b2; }
+    TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.toggled(); } }
+}
+
+component Thumb inherits Rectangle {
+    in property <image> img;
+    in property <bool> empty;
+    in property <bool> picked;
+    callback clicked();
+    callback zoom();
+    width: 72px; height: 72px; border-radius: 6px; clip: true;
+    background: Theme.bg-b1;
+    border-width: root.picked ? 2px : 1px; border-color: root.picked ? Theme.accent : Theme.divider;
+    if !root.empty: Image { x: 2px; y: 2px; width: parent.width - 4px; height: parent.height - 4px; source: root.img; image-fit: cover; }
+    if root.empty: Text { text: "No cover"; color: Theme.fg-a3; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
+    TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.zoom(); } }
+    if !root.empty: Rectangle {
+        x: parent.width - 22px; y: 2px; width: 20px; height: 20px; border-radius: 4px; background: #000000A0;
+        Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/search.svg"); tint: #FFFFFF; }
+        TouchArea { mouse-cursor: pointer; clicked => { root.zoom(); } }
+    }
+}
+
+// Before/after review: per file a card with one row per tag field (current next to
+// proposed; changed rows highlighted, unchanged dimmed), the match source and
+// confidence, and cover art (current vs. candidates, click to pick, magnifier to
+// enlarge). Checkboxes per file and per field; Apply selected / Apply all / Skip.
+// After writing, a summary with Undo (restores tags and covers from a backup).
+export component TagReviewDialog inherits Rectangle {
+    in property <[TagFile]> files;
+    in property <string> status;
+    in property <bool> busy;
+    in property <string> summary;        // non-empty: the after-apply summary view
+    in property <[string]> summary-lines;
+    in property <bool> can-undo;
+    callback cmd(string, string);
+    property <image> zoom-img;
+    property <string> zoom-info;
+    property <bool> zoomed;
+    background: #000000A0;
+    TouchArea { }
+    tdlg := Rectangle {
+        width: min(980px, root.width - 32px); height: min(760px, root.height - 32px);
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
+        drop-shadow-blur: 24px; drop-shadow-color: #00000080;
+        clip: true;
+        TouchArea { }
+        VerticalLayout {
+            Rectangle {
+                height: 44px; background: Theme.bg-b1;
+                HorizontalLayout {
+                    padding-left: 16px; padding-right: 8px; spacing: 10px;
+                    Text { horizontal-stretch: 1; text: root.summary != "" ? "Auto-tagger · Done" : "Auto-tagger · Review changes"; color: Theme.fg-1; font-size: 14px; vertical-alignment: center; }
+                    if root.summary == "": Text { text: "Changed"; color: Theme.accent; font-size: 12px; vertical-alignment: center; }
+                    if root.summary == "": Text { text: "Unchanged"; color: Theme.fg-a3; font-size: 12px; vertical-alignment: center; }
+                    VerticalLayout { alignment: center;
+                        Rectangle { width: 30px; height: 30px; border-radius: Theme.radius; background: cx.has-hover ? Theme.bg-a1 : transparent;
+                            Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); }
+                            cx := TouchArea { mouse-cursor: pointer; clicked => { root.cmd("review-close", ""); } } } }
+                }
+            }
+            if root.summary == "": ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    padding: 16px; spacing: 14px; alignment: start;
+                    for f[fi] in root.files: card := Rectangle {
+                        property <length> colw: (tdlg.width - 32px - 14px - 24px - 28px - 110px - 16px - 30px) / 2;
+                        border-radius: 8px; background: Theme.bg-a3; border-width: 1px; border-color: Theme.bg-a1;
+                        opacity: f.checked ? 1 : 0.55;
+                        VerticalLayout {
+                            padding: 12px; spacing: 4px;
+                            HorizontalLayout {
+                                spacing: 10px; height: 28px;
+                                Check { y: 5px; checked: f.checked; toggled => { root.cmd("toggle-file", fi); } }
+                                Text { horizontal-stretch: 1; text: f.name; color: Theme.fg-1; font-size: 14px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                                Rectangle {
+                                    width: src.preferred-width + 16px; height: 22px; y: 3px; border-radius: 11px;
+                                    background: (f.confidence >= 90 ? #2E7D32 : f.confidence >= 70 ? #B8860B : #B23B3B).with-alpha(0.25);
+                                    src := Text { text: f.source; font-size: 12px; horizontal-alignment: center; vertical-alignment: center;
+                                        color: f.confidence >= 90 ? #7CC47F : f.confidence >= 70 ? #E2B44A : #E57373; }
+                                }
+                            }
+                            // Column headers
+                            HorizontalLayout {
+                                spacing: 10px; height: 22px; padding-left: 28px;
+                                Text { width: 110px; text: "Field"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
+                                Text { width: card.colw; text: "Current"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
+                                Text { width: 16px; text: ""; }
+                                Text { width: card.colw; text: "Proposed"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
+                            }
+                            for t[ti] in f.fields: Rectangle {
+                                height: 28px; border-radius: 4px;
+                                background: t.changed ? Theme.accent.with-alpha(t.checked ? 0.12 : 0.05) : transparent;
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    Check { y: 5px; checked: t.checked; enabled: t.changed && f.checked; toggled => { root.cmd("toggle-field", fi + ":" + ti); } }
+                                    Text { width: 110px; text: t.name; color: t.changed ? Theme.fg-2 : Theme.fg-a3; font-size: 13px; vertical-alignment: center; }
+                                    Text { width: card.colw; text: t.old == "" ? "—" : t.old; color: Theme.fg-a3; font-size: 13px; vertical-alignment: center; overflow: elide;
+                                        opacity: t.changed ? 1 : 0.7; }
+                                    Text { width: 16px; text: t.changed ? "→" : "="; color: t.changed ? Theme.accent : Theme.fg-a3; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; }
+                                    Text { width: card.colw; text: t.changed ? t.new : (t.old == "" ? "—" : t.old); font-size: 13px; vertical-alignment: center; overflow: elide;
+                                        color: t.changed ? (t.checked ? Theme.accent-bright : Theme.fg-a2) : Theme.fg-a3; font-weight: t.changed ? 600 : 400; }
+                                }
+                            }
+                            // Cover art: current vs. candidates
+                            HorizontalLayout {
+                                spacing: 10px; padding-top: 6px;
+                                Check { y: 27px; checked: f.cover-pick >= 0; enabled: f.checked && f.covers.length > 0;
+                                    toggled => { root.cmd("cover-pick", fi + ":" + (f.cover-pick >= 0 ? -1 : 0)); } }
+                                VerticalLayout { width: 110px; alignment: center;
+                                    Text { text: "Cover art"; color: f.cover-pick >= 0 ? Theme.fg-2 : Theme.fg-a3; font-size: 13px; }
+                                    Text { text: f.covers.length == 0 ? "No candidates" : f.cover-pick >= 0 ? (f.has-old-cover ? "Replace" : "Embed") : "Keep current"; color: f.cover-pick >= 0 ? Theme.accent : Theme.fg-a3; font-size: 11px; }
+                                }
+                                VerticalLayout { spacing: 3px;
+                                    Thumb { img: f.old-cover; empty: !f.has-old-cover; picked: f.cover-pick < 0;
+                                        clicked => { root.cmd("cover-pick", fi + ":-1"); }
+                                        zoom => { root.zoom-img = f.old-cover; root.zoom-info = "Current · " + f.old-cover-info; root.zoomed = true; } }
+                                    Text { width: 72px; text: f.has-old-cover ? "Current\n" + f.old-cover-info : "Current"; color: f.cover-pick < 0 ? Theme.fg-2 : Theme.fg-a3; font-size: 10px; horizontal-alignment: center; wrap: word-wrap; }
+                                }
+                                Text { text: "→"; color: Theme.accent; font-size: 16px; vertical-alignment: center; height: 72px; }
+                                for c[ci] in f.covers: VerticalLayout { spacing: 3px;
+                                    Thumb { img: c.img; picked: f.cover-pick == ci;
+                                        clicked => { root.cmd("cover-pick", fi + ":" + ci); }
+                                        zoom => { root.zoom-img = c.img; root.zoom-info = c.label + " · " + c.info; root.zoomed = true; } }
+                                    Text { width: 72px; text: c.label + "\n" + c.info; color: f.cover-pick == ci ? Theme.accent : Theme.fg-a3; font-size: 10px; horizontal-alignment: center; wrap: word-wrap; }
+                                }
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                        }
+                    }
+                }
+            }
+            if root.summary != "": VerticalLayout {
+                vertical-stretch: 1; padding: 24px; spacing: 10px; alignment: start;
+                Text { text: root.summary; color: Theme.fg-1; font-size: 18px; font-weight: 600; }
+                for l in root.summary-lines: Text { text: l; color: Theme.fg-a2; font-size: 13px; overflow: elide; }
+            }
+            HorizontalLayout {
+                padding: 12px; padding-left: 16px; spacing: 8px;
+                Text { horizontal-stretch: 1; text: root.status; color: Theme.fg-a2; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                if root.summary == "": FlatButton { text: "Skip"; enabled: !root.busy; clicked => { root.cmd("review-close", ""); } }
+                if root.summary == "": FlatButton { text: "Apply all"; enabled: !root.busy; clicked => { root.cmd("apply-all", ""); } }
+                if root.summary == "": Rectangle {
+                    width: 128px; height: 32px; border-radius: 6px; background: Theme.accent; opacity: root.busy ? 0.5 : 1;
+                    Text { text: "Apply selected"; color: Theme.bg-b2; font-weight: 600; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { enabled: !root.busy; mouse-cursor: pointer; clicked => { root.cmd("apply-selected", ""); } }
+                }
+                if root.summary != "": FlatButton { text: "Undo"; enabled: root.can-undo && !root.busy; clicked => { root.cmd("undo", ""); } }
+                if root.summary != "": Rectangle {
+                    width: 80px; height: 32px; border-radius: 6px; background: Theme.accent;
+                    Text { text: "Done"; color: Theme.bg-b2; font-weight: 600; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { mouse-cursor: pointer; clicked => { root.cmd("review-close", ""); } }
+                }
+            }
+        }
+        // Enlarged cover
+        if root.zoomed: Rectangle {
+            background: #000000D0;
+            TouchArea { mouse-cursor: pointer; clicked => { root.zoomed = false; } }
+            VerticalLayout {
+                alignment: center; spacing: 10px;
+                HorizontalLayout { alignment: center;
+                    Image { width: min(500px, root.height - 140px); height: self.width; source: root.zoom-img; image-fit: contain; } }
+                Text { text: root.zoom-info + "  ·  click to close"; color: #DDDDDD; font-size: 13px; horizontal-alignment: center; }
+            }
+        }
+    }
+}

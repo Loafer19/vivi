@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog } from "dialogs.slint";
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, NowPlayingCard } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
@@ -287,6 +287,13 @@ export component AppWindow inherits Window {
     in property <string> md-status;
     in property <bool> md-busy;
     in property <string> md-detail;
+    in-out property <bool> tr-open;
+    in property <[TagFile]> tr-files;
+    in property <string> tr-status;
+    in property <bool> tr-busy;
+    in property <string> tr-summary;
+    in property <[string]> tr-summary-lines;
+    in property <bool> tr-can-undo;
     in property <string> md-placeholder;
     in property <string> md-search-label;
     in property <string> md-primary;
@@ -1022,6 +1029,14 @@ export component AppWindow inherits Window {
         primary(i) => { root.plugin-command(root.md-owner, "primary", i); }
         secondary(i) => { root.plugin-command(root.md-owner, "secondary", i); }
         close => { root.md-open = false; root.plugin-command(root.md-owner, "close", ""); fs.focus(); }
+    }
+
+    // ---------- Auto-tagger review ----------
+    if root.tr-open: TagReviewDialog {
+        width: root.width; height: root.height;
+        files: root.tr-files; status: root.tr-status; busy: root.tr-busy;
+        summary: root.tr-summary; summary-lines: root.tr-summary-lines; can-undo: root.tr-can-undo;
+        cmd(n, a) => { root.plugin-command("auto-tagger", n, a); if (n == "review-close") { fs.focus(); } }
     }
 
     // ---------- Customize player ----------

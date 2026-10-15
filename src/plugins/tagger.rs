@@ -494,6 +494,7 @@ pub fn identify(path: &Path, key: &str) -> Result<(Tags, Vec<Candidate>, Vec<Str
 }
 
 /// Front cover from the Cover Art Archive (release, then release group), ≤ 500 px.
+#[cfg(test)]
 pub fn cover_art(release: &str, group: &str) -> Option<Vec<u8>> {
     let urls = [
         (!release.is_empty())
@@ -633,16 +634,276 @@ pub fn write_tags(path: &Path, t: &Tags, cover: Option<&[u8]>) -> Result<(), Str
         .map_err(|e| e.to_string())
 }
 
-/// Back up, fetch the cover (if wanted) and write one candidate.
-fn apply(path: &Path, c: &Candidate, with_cover: bool) -> Result<bool, String> {
-    backup(&backup_dir(), path)?;
-    let cover = if with_cover {
-        cover_art(&c.tags.mb_release, &c.release_group)
-    } else {
-        None
+// ---------- review: per-field diff, cover candidates, apply + undo ----------
+
+/// The fields shown in the review, as (label, current, proposed).
+pub fn review_fields(old: &Tags, new: &Tags) -> Vec<(&'static str, String, String)> {
+    vec![
+        ("Title", old.title.clone(), new.title.clone()),
+        ("Artist", old.artist.clone(), new.artist.clone()),
+        ("Album", old.album.clone(), new.album.clone()),
+        (
+            "Album artist",
+            old.album_artist.clone(),
+            new.album_artist.clone(),
+        ),
+        ("Year", old.date.clone(), new.date.clone()),
+        ("Track", old.track.clone(), new.track.clone()),
+        ("Genre", old.genre.clone(), new.genre.clone()),
+    ]
+}
+
+/// Whether a proposed value would change the field (empty proposals never overwrite).
+pub fn field_changes(old: &str, new: &str) -> bool {
+    !new.trim().is_empty() && old.trim() != new.trim()
+}
+
+/// Tags holding only the chosen fields of `new` (by review index); the MusicBrainz
+/// ids come along whenever anything is written.
+pub fn pick_fields(new: &Tags, on: &[bool]) -> Tags {
+    let g = |i: usize, v: &str| {
+        if on.get(i).copied().unwrap_or(false) {
+            v.to_string()
+        } else {
+            String::new()
+        }
     };
-    write_tags(path, &c.tags, cover.as_deref())?;
-    Ok(cover.is_some())
+    let any = on.iter().any(|b| *b);
+    Tags {
+        title: g(0, &new.title),
+        artist: g(1, &new.artist),
+        album: g(2, &new.album),
+        album_artist: g(3, &new.album_artist),
+        date: g(4, &new.date),
+        track: g(5, &new.track),
+        genre: g(6, &new.genre),
+        mb_recording: if any {
+            new.mb_recording.clone()
+        } else {
+            String::new()
+        },
+        mb_release: if any {
+            new.mb_release.clone()
+        } else {
+            String::new()
+        },
+        ..Tags::default()
+    }
+}
+
+/// Pixel size of a PNG or JPEG.
+pub fn image_size(d: &[u8]) -> Option<(u32, u32)> {
+    if d.len() > 24 && d.starts_with(b"\x89PNG") {
+        let be = |o: usize| u32::from_be_bytes([d[o], d[o + 1], d[o + 2], d[o + 3]]);
+        return Some((be(16), be(20)));
+    }
+    if !d.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut i = 2;
+    while i + 9 < d.len() {
+        if d[i] != 0xFF {
+            i += 1;
+            continue;
+        }
+        let m = d[i + 1];
+        let len = u16::from_be_bytes([d[i + 2], d[i + 3]]) as usize;
+        if matches!(m, 0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF) {
+            let h = u16::from_be_bytes([d[i + 5], d[i + 6]]) as u32;
+            let w = u16::from_be_bytes([d[i + 7], d[i + 8]]) as u32;
+            return Some((w, h));
+        }
+        i += 2 + len;
+    }
+    None
+}
+
+/// "500×500 · 48 KB" for an image.
+pub fn image_info(d: &[u8]) -> String {
+    let kb = (d.len() as f64 / 1024.0).round() as u64;
+    let kind = if d.starts_with(b"\x89PNG") {
+        "PNG"
+    } else {
+        "JPEG"
+    };
+    match image_size(d) {
+        Some((w, h)) => format!("{w}×{h}\n{kb} KB {kind}"),
+        None => format!("{kb} KB"),
+    }
+}
+
+/// Front cover embedded in the file.
+pub fn embedded_cover(path: &Path) -> Option<Vec<u8>> {
+    let tf = lofty::read_from_path(path).ok()?;
+    let tag = tf.primary_tag().or_else(|| tf.first_tag())?;
+    tag.pictures()
+        .iter()
+        .find(|p| p.pic_type() == PictureType::CoverFront)
+        .or_else(|| tag.pictures().first())
+        .map(|p| p.data().to_vec())
+}
+
+/// A downloaded cover candidate.
+#[derive(Debug, Clone)]
+pub struct CoverOpt {
+    pub label: String,
+    pub data: Vec<u8>,
+}
+
+/// Image URLs of a release on the Cover Art Archive: front first, then the others
+/// (back, booklet…), as (label, url of the 500 px version or the original).
+pub fn caa_images(release: &str) -> Vec<(String, String)> {
+    if release.is_empty() {
+        return Vec::new();
+    }
+    let url = format!("https://coverartarchive.org/release/{release}");
+    let Some(b) = web::get_bytes(&url, 2 * 1024 * 1024).ok().flatten() else {
+        return Vec::new();
+    };
+    let Ok(j) = serde_json::from_slice::<serde_json::Value>(&b) else {
+        return Vec::new();
+    };
+    let mut v: Vec<(bool, String, String)> = j["images"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|im| {
+            let u = im["thumbnails"]["500"]
+                .as_str()
+                .or_else(|| im["thumbnails"]["large"].as_str())
+                .or_else(|| im["image"].as_str())?;
+            let types: Vec<&str> = im["types"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|t| t.as_str())
+                .collect();
+            let front = im["front"].as_bool().unwrap_or(false);
+            let label = if types.is_empty() {
+                "Image".to_string()
+            } else {
+                types.join(", ")
+            };
+            Some((front, label, u.replace("http://", "https://")))
+        })
+        .collect();
+    v.sort_by_key(|(f, _, _)| !*f);
+    v.into_iter().map(|(_, l, u)| (l, u)).collect()
+}
+
+/// Up to `max` cover candidates: the release's CAA images, its release-group front,
+/// then the fronts of the other matched releases.
+pub fn cover_candidates(c: &Candidate, others: &[Candidate], max: usize) -> Vec<CoverOpt> {
+    let mut urls: Vec<(String, String)> = caa_images(&c.tags.mb_release);
+    if !c.release_group.is_empty() {
+        urls.push((
+            "Group front".into(),
+            format!(
+                "https://coverartarchive.org/release-group/{}/front-500",
+                c.release_group
+            ),
+        ));
+    }
+    for o in others {
+        if !o.tags.mb_release.is_empty() && o.tags.mb_release != c.tags.mb_release {
+            urls.push((
+                o.tags.album.clone(),
+                format!(
+                    "https://coverartarchive.org/release/{}/front-500",
+                    o.tags.mb_release
+                ),
+            ));
+        }
+    }
+    urls.truncate(max + 4);
+    // Cover Art Archive redirects to archive.org, which can be slow: fetch in parallel.
+    let got: Vec<Option<CoverOpt>> = std::thread::scope(|sc| {
+        let hs: Vec<_> = urls
+            .iter()
+            .map(|(label, u)| {
+                sc.spawn(move || {
+                    let data = web::get_bytes(u, 10 * 1024 * 1024).ok().flatten()?;
+                    image_size(&data)?;
+                    Some(CoverOpt {
+                        label: label.clone(),
+                        data,
+                    })
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().ok().flatten()).collect()
+    });
+    let mut out: Vec<CoverOpt> = Vec::new();
+    for c in got.into_iter().flatten() {
+        // The release-group front is often the same picture as the release front.
+        if out.len() < max && !out.iter().any(|o| o.data == c.data) {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// One file in the review.
+#[derive(Debug, Clone)]
+pub struct Review {
+    pub path: PathBuf,
+    pub old: Tags,
+    pub cand: Candidate,
+    pub on: bool,
+    pub fields: Vec<bool>,
+    pub old_cover: Option<Vec<u8>>,
+    pub covers: Vec<CoverOpt>,
+    /// Chosen cover candidate; None keeps the current cover.
+    pub cover: Option<usize>,
+}
+
+impl Review {
+    pub fn new(
+        path: PathBuf,
+        old: Tags,
+        cand: Candidate,
+        covers: Vec<CoverOpt>,
+        embed: bool,
+    ) -> Self {
+        let fields = review_fields(&old, &cand.tags)
+            .iter()
+            .map(|(_, o, n)| field_changes(o, n))
+            .collect();
+        let old_cover = embedded_cover(&path);
+        // Embed by default when the file has no cover; replacing one is opt-in.
+        let cover = (embed && old_cover.is_none() && !covers.is_empty()).then_some(0);
+        Review {
+            path,
+            old,
+            cand,
+            on: true,
+            fields,
+            old_cover,
+            covers,
+            cover,
+        }
+    }
+    /// Number of fields (cover included) this file would change.
+    pub fn changes(&self) -> usize {
+        self.fields.iter().filter(|b| **b).count() + usize::from(self.cover.is_some())
+    }
+}
+
+/// Write the chosen fields and cover of one file. `session` gets a backup of the
+/// tags right before this write (for Undo); the one-time original backup is kept too.
+pub fn apply_review(r: &Review, originals: &Path, session: &Path) -> Result<(usize, bool), String> {
+    let n = r.fields.iter().filter(|b| **b).count();
+    let cover = r
+        .cover
+        .and_then(|i| r.covers.get(i))
+        .map(|c| c.data.as_slice());
+    if n == 0 && cover.is_none() {
+        return Ok((0, false));
+    }
+    backup(originals, &r.path)?;
+    backup(session, &r.path)?;
+    write_tags(&r.path, &pick_fields(&r.cand.tags, &r.fields), cover)?;
+    Ok((n, cover.is_some()))
 }
 
 /// Audio files under a folder, sorted.
@@ -674,8 +935,15 @@ enum Msg {
     Status(String),
     Rows(Vec<Row>, String),
     Row(Box<Row>),
-    Written(Result<String, String>),
     Done(String),
+    Reviews(Vec<Review>),
+    Applied {
+        files: usize,
+        fields: usize,
+        covers: usize,
+        lines: Vec<String>,
+        paths: Vec<PathBuf>,
+    },
 }
 
 #[derive(Default)]
@@ -684,6 +952,29 @@ pub struct AutoTagger {
     rx: Option<Receiver<Msg>>,
     cancel: Arc<AtomicBool>,
     batch: bool,
+    reviews: Vec<Review>,
+    /// Backup folder of the last apply and the files it changed (Undo).
+    session: Option<(PathBuf, Vec<PathBuf>)>,
+}
+
+fn cover_cache() -> PathBuf {
+    crate::store::cache_dir().join("tagger-covers")
+}
+
+/// Show image bytes in Slint (through a small cache file; femtovg loads from paths).
+fn slint_image(data: &[u8]) -> slint::Image {
+    let dir = cover_cache();
+    let _ = std::fs::create_dir_all(&dir);
+    let ext = if data.starts_with(b"\x89PNG") {
+        "png"
+    } else {
+        "jpg"
+    };
+    let f = dir.join(format!("{:x}.{ext}", md5::compute(data)));
+    if !f.exists() {
+        let _ = std::fs::write(&f, data);
+    }
+    slint::Image::load_from_path(&f).unwrap_or_default()
 }
 
 impl AutoTagger {
@@ -698,8 +989,8 @@ impl AutoTagger {
         a.set_md_title("Auto-tagger".into());
         a.set_md_placeholder("File or folder to tag".into());
         a.set_md_search_label("Identify".into());
-        a.set_md_primary("Write tags".into());
-        a.set_md_secondary("Write all".into());
+        a.set_md_primary("Review changes…".into());
+        a.set_md_secondary("Review all files…".into());
         a.set_md_sources(ModelRc::new(VecModel::from(
             Vec::<slint::SharedString>::new(),
         )));
@@ -766,6 +1057,217 @@ impl AutoTagger {
         s
     }
 
+    fn render_review(&self, cx: &Ctx) {
+        use crate::{TagCover, TagField, TagFile};
+        let files: Vec<TagFile> = self
+            .reviews
+            .iter()
+            .map(|r| {
+                let fields: Vec<TagField> = review_fields(&r.old, &r.cand.tags)
+                    .into_iter()
+                    .zip(&r.fields)
+                    .map(|((name, o, n), on)| TagField {
+                        name: name.into(),
+                        changed: field_changes(&o, &n),
+                        old: o.into(),
+                        new: n.into(),
+                        checked: *on,
+                    })
+                    .collect();
+                let covers: Vec<TagCover> = r
+                    .covers
+                    .iter()
+                    .map(|c| TagCover {
+                        img: slint_image(&c.data),
+                        label: c.label.as_str().into(),
+                        info: image_info(&c.data).into(),
+                    })
+                    .collect();
+                TagFile {
+                    name: r
+                        .path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .as_ref()
+                        .into(),
+                    source: format!(
+                        "{} · {}%",
+                        if r.cand.source == "AcoustID" {
+                            "AcoustID + MusicBrainz"
+                        } else {
+                            "MusicBrainz search"
+                        },
+                        r.cand.score
+                    )
+                    .into(),
+                    confidence: r.cand.score as i32,
+                    checked: r.on,
+                    fields: ModelRc::new(VecModel::from(fields)),
+                    has_old_cover: r.old_cover.is_some(),
+                    old_cover: r.old_cover.as_deref().map(slint_image).unwrap_or_default(),
+                    old_cover_info: r
+                        .old_cover
+                        .as_deref()
+                        .map(image_info)
+                        .unwrap_or_default()
+                        .into(),
+                    covers: ModelRc::new(VecModel::from(covers)),
+                    cover_pick: r.cover.map(|i| i as i32).unwrap_or(-1),
+                }
+            })
+            .collect();
+        cx.app.set_tr_files(ModelRc::new(VecModel::from(files)));
+        let on: Vec<&Review> = self.reviews.iter().filter(|r| r.on).collect();
+        let n: usize = on.iter().map(|r| r.changes()).sum();
+        cx.app.set_tr_status(
+            format!(
+                "{} of {} files selected · {n} changes (fields + covers) · double-click or 🔍 a cover to enlarge",
+                on.len(),
+                self.reviews.len()
+            )
+            .into(),
+        );
+    }
+
+    /// Build the review for the given rows (one per file) in the background:
+    /// reads the current cover and downloads the cover candidates.
+    fn review(&mut self, cx: &Ctx, which: Vec<usize>) {
+        let picks: Vec<(Row, Vec<Candidate>)> = which
+            .iter()
+            .filter_map(|&i| self.rows.get(i).cloned())
+            .map(|r| {
+                let others = self
+                    .rows
+                    .iter()
+                    .filter(|o| o.path == r.path)
+                    .map(|o| o.cand.clone())
+                    .collect();
+                (r, others)
+            })
+            .collect();
+        if picks.is_empty() {
+            Self::ui(cx, "Select a match first", false);
+            return;
+        }
+        let embed = cx.flag("cover");
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+        Self::ui(cx, "Fetching cover art candidates…", true);
+        std::thread::spawn(move || {
+            let total = picks.len();
+            let v = picks
+                .into_iter()
+                .enumerate()
+                .map(|(i, (r, others))| {
+                    let _ = tx.send(Msg::Status(format!("Fetching covers {}/{total}…", i + 1)));
+                    let covers = cover_candidates(&r.cand, &others, 6);
+                    Review::new(r.path, r.old, r.cand, covers, embed)
+                })
+                .collect();
+            let _ = tx.send(Msg::Reviews(v));
+        });
+    }
+
+    fn apply_reviews(&mut self, cx: &Ctx) {
+        let todo: Vec<Review> = self
+            .reviews
+            .iter()
+            .filter(|r| r.on && r.changes() > 0)
+            .cloned()
+            .collect();
+        if todo.is_empty() {
+            cx.app.set_tr_status("Nothing selected to change".into());
+            return;
+        }
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let session = backup_dir().join(format!("session-{stamp}"));
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+        cx.app.set_tr_busy(true);
+        cx.app.set_tr_status("Writing tags…".into());
+        let dir = session.clone();
+        self.session = Some((session, Vec::new()));
+        std::thread::spawn(move || {
+            let (mut files, mut fields, mut covers) = (0, 0, 0);
+            let (mut lines, mut paths) = (Vec::new(), Vec::new());
+            for r in &todo {
+                let name = r
+                    .path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
+                match apply_review(r, &backup_dir(), &dir) {
+                    Ok((n, c)) => {
+                        files += 1;
+                        fields += n;
+                        covers += usize::from(c);
+                        paths.push(r.path.clone());
+                        lines.push(format!(
+                            "✓ {name}: {n} field{}{}",
+                            if n == 1 { "" } else { "s" },
+                            if c {
+                                if r.old_cover.is_some() {
+                                    " + cover replaced"
+                                } else {
+                                    " + cover embedded"
+                                }
+                            } else {
+                                ""
+                            }
+                        ));
+                        for ((f, o, nv), on) in
+                            review_fields(&r.old, &r.cand.tags).iter().zip(&r.fields)
+                        {
+                            if *on {
+                                let o = if o.is_empty() { "—" } else { o.as_str() };
+                                lines.push(format!("      {f}:  {o}  →  {nv}"));
+                            }
+                        }
+                    }
+                    Err(e) => lines.push(format!("✗ {name}: {e}")),
+                }
+            }
+            let _ = tx.send(Msg::Applied {
+                files,
+                fields,
+                covers,
+                lines,
+                paths,
+            });
+        });
+    }
+
+    fn undo(&mut self, cx: &Ctx) {
+        let Some((dir, paths)) = self.session.take() else {
+            return;
+        };
+        let (mut ok, mut errs) = (0, Vec::new());
+        for p in &paths {
+            match restore(&dir, p) {
+                Ok(()) => ok += 1,
+                Err(e) => errs.push(format!("{}: {e}", p.display())),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        let s = if errs.is_empty() {
+            format!(
+                "Undone: previous tags and covers restored for {ok} file{}",
+                if ok == 1 { "" } else { "s" }
+            )
+        } else {
+            format!("Restored {ok}; failed: {}", errs.join("; "))
+        };
+        cx.app.set_tr_can_undo(false);
+        cx.app.set_tr_summary("Changes undone".into());
+        cx.app.set_tr_status(s.as_str().into());
+        cx.toast(&s);
+    }
+
     fn start(&mut self, cx: &Ctx) {
         self.cancel.store(true, Ordering::Relaxed);
         self.cancel = Arc::new(AtomicBool::new(false));
@@ -812,46 +1314,6 @@ impl AutoTagger {
             Self::ui(cx, "Choose an audio file or a folder", false);
             self.rx = None;
         }
-    }
-
-    fn write(&mut self, cx: &Ctx, which: Vec<usize>) {
-        let rows: Vec<Row> = which
-            .iter()
-            .filter_map(|&i| self.rows.get(i).cloned())
-            .collect();
-        if rows.is_empty() {
-            Self::ui(cx, "Select a match first", false);
-            return;
-        }
-        let cover = cx.flag("cover");
-        let (tx, rx) = channel();
-        self.rx = Some(rx);
-        Self::ui(cx, "Writing tags…", true);
-        std::thread::spawn(move || {
-            let (mut ok, mut covers, mut errs) = (0, 0, Vec::new());
-            for (n, r) in rows.iter().enumerate() {
-                let _ = tx.send(Msg::Status(format!("Writing {}/{}…", n + 1, rows.len())));
-                match apply(&r.path, &r.cand, cover) {
-                    Ok(c) => {
-                        ok += 1;
-                        covers += c as usize;
-                    }
-                    Err(e) => errs.push(format!(
-                        "{}: {e}",
-                        r.path.file_name().unwrap_or_default().to_string_lossy()
-                    )),
-                }
-            }
-            let m = if errs.is_empty() {
-                Ok(format!(
-                    "Tagged {ok} file{} ({covers} with cover). Originals backed up; Restore in Settings undoes it.",
-                    if ok == 1 { "" } else { "s" }
-                ))
-            } else {
-                Err(format!("Tagged {ok}; failed: {}", errs.join("; ")))
-            };
-            let _ = tx.send(Msg::Written(m));
-        });
     }
 }
 
@@ -983,14 +1445,64 @@ impl Plugin for AutoTagger {
                     cx.app.set_md_detail(self.detail(i).into());
                 }
             }
-            "primary" => self.write(cx, idx().into_iter().collect()),
+            "primary" => self.review(cx, idx().into_iter().collect()),
             "secondary" => {
                 // One row per file: the first (best) one.
                 let mut seen = std::collections::HashSet::new();
                 let all = (0..self.rows.len())
                     .filter(|&i| seen.insert(self.rows[i].path.clone()))
                     .collect();
-                self.write(cx, all);
+                self.review(cx, all);
+            }
+            "toggle-file" | "toggle-field" | "cover-pick" => {
+                let a = args.first().map(String::as_str).unwrap_or("");
+                let mut it = a.split(':');
+                let i = it.next().and_then(|x| x.parse::<usize>().ok());
+                let j = it.next().and_then(|x| x.parse::<i64>().ok());
+                let Some(r) = i.and_then(|i| self.reviews.get_mut(i)) else {
+                    return;
+                };
+                match (name, j) {
+                    ("toggle-file", _) => r.on = !r.on,
+                    ("toggle-field", Some(j)) => {
+                        let (o, n) = {
+                            let f = review_fields(&r.old, &r.cand.tags);
+                            let (_, o, n) = f[j as usize].clone();
+                            (o, n)
+                        };
+                        if field_changes(&o, &n) {
+                            if let Some(b) = r.fields.get_mut(j as usize) {
+                                *b = !*b;
+                            }
+                        }
+                    }
+                    ("cover-pick", Some(j)) => {
+                        r.cover = (j >= 0 && (j as usize) < r.covers.len()).then_some(j as usize)
+                    }
+                    _ => {}
+                }
+                self.render_review(cx);
+            }
+            "apply-selected" => self.apply_reviews(cx),
+            "apply-all" => {
+                for r in &mut self.reviews {
+                    r.on = true;
+                    let f = review_fields(&r.old, &r.cand.tags);
+                    r.fields = f.iter().map(|(_, o, n)| field_changes(o, n)).collect();
+                    if r.cover.is_none() && !r.covers.is_empty() {
+                        r.cover = Some(0);
+                    }
+                }
+                self.render_review(cx);
+                self.apply_reviews(cx);
+            }
+            "undo" => self.undo(cx),
+            "review-close" => {
+                cx.app.set_tr_open(false);
+                self.reviews.clear();
+                cx.app.set_tr_files(ModelRc::default());
+                // Thumbnails are only needed while the dialog is open.
+                let _ = std::fs::remove_dir_all(cover_cache());
             }
             "close" => {
                 self.cancel.store(true, Ordering::Relaxed);
@@ -1003,7 +1515,10 @@ impl Plugin for AutoTagger {
         let Some(rx) = &self.rx else { return };
         while let Ok(m) = rx.try_recv() {
             match m {
-                Msg::Status(s) => cx.app.set_md_status(s.into()),
+                Msg::Status(s) => {
+                    cx.app.set_md_status(s.as_str().into());
+                    cx.app.set_tr_status(s.into());
+                }
                 Msg::Row(r) => {
                     self.rows.push(*r);
                     self.show_rows(cx, None);
@@ -1029,6 +1544,10 @@ impl Plugin for AutoTagger {
                         cx.app.set_md_detail(self.detail(0).into());
                     }
                     self.rx = None;
+                    // Screenshots/tests: go straight to the review of the best match.
+                    if std::env::var_os("VIVI_TAGREVIEW").is_some() && !self.rows.is_empty() {
+                        self.review(cx, vec![0]);
+                    }
                     return;
                 }
                 Msg::Done(s) => {
@@ -1039,13 +1558,53 @@ impl Plugin for AutoTagger {
                     self.rx = None;
                     return;
                 }
-                Msg::Written(r) => {
-                    let s = match r {
-                        Ok(s) | Err(s) => s,
-                    };
-                    Self::ui(cx, &s, false);
-                    cx.toast(&s);
+                Msg::Reviews(v) => {
+                    self.reviews = v;
                     self.rx = None;
+                    Self::ui(cx, "", false);
+                    cx.app.set_tr_summary("".into());
+                    cx.app.set_tr_busy(false);
+                    cx.app.set_tr_can_undo(false);
+                    self.render_review(cx);
+                    cx.app.set_md_open(false);
+                    cx.app.set_tr_open(true);
+                    if std::env::var("VIVI_TAGREVIEW").as_deref() == Ok("apply") {
+                        self.apply_reviews(cx);
+                    }
+                    return;
+                }
+                Msg::Applied {
+                    files,
+                    fields,
+                    covers,
+                    lines,
+                    paths,
+                } => {
+                    self.rx = None;
+                    if let Some(s) = &mut self.session {
+                        s.1 = paths;
+                    }
+                    let sum = format!(
+                        "{files} file{} updated · {fields} field{} changed{}",
+                        if files == 1 { "" } else { "s" },
+                        if fields == 1 { "" } else { "s" },
+                        if covers > 0 {
+                            format!(" · {covers} cover{}", if covers == 1 { "" } else { "s" })
+                        } else {
+                            String::new()
+                        }
+                    );
+                    cx.app.set_tr_busy(false);
+                    cx.app.set_tr_summary(sum.as_str().into());
+                    let lines: Vec<slint::SharedString> =
+                        lines.into_iter().map(Into::into).collect();
+                    cx.app
+                        .set_tr_summary_lines(ModelRc::new(VecModel::from(lines)));
+                    cx.app.set_tr_can_undo(files > 0);
+                    cx.app.set_tr_status(
+                        "Previous tags and covers are backed up; Undo restores them.".into(),
+                    );
+                    cx.toast(&sum);
                     return;
                 }
             }
@@ -1126,6 +1685,49 @@ mod tests {
         assert_eq!((t.date.as_str(), t.genre.as_str()), ("2011-02-03", "Jazz"));
         assert_eq!(c[0].release_group, "rg1");
         assert_eq!(c[1].tags.mb_release, "bootleg");
+    }
+
+    #[test]
+    fn review_apply_and_undo_restores_tags_and_cover() {
+        let Some(p) = tmp_copy("review") else { return };
+        let png: Vec<u8> = {
+            // 1×1 PNG
+            let mut v = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01".to_vec();
+            v.extend_from_slice(&[8, 6, 0, 0, 0, 0x1f, 0x15, 0xc4, 0x89]);
+            v
+        };
+        assert_eq!(image_size(&png), Some((1, 1)));
+        let (old, _) = read_tags(&p).unwrap();
+        let mut new = old.clone();
+        new.title = "Reviewed Title".into();
+        new.album = "Reviewed Album".into();
+        let cand = Candidate {
+            tags: new,
+            release_group: String::new(),
+            score: 95,
+            source: "AcoustID",
+        };
+        let cover = CoverOpt {
+            label: "Front".into(),
+            data: png.clone(),
+        };
+        let mut r = Review::new(p.clone(), old.clone(), cand, vec![cover], true);
+        // Only the title: the album change is unticked.
+        r.fields[2] = false;
+        r.cover = Some(0);
+        let session = std::env::temp_dir().join(format!("vivi-review-{}", std::process::id()));
+        let (n, c) = apply_review(&r, &session.join("orig"), &session).unwrap();
+        assert_eq!((n, c), (1, true));
+        let (now, _) = read_tags(&p).unwrap();
+        assert_eq!(now.title, "Reviewed Title");
+        assert_eq!(now.album, old.album);
+        assert_eq!(embedded_cover(&p).as_deref(), Some(png.as_slice()));
+        restore(&session, &p).unwrap();
+        let (back, _) = read_tags(&p).unwrap();
+        assert_eq!(back.title, old.title);
+        assert_ne!(embedded_cover(&p).as_deref(), Some(png.as_slice()));
+        let _ = std::fs::remove_dir_all(&session);
+        let _ = std::fs::remove_file(&p);
     }
 
     #[test]
