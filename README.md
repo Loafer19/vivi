@@ -65,6 +65,14 @@ env-driven helpers as debug builds (`VIVI_SETTINGS`, `VIVI_PANEL`, `VIVI_LIBRARY
 
 ## Install
 
+Linux (x86_64), one line:
+
+```sh
+curl -fsSL https://loafer19.github.io/vivi/install.sh | sh
+```
+
+On Arch and derivatives it builds the `vivi-bin` package with `makepkg -si`; elsewhere it puts `vivi`, `vivi-mcp`, the desktop file and icons into `~/.local` and tells you if `libmpv` is missing (e.g. `sudo apt install libmpv2`). Downloads are checked against the release `SHA256SUMS`. Update by running it again; remove with `curl -fsSL https://loafer19.github.io/vivi/install.sh | sh -s -- --uninstall` (settings and library stay). [Read the script](docs/site/install.sh) first if you like.
+
 | Platform | Package |
 |---|---|
 | Arch / Omarchy | `packaging/arch/vivi-bin` (prebuilt) or `packaging/arch/vivi` (from source): `makepkg -si`. The release also ships a ready `PKGBUILD` with checksums. |

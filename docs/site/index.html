@@ -67,7 +67,13 @@
 </div>
 
 <h2>Install</h2>
-<pre><code># Arch / Omarchy
+<pre><code># Linux (x86_64): latest release, checksums verified
+curl -fsSL https://loafer19.github.io/vivi/install.sh | sh
+
+# uninstall (settings and library stay)
+curl -fsSL https://loafer19.github.io/vivi/install.sh | sh -s -- --uninstall</code></pre>
+<p class="lead">On Arch it builds the <code>vivi-bin</code> package with <code>makepkg -si</code>; on other distributions it installs into <code>~/.local</code> and checks for <code>libmpv</code>. <a href="install.sh">Read the script</a>.</p>
+<pre><code># From source (Arch / Omarchy)
 git clone https://github.com/Loafer19/vivi &amp;&amp; cd vivi
 sudo pacman -S --needed mpv sqlite rust
 cargo build --release &amp;&amp; ./target/release/vivi</code></pre>

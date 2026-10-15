@@ -1,0 +1,67 @@
+name: Install script
+# Lints docs/site/install.sh (served as https://loafer19.github.io/vivi/install.sh) and runs
+# install + --uninstall in Debian, Ubuntu, Fedora and Arch containers against the latest release.
+on:
+  push:
+    branches: [master]
+    paths: ["docs/site/install.sh", "packaging/aur/vivi-bin/**", ".github/workflows/install-script.yml"]
+  pull_request:
+    paths: ["docs/site/install.sh", "packaging/aur/vivi-bin/**", ".github/workflows/install-script.yml"]
+  workflow_dispatch:
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -s sh docs/site/install.sh
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:13", setup: "apt-get update && apt-get install -y curl ca-certificates libmpv2 libsqlite3-0 libfontconfig1" }
+          - { image: "ubuntu:24.04", setup: "apt-get update && apt-get install -y curl ca-certificates libmpv2 libsqlite3-0 libfontconfig1" }
+          - { image: "debian:13", setup: "apt-get update && apt-get install -y curl ca-certificates", nompv: true }
+          - { image: "fedora:43", setup: "dnf install -y --setopt=install_weak_deps=False curl tar gzip findutils which" , nompv: true }
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    steps:
+      - run: ${{ matrix.setup }}
+      - uses: actions/checkout@v4
+      - name: Install as a user, then uninstall
+        run: |
+          useradd -m tester
+          cp docs/site/install.sh /tmp/install.sh && chmod 755 /tmp/install.sh
+          su tester -c 'sh /tmp/install.sh' 2>&1 | tee /tmp/out
+          grep -q 'Checksum OK' /tmp/out
+          H=/home/tester/.local
+          for f in bin/vivi bin/vivi-mcp share/applications/vivi.desktop share/icons/hicolor/scalable/apps/vivi.svg share/icons/hicolor/256x256/apps/vivi.png; do test -f "$H/$f"; done
+          grep -q "^Exec=$H/bin/vivi" "$H/share/applications/vivi.desktop"
+          su tester -c "$H/bin/vivi-mcp --help" | head -1
+          if [ "${{ matrix.nompv }}" = true ]; then grep -q 'missing libraries' /tmp/out; else ! ldd "$H/bin/vivi" | grep 'not found'; fi
+          su tester -c 'sh /tmp/install.sh --uninstall'
+          ! test -e "$H/bin/vivi" && ! test -e "$H/bin/vivi-mcp" && ! test -e "$H/share/applications/vivi.desktop"
+          # A tampered SHA256SUMS must stop the install.
+          sed 's|fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS"|fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS"; sed -i "s/^[0-9a-f]/0/" "$TMP/SHA256SUMS"|' /tmp/install.sh > /tmp/bad.sh
+          if su tester -c 'sh /tmp/bad.sh' > /tmp/bad 2>&1; then cat /tmp/bad; exit 1; fi
+          grep 'checksum mismatch' /tmp/bad
+          ! test -e "$H/bin/vivi"
+  arch:
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v4
+      - name: makepkg -si through the script, then uninstall
+        run: |
+          useradd -m tester
+          echo 'tester ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/tester
+          cp docs/site/install.sh /tmp/install.sh
+          # Use this commit's PKGBUILD instead of the deployed site copy.
+          su tester -c "VIVI_SITE=file://$PWD/packaging/aur sh /tmp/install.sh" 2>&1 | tee /tmp/out
+          grep -q 'Checksum pinned' /tmp/out
+          pacman -Q vivi-bin
+          test -x /usr/bin/vivi -a -x /usr/bin/vivi-mcp -a -f /usr/share/applications/vivi.desktop
+          ! ldd /usr/bin/vivi | grep 'not found'
+          su tester -c 'sh /tmp/install.sh --uninstall'
+          ! pacman -Q vivi-bin

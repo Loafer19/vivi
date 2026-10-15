@@ -5,7 +5,7 @@ name: Docs site
 on:
   push:
     branches: [master]
-    paths: ["docs/site/**", "plugins/**", "scripts/build-site.py", "docs/screenshots/**", ".github/workflows/pages.yml"]
+    paths: ["docs/site/**", "plugins/**", "scripts/build-site.py", "docs/screenshots/**", "packaging/aur/vivi-bin/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 permissions:
   contents: read

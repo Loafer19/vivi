@@ -82,6 +82,9 @@ def main() -> None:
     for name in IMAGES:
         shutil.copy(ROOT / f"docs/screenshots/{name}.png", img / f"{name}.png")
     shutil.copy(ROOT / "plugins/index.json", OUT / "index.json")
+    # install.sh builds this on Arch (kept at the latest release by the release workflow).
+    (OUT / "vivi-bin").mkdir(exist_ok=True)
+    shutil.copy(ROOT / "packaging/aur/vivi-bin/PKGBUILD", OUT / "vivi-bin/PKGBUILD")
     tpl = (ROOT / "docs/site/plugins.template.html").read_text()
     cards = "\n".join(card(p) for p in idx["plugins"])
     (OUT / "plugins.html").write_text(tpl.replace("<!--PLUGINS-->", cards).replace("<!--COUNT-->", str(len(idx["plugins"]))))
