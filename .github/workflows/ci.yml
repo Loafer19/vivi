@@ -17,3 +17,20 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo build --release
+  flatpak-sources:
+    # Fails when packaging/flatpak/cargo-sources.json no longer matches Cargo.lock.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Regenerate cargo-sources.json
+        run: |
+          python3 -m venv /tmp/venv
+          /tmp/venv/bin/pip install -q aiohttp toml tomlkit PyYAML
+          curl -fsSL -o /tmp/fcg.py https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          /tmp/venv/bin/python /tmp/fcg.py Cargo.lock -o /tmp/cargo-sources.json
+      - name: Compare
+        run: |
+          if ! diff -q <(jq -S . packaging/flatpak/cargo-sources.json) <(jq -S . /tmp/cargo-sources.json); then
+            echo "::error file=packaging/flatpak/cargo-sources.json::stale; run: python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json"
+            exit 1
+          fi

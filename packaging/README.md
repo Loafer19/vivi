@@ -18,7 +18,7 @@ packaging/appimage/build-appimage.sh Vivi-dev-x86_64.AppImage
 
 Size history: v0.8.0 was 105.7 MB (Ubuntu's libmpv pulled in x264/x265/SVT-AV1/aom/rav1e
 encoders, codec2, flite voices, ICU data, LAPACK/Fortran, librsvg, SDL2, Blu-ray/DVD, ...).
-With the slim libmpv it is about 34 MB. Kept: Lua (yt-dlp hook), GnuTLS (https streams),
+With the slim libmpv it is about 44 MB (v0.9.0: 43.8 MB). Kept: Lua (yt-dlp hook), GnuTLS (https streams),
 VA-API/VDPAU, libplacebo (Vulkan/OpenGL), png/mjpeg/webp encoders for screenshots.
 Host-provided: glibc, GL/EGL, X11/xcb core, Wayland, D-Bus, systemd/udev, PulseAudio/ALSA, libdrm.
 

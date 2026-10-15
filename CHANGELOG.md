@@ -4,7 +4,7 @@
 
 ## [0.9.0] - 2026-10-15
 
-Highlights: Network Streams (radio now-playing card and visualizer, IPTV via iptv-org, music genres and SomaFM, M3U import), a loading spinner and error toast for streams, physical-keycode shortcuts, chapter thumbnails, EQ preset import/export, Figma-accurate dialogs, filters and miniplayer, Discord Rich Presence and Remote Control, downloadable plugins (Auto-tagger, Free Music, ListenBrainz, Subtitle Sync, SponsorBlock, Scene Chapters, A-B Loop, Night Mode, Playback Stats), an AppImage cut from 106 MB to 34 MB, and a Flatpak build.
+Highlights: Network Streams (radio now-playing card and visualizer, IPTV via iptv-org, music genres and SomaFM, M3U import), a loading spinner and error toast for streams, physical-keycode shortcuts, chapter thumbnails, EQ preset import/export, Figma-accurate dialogs, filters and miniplayer, Discord Rich Presence and Remote Control, downloadable plugins (Auto-tagger, Free Music, ListenBrainz, Subtitle Sync, SponsorBlock, Scene Chapters, A-B Loop, Night Mode, Playback Stats), an AppImage cut from 106 MB to 44 MB, and a Flatpak build.
 
 ### Added
 - **Equalizer** per the Figma components frame (#45): preamp + 10 vertical band sliders (60 Hz–16 kHz) with editable dB boxes, ON/OFF switch, *Open/Close Equalizer* bar and a presets dropdown with VLC's 18 presets (Flat, Classical, Club, Dance, Full bass, Full bass & treble, …) and their icons, plus custom presets (*New Preset*, rename, delete; edits follow the selected custom preset). Applied as a labelled mpv `af` (`@vivi-eq`, lavfi `volume` + `equalizer` chain; preamp uses VLC's convention, 12 dB = unity) and saved in `~/.config/vivi/fx.toml`.
@@ -35,7 +35,7 @@ Highlights: Network Streams (radio now-playing card and visualizer, IPTV via ipt
 - **Stream loading overlay** (core player): while a network stream opens or buffers (before the first frame/audio, or paused for cache) a spinner with the stream name is shown instead of a black screen; it hides on playback start, and a failed open shows an error toast.
 - **Equalizer preset import/export** (#61): custom presets can be exported to and imported from JSON files.
 - **Chapter thumbnails** (#62): the side panel's Chapters list shows the thumbnails saved by Scene Chapters.
-- **Packaging**: Flatpak manifest, AppStream metainfo and a CI job that builds a `.flatpak` bundle (#29). The AppImage now bundles a slim libmpv (decoders-only FFmpeg, no mpv CLI, zstd -19), cutting it from 106 MB to 34 MB; the Windows zip is smaller too.
+- **Packaging**: Flatpak manifest, AppStream metainfo and a CI job that builds a `.flatpak` bundle (#29). The AppImage now bundles a slim libmpv (decoders-only FFmpeg, no mpv CLI, zstd -19), cutting it from 106 MB to 44 MB; the Windows zip is smaller too.
 
 ### Fixed
 - Shortcuts with modifiers are forwarded to mpv by physical key (winit KeyCode mapped to US-QWERTY mpv names), so they work with any keyboard layout; the Cyrillic table stays as a fallback.
