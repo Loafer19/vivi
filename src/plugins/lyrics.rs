@@ -2,6 +2,13 @@
 //! current line. Sources, in order: a `.lrc` file next to the media file, the on-disk
 //! cache (`$XDG_CACHE_HOME/vivi/lyrics`), then LRCLIB (<https://lrclib.net>) using the
 //! artist / title / album / duration from the file tags (lofty) or mpv metadata.
+//!
+//! Network streams (radio): whenever the stream title (`icy-title`, else `media-title`,
+//! usually "Artist - Title") changes, it is parsed and looked up on LRCLIB; ads, jingles
+//! and station IDs are skipped and results are cached (memory + disk). Plain lyrics are
+//! shown as a scrollable block, since the song's start time is unknown. Optionally
+//! ("Radio lyrics: Approximate sync") synced lyrics are timed from the moment the title
+//! changed, shifted by a manual offset.
 
 use super::{Ctx, Manifest, Plugin, SettingSpec};
 use slint::{ModelRc, SharedString, VecModel};
@@ -88,10 +95,25 @@ fn cache_file(t: &Track) -> PathBuf {
         .join(format!("{:x}.lrc", md5::compute(key)))
 }
 
-#[derive(serde::Deserialize)]
-struct LrclibItem {
-    #[serde(rename = "syncedLyrics")]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct LrclibItem {
+    #[serde(rename = "artistName", default)]
+    artist: Option<String>,
+    #[serde(rename = "trackName", default)]
+    title: Option<String>,
+    #[serde(rename = "syncedLyrics", default)]
     synced: Option<String>,
+    #[serde(rename = "plainLyrics", default)]
+    plain: Option<String>,
+    #[serde(default)]
+    instrumental: Option<bool>,
+}
+
+impl LrclibItem {
+    fn has_lyrics(&self) -> bool {
+        let ne = |s: &Option<String>| s.as_ref().is_some_and(|s| !s.trim().is_empty());
+        ne(&self.synced) || ne(&self.plain)
+    }
 }
 
 fn agent() -> ureq::Agent {
@@ -182,17 +204,195 @@ fn track_info(cx: &Ctx) -> Option<Track> {
     (!t.artist.is_empty() && !t.title.is_empty()).then_some(t)
 }
 
+// ---------- Radio (network streams) ----------
+
+/// Words that mark a stream title as an ad, jingle, station ID or talk segment.
+const NOT_SONG: &[&str] = &[
+    "advert",
+    "commercial",
+    "sponsor",
+    "jingle",
+    "station id",
+    "promo",
+    "spot block",
+    "you're listening",
+    "you are listening",
+    "listening to",
+    "now playing",
+    "news",
+    "weather",
+    "traffic",
+    "live stream",
+    "on air",
+    "unknown",
+    "www.",
+    "http",
+    ".com",
+    ".fm",
+    "call us",
+    "text us",
+    "podcast",
+];
+
+/// "Artist - Title" from a stream title, or None for ads, station IDs and the like.
+/// `station` (icy-name) is used to reject titles that are just the station's name.
+pub fn parse_stream_title(raw: &str, station: &str) -> Option<(String, String)> {
+    let s = raw.trim().trim_matches(|c| c == '\'' || c == '"').trim();
+    let low = s.to_lowercase();
+    if s.len() < 3 || NOT_SONG.iter().any(|w| low.contains(w)) {
+        return None;
+    }
+    let st = station.trim().to_lowercase();
+    if !st.is_empty() && (low == st || low.starts_with(&format!("{st} -"))) {
+        return None;
+    }
+    let (a, t) = [" - ", " – ", " — ", " ~ ", " | "]
+        .iter()
+        .find_map(|sep| s.split_once(sep))?;
+    let artist = a.trim().to_string();
+    let title = clean_title(t);
+    let bad = |x: &str| x.is_empty() || x.chars().all(|c| !c.is_alphanumeric());
+    if bad(&artist) || bad(&title) {
+        return None;
+    }
+    Some((artist, title))
+}
+
+/// Drop decorations that LRCLIB does not know: "(Radio Edit)", "[Live]", "feat. X".
+fn clean_title(t: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0;
+    for c in t.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = (depth - 1).max(0),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    let low = out.to_lowercase();
+    let cut = [" feat. ", " feat ", " ft. ", " ft "]
+        .iter()
+        .filter_map(|w| low.find(w))
+        .min()
+        .unwrap_or(out.len());
+    out[..cut].split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn radio_cache_file(artist: &str, title: &str) -> PathBuf {
+    let key = format!(
+        "radio\u{1f}{}\u{1f}{}",
+        artist.to_lowercase(),
+        title.to_lowercase()
+    );
+    crate::store::cache_dir()
+        .join("lyrics")
+        .join(format!("{:x}.json", md5::compute(key)))
+}
+
+fn norm(s: &str) -> String {
+    s.to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect()
+}
+
+/// Best LRCLIB entry for a radio title (no album or duration known): `/api/get`, then
+/// `/api/search` keeping only results whose artist and title match (either way round,
+/// some stations send "Title - Artist").
+pub fn fetch_radio(artist: &str, title: &str) -> Result<Option<LrclibItem>, String> {
+    let a = agent();
+    match a
+        .get("https://lrclib.net/api/get")
+        .query("artist_name", artist)
+        .query("track_name", title)
+        .call()
+    {
+        Ok(mut r) => {
+            let it: LrclibItem = r.body_mut().read_json().map_err(|e| e.to_string())?;
+            if it.has_lyrics() {
+                return Ok(Some(it));
+            }
+        }
+        Err(ureq::Error::StatusCode(404)) => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    let mut r = a
+        .get("https://lrclib.net/api/search")
+        .query("q", format!("{artist} {title}"))
+        .call()
+        .map_err(|e| e.to_string())?;
+    let items: Vec<LrclibItem> = r.body_mut().read_json().map_err(|e| e.to_string())?;
+    let (na, nt) = (norm(artist), norm(title));
+    let close =
+        |x: &str, y: &str| !x.is_empty() && !y.is_empty() && (x.contains(y) || y.contains(x));
+    let matches = |i: &LrclibItem| {
+        let (ia, it) = (
+            norm(i.artist.as_deref().unwrap_or("")),
+            norm(i.title.as_deref().unwrap_or("")),
+        );
+        (close(&ia, &na) && close(&it, &nt)) || (close(&ia, &nt) && close(&it, &na))
+    };
+    let mut good: Vec<LrclibItem> = items
+        .into_iter()
+        .filter(|i| matches(i) && i.has_lyrics())
+        .collect();
+    // Prefer entries with synced lyrics.
+    good.sort_by_key(|i| i.synced.as_ref().is_none_or(|s| s.trim().is_empty()));
+    Ok(good.into_iter().next())
+}
+
+/// Plain text lines of an entry (from `plainLyrics`, else the synced text without tags).
+fn plain_lines(it: &LrclibItem) -> Vec<String> {
+    if let Some(p) = it.plain.as_ref().filter(|p| !p.trim().is_empty()) {
+        return p.lines().map(|l| l.trim().to_string()).collect();
+    }
+    it.synced
+        .as_deref()
+        .map(|s| Lrc::parse(s).lines.into_iter().map(|(_, l)| l).collect())
+        .unwrap_or_default()
+}
+
+/// Seconds from the "Radio sync offset" setting (positive = lyrics later).
+fn parse_offset(s: &str) -> f64 {
+    s.trim()
+        .trim_end_matches('s')
+        .trim()
+        .replace(',', ".")
+        .parse()
+        .unwrap_or(0.0)
+}
+
+#[derive(Default)]
+struct Radio {
+    /// Raw stream title last seen.
+    title: String,
+    /// `time-pos` when it changed (approximate song start).
+    since: f64,
+    /// Lookup key ("artist\u{1f}title") whose result is displayed / awaited.
+    key: String,
+    mem: std::collections::HashMap<String, Option<LrclibItem>>,
+    rx: Option<Receiver<(String, Option<LrclibItem>)>>,
+    last_poll: Option<std::time::Instant>,
+}
+
 #[derive(Default)]
 pub struct Lyrics {
     lrc: Option<Lrc>,
     index: Option<usize>,
     rx: Option<Receiver<(String, Option<String>)>>,
     path: Option<String>,
+    /// Some while a network stream plays.
+    radio: Option<Radio>,
+    /// Synced lines are timed from the title change (radio, approximate sync).
+    radio_synced: bool,
 }
 
 impl Lyrics {
     fn show(&mut self, cx: &Ctx, lrc: Option<Lrc>) {
         self.index = None;
+        self.radio_synced = false;
+        cx.app.set_lyrics_plain(false);
         let lines: Vec<SharedString> = lrc
             .as_ref()
             .map(|l| {
@@ -217,6 +417,16 @@ impl Lyrics {
         self.rx = None;
         self.show(cx, None);
         self.path = cx.player.get("path");
+        self.radio = None;
+        let stream = self
+            .path
+            .as_deref()
+            .is_some_and(|p| p.contains("://") && !p.starts_with("file://"));
+        if stream {
+            // Stream titles are polled in `tick`.
+            self.radio = Some(Radio::default());
+            return;
+        }
         if let Some(p) = cx.local_path() {
             if let Some(l) = local_lrc(&p).and_then(|f| std::fs::read_to_string(f).ok()) {
                 self.show(cx, Some(Lrc::parse(&l)));
@@ -258,6 +468,123 @@ impl Lyrics {
     }
 }
 
+impl Lyrics {
+    /// Poll the stream title (twice a second) and look lyrics up when it changes.
+    fn radio_tick(&mut self, cx: &Ctx) {
+        let Some(r) = self.radio.as_mut() else { return };
+        if r.last_poll
+            .is_some_and(|t| t.elapsed() < Duration::from_millis(500))
+        {
+            return;
+        }
+        r.last_poll = Some(std::time::Instant::now());
+        let raw = cx
+            .player
+            .get("metadata/by-key/icy-title")
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| cx.player.get("media-title"))
+            .unwrap_or_default();
+        if raw == r.title {
+            return;
+        }
+        r.title = raw.clone();
+        r.since = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
+        r.rx = None;
+        let station = cx
+            .player
+            .get("metadata/by-key/icy-name")
+            .unwrap_or_default();
+        let parsed = parse_stream_title(&raw, &station);
+        let key = parsed
+            .as_ref()
+            .map(|(a, t)| format!("{a}\u{1f}{t}"))
+            .unwrap_or_default();
+        r.key = key.clone();
+        let Some((artist, title)) = parsed else {
+            self.show(cx, None); // ad / station ID / talk: hide
+            return;
+        };
+        if let Some(hit) = r.mem.get(&key).cloned() {
+            self.show_radio(cx, hit.as_ref());
+            return;
+        }
+        let cache = radio_cache_file(&artist, &title);
+        if let Ok(s) = std::fs::read_to_string(&cache) {
+            if let Ok(it) = serde_json::from_str::<LrclibItem>(&s) {
+                r.mem.insert(key, Some(it.clone()));
+                self.show_radio(cx, Some(&it));
+                return;
+            }
+        }
+        let offline = !cx.flag("online") || cache.with_extension("none").exists();
+        if offline {
+            r.mem.insert(key.clone(), None);
+        }
+        let (tx, rx) = channel();
+        if !offline {
+            r.rx = Some(rx);
+        }
+        self.show(cx, None);
+        if offline {
+            return;
+        }
+        std::thread::spawn(move || {
+            let res = fetch_radio(&artist, &title);
+            if let Some(d) = cache.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            match &res {
+                Ok(Some(it)) => {
+                    if let Ok(j) = serde_json::to_string(it) {
+                        let _ = std::fs::write(&cache, j);
+                    }
+                }
+                Ok(None) => {
+                    let _ = std::fs::write(cache.with_extension("none"), b"");
+                }
+                Err(e) => eprintln!("vivi: radio lyrics: {e}"),
+            }
+            let _ = tx.send((key, res.ok().flatten()));
+        });
+    }
+
+    fn radio_result(&mut self, cx: &Ctx) {
+        let Some(r) = self.radio.as_mut() else { return };
+        let Some(rx) = &r.rx else { return };
+        let Ok((key, it)) = rx.try_recv() else { return };
+        r.rx = None;
+        r.mem.insert(key.clone(), it.clone());
+        if key == r.key {
+            self.show_radio(cx, it.as_ref());
+        }
+    }
+
+    fn show_radio(&mut self, cx: &Ctx, it: Option<&LrclibItem>) {
+        let Some(it) = it.filter(|i| i.has_lyrics()) else {
+            self.show(cx, None);
+            return;
+        };
+        let synced = it
+            .synced
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .map(Lrc::parse)
+            .filter(|l| !l.lines.is_empty());
+        match synced {
+            Some(l) if cx.get("radio-mode") == "Approximate sync" => {
+                self.show(cx, Some(l));
+                self.radio_synced = true;
+            }
+            _ => {
+                let lines: Vec<(f64, String)> =
+                    plain_lines(it).into_iter().map(|l| (0.0, l)).collect();
+                self.show(cx, Some(Lrc { lines }));
+                cx.app.set_lyrics_plain(true);
+            }
+        }
+    }
+}
+
 impl Plugin for Lyrics {
     fn manifest(&self) -> Manifest {
         Manifest::builtin(
@@ -271,6 +598,19 @@ impl Plugin for Lyrics {
             "Search lyrics online (LRCLIB)",
             "Sends artist, title, album and duration to lrclib.net. Results are cached.",
             true,
+        ))
+        .setting(SettingSpec::choice(
+            "radio-mode",
+            "Radio lyrics",
+            "Network streams: lyrics are looked up when the stream title changes. The song's start is unknown, so synced lyrics can only be timed approximately from the title change.",
+            &["Plain lyrics", "Approximate sync", "Off"],
+        ))
+        .setting(SettingSpec::text(
+            "radio-offset",
+            "Radio sync offset (seconds)",
+            "Approximate sync only: positive shows lines later, negative earlier.",
+            "0",
+            "0",
         ))
         .setting(SettingSpec::choice(
             "size",
@@ -301,7 +641,7 @@ impl Plugin for Lyrics {
     fn setting_changed(&mut self, cx: &Ctx, key: &str) {
         match key {
             "size" => self.apply_size(cx),
-            "online" => self.load(cx),
+            "online" | "radio-mode" => self.load(cx),
             _ => {}
         }
     }
@@ -313,6 +653,10 @@ impl Plugin for Lyrics {
         }
     }
     fn tick(&mut self, cx: &Ctx) {
+        if self.radio.is_some() && cx.get("radio-mode") != "Off" {
+            self.radio_result(cx);
+            self.radio_tick(cx);
+        }
         if let Some(rx) = &self.rx {
             if let Ok((key, res)) = rx.try_recv() {
                 self.rx = None;
@@ -322,7 +666,13 @@ impl Plugin for Lyrics {
             }
         }
         let Some(l) = &self.lrc else { return };
-        let t: f64 = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
+        if self.radio.is_some() && !self.radio_synced {
+            return; // plain lyrics: nothing to highlight
+        }
+        let mut t: f64 = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
+        if let (Some(r), true) = (&self.radio, self.radio_synced) {
+            t -= r.since + parse_offset(&cx.get("radio-offset"));
+        }
         let i = l.index_at(t + 0.15);
         if i != self.index {
             self.index = i;
@@ -364,6 +714,50 @@ mod tests {
         std::fs::write(d.join("song.lrc"), "[00:01.00]x").unwrap();
         assert_eq!(local_lrc(&song), Some(d.join("song.lrc")));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn stream_titles() {
+        let p = |s: &str| parse_stream_title(s, "Groove Salad");
+        assert_eq!(
+            p("Daft Punk - Get Lucky (Radio Edit) [feat. Pharrell]"),
+            Some(("Daft Punk".into(), "Get Lucky".into()))
+        );
+        assert_eq!(
+            p("Massive Attack – Teardrop ft. Liz Fraser"),
+            Some(("Massive Attack".into(), "Teardrop".into()))
+        );
+        assert_eq!(p("Groove Salad"), None);
+        assert_eq!(p("Groove Salad - Commercial Free"), None);
+        assert_eq!(p("Advertisement - Buy now"), None);
+        assert_eq!(p("You're listening to Radio X"), None);
+        assert_eq!(p("www.radio.fm - best hits"), None);
+        assert_eq!(p("Just a title"), None);
+        assert_eq!(p(" - "), None);
+        assert_eq!(parse_offset("-2.5"), -2.5);
+        assert_eq!(parse_offset("3s"), 3.0);
+        assert_eq!(parse_offset("x"), 0.0);
+    }
+
+    #[test]
+    fn plain_from_synced() {
+        let it = LrclibItem {
+            synced: Some("[00:01.00]A\n[00:02.00]B".into()),
+            ..Default::default()
+        };
+        assert_eq!(plain_lines(&it), ["A", "B"]);
+        assert!(it.has_lyrics());
+        assert!(!LrclibItem::default().has_lyrics());
+    }
+
+    /// Network test; run with `cargo test -- --ignored`.
+    #[test]
+    #[ignore]
+    fn lrclib_radio_live() {
+        let it = fetch_radio("Daft Punk", "Get Lucky").unwrap().unwrap();
+        assert!(!plain_lines(&it).is_empty());
+        // Swapped "Title - Artist" still found through search.
+        assert!(fetch_radio("Get Lucky", "Daft Punk").unwrap().is_some());
     }
 
     /// Network test; run with `cargo test -- --ignored`.

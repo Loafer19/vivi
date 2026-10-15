@@ -34,8 +34,9 @@ export component LyricsView inherits Rectangle {
     in property <[string]> lines;
     in property <int> index: -1;
     in property <length> size: 22px;
+    in property <bool> plain;
     property <length> line-h: root.size * 1.7;
-    property <int> visible-lines: 5;
+    property <int> visible-lines: root.plain ? 8 : 5;
     // Dim the picture behind the lyrics (off over the visualizer).
     in property <bool> backdrop;
     height: self.line-h * self.visible-lines;
@@ -44,21 +45,38 @@ export component LyricsView inherits Rectangle {
         x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
         border-radius: 16px; background: #000000A0;
     }
-    for l[i] in root.lines: Text {
-        property <int> d: abs(i - root.index);
-        visible: self.d <= 3;
-        x: 0; width: root.width;
-        y: (i - root.index + 2) * root.line-h;
-        height: root.line-h;
-        animate y { duration: 260ms; easing: ease-out; }
-        text: l == "" ? "♪" : l;
-        horizontal-alignment: center; vertical-alignment: center;
-        overflow: elide;
-        font-size: i == root.index ? root.size * 1.15 : root.size;
-        font-weight: i == root.index ? 700 : 500;
-        color: i == root.index ? Theme.accent : #FFFFFF;
-        opacity: i == root.index ? 1 : max(0.15, 0.7 - self.d * 0.2);
-        animate opacity, color { duration: 200ms; }
+    if !root.plain: Rectangle {
+        for l[i] in root.lines: Text {
+            property <int> d: abs(i - root.index);
+            visible: self.d <= 3;
+            x: 0; width: root.width;
+            y: (i - root.index + 2) * root.line-h;
+            height: root.line-h;
+            animate y { duration: 260ms; easing: ease-out; }
+            text: l == "" ? "♪" : l;
+            horizontal-alignment: center; vertical-alignment: center;
+            overflow: elide;
+            font-size: i == root.index ? root.size * 1.15 : root.size;
+            font-weight: i == root.index ? 700 : 500;
+            color: i == root.index ? Theme.accent : #FFFFFF;
+            opacity: i == root.index ? 1 : max(0.15, 0.7 - self.d * 0.2);
+            animate opacity, color { duration: 200ms; }
+        }
+    }
+    // Plain lyrics (no timing): every line, scroll with the wheel or by dragging.
+    if root.plain: Flickable {
+        x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
+        viewport-height: col.preferred-height;
+        col := VerticalLayout {
+            padding-top: 12px; padding-bottom: 12px;
+            for l in root.lines: Text {
+                text: l;
+                horizontal-alignment: center; vertical-alignment: center;
+                wrap: word-wrap;
+                font-size: root.size * 0.8; font-weight: 500;
+                color: #FFFFFF; opacity: 0.85;
+            }
+        }
     }
 }
 

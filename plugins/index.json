@@ -57,7 +57,7 @@
     {
       "id": "lyrics",
       "name": "Lyrics",
-      "description": "Synced lyrics as a karaoke overlay, from a .lrc file next to the song or from LRCLIB, cached on disk.",
+      "description": "Synced lyrics as a karaoke overlay, from a .lrc file next to the song or from LRCLIB, cached on disk. Radio streams: lyrics for the current stream title.",
       "version": "0.8.0",
       "author": "Vivi",
       "icon": "lyrics",
@@ -70,6 +70,23 @@
           "title": "Search lyrics online (LRCLIB)",
           "type": "toggle",
           "default": "true"
+        },
+        {
+          "key": "radio-mode",
+          "title": "Radio lyrics",
+          "type": "choice",
+          "options": [
+            "Plain lyrics",
+            "Approximate sync",
+            "Off"
+          ],
+          "default": "Plain lyrics"
+        },
+        {
+          "key": "radio-offset",
+          "title": "Radio sync offset (seconds)",
+          "type": "text",
+          "default": "0"
         },
         {
           "key": "size",
