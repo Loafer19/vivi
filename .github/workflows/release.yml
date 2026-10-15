@@ -203,3 +203,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --notes-file notes.md --generate-notes --title "Vivi $GITHUB_REF_NAME"
+
+  # Bumps packaging/aur (vivi-bin, vivi-git), packaging/flathub, packaging/winget and
+  # packaging/scoop to the new version and checksums and commits that to master. Nothing is
+  # published to AUR, Flathub, winget or Scoop: see packaging/aur/README.md and
+  # packaging/flathub/README.md for the manual steps.
+  packaging:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v') && needs.publish.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: master, fetch-depth: 0 }
+      - name: Bump packaging to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          mkdir -p "$RUNNER_TEMP/rel"
+          gh release download "$GITHUB_REF_NAME" -p SHA256SUMS -D "$RUNNER_TEMP/rel"
+          # Flatpak metainfo and cargo sources as of the tag (master may have moved on).
+          git show "$GITHUB_SHA:packaging/flatpak/cargo-sources.json" > "$RUNNER_TEMP/cargo-sources.json"
+          git show "$GITHUB_SHA:packaging/flatpak/io.github.loafer19.vivi.metainfo.xml" > "$RUNNER_TEMP/meta.xml"
+          META_SRC="$RUNNER_TEMP/meta.xml" CARGO_SOURCES="$RUNNER_TEMP/cargo-sources.json" \
+            python3 scripts/bump-packaging.py "$VER" "$RUNNER_TEMP/rel" "$GITHUB_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging
+          git diff --cached --quiet && exit 0
+          git commit -m "Packaging: AUR, Flathub, winget and Scoop manifests for $GITHUB_REF_NAME"
+          git push origin HEAD:master

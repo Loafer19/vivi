@@ -1,0 +1,54 @@
+name: Packaging
+# Checks the distribution packaging in packaging/aur and packaging/flathub: builds both AUR
+# packages in Arch Linux, runs namcap on PKGBUILD and package, checks that .SRCINFO matches
+# `makepkg --printsrcinfo`, and lints the Flathub manifest and metainfo with
+# flatpak-builder-lint and appstreamcli. Publishes nothing.
+on:
+  push:
+    branches: [master]
+    paths: ["packaging/aur/**", "packaging/flathub/**", "packaging/winget/**", "packaging/scoop/**", ".github/workflows/packaging.yml"]
+  pull_request:
+    paths: ["packaging/aur/**", "packaging/flathub/**", "packaging/winget/**", "packaging/scoop/**", ".github/workflows/packaging.yml"]
+  workflow_dispatch:
+jobs:
+  aur:
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [vivi-bin, vivi-git]
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and namcap
+        run: |
+          pacman -Syu --noconfirm --needed namcap git rust
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          cp -r packaging/aur/${{ matrix.pkg }} /home/builder/pkg && chown -R builder /home/builder/pkg
+          cd /home/builder/pkg
+          sudo -u builder makepkg --printsrcinfo > /tmp/srcinfo
+          if [ "${{ matrix.pkg }}" = vivi-git ]; then
+            # pkgver() rewrites pkgver on build; compare everything else.
+            diff <(grep -v pkgver .SRCINFO) <(grep -v pkgver /tmp/srcinfo)
+          else
+            diff .SRCINFO /tmp/srcinfo
+          fi
+          namcap PKGBUILD | tee /tmp/namcap-pkgbuild
+          sudo -u builder makepkg -s --noconfirm
+          namcap -i ./*.pkg.tar.zst | tee /tmp/namcap-pkg
+          pacman -Qlp ./*.pkg.tar.zst
+          if grep -E ' E: ' /tmp/namcap-pkgbuild /tmp/namcap-pkg; then exit 1; fi
+          pacman -U --noconfirm ./*.pkg.tar.zst
+          test -x /usr/bin/vivi -a -x /usr/bin/vivi-mcp
+  flathub:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: flatpak-builder-lint (manifest) and appstream validation
+        run: |
+          docker run --rm -v "$PWD/packaging/flathub:/w" -w /w ghcr.io/flathub/flatpak-builder-lint:latest \
+            flatpak-builder-lint --exceptions manifest io.github.loafer19.vivi.yml
+          docker run --rm -v "$PWD/packaging/flathub:/w" -w /w ghcr.io/flathub/flatpak-builder-lint:latest \
+            appstreamcli validate --explain io.github.loafer19.vivi.metainfo.xml
+          python3 -c "import json; json.load(open('packaging/scoop/vivi.json'))"

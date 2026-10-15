@@ -1,0 +1,50 @@
+# Maintainer: Loafer19 <https://github.com/Loafer19>
+# Builds the latest master from source.
+pkgname=vivi-git
+pkgver=0.9.1.r0.g16fe71b
+pkgrel=1
+pkgdesc="Fast, minimal media player built on mpv (Slint UI) - development version"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Loafer19/vivi"
+license=('MIT')
+# libxkbcommon is loaded at runtime (dlopen), so namcap cannot see it.
+depends=('mpv' 'sqlite' 'fontconfig' 'gcc-libs' 'glibc' 'libxkbcommon' 'hicolor-icon-theme')
+makedepends=('cargo' 'git')
+optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
+            'yt-dlp: YouTube and other sites in Open Network Stream'
+            'xdg-desktop-portal: native file and folder dialogs')
+provides=('vivi')
+conflicts=('vivi' 'vivi-bin')
+options=('!lto')
+source=("${pkgname}::git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${pkgname}"
+  git describe --long --tags --match 'v[0-9]*' | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+prepare() {
+  cd "${pkgname}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+package() {
+  cd "${pkgname}"
+  install -Dm755 target/release/vivi "${pkgdir}/usr/bin/vivi"
+  install -Dm755 target/release/vivi-mcp "${pkgdir}/usr/bin/vivi-mcp"
+  install -Dm644 packaging/vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"
+  install -Dm644 packaging/vivi.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vivi.svg"
+  install -Dm644 packaging/vivi.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/vivi.png"
+  sed 's|<launchable type="desktop-id">.*</launchable>|<launchable type="desktop-id">vivi.desktop</launchable>|' \
+    packaging/flatpak/io.github.loafer19.vivi.metainfo.xml > metainfo.xml
+  install -Dm644 metainfo.xml "${pkgdir}/usr/share/metainfo/io.github.loafer19.vivi.metainfo.xml"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

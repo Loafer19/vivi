@@ -36,3 +36,11 @@ After changing `Cargo.lock`, regenerate the offline cargo sources with
 `python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json`.
 FFmpeg comes from the freedesktop runtime (H.264/HEVC via its `codecs-extra` extension);
 yt-dlp is not bundled in the sandbox.
+
+## Distribution packaging
+
+- `aur/`: AUR packages `vivi-bin` (release tarball) and `vivi-git` (source), with `.SRCINFO`; see `aur/README.md`.
+- `flathub/`: Flathub manifest, cargo sources and metainfo for the submission; see `flathub/README.md`.
+- `winget/`, `scoop/`: Windows package manifests (portable zip).
+
+All four are bumped to each release by the release workflow (`scripts/bump-packaging.py`, job `packaging`) and checked by `.github/workflows/packaging.yml`. Nothing is published automatically.

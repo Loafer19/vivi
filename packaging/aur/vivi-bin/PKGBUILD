@@ -1,0 +1,36 @@
+# Maintainer: Loafer19 <https://github.com/Loafer19>
+# Prebuilt binaries from the GitHub release tarball. pkgver and sha256sums are bumped by
+# the release workflow (.github/workflows/release.yml, job "packaging"); see packaging/aur/README.md.
+pkgname=vivi-bin
+pkgver=0.9.1
+pkgrel=1
+pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
+arch=('x86_64')
+url="https://github.com/Loafer19/vivi"
+license=('MIT')
+# libxkbcommon is loaded at runtime (dlopen), so namcap cannot see it.
+depends=('mpv' 'sqlite' 'fontconfig' 'gcc-libs' 'glibc' 'libxkbcommon' 'hicolor-icon-theme')
+optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
+            'yt-dlp: YouTube and other sites in Open Network Stream'
+            'xdg-desktop-portal: native file and folder dialogs')
+provides=('vivi')
+conflicts=('vivi' 'vivi-git')
+options=('!debug' '!strip')
+source=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz"
+        "io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
+sha256sums=('dea45ac3ca2781135b2eff7b4661b06400c31666efaa803d2730a3ee852de49f'
+            'c95a35f2e6dc90fd7576ef64cc4f2a3b925bd29eb5223dec9f5bd67f3666fcfd')
+
+package() {
+  cd "vivi-v${pkgver}-linux-x86_64"
+  install -Dm755 vivi "${pkgdir}/usr/bin/vivi"
+  install -Dm755 vivi-mcp "${pkgdir}/usr/bin/vivi-mcp"
+  install -Dm644 vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"
+  install -Dm644 vivi.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vivi.svg"
+  install -Dm644 vivi.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/vivi.png"
+  sed 's|<launchable type="desktop-id">.*</launchable>|<launchable type="desktop-id">vivi.desktop</launchable>|' \
+    "${srcdir}/io.github.loafer19.vivi.metainfo.xml" > metainfo.xml
+  install -Dm644 metainfo.xml "${pkgdir}/usr/share/metainfo/io.github.loafer19.vivi.metainfo.xml"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
