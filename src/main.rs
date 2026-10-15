@@ -406,6 +406,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let p = player.clone();
         let weak = app.as_weak();
         app.window().on_winit_window_event(move |_w, ev| {
+            // Remember the physical key of the key press Slint is about to dispatch, so
+            // forwarded modifier combos are layout-independent (see `forward_key`).
+            if let WindowEvent::KeyboardInput { event, .. } = ev {
+                if event.state.is_pressed() {
+                    LAST_PHYSICAL.set(Some(event.physical_key));
+                }
+            }
             if let WindowEvent::DroppedFile(path) = ev {
                 if weak.upgrade().is_some_and(|a| dialogs::take_drop(&a, path)) {
                     return EventResult::PreventDefault;
@@ -938,17 +945,126 @@ fn walk_media(dir: &std::path::Path) -> Vec<String> {
 /// Send a key Vivi does not use to mpv (`keypress`), so key bindings of mpv scripts and
 /// plugin packages work. Returns whether it was sent.
 fn forward_key(p: &player::Player, text: &str, ctrl: bool, alt: bool) -> bool {
-    let Some(k) = mpv_key(text, ctrl, alt) else {
+    let phys = LAST_PHYSICAL.take();
+    let k = phys
+        .filter(|_| ctrl || alt)
+        .and_then(|pk| physical_key(pk, text, ctrl, alt))
+        .or_else(|| mpv_key(text, ctrl, alt));
+    let Some(k) = k else {
         if key_debug() {
-            eprintln!("vivi: key {text:?} (ctrl={ctrl} alt={alt}) has no mpv name");
+            eprintln!(
+                "vivi: key {text:?} (ctrl={ctrl} alt={alt} physical={phys:?}) has no mpv name"
+            );
         }
         return false;
     };
     if key_debug() {
-        eprintln!("vivi: keypress {k}");
+        eprintln!("vivi: keypress {k} (physical={phys:?})");
     }
     p.cmd("keypress", &[&k]);
     true
+}
+
+thread_local! {
+    /// Physical key of the latest winit key press (set in the winit event hook).
+    static LAST_PHYSICAL: std::cell::Cell<Option<slint::winit_030::winit::keyboard::PhysicalKey>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// US-QWERTY character printed on a physical key (letters lowercase), the layout mpv
+/// key bindings are written for.
+fn physical_char(code: slint::winit_030::winit::keyboard::KeyCode) -> Option<char> {
+    use slint::winit_030::winit::keyboard::KeyCode as K;
+    const LETTERS: [K; 26] = [
+        K::KeyA,
+        K::KeyB,
+        K::KeyC,
+        K::KeyD,
+        K::KeyE,
+        K::KeyF,
+        K::KeyG,
+        K::KeyH,
+        K::KeyI,
+        K::KeyJ,
+        K::KeyK,
+        K::KeyL,
+        K::KeyM,
+        K::KeyN,
+        K::KeyO,
+        K::KeyP,
+        K::KeyQ,
+        K::KeyR,
+        K::KeyS,
+        K::KeyT,
+        K::KeyU,
+        K::KeyV,
+        K::KeyW,
+        K::KeyX,
+        K::KeyY,
+        K::KeyZ,
+    ];
+    const DIGITS: [K; 10] = [
+        K::Digit0,
+        K::Digit1,
+        K::Digit2,
+        K::Digit3,
+        K::Digit4,
+        K::Digit5,
+        K::Digit6,
+        K::Digit7,
+        K::Digit8,
+        K::Digit9,
+    ];
+    if let Some(i) = LETTERS.iter().position(|k| *k == code) {
+        return Some((b'a' + i as u8) as char);
+    }
+    if let Some(i) = DIGITS.iter().position(|k| *k == code) {
+        return Some((b'0' + i as u8) as char);
+    }
+    Some(match code {
+        K::Minus => '-',
+        K::Equal => '=',
+        K::BracketLeft => '[',
+        K::BracketRight => ']',
+        K::Backslash => '\\',
+        K::Semicolon => ';',
+        K::Quote => '\'',
+        K::Backquote => '`',
+        K::Comma => ',',
+        K::Period => '.',
+        K::Slash => '/',
+        _ => return None,
+    })
+}
+
+/// mpv name of a modifier combo from the physical key (layout-independent). Only
+/// character keys are handled here; named keys (arrows, …) keep the Slint text path.
+/// `text` decides the case: an upper-case character means Shift was held.
+fn physical_key(
+    pk: slint::winit_030::winit::keyboard::PhysicalKey,
+    text: &str,
+    ctrl: bool,
+    alt: bool,
+) -> Option<String> {
+    let slint::winit_030::winit::keyboard::PhysicalKey::Code(code) = pk else {
+        return None;
+    };
+    let ch = physical_char(code)?;
+    let upper = text.chars().next().is_some_and(char::is_uppercase);
+    let k = if upper && ch.is_ascii_lowercase() {
+        ch.to_ascii_uppercase().to_string()
+    } else {
+        ch.to_string()
+    };
+    let k = if k == "#" { "SHARP".into() } else { k };
+    let mut k = k;
+    if alt {
+        k = format!("Alt+{k}");
+    }
+    if ctrl {
+        k = format!("Ctrl+{k}");
+    }
+    Some(k)
 }
 
 /// `VIVI_KEY_DEBUG=1` logs every key event and what is forwarded to mpv.
@@ -957,8 +1073,8 @@ fn key_debug() -> bool {
     *ON.get_or_init(|| std::env::var_os("VIVI_KEY_DEBUG").is_some())
 }
 
-/// QWERTY letter on the same physical key as a Cyrillic (Ukrainian/Russian ЙЦУКЕН)
-/// letter, so Alt+N etc. still reach mpv scripts while a Cyrillic layout is active.
+/// Fallback when no physical key code is known: QWERTY letter on the same physical key
+/// as a Cyrillic (Ukrainian/Russian ЙЦУКЕН) letter.
 fn latin_of(ch: char) -> Option<char> {
     const CYR: &str = "йцукенгшщзхїфівапролджєячсмитьбюыэъё";
     const LAT: &str = "qwertyuiop[]asdfghjkl;'zxcvbnm,.s']`";
@@ -1036,6 +1152,39 @@ mod key_tests {
         assert_eq!(mpv_key("с", false, true).as_deref(), Some("Alt+c"));
         assert_eq!(mpv_key("і", false, true).as_deref(), Some("Alt+s"));
         assert_eq!(mpv_key("т", false, false), None);
+    }
+
+    #[test]
+    fn physical_keys_are_layout_independent() {
+        use super::physical_key;
+        use slint::winit_030::winit::keyboard::{KeyCode, NativeKeyCode, PhysicalKey};
+        let n = PhysicalKey::Code(KeyCode::KeyN);
+        // Ukrainian layout types "т" on N, Greek "ν", German "n": all map to Alt+n.
+        for t in ["т", "ν", "n"] {
+            assert_eq!(physical_key(n, t, false, true).as_deref(), Some("Alt+n"));
+        }
+        assert_eq!(physical_key(n, "Т", false, true).as_deref(), Some("Alt+N"));
+        // German QWERTZ: the key labelled Z sits on US Y.
+        let y = PhysicalKey::Code(KeyCode::KeyY);
+        assert_eq!(physical_key(y, "z", true, false).as_deref(), Some("Ctrl+y"));
+        let d1 = PhysicalKey::Code(KeyCode::Digit1);
+        assert_eq!(
+            physical_key(d1, "&", true, true).as_deref(),
+            Some("Ctrl+Alt+1")
+        );
+        assert_eq!(
+            physical_key(PhysicalKey::Code(KeyCode::ArrowLeft), "", false, true),
+            None
+        );
+        assert_eq!(
+            physical_key(
+                PhysicalKey::Unidentified(NativeKeyCode::Unidentified),
+                "т",
+                false,
+                true
+            ),
+            None
+        );
     }
 
     #[test]
