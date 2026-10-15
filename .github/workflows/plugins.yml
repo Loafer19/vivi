@@ -4,17 +4,67 @@ name: Plugins
 # as a GitHub release "plugin-<id>-v<version>" with the zip as its asset. Releases that
 # already exist are left alone (bump the version to publish a change). Plugin releases are
 # never marked "latest", so the app's own release stays the latest one.
+#
+# Packages with native helpers (manifest `binaries`, sources in helpers/) also get one
+# asset per helper and platform, built by the `helpers` job. Builds are not bit-for-bit
+# reproducible, so their checksums cannot be committed up front: after publishing a new
+# version this workflow writes the helpers' sha256/size into plugins/index.json, commits
+# that to master and redeploys the docs site (which serves the catalog). For versions
+# that are already released the published assets are used, never fresh builds.
 on:
   push:
     branches: [master]
-    paths: ["plugins/**", "scripts/package-plugins.py", ".github/workflows/plugins.yml"]
+    paths: ["plugins/**", "helpers/**", "scripts/package-plugins.py", ".github/workflows/plugins.yml"]
   pull_request:
-    paths: ["plugins/**", "scripts/package-plugins.py"]
+    paths: ["plugins/**", "helpers/**", "scripts/package-plugins.py", ".github/workflows/plugins.yml"]
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
+concurrency:
+  group: plugins-${{ github.ref }}
 jobs:
+  helpers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x86_64, target: x86_64-unknown-linux-musl, test: true }
+          - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-musl, test: true }
+          - { os: windows-latest, platform: windows-x86_64, target: x86_64-pc-windows-msvc, test: true }
+          - { os: macos-14, platform: macos-aarch64, target: aarch64-apple-darwin, test: true }
+          - { os: macos-14, platform: macos-x86_64, target: x86_64-apple-darwin, test: false }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: helpers
+    steps:
+      - uses: actions/checkout@v4
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+      - if: matrix.platform == 'linux-x86_64'
+        run: cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings
+      - if: matrix.test
+        run: cargo test --locked --target ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Collect
+        run: |
+          out=../dist/helpers/${{ matrix.platform }}
+          mkdir -p "$out"
+          ext=""; [[ "${{ matrix.platform }}" == windows-* ]] && ext=".exe"
+          for b in vivi-discord vivi-remote; do cp "target/${{ matrix.target }}/release/$b$ext" "$out/"; done
+          ls -la "$out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: helpers-${{ matrix.platform }}
+          path: dist/helpers
   package:
+    needs: helpers
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +74,29 @@ jobs:
           for f in plugins/*/*.lua ; do luajit -bl "$f" > /dev/null || exit 1; done
       - name: Build packages, verify index.json
         run: python3 scripts/package-plugins.py --check
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: helpers-*
+          path: dist/helpers
+          merge-multiple: true
+      - name: Use published helpers for released versions
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/package-plugins.py --list | while read -r id ver tag zip; do
+            needs=$(python3 -c "import tomllib,sys; print(' '.join(tomllib.load(open('plugins/$id/manifest.toml','rb')).get('binaries', [])))")
+            [ -z "$needs" ] && continue
+            gh release view "$tag" > /dev/null 2>&1 || continue
+            rm -rf /tmp/rel && gh release download "$tag" -D /tmp/rel -p 'vivi-*'
+            for f in /tmp/rel/*; do
+              n=$(basename "$f"); base=${n%.exe}; ext=""; [ "$n" != "$base" ] && ext=".exe"
+              for name in $needs; do
+                plat=${base#"$name"-}
+                [ "$plat" != "$base" ] && mkdir -p "dist/helpers/$plat" && cp "$f" "dist/helpers/$plat/$name$ext"
+              done
+            done
+          done
       - name: Publish new versions
         if: github.event_name != 'pull_request'
         env:
@@ -34,10 +107,28 @@ jobs:
               echo "$tag exists"
               continue
             fi
-            gh release create "$tag" "$zip" --target "$GITHUB_SHA" --latest=false \
+            assets=$(python3 scripts/package-plugins.py --assets "$id")
+            gh release create "$tag" "$zip" $assets --target "$GITHUB_SHA" --latest=false \
               --title "Plugin $id $ver" \
               --notes "Vivi plugin package \`$id\` $ver. Install it from Settings → Extensions → Browse. sha256: \`$(sha256sum "$zip" | cut -d' ' -f1)\`"
           done
+      - name: Record helper checksums in index.json
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/package-plugins.py
+          if git diff --quiet plugins/index.json; then
+            echo "index.json up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Plugins: record helper checksums in index.json" plugins/index.json
+          git pull --rebase origin master
+          git push origin HEAD:master
+          # Pushes made with GITHUB_TOKEN start no workflows; redeploy the catalog explicitly.
+          gh workflow run pages.yml --ref master
       - name: Verify published assets
         if: github.event_name != 'pull_request'
         run: |
@@ -46,7 +137,9 @@ jobs:
           for p in json.load(open("plugins/index.json"))["plugins"]:
               if p.get("kind") != "package":
                   continue
-              data = urllib.request.urlopen(p["url"]).read()
-              assert hashlib.sha256(data).hexdigest() == p["sha256"], p["id"]
-              print("ok", p["id"], p["version"])
+              for a in [p] + p.get("binaries", []):
+                  data = urllib.request.urlopen(a["url"]).read()
+                  assert hashlib.sha256(data).hexdigest() == a["sha256"], a["url"]
+              assert set(p.get("needs", [])) <= {b["name"] for b in p.get("binaries", [])}, p["id"]
+              print("ok", p["id"], p["version"], len(p.get("binaries", [])), "helpers")
           PY

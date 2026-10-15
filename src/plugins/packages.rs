@@ -14,7 +14,13 @@
 //!
 //! Install = download → verify sha256 → unpack into a staging dir → validate the manifest
 //! → rename to `<id>/<version>` → switch `current`. The previous version stays for
-//! [`rollback`]; older ones are pruned. Network and disk work run on background threads;
+//! [`rollback`]; older ones are pruned.
+//!
+//! A package may ship native helper programs (`binaries = ["vivi-discord"]` in its
+//! manifest). The zip stays platform independent; the catalog entry lists one asset per
+//! helper and platform ([`Binary`], keyed by [`platform`] such as `linux-x86_64`), each
+//! with its own sha256. The installer downloads the ones for this platform, checks them
+//! and puts them at `<id>/<version>/bin/<name>` (`.exe` on Windows, mode 0755). Network and disk work run on background threads;
 //! results come back to the UI thread with `slint::invoke_from_event_loop`.
 
 use super::{Manifest, Origin, SettingKind, SettingSpec};
@@ -68,10 +74,38 @@ pub struct IndexSetting {
     pub options: Vec<String>,
     #[serde(default)]
     pub default: String,
+    /// Button label of an `action` setting.
+    #[serde(default)]
+    pub label: String,
 }
 
 fn yes() -> bool {
     true
+}
+
+/// A per-platform helper program of a package (catalog `binaries`).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Binary {
+    pub name: String,
+    pub platform: String,
+    pub url: String,
+    pub sha256: String,
+    #[serde(default)]
+    pub size: u64,
+}
+
+/// This build's platform key: `linux-x86_64`, `windows-x86_64`, `macos-aarch64`, …
+pub fn platform() -> String {
+    format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+}
+
+/// File name of a helper on this OS.
+pub fn binary_file(name: &str) -> String {
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 /// One catalog entry (only `kind = "package"` entries are kept).
@@ -97,6 +131,51 @@ pub struct Entry {
     pub sha256: String,
     #[serde(default)]
     pub size: u64,
+    /// Helper names the package needs (from its manifest).
+    #[serde(default)]
+    pub needs: Vec<String>,
+    #[serde(default)]
+    pub binaries: Vec<Binary>,
+    /// Extra download the plugin does itself, e.g. "+ yt-dlp ~35 MB unless a system yt-dlp is used".
+    #[serde(default)]
+    pub size_note: String,
+}
+
+impl Entry {
+    /// Helper assets for `plat`, or the name of the first missing one.
+    pub fn binaries_for(&self, plat: &str) -> Result<Vec<Binary>, String> {
+        self.needs
+            .iter()
+            .map(|n| {
+                self.binaries
+                    .iter()
+                    .find(|b| &b.name == n && b.platform == plat && b.sha256.len() == 64)
+                    .cloned()
+                    .ok_or_else(|| format!("no {n} helper for {plat} yet"))
+            })
+            .collect()
+    }
+    /// Whether it can be installed on this platform.
+    pub fn available(&self) -> bool {
+        self.binaries_for(&platform()).is_ok()
+    }
+    /// Download size on this platform: zip plus helpers.
+    pub fn download_size(&self) -> u64 {
+        self.size
+            + self
+                .binaries_for(&platform())
+                .map(|v| v.iter().map(|b| b.size).sum())
+                .unwrap_or(0)
+    }
+}
+
+/// "12 KB" / "1.4 MB".
+pub fn human_size(n: u64) -> String {
+    if n >= 1 << 20 {
+        format!("{:.1} MB", n as f64 / (1 << 20) as f64)
+    } else {
+        format!("{:.0} KB", (n as f64 / 1024.0).ceil())
+    }
 }
 
 #[derive(Deserialize)]
@@ -140,6 +219,18 @@ pub struct PkgManifest {
     pub default_enabled: bool,
     #[serde(default)]
     pub settings: Vec<IndexSetting>,
+    /// Native helpers shipped per platform (see the module docs).
+    #[serde(default)]
+    pub binaries: Vec<String>,
+}
+
+/// Setting keys Vivi passes to every package itself (`<id>-pkgdir`).
+pub const RESERVED_KEYS: [&str; 1] = ["pkgdir"];
+
+fn safe_name(n: &str) -> bool {
+    !n.is_empty()
+        && n.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 impl PkgManifest {
@@ -168,6 +259,16 @@ impl PkgManifest {
             .find(|p| !PERMISSIONS.iter().any(|(k, _)| k == p))
         {
             return Err(format!("unknown permission {p:?}"));
+        }
+        if let Some(b) = self.binaries.iter().find(|b| !safe_name(b)) {
+            return Err(format!("invalid helper name {b:?}"));
+        }
+        if let Some(s) = self
+            .settings
+            .iter()
+            .find(|s| RESERVED_KEYS.contains(&s.key.as_str()))
+        {
+            return Err(format!("setting key {:?} is reserved", s.key));
         }
         Ok(())
     }
@@ -198,7 +299,11 @@ fn to_spec(s: &IndexSetting) -> Option<SettingSpec> {
         "choice" if !s.options.is_empty() => SettingKind::Choice(s.options.clone()),
         "text" => SettingKind::Text(String::new()),
         "secret" => SettingKind::Secret,
-        "action" => SettingKind::Action("Run".into()),
+        "action" => SettingKind::Action(if s.label.is_empty() {
+            "Run".into()
+        } else {
+            s.label.clone()
+        }),
         _ => return None,
     };
     let default = match (&kind, s.default.is_empty()) {
@@ -340,7 +445,19 @@ pub fn sha256_hex(data: &[u8]) -> String {
 }
 
 /// Verify and unpack a downloaded package for catalog `entry`, then make it current.
+#[cfg(test)]
 pub fn install_bytes(root: &Path, entry: &Entry, data: &[u8]) -> Result<Installed, String> {
+    install_with(root, entry, data, &[])
+}
+
+/// Like [`install_bytes`], plus downloaded helpers (`(asset, bytes)`, already for this
+/// platform). Every helper the manifest names must be there and match its sha256.
+pub fn install_with(
+    root: &Path,
+    entry: &Entry,
+    data: &[u8],
+    bins: &[(Binary, Vec<u8>)],
+) -> Result<Installed, String> {
     let got = sha256_hex(data);
     if !got.eq_ignore_ascii_case(&entry.sha256) {
         return Err(format!(
@@ -366,6 +483,16 @@ pub fn install_bytes(root: &Path, entry: &Entry, data: &[u8]) -> Result<Installe
         if !compatible(&m.min_vivi) {
             return Err(format!("needs Vivi {} or newer", m.min_vivi));
         }
+        for name in &m.binaries {
+            let (b, bytes) = bins
+                .iter()
+                .find(|(b, _)| &b.name == name)
+                .ok_or_else(|| format!("helper {name} missing"))?;
+            if !sha256_hex(bytes).eq_ignore_ascii_case(&b.sha256) {
+                return Err(format!("checksum mismatch for helper {name}"));
+            }
+            write_binary(&staging.join("bin").join(binary_file(name)), bytes)?;
+        }
         let dest = id_dir.join(&m.version);
         let _ = fs::remove_dir_all(&dest);
         fs::rename(&staging, &dest).map_err(|e| e.to_string())?;
@@ -378,6 +505,19 @@ pub fn install_bytes(root: &Path, entry: &Entry, data: &[u8]) -> Result<Installe
     }
     res?;
     installed_one(root, &entry.id).ok_or_else(|| "installed package is unreadable".into())
+}
+
+fn write_binary(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if let Some(p) = path.parent() {
+        fs::create_dir_all(p).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, bytes).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn unpack(data: &[u8], dest: &Path) -> Result<(), String> {
@@ -619,6 +759,13 @@ pub fn install(id: &str) {
         status(format!("{} needs Vivi {}", entry.name, entry.min_vivi));
         return;
     }
+    let bins = match entry.binaries_for(&platform()) {
+        Ok(b) => b,
+        Err(e) => {
+            status(format!("{}: {e}", entry.name));
+            return;
+        }
+    };
     let was = installed_one(&root(), id).map(|i| i.manifest.version);
     with_state(|s| {
         s.busy = Some(id.into());
@@ -626,7 +773,13 @@ pub fn install(id: &str) {
     });
     status(format!("Downloading {} {}…", entry.name, entry.version));
     std::thread::spawn(move || {
-        let res = download(&entry.url).and_then(|b| install_bytes(&root(), &entry, &b));
+        let res = download(&entry.url).and_then(|b| {
+            let got = bins
+                .into_iter()
+                .map(|a| download(&a.url).map(|d| (a, d)))
+                .collect::<Result<Vec<_>, _>>()?;
+            install_with(&root(), &entry, &b, &got)
+        });
         let _ = slint::invoke_from_event_loop(move || {
             with_state(|s| s.busy = None);
             let msg = match res {
@@ -800,6 +953,54 @@ mod tests {
         let _ = fs::remove_dir_all(&r);
     }
 
+    #[test]
+    fn installs_platform_helpers() {
+        let r = tmp("bins");
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let o = zip::write::SimpleFileOptions::default();
+        w.start_file("manifest.toml", o).unwrap();
+        w.write_all(b"id = \"helped\"\nname = \"H\"\nversion = \"1.0.0\"\nkind = \"mpv-lua\"\nentry = \"helped.lua\"\nbinaries = [\"vivi-x\"]\n").unwrap();
+        w.start_file("helped.lua", o).unwrap();
+        w.write_all(b"--").unwrap();
+        let z = w.finish().unwrap().into_inner();
+        let helper = b"#!/bin/sh\necho hi\n".to_vec();
+        let mut e = entry("helped", "1.0.0", &z);
+        e.needs = vec!["vivi-x".into()];
+        e.size = z.len() as u64;
+        assert!(e.binaries_for(&platform()).is_err());
+        assert!(!e.available());
+        let b = Binary {
+            name: "vivi-x".into(),
+            platform: platform(),
+            url: "u".into(),
+            sha256: sha256_hex(&helper),
+            size: helper.len() as u64,
+        };
+        e.binaries = vec![b.clone()];
+        assert!(e.available());
+        assert_eq!(e.download_size(), z.len() as u64 + helper.len() as u64);
+        // Missing helper and bad helper checksum are refused.
+        assert!(install_with(&r, &e, &z, &[])
+            .unwrap_err()
+            .contains("missing"));
+        assert!(install_with(&r, &e, &z, &[(b.clone(), b"evil".to_vec())])
+            .unwrap_err()
+            .contains("checksum"));
+        let i = install_with(&r, &e, &z, &[(b, helper.clone())]).unwrap();
+        let p = i.dir.join("bin").join(binary_file("vivi-x"));
+        assert_eq!(fs::read(&p).unwrap(), helper);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&p).unwrap().permissions().mode() & 0o777,
+                0o755
+            );
+        }
+        assert_eq!(human_size(1536 * 1024), "1.5 MB");
+        let _ = fs::remove_dir_all(&r);
+    }
+
     /// Every package in `plugins/index.json` matches its `plugins/<id>/manifest.toml`.
     #[test]
     fn repo_index_packages() {
@@ -815,7 +1016,11 @@ mod tests {
             assert!(e.url.contains(&format!("plugin-{}-v{}", e.id, e.version)));
             assert!(dir.join(&m.entry).is_file());
             assert_eq!(Path::new(&m.entry).file_stem().unwrap(), e.id.as_str());
-            assert!(compatible(&e.min_vivi));
+            // At most the next patch release (packages may need unreleased core support).
+            let (a, b, c) = parse_version(env!("CARGO_PKG_VERSION")).unwrap();
+            let next = format!("{a}.{b}.{}", c + 1);
+            assert!(cmp_version(&e.min_vivi, &next).is_le(), "{}", e.id);
+            assert_eq!(m.binaries, e.needs, "{}", e.id);
         }
     }
 }

@@ -20,12 +20,13 @@ Status: implemented in v0.9.0. Code: `src/plugins/packages.rs`,
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint), with a results list. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
-| Discord Rich Presence | Needs a Unix socket / Windows named pipe client (Lua cannot open them); `discord-rich-presence` crate on a worker thread. |
-| Remote Control | Runs an HTTP server thread and drives the player; scripts cannot listen on sockets. |
 | Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
 | Free Music | Search dialog with results, licence details, preview and download; writes tags with lofty. |
 
-These use the Rust UI directly. The ListenBrainz Scrobbler needs no UI beyond its settings, so it is a
+These use the Rust UI directly. Discord Rich Presence (#57) and Remote Control (#58) were
+built in until 0.9.0; they need a socket client / server that Lua cannot do, so they are now
+packages with a native helper (see [Native helpers](#native-helpers)), and the core no
+longer links `discord-rich-presence` or carries the HTTP server. The ListenBrainz Scrobbler needs no UI beyond its settings, so it is a
 downloadable package (`plugins/scrobbler`). Scripts cannot draw Slint widgets, so moving them out
 would mean either a worse UI (mpv OSD text) or a declarative-UI host API, which is the
 WASM step below. They stay built in until that exists.
@@ -134,6 +135,49 @@ every `Alt` combination) to mpv, so packages bind keys with `mp.add_forced_key_b
 Permissions are declarations, shown before install and in Settings. Because mpv scripts are
 not sandboxed they are a promise reviewed when a plugin is accepted into the catalog, not
 an enforced boundary; enforcing them is one of the reasons for the WASM step.
+
+## Native helpers
+
+A package may ship small programs next to its script, for what mpv scripts cannot do
+(sockets, servers, native APIs):
+
+```toml
+binaries = ["vivi-discord"]       # helper names; built per platform
+```
+
+* Sources live in `helpers/` (one Rust crate, its own `Cargo.lock`, only `serde_json`;
+  nothing is linked into Vivi, so the Flatpak's `cargo-sources.json` is unaffected).
+  `helpers/src/lib.rs` is a request/response client for mpv's JSON IPC.
+* CI (`plugins.yml`, job `helpers`) builds them for `linux-x86_64` and `linux-aarch64`
+  (static musl), `windows-x86_64`, `macos-aarch64` and `macos-x86_64`, and uploads
+  `<name>-<platform>[.exe]` to the package's release next to the zip.
+* The catalog entry lists `needs` (the names) and `binaries`
+  (`{name, platform, url, sha256, size}` per asset). Helper builds are not reproducible,
+  so CI writes these checksums into `plugins/index.json` after publishing a new version
+  (bot commit) and redeploys the site; released versions always reuse their published
+  assets. Until that commit lands, the new version shows "Not available for <platform>".
+* The installer downloads the zip and the helpers for `std::env::consts::{OS, ARCH}`,
+  checks each sha256 and writes them to `<id>/<version>/bin/<name>[.exe]` (mode 0755)
+  before switching `current`. Browse shows the zip + helper size; a package without a
+  helper for this platform shows "Not available for <platform> yet".
+* Vivi passes every package its folder as the script-opt `<id>-pkgdir` (the key `pkgdir`
+  is reserved). The script turns on `input-ipc-server` if it is not set
+  (`$XDG_RUNTIME_DIR/vivi-mpv-<pid>.sock`, `\\.\pipe\vivi-mpv-<pid>` on Windows), starts
+  the helper with mpv's `subprocess` command (`playback_only = false`) and the socket path
+  plus its settings as arguments, restarts it when a setting changes and aborts it on
+  shutdown. Helpers exit by themselves when the IPC connection closes, report status in
+  `user-data/<plugin>/…` and show toasts with `script-message vivi-toast`.
+
+Script messages Vivi handles for packages:
+
+| Message | Effect |
+| --- | --- |
+| `vivi-toast <text>` | toast |
+| `vivi-setting <id> <key> <value>` | saves one of the package's declared settings (e.g. a generated PIN) and applies it as script-opt |
+| `vivi-pick-folder <id> <key>` | folder dialog; the result is saved as that setting and sent back as `script-message-to <script> folder-picked <path>` |
+
+`action` settings may set `label` (button text, default "Run"); `size_note` adds a note to
+the size in Browse (e.g. the YouTube plugin's own yt-dlp download).
 
 ## Registry (catalog)
 

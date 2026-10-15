@@ -252,76 +252,6 @@
       ]
     },
     {
-      "id": "discord",
-      "name": "Discord Rich Presence",
-      "description": "Shows the current title, artist and progress in your Discord status. Off by default; needs a Discord application ID and Discord running on this computer.",
-      "version": "0.8.0",
-      "author": "Vivi",
-      "icon": "discord",
-      "lucide": "gamepad-2",
-      "kind": "builtin",
-      "default_enabled": false,
-      "issue": 57,
-      "settings": [
-        {
-          "key": "app-id",
-          "title": "Discord application ID",
-          "type": "text",
-          "default": ""
-        },
-        {
-          "key": "hide-names",
-          "title": "Hide titles and file names",
-          "type": "toggle",
-          "default": "false"
-        },
-        {
-          "key": "image",
-          "title": "Large image key",
-          "type": "text",
-          "default": ""
-        },
-        {
-          "key": "status",
-          "title": "Connection status",
-          "type": "action",
-          "default": ""
-        }
-      ]
-    },
-    {
-      "id": "remote-control",
-      "name": "Remote Control",
-      "description": "Control playback from your phone: a web page on your local network with play/pause, seek, volume, next/previous, the queue and cover art. Off by default, PIN protected, LAN only.",
-      "version": "0.8.0",
-      "author": "Vivi",
-      "icon": "remote",
-      "lucide": "smartphone",
-      "kind": "builtin",
-      "default_enabled": false,
-      "issue": 58,
-      "settings": [
-        {
-          "key": "port",
-          "title": "Port",
-          "type": "text",
-          "default": "8765"
-        },
-        {
-          "key": "pin",
-          "title": "PIN",
-          "type": "text",
-          "default": ""
-        },
-        {
-          "key": "address",
-          "title": "Phone address",
-          "type": "action",
-          "default": ""
-        }
-      ]
-    },
-    {
       "id": "script-now-playing",
       "name": "Now Playing OSD",
       "description": "Example mpv Lua script: shows the title on the OSD when a file starts.",
@@ -377,6 +307,57 @@
         }
       ],
       "issue": 59
+    },
+    {
+      "id": "discord",
+      "name": "Discord Rich Presence",
+      "description": "Shows the current title, artist and progress in your Discord status. Needs a Discord application ID; Discord must be running on this computer. Ships a small native helper (vivi-discord) that talks to Discord's local IPC.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "discord",
+      "lucide": "gamepad-2",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": false,
+      "min_vivi": "0.9.1",
+      "permissions": [
+        "subprocess"
+      ],
+      "source": "plugins/discord",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-discord-v1.0.0/discord-1.0.0.zip",
+      "sha256": "1228cba636bc2623bdf90caa41f89828d1874f03404056c0a309fcdc331e4e9a",
+      "size": 4969,
+      "settings": [
+        {
+          "key": "app-id",
+          "title": "Discord application ID (create one at discord.com/developers/applications; its name is shown as \"Listening to <name>\")",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "hide-names",
+          "title": "Hide titles and file names",
+          "type": "toggle",
+          "default": "false"
+        },
+        {
+          "key": "image",
+          "title": "Large image key (optional art asset of your Discord application)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "status",
+          "title": "Connection status",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "issue": 57,
+      "needs": [
+        "vivi-discord"
+      ],
+      "binaries": []
     },
     {
       "id": "night-mode",
@@ -465,6 +446,52 @@
         }
       ],
       "issue": 66
+    },
+    {
+      "id": "remote-control",
+      "name": "Remote Control",
+      "description": "Control playback from your phone: a web page on your local network with play/pause, seek, volume, next/previous, the queue and cover art. PIN protected; only devices on the local network can connect. Ships a small native helper (vivi-remote) that serves the page.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "remote",
+      "lucide": "smartphone",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": false,
+      "min_vivi": "0.9.1",
+      "permissions": [
+        "network",
+        "subprocess"
+      ],
+      "source": "plugins/remote-control",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-remote-control-v1.0.0/remote-control-1.0.0.zip",
+      "sha256": "bca820963eae07ca66f61ef8fc6ebb5943cc80accdd0dc53896622a255dd8e26",
+      "size": 5577,
+      "settings": [
+        {
+          "key": "port",
+          "title": "Port of the web page",
+          "type": "text",
+          "default": "8765"
+        },
+        {
+          "key": "pin",
+          "title": "PIN (asked once by the phone; leave empty for a new random 6-digit PIN)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "address",
+          "title": "Phone address and PIN",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "issue": 58,
+      "needs": [
+        "vivi-remote"
+      ],
+      "binaries": []
     },
     {
       "id": "scene-chapters",

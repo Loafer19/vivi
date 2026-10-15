@@ -11,6 +11,14 @@ and in CI. Its index entry gets the download URL of the GitHub release asset
     scripts/package-plugins.py --check    # build zips, fail if index.json is stale
     scripts/package-plugins.py --list     # print "<id> <version> <tag> <zip>" per package
 
+Packages with native helpers (`binaries = ["vivi-discord"]` in manifest.toml) get one
+release asset per helper and platform, `<name>-<platform>[.exe]`. The helpers are built by
+CI into dist/helpers/<platform>/<name>[.exe]; when those files exist their sha256/size
+go into the index, otherwise the entries already in index.json for the same version are
+kept (so --check works without the binaries).
+
+    scripts/package-plugins.py --assets <id>  # print the helper files to upload for <id>
+
 Standard library only (Python 3.11+ for tomllib).
 """
 import hashlib
@@ -28,6 +36,9 @@ INDEX = ROOT / "plugins/index.json"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 ID = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 PERMISSIONS = {"network", "filesystem", "subprocess"}
+HELPERS = ROOT / "dist/helpers"
+PLATFORMS = ["linux-x86_64", "linux-aarch64", "windows-x86_64", "macos-x86_64", "macos-aarch64"]
+RESERVED = {"pkgdir"}
 REQUIRED = ["id", "name", "version", "description", "author", "kind", "entry", "min_vivi"]
 
 
@@ -47,6 +58,11 @@ def manifests() -> list[tuple[Path, dict]]:
             sys.exit(f"{f}: kind must be mpv-lua or mpv-js")
         if not (d / m["entry"]).is_file():
             sys.exit(f"{f}: entry {m['entry']} not found")
+        for b in m.get("binaries", []):
+            if not re.match(r"^[A-Za-z0-9_-]+$", b):
+                sys.exit(f"{f}: invalid helper name {b!r}")
+        if RESERVED & {x["key"] for x in m.get("settings", [])}:
+            sys.exit(f"{f}: setting keys {sorted(RESERVED)} are reserved")
         bad = set(m.get("permissions", [])) - PERMISSIONS
         if bad:
             sys.exit(f"{f}: unknown permissions {sorted(bad)}")
@@ -67,7 +83,39 @@ def build_zip(d: Path, m: dict) -> Path:
     return z
 
 
-def entry(m: dict, z: Path) -> dict:
+def helper_files(m: dict) -> list[tuple[str, str, Path]]:
+    """(name, platform, local file) of every helper CI built for this package."""
+    out = []
+    for name in m.get("binaries", []):
+        for plat in PLATFORMS:
+            exe = name + (".exe" if plat.startswith("windows") else "")
+            f = HELPERS / plat / exe
+            if f.is_file():
+                out.append((name, plat, f))
+    return out
+
+
+def binaries(m: dict, tag: str, old: dict | None) -> list[dict]:
+    if not m.get("binaries"):
+        return []
+    files = helper_files(m)
+    if not files:
+        return old.get("binaries", []) if old and old.get("version") == m["version"] else []
+    out = []
+    for name, plat, f in files:
+        data = f.read_bytes()
+        asset = f"{name}-{plat}" + (".exe" if plat.startswith("windows") else "")
+        out.append({
+            "name": name,
+            "platform": plat,
+            "url": f"https://github.com/{REPO}/releases/download/{tag}/{asset}",
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "size": len(data),
+        })
+    return out
+
+
+def entry(m: dict, z: Path, old: dict | None = None) -> dict:
     data = z.read_bytes()
     tag = f"plugin-{m['id']}-v{m['version']}"
     e = {
@@ -88,24 +136,40 @@ def entry(m: dict, z: Path) -> dict:
         "sha256": hashlib.sha256(data).hexdigest(),
         "size": len(data),
         "settings": [
-            {k: s[k] for k in ("key", "title", "type", "options", "default") if k in s}
+            {k: s[k] for k in ("key", "title", "type", "options", "default", "label") if k in s}
             for s in m.get("settings", [])
         ],
     }
     if "issue" in m:
         e["issue"] = m["issue"]
+    if m.get("binaries"):
+        e["needs"] = m["binaries"]
+        e["binaries"] = binaries(m, tag, old)
+    if m.get("size_note"):
+        e["size_note"] = m["size_note"]
     return e
 
 
 def main() -> None:
     pk = [(d, m, build_zip(d, m)) for d, m in manifests()]
+    if "--assets" in sys.argv:
+        want = sys.argv[sys.argv.index("--assets") + 1]
+        for _, m, _ in pk:
+            if m["id"] == want:
+                for name, plat, f in helper_files(m):
+                    ext = ".exe" if plat.startswith("windows") else ""
+                    dst = DIST / f"{name}-{plat}{ext}"
+                    dst.write_bytes(f.read_bytes())
+                    print(dst)
+        return
     if "--list" in sys.argv:
         for _, m, z in pk:
             print(m["id"], m["version"], f"plugin-{m['id']}-v{m['version']}", z)
         return
     idx = json.loads(INDEX.read_text())
+    old = {p["id"]: p for p in idx["plugins"] if p.get("kind") == "package"}
     keep = [p for p in idx["plugins"] if p.get("kind") != "package"]
-    idx["plugins"] = keep + [entry(m, z) for _, m, z in pk]
+    idx["plugins"] = keep + [entry(m, z, old.get(m["id"])) for _, m, z in pk]
     text = json.dumps(idx, indent=2, ensure_ascii=False) + "\n"
     if "--check" in sys.argv:
         if INDEX.read_text() != text:

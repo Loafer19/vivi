@@ -907,6 +907,11 @@ fn browse(r: &mut Rows) {
             )
         } else if !compatible(&e.min_vivi) {
             (format!("Needs Vivi {} or newer", e.min_vivi), vec![])
+        } else if !e.available() && have.is_none() {
+            (
+                format!("Not available for {} yet", packages::platform()),
+                vec![],
+            )
         } else {
             match have {
                 Some(h) if cmp_version(&e.version, &h.manifest.version).is_gt() => (
@@ -931,7 +936,10 @@ fn browse(r: &mut Rows) {
                 String::new()
             },
         );
-        let size = format!("{:.0} KB", (e.size as f64 / 1024.0).ceil());
+        let mut size = packages::human_size(e.download_size());
+        if !e.size_note.is_empty() {
+            size = format!("{size} {}", e.size_note);
+        }
         let perms = describe_permissions(&e.permissions);
         r.last().options = strs(&[&e.version, &e.author, &e.icon, &perms, &state, &size]);
         r.last().labels = strs(&labels);

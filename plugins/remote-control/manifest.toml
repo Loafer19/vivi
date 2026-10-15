@@ -1,0 +1,32 @@
+id = "remote-control"
+name = "Remote Control"
+version = "1.0.0"
+description = "Control playback from your phone: a web page on your local network with play/pause, seek, volume, next/previous, the queue and cover art. PIN protected; only devices on the local network can connect. Ships a small native helper (vivi-remote) that serves the page."
+author = "Vivi"
+kind = "mpv-lua"
+entry = "remote-control.lua"
+min_vivi = "0.9.1"
+icon = "remote"
+lucide = "smartphone"
+permissions = ["network", "subprocess"]
+issue = 58
+default_enabled = false
+binaries = ["vivi-remote"]
+
+[[settings]]
+key = "port"
+title = "Port of the web page"
+type = "text"
+default = "8765"
+
+[[settings]]
+key = "pin"
+title = "PIN (asked once by the phone; leave empty for a new random 6-digit PIN)"
+type = "text"
+default = ""
+
+[[settings]]
+key = "address"
+title = "Phone address and PIN"
+type = "action"
+label = "Show"

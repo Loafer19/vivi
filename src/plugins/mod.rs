@@ -19,11 +19,9 @@
 //!
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
-pub mod discord;
 pub mod free_music;
 pub mod lyrics;
 pub mod packages;
-pub mod remote;
 pub mod scripts;
 pub mod skip_intro;
 pub mod streams;
@@ -146,6 +144,7 @@ impl Manifest {
         self
     }
     /// Start disabled until the user turns it on.
+    #[cfg(test)]
     pub fn default_off(mut self) -> Self {
         self.default_enabled = false;
         self
@@ -236,8 +235,6 @@ pub fn builtin() -> Vec<Box<dyn Plugin>> {
         Box::new(tagger::AutoTagger::default()),
         Box::new(free_music::FreeMusic::default()),
         Box::new(streams::Streams::default()),
-        Box::new(discord::Discord::default()),
-        Box::new(remote::Remote::default()),
     ]
 }
 
@@ -447,6 +444,17 @@ impl Registry {
                     ],
                 );
             }
+            // Where the package lives (helpers are in `<pkgdir>/bin`).
+            if let Some(dir) = s.path.parent() {
+                self.player.cmd(
+                    "change-list",
+                    &[
+                        "script-opts",
+                        "append",
+                        &format!("{}-pkgdir={}", s.manifest.id, dir.display()),
+                    ],
+                );
+            }
         }
         let path = s.path.to_string_lossy();
         let st = match self.player.try_cmd("load-script", &[&path]) {
@@ -485,11 +493,79 @@ pub fn toast_text(args: &[String]) -> Option<&str> {
 
 /// A `script-message` broadcast reached Vivi's mpv client.
 pub fn client_message(args: &[String]) {
+    match args {
+        [m, id, key, value] if m == "vivi-setting" => return store_setting(id, key, value),
+        [m, id, key] if m == "vivi-pick-folder" => return pick_folder(id, key),
+        _ => {}
+    }
     let Some(text) = toast_text(args) else { return };
     with(|r| {
         if let Some(a) = r.app.upgrade() {
             show_toast(&a, text);
         }
+    });
+}
+
+/// `script-message vivi-setting <id> <key> <value>`: a package saves one of its own
+/// declared (non-action) settings, e.g. a generated PIN. Applied as script-opt too.
+fn store_setting(id: &str, key: &str, value: &str) {
+    with(|r| {
+        let ok = r.scripts.iter().any(|s| {
+            s.manifest.id == id
+                && s.manifest.origin == Origin::Package
+                && s.manifest
+                    .settings
+                    .iter()
+                    .any(|st| st.key == key && !matches!(st.kind, SettingKind::Action(_)))
+        });
+        if !ok {
+            eprintln!("vivi: vivi-setting for unknown setting {id}.{key} ignored");
+            return;
+        }
+        r.cfg
+            .borrow_mut()
+            .plugins
+            .entry(id.into())
+            .or_default()
+            .settings
+            .insert(key.into(), value.into());
+        save(&r.cfg);
+        r.player.cmd(
+            "change-list",
+            &["script-opts", "append", &script_opt(id, key, value)],
+        );
+    });
+    crate::settings::refresh_ui();
+}
+
+/// `script-message vivi-pick-folder <id> <key>`: folder dialog, result stored like
+/// [`store_setting`] and announced back with `script-message-to <script> folder-picked <path>`.
+fn pick_folder(id: &str, key: &str) {
+    let (id, key) = (id.to_string(), key.to_string());
+    let Some(name) = with(|r| {
+        r.scripts
+            .iter()
+            .find(|s| s.manifest.id == id && s.manifest.origin == Origin::Package)
+            .and_then(|s| s.path.file_stem())
+            .map(|n| n.to_string_lossy().replace('-', "_"))
+    })
+    .flatten() else {
+        return;
+    };
+    // Same as File → Open folder: the dialog runs on the UI thread (GTK needs it).
+    let _ = slint::invoke_from_event_loop(move || {
+        let Some(dir) = rfd::FileDialog::new()
+            .set_title("Choose folder")
+            .pick_folder()
+        else {
+            return;
+        };
+        let d = dir.to_string_lossy().into_owned();
+        store_setting(&id, &key, &d);
+        with(|r| {
+            r.player
+                .cmd("script-message-to", &[&name, "folder-picked", &d])
+        });
     });
 }
 

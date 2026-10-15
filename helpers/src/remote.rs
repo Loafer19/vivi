@@ -1,31 +1,27 @@
-//! Remote Control (#58): a small HTTP server with a phone-friendly page (play/pause,
-//! seek, volume, previous/next, queue, now-playing art) for devices on the local network.
+//! Remote Control server (`remote-control` plugin): a phone-friendly page (play/pause,
+//! seek, volume, previous/next, queue, cover art) for devices on the local network.
 //!
-//! * Off by default; port and PIN in Settings (a random 6-digit PIN is created when the
-//!   PIN is empty).
 //! * LAN only: connections from addresses that are not loopback, private (RFC 1918 /
 //!   unique-local) or link-local are dropped before reading the request.
 //! * Every API call needs the PIN (`X-Vivi-Pin` header, or `?pin=` for the art image);
 //!   five wrong PINs from one address block it for a minute.
 //!
-//! The server runs on its own thread and only reads a [`Snapshot`] the UI thread updates
-//! in [`Plugin::tick`]; commands go back over a channel and are applied on the UI thread.
+//! Server threads only read the [`Snapshot`]; commands go back over a channel to the
+//! helper's main loop, which owns the mpv IPC connection.
 
-use super::{Ctx, Manifest, Plugin, SettingSpec};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, TcpListener, TcpStream, UdpSocket};
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-pub const ID: &str = "remote-control";
 const PAGE: &str = include_str!("remote_page.html");
-const MAX_QUEUE: usize = 300;
+pub const MAX_QUEUE: usize = 300;
 
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
     pub title: String,
     pub artist: String,
@@ -38,6 +34,17 @@ pub struct Snapshot {
     pub queue: Vec<String>,
     pub current: i64,
     pub has_art: bool,
+}
+
+impl Snapshot {
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "title": self.title, "artist": self.artist, "path": self.path,
+            "paused": self.paused, "position": self.position, "duration": self.duration,
+            "volume": self.volume, "volume_max": self.volume_max, "queue": self.queue,
+            "current": self.current, "has_art": self.has_art,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,7 +108,7 @@ pub fn lan_ip() -> Option<IpAddr> {
     Some(s.local_addr().ok()?.ip())
 }
 
-fn random_pin() -> String {
+pub fn random_pin() -> String {
     use std::hash::{BuildHasher, Hasher};
     let mut h = std::collections::hash_map::RandomState::new().build_hasher();
     h.write_u128(
@@ -113,11 +120,13 @@ fn random_pin() -> String {
     format!("{:06}", h.finish() % 1_000_000)
 }
 
-struct Shared {
-    snap: Mutex<Snapshot>,
-    pin: Mutex<String>,
-    stop: AtomicBool,
-    fails: Mutex<HashMap<IpAddr, (u32, Instant)>>,
+pub struct Shared {
+    pub snap: Mutex<Snapshot>,
+    /// Cover of the current file (bytes, MIME type).
+    pub art: Mutex<Option<(Vec<u8>, &'static str)>>,
+    pub pin: Mutex<String>,
+    pub stop: AtomicBool,
+    pub fails: Mutex<HashMap<IpAddr, (u32, Instant)>>,
 }
 
 struct Request {
@@ -207,39 +216,6 @@ fn respond(s: &mut TcpStream, status: &str, ctype: &str, body: &[u8]) {
     let _ = s.write_all(body);
 }
 
-/// Embedded cover (lofty) or a cover/folder/front image next to the file.
-pub fn art(path: &Path) -> Option<(Vec<u8>, &'static str)> {
-    use lofty::file::TaggedFileExt;
-    if let Ok(f) = lofty::read_from_path(path) {
-        if let Some(p) = f
-            .primary_tag()
-            .or(f.first_tag())
-            .and_then(|t| t.pictures().first())
-        {
-            let mime = if p.data().starts_with(&[0x89, b'P']) {
-                "image/png"
-            } else {
-                "image/jpeg"
-            };
-            return Some((p.data().to_vec(), mime));
-        }
-    }
-    let dir = path.parent()?;
-    for n in ["cover", "folder", "front", "Cover", "Folder", "Front"] {
-        for (ext, mime) in [
-            ("jpg", "image/jpeg"),
-            ("jpeg", "image/jpeg"),
-            ("png", "image/png"),
-        ] {
-            let p: PathBuf = dir.join(format!("{n}.{ext}"));
-            if let Ok(b) = std::fs::read(&p) {
-                return Some((b, mime));
-            }
-        }
-    }
-    None
-}
-
 fn handle(mut s: TcpStream, sh: &Shared, tx: &Sender<Cmd>) {
     let Ok(peer) = s.peer_addr() else { return };
     if !is_lan(peer.ip()) {
@@ -288,8 +264,9 @@ fn handle(mut s: TcpStream, sh: &Shared, tx: &Sender<Cmd>) {
     }
     match (req.method.as_str(), req.path.as_str()) {
         ("GET", "/api/state") => {
-            let j = serde_json::to_vec(&*sh.snap.lock().unwrap_or_else(|e| e.into_inner()))
-                .unwrap_or_default();
+            let j =
+                serde_json::to_vec(&sh.snap.lock().unwrap_or_else(|e| e.into_inner()).to_json())
+                    .unwrap_or_default();
             respond(&mut s, "200 OK", "application/json", &j);
         }
         ("GET", "/api/art") => {
@@ -299,7 +276,9 @@ fn handle(mut s: TcpStream, sh: &Shared, tx: &Sender<Cmd>) {
                 .unwrap_or_else(|e| e.into_inner())
                 .path
                 .clone();
-            match (!p.contains("://")).then(|| art(Path::new(&p))).flatten() {
+            let _ = p;
+            let a = sh.art.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            match a {
                 Some((b, m)) => respond(&mut s, "200 OK", m, &b),
                 None => respond(&mut s, "404 Not Found", "text/plain", b"no art"),
             }
@@ -327,7 +306,7 @@ fn handle(mut s: TcpStream, sh: &Shared, tx: &Sender<Cmd>) {
     }
 }
 
-fn serve(l: TcpListener, sh: Arc<Shared>, tx: Sender<Cmd>) {
+pub fn serve(l: TcpListener, sh: Arc<Shared>, tx: Sender<Cmd>) {
     let _ = l.set_nonblocking(true);
     while !sh.stop.load(Ordering::Relaxed) {
         match l.accept() {
@@ -344,201 +323,10 @@ fn serve(l: TcpListener, sh: Arc<Shared>, tx: Sender<Cmd>) {
     }
 }
 
-#[derive(Default)]
-pub struct Remote {
-    shared: Option<Arc<Shared>>,
-    rx: Option<Receiver<Cmd>>,
-    url: String,
-    poll: u32,
-}
-
-impl Remote {
-    fn stop(&mut self) {
-        if let Some(s) = self.shared.take() {
-            s.stop.store(true, Ordering::Relaxed);
-        }
-        self.rx = None;
-    }
-    fn pin(cx: &Ctx) -> String {
-        let p = cx.get("pin").trim().to_string();
-        if p.is_empty() {
-            let p = random_pin();
-            cx.set("pin", &p);
-            p
-        } else {
-            p
-        }
-    }
-    fn start(&mut self, cx: &Ctx) {
-        self.stop();
-        let port: u16 = cx.get("port").trim().parse().unwrap_or(8765);
-        let l = match TcpListener::bind(("0.0.0.0", port)) {
-            Ok(l) => l,
-            Err(e) => {
-                cx.toast(&format!("Remote control: port {port}: {e}"));
-                return;
-            }
-        };
-        let pin = Self::pin(cx);
-        let sh = Arc::new(Shared {
-            snap: Mutex::new(Snapshot::default()),
-            pin: Mutex::new(pin.clone()),
-            stop: AtomicBool::new(false),
-            fails: Mutex::new(HashMap::new()),
-        });
-        let (tx, rx) = channel();
-        let s2 = sh.clone();
-        std::thread::spawn(move || serve(l, s2, tx));
-        self.shared = Some(sh);
-        self.rx = Some(rx);
-        let host = lan_ip()
-            .map(|i| i.to_string())
-            .unwrap_or("<this computer>".into());
-        self.url = format!("http://{host}:{port}");
-        eprintln!("vivi: remote control on {}", self.url);
-        cx.toast(&format!(
-            "Remote control: open {} on your phone, PIN {pin}",
-            self.url
-        ));
-    }
-    fn snapshot(cx: &Ctx) -> Snapshot {
-        let p = cx.player;
-        let f = |k: &str| p.get(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
-        let n = (f("playlist-count") as usize).min(MAX_QUEUE);
-        let queue = (0..n)
-            .map(|i| {
-                p.get(&format!("playlist/{i}/title"))
-                    .or_else(|| {
-                        p.get(&format!("playlist/{i}/filename"))
-                            .map(|f| f.rsplit(['/', '\\']).next().unwrap_or(&f).to_string())
-                    })
-                    .unwrap_or_default()
-            })
-            .collect();
-        let path = p.get("path").unwrap_or_default();
-        let has_art = !path.is_empty()
-            && !path.contains("://")
-            && (p.get("current-tracks/video/albumart").as_deref() == Some("yes")
-                || Path::new(&path).parent().is_some_and(|d| {
-                    ["cover.jpg", "folder.jpg", "front.jpg", "cover.png"]
-                        .iter()
-                        .any(|n| d.join(n).is_file())
-                }));
-        Snapshot {
-            title: p
-                .get("metadata/by-key/title")
-                .or_else(|| p.get("media-title"))
-                .unwrap_or_default(),
-            artist: p.get("metadata/by-key/artist").unwrap_or_default(),
-            path,
-            paused: p.get("pause").as_deref() == Some("yes"),
-            position: f("time-pos"),
-            duration: f("duration"),
-            volume: f("volume"),
-            volume_max: f("volume-max"),
-            queue,
-            current: p
-                .get("playlist-pos")
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(-1),
-            has_art,
-        }
-    }
-    fn apply(cx: &Ctx, c: Cmd) {
-        let p = cx.player;
-        match c {
-            Cmd::Pause => p.cmd("cycle", &["pause"]),
-            Cmd::Seek(t) => p.cmd("seek", &[&format!("{t:.2}"), "absolute"]),
-            Cmd::SeekRel(t) => p.cmd("seek", &[&format!("{t:.2}"), "relative"]),
-            Cmd::Volume(v) => p.set("volume", &format!("{v:.0}")),
-            Cmd::Next => p.playlist_step(true),
-            Cmd::Prev => p.playlist_step(false),
-            Cmd::PlayIndex(i) if i >= 0 => p.cmd("playlist-play-index", &[&i.to_string()]),
-            Cmd::PlayIndex(_) => {}
-        }
-    }
-}
-
-impl Plugin for Remote {
-    fn manifest(&self) -> Manifest {
-        Manifest::builtin(
-            ID,
-            "Remote Control",
-            "Control playback from your phone: a web page on your local network with play/pause, seek, volume, next/previous, the queue and cover art. PIN protected; only devices on the local network can connect.",
-            "remote",
-        )
-        .setting(SettingSpec::text(
-            "port",
-            "Port",
-            "TCP port of the web page (restart the plugin after changing it).",
-            "8765",
-            "8765",
-        ))
-        .setting(SettingSpec::text(
-            "pin",
-            "PIN",
-            "Asked once by the phone. Leave empty to get a new random 6-digit PIN.",
-            "random",
-            "",
-        ))
-        .setting(SettingSpec::action(
-            "address",
-            "Phone address",
-            "Shows the address to open on your phone and the PIN.",
-            "Show",
-        ))
-        .default_off()
-    }
-    fn enable(&mut self, cx: &Ctx) {
-        self.start(cx);
-    }
-    fn disable(&mut self, _cx: &Ctx) {
-        self.stop();
-    }
-    fn setting_changed(&mut self, cx: &Ctx, key: &str) {
-        match key {
-            "port" => self.start(cx),
-            "pin" => {
-                let pin = Self::pin(cx);
-                if let Some(s) = &self.shared {
-                    *s.pin.lock().unwrap_or_else(|e| e.into_inner()) = pin;
-                }
-            }
-            _ => {}
-        }
-    }
-    fn command(&mut self, cx: &Ctx, name: &str, _args: &[String]) {
-        if name == "address" {
-            if self.shared.is_some() {
-                cx.toast(&format!(
-                    "Open {} on your phone, PIN {}",
-                    self.url,
-                    Self::pin(cx)
-                ));
-            } else {
-                cx.toast("Remote control is not running");
-            }
-        }
-    }
-    fn tick(&mut self, cx: &Ctx) {
-        if let Some(rx) = &self.rx {
-            while let Ok(c) = rx.try_recv() {
-                Self::apply(cx, c);
-            }
-        }
-        self.poll += 1;
-        if self.poll.is_multiple_of(5) {
-            if let Some(s) = &self.shared {
-                let snap = Self::snapshot(cx);
-                *s.snap.lock().unwrap_or_else(|e| e.into_inner()) = snap;
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc::channel;
 
     #[test]
     fn lan_only() {
@@ -595,6 +383,7 @@ mod tests {
                 title: "Song".into(),
                 ..Default::default()
             }),
+            art: Mutex::new(None),
             pin: Mutex::new("4242".into()),
             stop: AtomicBool::new(false),
             fails: Mutex::new(HashMap::new()),

@@ -35,10 +35,10 @@
 
 <h2 id="core">What stays built in</h2>
 <p>A small core ships inside the binary: <b>Music Visualizer</b>, <b>Skip Intro &amp; Credits</b>,
-<b>Lyrics</b>, <b>Subtitle Search</b>, <b>Auto-tagger</b>, <b>Free Music</b>, <b>Network Streams</b>, <b>Discord Rich Presence</b> and <b>Remote Control</b>. They draw Slint UI
+<b>Lyrics</b>, <b>Subtitle Search</b>, <b>Auto-tagger</b>, <b>Free Music</b> and <b>Network Streams</b>. They draw Slint UI
 (visualizer canvas, Skip button, karaoke overlay, search and preview dialogs) that a script cannot
 render; the two music plugins also write tags with lofty. The <b>ListenBrainz Scrobbler</b> needs no
-UI, so it is a downloadable package.</p>
+UI, so it is a downloadable package. <b>Discord Rich Presence</b> and <b>Remote Control</b> are packages too: a Lua script plus a small native helper per platform that talks to mpv over its JSON IPC.</p>
 <p>Keys: the Auto-tagger works without keys (MusicBrainz search by tags or file name, Cover Art
 Archive); an optional free <a href="https://acoustid.org/new-application">AcoustID application key</a>
 adds audio-fingerprint matching. Free Music searches the Internet Archive without a key; Jamendo
