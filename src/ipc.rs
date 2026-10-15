@@ -49,6 +49,32 @@ fn search(args: &Value) -> Result<Value, String> {
     Ok(json!({ "count": hits.len(), "items": hits }))
 }
 
+/// Radio + TV directory search (network; runs on the connection thread).
+fn search_streams(args: &Value) -> Result<Value, String> {
+    let q = args["query"].as_str().unwrap_or("").trim();
+    if q.is_empty() {
+        return Err("missing \"query\"".into());
+    }
+    let limit = args["limit"].as_u64().unwrap_or(25).clamp(1, 200) as usize;
+    let kind = args["kind"].as_str().unwrap_or("");
+    let v = crate::plugins::streams::search_all(q)?;
+    let items: Vec<Value> = v
+        .into_iter()
+        .filter(|s| match kind {
+            "radio" => s.source == "radio-browser.info",
+            "tv" => s.source != "radio-browser.info",
+            _ => true,
+        })
+        .take(limit)
+        .map(|s| {
+            json!({ "name": crate::plugins::streams::display_name(&s.name), "url": s.url,
+                "group": s.group, "country": s.country, "codec": s.codec, "bitrate": s.bitrate,
+                "logo": s.logo, "source": s.source, "tvg_id": s.tvg_id })
+        })
+        .collect();
+    Ok(json!({ "count": items.len(), "items": items }))
+}
+
 #[cfg(unix)]
 pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>, enabled: bool) {
     use std::io::{BufRead, BufReader, Write};
@@ -101,6 +127,8 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                             let args = req.get("args").cloned().unwrap_or(json!({}));
                             if cmd == "search" {
                                 search(&args)
+                            } else if cmd == "search_streams" {
+                                search_streams(&args)
                             } else {
                                 let (rtx, rrx) = mpsc::channel();
                                 if tx.send((cmd, args, rtx)).is_err() {
@@ -288,6 +316,161 @@ fn handle(
             }
             fx.invoke_preset_action("select".into(), name.into(), "".into());
             ok()
+        }
+        "tracks" => {
+            let kind = match args["type"].as_str().unwrap_or("audio") {
+                "sub" | "subtitle" | "subtitles" => "sub",
+                "video" => "video",
+                _ => "audio",
+            };
+            Ok(json!(p
+                .tracks(kind)
+                .into_iter()
+                .map(|(id, label, sel)| json!({ "id": id, "title": label, "selected": sel }))
+                .collect::<Vec<_>>()))
+        }
+        "set_track" => {
+            let (prop, kind) = match args["type"].as_str().unwrap_or("audio") {
+                "sub" | "subtitle" | "subtitles" => ("sid", "sub"),
+                _ => ("aid", "audio"),
+            };
+            let v = match &args["id"] {
+                Value::Number(n) => {
+                    let id = n.as_i64().ok_or("\"id\" must be an integer")?;
+                    if !p.tracks(kind).iter().any(|t| t.0 == id) {
+                        return Err(format!("no {kind} track {id}; see the track list"));
+                    }
+                    id.to_string()
+                }
+                Value::String(s) if s == "no" || s == "off" => "no".into(),
+                Value::String(s) if s == "auto" => "auto".into(),
+                _ => return Err("give \"id\" (track id, \"auto\" or \"no\")".into()),
+            };
+            p.set(prop, &v);
+            if prop == "sid" {
+                p.set("sub-visibility", if v == "no" { "no" } else { "yes" });
+            }
+            ok()
+        }
+        "chapters" => {
+            let cur = p
+                .get("chapter")
+                .and_then(|c| c.parse::<i64>().ok())
+                .unwrap_or(-1);
+            Ok(
+                json!({ "current": cur, "chapters": p.chapters().into_iter().enumerate()
+                .map(|(i, (t, s))| json!({ "index": i, "title": t, "start": s }))
+                .collect::<Vec<_>>() }),
+            )
+        }
+        "seek_chapter" => {
+            let n = p.chapters().len() as i64;
+            if n == 0 {
+                return Err("this item has no chapters".into());
+            }
+            if let Some(i) = args["index"].as_i64() {
+                if !(0..n).contains(&i) {
+                    return Err(format!("chapter index out of range (0..{n})"));
+                }
+                p.set("chapter", &i.to_string());
+            } else if let Some(d) = args["offset"].as_i64() {
+                p.cmd("add", &["chapter", &d.to_string()]);
+            } else {
+                return Err("give \"index\" (0-based) or \"offset\" (+1 / -1)".into());
+            }
+            ok()
+        }
+        "speed" => {
+            let s = args["speed"].as_f64().ok_or("missing \"speed\"")?;
+            if !(0.1..=4.0).contains(&s) {
+                return Err("speed must be between 0.1 and 4".into());
+            }
+            p.set("speed", &format!("{s}"));
+            Ok(json!({ "speed": s }))
+        }
+        "screenshot" => {
+            if p.get("path").unwrap_or_default().is_empty() {
+                return Err("nothing is playing".into());
+            }
+            if p.get("vid").as_deref().is_none_or(|v| v == "no") {
+                return Err("no video to capture (audio-only item)".into());
+            }
+            let mode = match args["mode"].as_str().unwrap_or("subtitles") {
+                "video" => "video",
+                "window" => "window",
+                _ => "subtitles",
+            };
+            let path = match args["path"].as_str().filter(|s| !s.trim().is_empty()) {
+                Some(s) => std::path::PathBuf::from(s.trim()),
+                None => {
+                    let d = p.get("screenshot-directory").unwrap_or_default();
+                    let d = match d.strip_prefix("~/") {
+                        Some(r) => crate::store::home().join(r),
+                        None if d.is_empty() => crate::store::home().join("Pictures"),
+                        None => d.into(),
+                    };
+                    let ext = p
+                        .get("screenshot-format")
+                        .filter(|f| !f.is_empty())
+                        .unwrap_or_else(|| "png".into());
+                    let t = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0);
+                    d.join(format!("vivi-{t}.{ext}"))
+                }
+            };
+            if let Some(d) = path.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            let ps = path.to_string_lossy().into_owned();
+            p.try_cmd("screenshot-to-file", &[&ps, mode])?;
+            Ok(json!({ "path": ps }))
+        }
+        "open_stream" => {
+            let t = target(args)?;
+            if !t.contains("://") {
+                return Err(
+                    "\"target\" must be a stream URL (http(s)://, rtmp://, udp://, …)".into(),
+                );
+            }
+            if let Some(n) = args["name"].as_str().filter(|n| !n.trim().is_empty()) {
+                crate::loading::set_name(&t, n.trim());
+            }
+            if args["queue"].as_bool() == Some(true) {
+                p.enqueue(&t);
+            } else {
+                p.open(&t);
+            }
+            ok()
+        }
+        "plugins" => Ok(json!(crate::plugins::states()
+            .into_iter()
+            .map(
+                |(m, on)| json!({ "id": m.id, "name": m.name, "version": m.version,
+                "kind": format!("{:?}", m.origin).to_lowercase(), "enabled": on })
+            )
+            .collect::<Vec<_>>())),
+        "plugin_info" => {
+            let id = args["id"].as_str().ok_or("missing \"id\"")?;
+            let (m, on) = crate::plugins::states()
+                .into_iter()
+                .find(|(m, _)| m.id == id)
+                .ok_or_else(|| format!("unknown plugin {id:?}; see list_plugins"))?;
+            Ok(
+                json!({ "id": m.id, "name": m.name, "description": m.description,
+                "version": m.version, "author": m.author,
+                "kind": format!("{:?}", m.origin).to_lowercase(), "enabled": on,
+                "settings": m.settings.iter().map(|s| json!({ "key": s.key, "title": s.title, "info": s.info }))
+                    .collect::<Vec<_>>() }),
+            )
+        }
+        "lyrics" => {
+            let lines: Vec<String> = a.get_lyrics_lines().iter().map(|s| s.to_string()).collect();
+            Ok(
+                json!({ "available": !lines.is_empty(), "synced": !a.get_lyrics_plain(),
+                "current_line": a.get_lyrics_index(), "lines": lines }),
+            )
         }
         "" => Err("missing \"cmd\"".into()),
         _ => Err(format!("unknown command {cmd:?}")),

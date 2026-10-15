@@ -79,13 +79,31 @@ explicitly: `"env": { "VIVI_SOCKET": "/run/user/1000/vivi.sock" }`.
 | `set_subtitles` | `enabled` | Show/hide subtitles |
 | `list_eq_presets` | – | Built-in and custom EQ presets, current one |
 | `set_eq_preset` | `name` | Select a preset, or `Off` to disable the equalizer |
+| `list_audio_tracks` | – | Audio tracks: `id`, `title` (with language), `selected` |
+| `set_audio_track` | `id` (integer, `auto` or `no`) | Switch the audio track |
+| `list_subtitle_tracks` | – | Subtitle tracks (embedded and external) |
+| `set_subtitle_track` | `id` (integer, `auto` or `no`) | Switch subtitles; `no` turns them off |
+| `get_chapters` | – | `current` index and `chapters` (`index`, `title`, `start` s) |
+| `seek_chapter` | `index` *or* `offset` (+1/-1) | Jump to a chapter |
+| `set_speed` | `speed` (0.1–4) | Playback speed |
+| `screenshot` | `path`, `mode` (`subtitles`/`video`/`window`) | Saves the current frame and returns its path; default folder is Settings → Video → screenshot folder. Errors on audio-only items |
+| `open_network_stream` | `target`, `name`, `queue` | Play (or queue) a stream URL: Internet radio, IPTV `.m3u8`/HLS, DASH, RTMP/RTSP/UDP, Icecast. `name` is shown while it loads |
+| `search_streams` | `query`, `kind` (`radio`/`tv`), `limit` | Search radio-browser.info, iptv-org TV, your Network Streams favorites and playlists; returns `url`s for `open_network_stream` (needs network; may take a few seconds) |
+| `list_plugins` | – | Plugins: `id`, `name`, `version`, `kind`, `enabled` (read-only) |
+| `plugin_info` | `id` | Description, author, version and setting keys/titles (no values) |
+| `get_lyrics` | – | Lines shown by the Lyrics plugin, `synced`, `current_line` |
+
+IPTV / radio: `open` also plays URLs, but `open_network_stream` validates the URL, can
+queue instead of replacing, and shows a station name. A whole `.m3u` playlist URL can be
+passed to `open` (mpv expands it into the queue); to browse channels, guide and logos use
+the Network Streams dialog in Vivi.
 
 Resources: `vivi://status` and `vivi://playlist` (JSON).
 
 ## Testing
 
 - Automated: `cargo test --test mcp` runs the real `vivi-mcp` binary against a fake Vivi
-  socket and checks initialize → tools/list → search → open → status.
+  socket and checks initialize → tools/list (all tools) → search → open → status → track listing.
 - MCP Inspector against a running Vivi:
   `VIVI_IPC=1 vivi &` then `npx @modelcontextprotocol/inspector target/release/vivi-mcp`.
 - By hand:
@@ -101,4 +119,5 @@ Resources: `vivi://status` and `vivi://playlist` (JSON).
 - stdio transport only; no HTTP/SSE server yet.
 - The setting takes effect after a restart; one Vivi instance owns the socket.
 - `search_library` covers the scanned library only (Settings → Library folders).
-- Not yet exposed: audio track selection, screenshots, plugins, lyrics.
+- Not exposed: changing plugin settings or enabling/disabling plugins (plugin tools are
+  read-only), and the Network Streams program guide.

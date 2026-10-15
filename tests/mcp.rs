@@ -32,6 +32,8 @@ fn mcp_client_lists_tools_plays_and_reads_status() {
                         playing = req["args"]["target"].as_str().unwrap().into();
                         json!({ "ok": true, "result": "ok" })
                     }
+                    "tracks" => json!({ "ok": true, "result": [{ "id": 1,
+                        "title": req["args"]["type"], "selected": true }] }),
                     "status" => json!({ "ok": true, "result": {
                         "playing": !playing.is_empty(), "path": playing, "title": "Song" } }),
                     c => json!({ "ok": false, "error": format!("unknown command {c:?}") }),
@@ -91,6 +93,19 @@ fn mcp_client_lists_tools_plays_and_reads_status() {
         "set_subtitles",
         "list_eq_presets",
         "set_eq_preset",
+        "list_audio_tracks",
+        "set_audio_track",
+        "list_subtitle_tracks",
+        "set_subtitle_track",
+        "get_chapters",
+        "seek_chapter",
+        "set_speed",
+        "screenshot",
+        "open_network_stream",
+        "search_streams",
+        "list_plugins",
+        "plugin_info",
+        "get_lyrics",
     ] {
         assert!(names.contains(&n), "missing tool {n}");
     }
@@ -120,6 +135,20 @@ fn mcp_client_lists_tools_plays_and_reads_status() {
         st["result"]["structuredContent"]["path"],
         "/music/song.flac"
     );
+
+    let subs = rpc(
+        7,
+        "tools/call",
+        json!({ "name": "list_subtitle_tracks", "arguments": {} }),
+    );
+    assert_eq!(
+        subs["result"]["content"][0]["text"]
+            .as_str()
+            .map(|t| t.contains("\"sub\"")),
+        Some(true)
+    );
+    let aud = rpc(8, "tools/call", json!({ "name": "list_audio_tracks" }));
+    assert_eq!(aud["result"]["isError"], false);
 
     let bad = rpc(6, "tools/call", json!({ "name": "nope", "arguments": {} }));
     assert!(bad["error"]["code"].is_number());

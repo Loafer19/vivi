@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- **Network Streams** 0.9.0: XMLTV program guide — now / next per `tvg-id` from the playlist `url-tvg` / `x-tvg-url` or a guide URL setting (`.xml` / `.xml.gz`); only the next 12 h, three titles per channel, cached compactly for 6 h. **Favorites** (formerly Saved) pinned on top with a ★; `group-title` chips and iptv-org category chips (News, Sports, Movies, Kids, Music, …); **My playlists**: custom M3U URLs or files that refresh themselves (24 h / 6 h / 7 days), show channel count, last update and the last error, and keep the last good copy when a link breaks; **Search all (TV + radio)** across favorites, iptv-org, your playlists and radio-browser; **Add to queue** and **Mini player** actions; broken logo URLs remembered for a week and the logo cache capped at 64 MB.
+- **MCP** (`vivi-mcp`): `list_audio_tracks` / `set_audio_track`, `list_subtitle_tracks` / `set_subtitle_track`, `get_chapters` / `seek_chapter`, `set_speed`, `screenshot`, `open_network_stream`, `search_streams`, `list_plugins` / `plugin_info` (read-only) and `get_lyrics`, with matching control-socket commands.
+
 ## [0.10.0] - 2026-10-15
 
 Highlights: new Equalizer, Chapter Thumbnails and AcoustID plugins; SponsorBlock undo, Scrobbler with Last.fm, and Subtitle Auto-Sync with managed helpers; Auto-tagger Deezer/iTunes/Last.fm/Discogs sources with per-field source and optional LRCLIB synced lyrics; plugin marketplace at plugins.viviplayer.app with What’s new and vivi://plugin deep links; viviplayer.app site; install.sh, AUR/Flathub/winget/Scoop packaging.

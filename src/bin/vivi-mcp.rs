@@ -39,7 +39,7 @@ fn call_vivi(cmd: &str, args: Value) -> Result<Value, String> {
             path.display()
         )
     })?;
-    s.set_read_timeout(Some(std::time::Duration::from_secs(10)))
+    s.set_read_timeout(Some(std::time::Duration::from_secs(30)))
         .ok();
     writeln!(s, "{}", json!({ "cmd": cmd, "args": args })).map_err(|e| e.to_string())?;
     let mut line = String::new();
@@ -97,7 +97,52 @@ fn tools() -> Vec<(&'static str, &'static str, Value, &'static str)> {
         ("list_eq_presets", "List equalizer presets (built-in and custom) and the current one.", none.clone(), "eq_presets"),
         ("set_eq_preset", "Select an equalizer preset by name (see list_eq_presets), or \"Off\" to disable the equalizer.",
             json!({ "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }), "eq_preset"),
+        ("list_audio_tracks", "Audio tracks of the current item (id, title/language, selected).",
+            json!({ "type": "object", "properties": { "type": { "type": "string", "const": "audio", "default": "audio" } } }), "tracks"),
+        ("set_audio_track", "Select an audio track by id (see list_audio_tracks), or \"auto\" / \"no\".",
+            json!({ "type": "object", "required": ["id"], "properties": {
+                "id": { "type": ["integer", "string"], "description": "Track id, \"auto\" or \"no\"" },
+                "type": { "type": "string", "const": "audio", "default": "audio" } } }), "set_track"),
+        ("list_subtitle_tracks", "Subtitle tracks of the current item (id, title/language, external, selected).",
+            json!({ "type": "object", "properties": { "type": { "type": "string", "const": "sub", "default": "sub" } } }), "tracks"),
+        ("set_subtitle_track", "Select a subtitle track by id (see list_subtitle_tracks), \"auto\", or \"no\" to turn subtitles off.",
+            json!({ "type": "object", "required": ["id"], "properties": {
+                "id": { "type": ["integer", "string"], "description": "Track id, \"auto\" or \"no\"" },
+                "type": { "type": "string", "const": "sub", "default": "sub" } } }), "set_track"),
+        ("get_chapters", "Chapters of the current item (index, title, start in seconds) and the current chapter.", none.clone(), "chapters"),
+        ("seek_chapter", "Jump to a chapter by index (0-based), or by offset (+1 next, -1 previous).",
+            json!({ "type": "object", "properties": {
+                "index": { "type": "integer", "minimum": 0 },
+                "offset": { "type": "integer" } } }), "seek_chapter"),
+        ("set_speed", "Set the playback speed (0.1-4, 1 = normal).",
+            json!({ "type": "object", "required": ["speed"], "properties": { "speed": { "type": "number", "minimum": 0.1, "maximum": 4 } } }), "speed"),
+        ("screenshot", "Save a screenshot of the current video frame to a file and return its path (default: the screenshot folder from Settings → Video).",
+            json!({ "type": "object", "properties": {
+                "path": { "type": "string", "description": "Output file (.png / .jpg); optional" },
+                "mode": { "type": "string", "enum": ["subtitles", "video", "window"], "description": "subtitles (default): video + subtitles; video: video only; window: as shown" } } }), "screenshot"),
+        ("open_network_stream", "Play a network stream URL now (Internet radio, IPTV .m3u8/HLS, DASH, RTMP/RTSP/UDP, Icecast/SHOUTcast), or append it to the queue. Use search_streams to find stations and TV channels.",
+            json!({ "type": "object", "required": ["target"], "properties": {
+                "target": { "type": "string", "description": "Stream URL" },
+                "name": { "type": "string", "description": "Display name while it loads (optional)" },
+                "queue": { "type": "boolean", "description": "Append to the queue instead of playing now" } } }), "open_stream"),
+        ("search_streams", "Search Internet radio (radio-browser.info), iptv-org TV channels, your favorites and your own playlists by name. Returns stream URLs for open_network_stream.",
+            json!({ "type": "object", "required": ["query"], "properties": {
+                "query": { "type": "string" },
+                "kind": { "type": "string", "enum": ["radio", "tv"] },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 200 } } }), "search_streams"),
+        ("list_plugins", "Installed plugins (id, name, version, kind, enabled). Read-only.", none.clone(), "plugins"),
+        ("plugin_info", "Details of one plugin: description, version, author, settings (keys and titles, no values). Read-only.",
+            json!({ "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }), "plugin_info"),
+        ("get_lyrics", "Lyrics shown for the current track (from the Lyrics plugin: lines, synced flag, current line index). Empty when none are loaded.", none.clone(), "lyrics"),
     ]
+}
+
+fn track_type(tool: &str) -> Option<&'static str> {
+    match tool {
+        "list_audio_tracks" | "set_audio_track" => Some("audio"),
+        "list_subtitle_tracks" | "set_subtitle_track" => Some("sub"),
+        _ => None,
+    }
 }
 
 fn handle(req: &Value) -> Option<Value> {
@@ -116,7 +161,7 @@ fn handle(req: &Value) -> Option<Value> {
                 "protocolVersion": v,
                 "capabilities": { "tools": {}, "resources": {} },
                 "serverInfo": { "name": "vivi-mcp", "version": env!("CARGO_PKG_VERSION") },
-                "instructions": "Controls the Vivi media player. Use get_status to see what is playing, search_library to find media, then open or playlist_add with a returned path.",
+                "instructions": "Controls the Vivi media player. Use get_status to see what is playing, search_library to find media, then open or playlist_add with a returned path. For radio and TV use search_streams, then open_network_stream with a returned URL.",
             }))
         }
         "ping" => Ok(json!({})),
@@ -126,8 +171,15 @@ fn handle(req: &Value) -> Option<Value> {
             let name = params["name"].as_str().unwrap_or("");
             match tools().into_iter().find(|t| t.0 == name) {
                 None => Err((-32602, format!("unknown tool {name:?}"))),
-                Some((_, _, _, cmd)) => {
-                    let args = params.get("arguments").cloned().unwrap_or(json!({}));
+                Some((tool, _, _, cmd)) => {
+                    let mut args = params.get("arguments").cloned().unwrap_or(json!({}));
+                    if args.is_null() {
+                        args = json!({});
+                    }
+                    // Track tools share one command; the tool name picks the track type.
+                    if let (Some(o), Some(t)) = (args.as_object_mut(), track_type(tool)) {
+                        o.insert("type".into(), json!(t));
+                    }
                     Ok(match call_vivi(cmd, args) {
                         Ok(v) => {
                             let text = serde_json::to_string_pretty(&v).unwrap_or_default();
