@@ -239,13 +239,154 @@ enum Msg {
     Downloaded(Result<PathBuf, String>),
 }
 
+const SUB_EXT: &[&str] = &["srt", "ass", "ssa", "vtt", "sub"];
+const VIDEO_EXT: &[&str] = &[
+    "mp4", "mkv", "webm", "avi", "mov", "m4v", "wmv", "flv", "ts", "m2ts", "mpg", "mpeg", "ogv",
+];
+
+fn has_ext(p: &Path, exts: &[&str]) -> bool {
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| exts.iter().any(|x| x.eq_ignore_ascii_case(e)))
+}
+
+fn file_name(p: &Path) -> String {
+    p.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Files of `dir` with one of `exts`, sorted by name.
+fn files_with(dir: &Path, exts: &[&str]) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|r| r.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    v.retain(|p| p.is_file() && has_ext(p, exts));
+    v.sort_by_key(|p| file_name(p).to_lowercase());
+    v
+}
+
+/// Whether subtitle `sub` belongs to `video`: same stem, or the stem followed by a
+/// separator (`Movie.en.srt`, `Movie_English.srt`), case-insensitive.
+pub fn sub_matches(video: &Path, sub: &Path) -> bool {
+    let v = video
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let s = sub
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    !v.is_empty()
+        && (s == v
+            || s.strip_prefix(&v)
+                .is_some_and(|r| r.starts_with(['.', '_', '-', ' ', '['])))
+}
+
+/// Pair each video of a folder with its best subtitle (exact stem first).
+pub fn pair_folder(videos: &[PathBuf], subs: &[PathBuf]) -> Vec<(PathBuf, Option<PathBuf>)> {
+    videos
+        .iter()
+        .map(|v| {
+            let stem = v.file_stem().map(|s| s.to_string_lossy().to_lowercase());
+            let exact = subs
+                .iter()
+                .find(|s| s.file_stem().map(|x| x.to_string_lossy().to_lowercase()) == stem);
+            let sub = exact.or_else(|| subs.iter().find(|s| sub_matches(v, s)));
+            (v.clone(), sub.cloned())
+        })
+        .collect()
+}
+
+/// "Videos / Shows / The Wand / S01": the last four components of a folder.
+fn breadcrumb(dir: &Path) -> String {
+    let parts: Vec<String> = dir
+        .components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect();
+    let n = parts.len().saturating_sub(4);
+    parts[n..].join(" / ")
+}
+
 #[derive(Default)]
 pub struct SubtitleSearch {
     hits: Vec<Hit>,
     rx: Option<Receiver<Msg>>,
+    /// "From Computer": scanned folder, its subtitle files (To This File) with the
+    /// checked ones, or its videos paired with subtitles (To This Folder).
+    dir: Option<PathBuf>,
+    subs: Vec<PathBuf>,
+    checked: Vec<bool>,
+    pairs: Vec<(PathBuf, Option<PathBuf>)>,
+    /// Subtitles assigned with "To This Folder", attached when that video loads.
+    assigned: std::collections::HashMap<PathBuf, PathBuf>,
 }
 
 impl SubtitleSearch {
+    /// Rescan the "From Computer" folder and show it in the dialog.
+    fn scan_local(&mut self, cx: &Ctx) {
+        let folder = cx.app.get_subs_target() == 1;
+        let Some(dir) = self.dir.clone() else {
+            cx.app.set_subs_folder("Choose a folder…".into());
+            cx.app.set_subs_local(ModelRc::default());
+            Self::status(
+                cx,
+                "Open a local file or click the folder bar to choose a folder.",
+                false,
+            );
+            return;
+        };
+        cx.app.set_subs_folder(breadcrumb(&dir).into());
+        self.subs = files_with(&dir, SUB_EXT);
+        let items: Vec<Item> = if folder {
+            self.pairs = pair_folder(&files_with(&dir, VIDEO_EXT), &self.subs);
+            self.pairs
+                .iter()
+                .map(|(v, s)| Item {
+                    key: file_name(v).into(),
+                    label: s.as_deref().map(file_name).unwrap_or_default().into(),
+                    selected: s.is_some(),
+                })
+                .collect()
+        } else {
+            let video = cx.local_path();
+            // Preselect the subtitle mpv would pick: the exact name, else the first match.
+            let stem = |p: &Path| p.file_stem().map(|s| s.to_string_lossy().to_lowercase());
+            let pick = video.as_deref().and_then(|v| {
+                self.subs
+                    .iter()
+                    .position(|s| stem(s) == stem(v))
+                    .or_else(|| self.subs.iter().position(|s| sub_matches(v, s)))
+            });
+            self.checked = (0..self.subs.len()).map(|i| Some(i) == pick).collect();
+            self.local_items()
+        };
+        let empty = items.is_empty();
+        cx.app.set_subs_local(ModelRc::new(VecModel::from(items)));
+        Self::status(
+            cx,
+            match (empty, folder) {
+                (true, false) => "No subtitle files in this folder.",
+                (true, true) => "No videos in this folder.",
+                _ => "",
+            },
+            false,
+        );
+    }
+    fn local_items(&self) -> Vec<Item> {
+        self.subs
+            .iter()
+            .zip(&self.checked)
+            .map(|(s, c)| Item {
+                key: file_name(s).into(),
+                label: "".into(),
+                selected: *c,
+            })
+            .collect()
+    }
     fn creds(cx: &Ctx) -> Creds {
         Creds {
             key: cx.get("api-key").trim().to_string(),
@@ -326,7 +467,16 @@ impl Plugin for SubtitleSearch {
                 cx.app.set_subs_query(query_from_name(&path).into());
                 cx.app.set_subs_lang(cx.get("languages").into());
                 self.set_hits(cx, Vec::new(), None);
-                if Self::creds(cx).key.is_empty() {
+                self.dir = cx
+                    .local_path()
+                    .and_then(|p| p.parent().map(Path::to_path_buf));
+                // Without an API key only the local source works.
+                if Self::creds(cx).key.is_empty() && std::env::var_os("VIVI_SUBS").is_none() {
+                    cx.app.set_subs_source(1);
+                }
+                if cx.app.get_subs_source() == 1 {
+                    self.scan_local(cx);
+                } else if Self::creds(cx).key.is_empty() {
                     Self::status(cx, NO_KEY, false);
                 } else {
                     Self::status(cx, "", false);
@@ -356,6 +506,73 @@ impl Plugin for SubtitleSearch {
                     let _ = tx.send(Msg::Results(r));
                 });
             }
+            "mode" => {
+                if cx.app.get_subs_source() == 1 {
+                    self.scan_local(cx);
+                } else {
+                    let key = Self::creds(cx).key;
+                    Self::status(cx, if key.is_empty() { NO_KEY } else { "" }, false);
+                }
+            }
+            "browse" => {
+                let mut d = rfd::FileDialog::new().set_title("Folder with subtitles");
+                if let Some(dir) = &self.dir {
+                    d = d.set_directory(dir);
+                }
+                if let Some(dir) = d.pick_folder() {
+                    self.dir = Some(dir);
+                    self.scan_local(cx);
+                }
+            }
+            "toggle" => {
+                let Some(i) = args.first().and_then(|a| a.parse::<usize>().ok()) else {
+                    return;
+                };
+                if cx.app.get_subs_target() == 0 {
+                    if let Some(c) = self.checked.get_mut(i) {
+                        *c = !*c;
+                    }
+                    cx.app
+                        .set_subs_local(ModelRc::new(VecModel::from(self.local_items())));
+                }
+            }
+            "save-local" => {
+                let current = cx.local_path().and_then(|p| std::fs::canonicalize(p).ok());
+                let mut loaded = 0;
+                if cx.app.get_subs_target() == 0 {
+                    for (s, _) in self.subs.iter().zip(&self.checked).filter(|(_, c)| **c) {
+                        let flag = if loaded == 0 { "select" } else { "auto" };
+                        cx.player.cmd("sub-add", &[&s.to_string_lossy(), flag]);
+                        loaded += 1;
+                    }
+                    if loaded == 0 {
+                        Self::status(cx, "Select at least one subtitle file", false);
+                        return;
+                    }
+                    cx.toast(&format!(
+                        "{loaded} subtitle file{} added",
+                        if loaded == 1 { "" } else { "s" }
+                    ));
+                } else {
+                    let mut n = 0;
+                    for (v, s) in &self.pairs {
+                        let (Some(s), Ok(v)) = (s, std::fs::canonicalize(v)) else {
+                            continue;
+                        };
+                        if current.as_ref() == Some(&v) {
+                            cx.player.cmd("sub-add", &[&s.to_string_lossy(), "select"]);
+                        }
+                        self.assigned.insert(v, s.clone());
+                        n += 1;
+                    }
+                    cx.toast(&format!(
+                        "Subtitles assigned to {n} video{}",
+                        if n == 1 { "" } else { "s" }
+                    ));
+                }
+                Self::status(cx, "", false);
+                cx.app.set_subs_open(false);
+            }
             "select" => {
                 let i = args.first().and_then(|a| a.parse::<usize>().ok());
                 let hits = std::mem::take(&mut self.hits);
@@ -377,6 +594,14 @@ impl Plugin for SubtitleSearch {
                 });
             }
             _ => {}
+        }
+    }
+    fn file_loaded(&mut self, cx: &Ctx) {
+        let Some(v) = cx.local_path().and_then(|p| std::fs::canonicalize(p).ok()) else {
+            return;
+        };
+        if let Some(s) = self.assigned.get(&v) {
+            cx.player.cmd("sub-add", &[&s.to_string_lossy(), "select"]);
         }
     }
     fn tick(&mut self, cx: &Ctx) {
@@ -407,6 +632,25 @@ impl Plugin for SubtitleSearch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folder_pairing() {
+        let p = |s: &str| PathBuf::from(s);
+        assert!(sub_matches(&p("/a/Ep01.mp4"), &p("/a/Ep01.srt")));
+        assert!(sub_matches(&p("/a/Ep01.mp4"), &p("/a/Ep01_English.srt")));
+        assert!(sub_matches(&p("/a/ep01.mp4"), &p("/a/EP01.en.srt")));
+        assert!(!sub_matches(&p("/a/Ep01.mp4"), &p("/a/Ep010.srt")));
+        let pairs = pair_folder(
+            &[p("/a/Ep01.mp4"), p("/a/Ep02.mp4")],
+            &[p("/a/Ep01_English.srt"), p("/a/Ep01.srt")],
+        );
+        assert_eq!(pairs[0].1, Some(p("/a/Ep01.srt")));
+        assert_eq!(pairs[1].1, None);
+        assert_eq!(
+            breadcrumb(&p("/home/u/Videos/Shows/The Wand/S01")),
+            "Videos / Shows / The Wand / S01"
+        );
+    }
 
     #[test]
     fn hash_known_value() {

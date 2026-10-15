@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Add Subtitles → From Computer** (Figma "Add Subtitles to Playlist/Folder", #51): the dialog gets the *To This File / To This Folder* and *From Computer / From OpenSubtitles* dropdowns and a folder breadcrumb (click to pick another folder). *To This File* lists the folder's subtitle files with checks (the matching one preselected) and adds the checked ones; *To This Folder* pairs every video with its subtitle (`Name.srt`, `Name.en.srt`, `Name_English.srt`) over a dashed leader and attaches each pair when that video plays. Without an OpenSubtitles key the dialog opens on *From Computer*. Save button styled as in Figma.
+
 ## [0.9.1] - 2026-10-15
 
 Highlights: Discord Rich Presence and Remote Control become downloadable plugins with small native helpers, a new YouTube & yt-dlp plugin (playlists, sizes, downloads; manages its own yt-dlp and ffmpeg), an MCP server for AI agents, radio lyrics, a visualizer fed by mpv's real output, and the Inter font bundled in the Flatpak and AppImage.

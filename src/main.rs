@@ -792,7 +792,7 @@ fn screenshot_mode() -> bool {
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
-/// VIVI_MENU, VIVI_SUB, VIVI_SUBS (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
+/// VIVI_MENU, VIVI_SUB, VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] (Auto-tagger / Free Music dialog, searched when a query is given).
 fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
@@ -868,7 +868,10 @@ fn debug_ui(app: &AppWindow) {
             }
         });
     }
-    if var("VIVI_SUBS").is_some() {
+    // VIVI_SUBS=folder: "To This Folder"; =search: "From OpenSubtitles".
+    if let Some(m) = var("VIVI_SUBS") {
+        app.set_subs_target(i32::from(m == "folder"));
+        app.set_subs_source(i32::from(m != "search"));
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(2500), move || {
             if let Some(a) = w.upgrade() {

@@ -274,6 +274,10 @@ export component AppWindow inherits Window {
     in property <bool> subs-busy;
     in-out property <string> subs-query;
     in-out property <string> subs-lang;
+    in property <[Item]> subs-local;
+    in property <string> subs-folder;
+    in-out property <int> subs-target;
+    in-out property <int> subs-source;
     // Shared dialog of the music plugins (Auto-tagger, Free Music); md-owner = plugin id.
     in-out property <bool> md-open;
     in property <string> md-owner;
@@ -994,10 +998,15 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         results: root.subs-results; status: root.subs-status; busy: root.subs-busy;
         query <=> root.subs-query; lang <=> root.subs-lang;
+        local: root.subs-local; folder: root.subs-folder;
+        target <=> root.subs-target; source <=> root.subs-source;
         search => { root.plugin-command("subtitle-search", "search", ""); }
         select(i) => { root.plugin-command("subtitle-search", "select", i); }
         done(i) => { root.plugin-command("subtitle-search", "download", i); }
-        from-computer => { root.subs-open = false; root.load-sub(); fs.focus(); }
+        mode => { root.plugin-command("subtitle-search", "mode", ""); }
+        toggle(i) => { root.plugin-command("subtitle-search", "toggle", i); }
+        browse => { root.plugin-command("subtitle-search", "browse", ""); }
+        save-local => { root.plugin-command("subtitle-search", "save-local", ""); }
         close => { root.subs-open = false; fs.focus(); }
     }
 
