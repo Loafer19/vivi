@@ -1,6 +1,6 @@
 pkgbase = vivi-git
 	pkgdesc = Fast, minimal media player built on mpv (Slint UI) - development version
-	pkgver = 0.9.1.r0.g16fe71b
+	pkgver = 0.10.0.r0.gee2c2a6
 	pkgrel = 1
 	url = https://github.com/Loafer19/vivi
 	arch = x86_64
