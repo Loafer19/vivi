@@ -1,11 +1,11 @@
 id = "sponsorblock"
 name = "SponsorBlock"
-version = "1.0.0"
+version = "1.0.1"
 description = "Skips sponsor, intro, self-promotion and other segments in YouTube videos opened as streams, using the crowd-sourced SponsorBlock database. Segments are marked as chapters on the seek bar."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "sponsorblock.lua"
-min_vivi = "0.8.0"
+min_vivi = "0.9.0"
 icon = "skip"
 lucide = "badge-dollar-sign"
 permissions = ["network", "subprocess"]

@@ -1,11 +1,11 @@
 id = "playback-stats"
 name = "Playback Statistics"
-version = "1.0.1"
+version = "1.0.2"
 description = "Counts time watched and listened per day, with top artists and shows. Kept locally in a small TSV file; Alt+S shows a summary, export as CSV or clear any time."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "playback-stats.lua"
-min_vivi = "0.8.0"
+min_vivi = "0.9.0"
 icon = "stats"
 lucide = "chart-column"
 permissions = ["filesystem"]

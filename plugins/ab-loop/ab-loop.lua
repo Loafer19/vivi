@@ -1,5 +1,5 @@
 -- @name A-B Loop & Frame Step
--- @version 1.0.1
+-- @version 1.0.2
 -- @author Vivi
 -- @description A-B loop editing and frame stepping (Vivi plugin package).
 --

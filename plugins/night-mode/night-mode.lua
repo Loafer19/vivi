@@ -1,5 +1,5 @@
 -- @name Night Mode
--- @version 1.0.2
+-- @version 1.0.3
 -- @author Vivi
 -- @description Dynamic range compression for quiet listening (Vivi plugin package).
 --

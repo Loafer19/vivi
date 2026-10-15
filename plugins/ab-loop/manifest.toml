@@ -1,11 +1,11 @@
 id = "ab-loop"
 name = "A-B Loop & Frame Step"
-version = "1.0.1"
+version = "1.0.2"
 description = "Set and clear A-B loop points from the keyboard, nudge them by a frame, step frame by frame while paused and see the loop on an on-screen bar."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "ab-loop.lua"
-min_vivi = "0.8.0"
+min_vivi = "0.9.0"
 icon = "loop"
 lucide = "repeat"
 permissions = []

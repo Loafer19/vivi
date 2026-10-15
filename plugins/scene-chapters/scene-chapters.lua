@@ -1,5 +1,5 @@
 -- @name Scene Chapters & Thumbnails
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Vivi
 -- @description Scene-change chapters and chapter thumbnails via ffmpeg (Vivi plugin package).
 --

@@ -1,7 +1,7 @@
 id = "youtube"
 name = "YouTube & yt-dlp"
-version = "1.0.0"
-description = "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp when it is recent, otherwise downloads and updates its own copy from the official yt-dlp GitHub releases."
+version = "1.1.0"
+description = "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp and ffmpeg when present; otherwise downloads and updates its own verified copies (yt-dlp from its official GitHub releases; a static ffmpeg only when merging 1080p+ or converting audio)."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "youtube.lua"
@@ -10,7 +10,7 @@ icon = "streams"
 lucide = "youtube"
 permissions = ["network", "filesystem", "subprocess"]
 default_enabled = true
-size_note = "+ yt-dlp 18–40 MB on first use, unless a recent system yt-dlp is found"
+size_note = "+ yt-dlp 18–40 MB on first use, + ffmpeg 125–195 MB download (about 345 MB unpacked) only for 1080p+ or audio conversion; none of it when found on the system"
 
 [[settings]]
 key = "url"
@@ -40,7 +40,7 @@ default = "Video"
 
 [[settings]]
 key = "audio-format"
-title = "Audio-only format (conversion needs ffmpeg)"
+title = "Audio-only format (mp3/m4a/opus use ffmpeg, downloaded if missing)"
 type = "choice"
 options = ["Original", "mp3", "m4a", "opus"]
 default = "Original"
@@ -84,7 +84,7 @@ default = "Auto (system if recent, else managed)"
 
 [[settings]]
 key = "auto-update"
-title = "Update the managed yt-dlp daily"
+title = "Update the managed yt-dlp daily (and ffmpeg monthly)"
 type = "toggle"
 default = "true"
 
@@ -95,7 +95,13 @@ type = "action"
 label = "Update"
 
 [[settings]]
+key = "update-ffmpeg"
+title = "Update the managed ffmpeg (downloaded only for 1080p+ or audio conversion)"
+type = "action"
+label = "Update"
+
+[[settings]]
 key = "info"
-title = "Which yt-dlp is used"
+title = "Which yt-dlp and ffmpeg are used"
 type = "action"
 label = "Show"

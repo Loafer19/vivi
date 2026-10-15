@@ -1,5 +1,5 @@
 -- @name SponsorBlock
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Vivi
 -- @description Skip SponsorBlock segments in YouTube streams (Vivi plugin package).
 --

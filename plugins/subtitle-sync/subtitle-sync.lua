@@ -1,5 +1,5 @@
 -- @name Subtitle Auto-Sync
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Vivi
 -- @description Align external subtitles to the audio with alass or ffsubsync (Vivi plugin package).
 --

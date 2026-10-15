@@ -268,18 +268,18 @@
       "id": "ab-loop",
       "name": "A-B Loop & Frame Step",
       "description": "Set and clear A-B loop points from the keyboard, nudge them by a frame, step frame by frame while paused and see the loop on an on-screen bar.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Vivi",
       "icon": "loop",
       "lucide": "repeat",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [],
       "source": "plugins/ab-loop",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-ab-loop-v1.0.1/ab-loop-1.0.1.zip",
-      "sha256": "6b5265a42a3c80f92bd5a923eb00aa12d20e6fb8c1aabdc7aa3324398e9a41a9",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-ab-loop-v1.0.2/ab-loop-1.0.2.zip",
+      "sha256": "da33a27e46f3fb85981a56c58b03f79a77dd68ee0cfec65b08056e9c42455539",
       "size": 5816,
       "settings": [
         {
@@ -399,18 +399,18 @@
       "id": "night-mode",
       "name": "Night Mode",
       "description": "Compresses loud scenes and lifts quiet dialogue so films stay understandable at low volume (mpv dynaudnorm / loudnorm). Toggle with Alt+N.",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "Vivi",
       "icon": "night",
       "lucide": "moon",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [],
       "source": "plugins/night-mode",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.2/night-mode-1.0.2.zip",
-      "sha256": "5d891df2b9bb0891cc13b62563fe0f670383602fb2175a6a9ec8319837ced4a8",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.3/night-mode-1.0.3.zip",
+      "sha256": "e857e72126c077e420d569711bc3ba65f321b3b25a6199cddb6078bc949159b8",
       "size": 3197,
       "settings": [
         {
@@ -438,20 +438,20 @@
       "id": "playback-stats",
       "name": "Playback Statistics",
       "description": "Counts time watched and listened per day, with top artists and shows. Kept locally in a small TSV file; Alt+S shows a summary, export as CSV or clear any time.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Vivi",
       "icon": "stats",
       "lucide": "chart-column",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [
         "filesystem"
       ],
       "source": "plugins/playback-stats",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-playback-stats-v1.0.1/playback-stats-1.0.1.zip",
-      "sha256": "54fd81f1e835d2bea235cea9a0df98ac8ee834ebe575a26b63ba4505a3d0ea52",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-playback-stats-v1.0.2/playback-stats-1.0.2.zip",
+      "sha256": "db46ba1d155c89c53838c62bd1ff99010e979cd097093387e5c2b360e4369528",
       "size": 7980,
       "settings": [
         {
@@ -569,21 +569,21 @@
       "id": "scene-chapters",
       "name": "Scene Chapters & Thumbnails",
       "description": "Creates chapters at scene changes for videos without chapters (ffmpeg scene detection, in the background) and saves a thumbnail for every chapter. Results are cached on disk.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Vivi",
       "icon": "chapters",
       "lucide": "clapperboard",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [
         "filesystem",
         "subprocess"
       ],
       "source": "plugins/scene-chapters",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scene-chapters-v1.0.0/scene-chapters-1.0.0.zip",
-      "sha256": "8076ed61e38bdcf35f8e4675e6ef877ff3b6f17109df8452f07dec3e90a3f196",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scene-chapters-v1.0.1/scene-chapters-1.0.1.zip",
+      "sha256": "5424bf21fa349aad2e64ceb43e54577675f1e12e76c9a4472501c2bb7eddc91a",
       "size": 8633,
       "settings": [
         {
@@ -627,22 +627,22 @@
       "id": "scrobbler",
       "name": "ListenBrainz Scrobbler",
       "description": "Sends what you listen to to ListenBrainz: now playing when a track starts and a listen after half the track or 4 minutes. Listens made offline are queued and sent later. Needs your ListenBrainz user token.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Vivi",
       "icon": "scrobble",
       "lucide": "radio-tower",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [
         "network",
         "filesystem",
         "subprocess"
       ],
       "source": "plugins/scrobbler",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.0.0/scrobbler-1.0.0.zip",
-      "sha256": "8040e0b0a3051d23e39d4172e09f24a6576fc5e8bc044292e6d51dc333a9e66a",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.0.1/scrobbler-1.0.1.zip",
+      "sha256": "fae650cf485c72c311a23d210da4a78c121a5aa8e98396424996f9c42ecd836b",
       "size": 11728,
       "settings": [
         {
@@ -686,21 +686,21 @@
       "id": "sponsorblock",
       "name": "SponsorBlock",
       "description": "Skips sponsor, intro, self-promotion and other segments in YouTube videos opened as streams, using the crowd-sourced SponsorBlock database. Segments are marked as chapters on the seek bar.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Vivi",
       "icon": "skip",
       "lucide": "badge-dollar-sign",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [
         "network",
         "subprocess"
       ],
       "source": "plugins/sponsorblock",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.0.0/sponsorblock-1.0.0.zip",
-      "sha256": "aaf91dacf45611c9c65d8ff7da60b7c16ac42c41ef6460845bad1b1b1cd16402",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.0.1/sponsorblock-1.0.1.zip",
+      "sha256": "8e05584960420a7782c31baa8896cfdb9eecb1574cbff69fa9bb531a91e21c81",
       "size": 9060,
       "settings": [
         {
@@ -738,21 +738,21 @@
       "id": "subtitle-sync",
       "name": "Subtitle Auto-Sync",
       "description": "Aligns the current external subtitle to the audio with alass or ffsubsync (whichever is installed), in the background, then loads the synced copy saved next to the original.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Vivi",
       "icon": "subtitles",
       "lucide": "captions",
       "kind": "package",
       "runtime": "mpv-lua",
       "default_enabled": true,
-      "min_vivi": "0.8.0",
+      "min_vivi": "0.9.0",
       "permissions": [
         "filesystem",
         "subprocess"
       ],
       "source": "plugins/subtitle-sync",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.0.0/subtitle-sync-1.0.0.zip",
-      "sha256": "6f3c5984b5719b47c879fc7acc7ca01ebc745ad27708b5c8d16200651a5315fc",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.0.1/subtitle-sync-1.0.1.zip",
+      "sha256": "36aeb9d0a9012dcede8c99d3ce5aabb7cae037282b2557cb7f1a9a07a52f7c11",
       "size": 6173,
       "settings": [
         {
@@ -782,8 +782,8 @@
     {
       "id": "youtube",
       "name": "YouTube & yt-dlp",
-      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp when it is recent, otherwise downloads and updates its own copy from the official yt-dlp GitHub releases.",
-      "version": "1.0.0",
+      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp and ffmpeg when present; otherwise downloads and updates its own verified copies (yt-dlp from its official GitHub releases; a static ffmpeg only when merging 1080p+ or converting audio).",
+      "version": "1.1.0",
       "author": "Vivi",
       "icon": "streams",
       "lucide": "youtube",
@@ -797,9 +797,9 @@
         "subprocess"
       ],
       "source": "plugins/youtube",
-      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.0.0/youtube-1.0.0.zip",
-      "sha256": "19f02c796ff0e8e887be5e1d2d6a95e83fe771794e5ebd0292a5f622c680b07d",
-      "size": 29537,
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.0/youtube-1.1.0.zip",
+      "sha256": "9c2c5fb4f702cc1b37c577e0de634bc1e6814a2bb725e6991a0cf84246be2385",
+      "size": 43150,
       "settings": [
         {
           "key": "url",
@@ -840,7 +840,7 @@
         },
         {
           "key": "audio-format",
-          "title": "Audio-only format (conversion needs ffmpeg)",
+          "title": "Audio-only format (mp3/m4a/opus use ffmpeg, downloaded if missing)",
           "type": "choice",
           "options": [
             "Original",
@@ -893,7 +893,7 @@
         },
         {
           "key": "auto-update",
-          "title": "Update the managed yt-dlp daily",
+          "title": "Update the managed yt-dlp daily (and ffmpeg monthly)",
           "type": "toggle",
           "default": "true"
         },
@@ -904,13 +904,19 @@
           "label": "Update"
         },
         {
+          "key": "update-ffmpeg",
+          "title": "Update the managed ffmpeg (downloaded only for 1080p+ or audio conversion)",
+          "type": "action",
+          "label": "Update"
+        },
+        {
           "key": "info",
-          "title": "Which yt-dlp is used",
+          "title": "Which yt-dlp and ffmpeg are used",
           "type": "action",
           "label": "Show"
         }
       ],
-      "size_note": "+ yt-dlp 18–40 MB on first use, unless a recent system yt-dlp is found"
+      "size_note": "+ yt-dlp 18–40 MB on first use, + ffmpeg 125–195 MB download (about 345 MB unpacked) only for 1080p+ or audio conversion; none of it when found on the system"
     }
   ]
 }

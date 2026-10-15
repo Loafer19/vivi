@@ -1,11 +1,11 @@
 id = "scene-chapters"
 name = "Scene Chapters & Thumbnails"
-version = "1.0.0"
+version = "1.0.1"
 description = "Creates chapters at scene changes for videos without chapters (ffmpeg scene detection, in the background) and saves a thumbnail for every chapter. Results are cached on disk."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "scene-chapters.lua"
-min_vivi = "0.8.0"
+min_vivi = "0.9.0"
 icon = "chapters"
 lucide = "clapperboard"
 permissions = ["filesystem", "subprocess"]

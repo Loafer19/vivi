@@ -1,11 +1,11 @@
 id = "scrobbler"
 name = "ListenBrainz Scrobbler"
-version = "1.0.0"
+version = "1.0.1"
 description = "Sends what you listen to to ListenBrainz: now playing when a track starts and a listen after half the track or 4 minutes. Listens made offline are queued and sent later. Needs your ListenBrainz user token."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "scrobbler.lua"
-min_vivi = "0.8.0"
+min_vivi = "0.9.0"
 icon = "scrobble"
 lucide = "radio-tower"
 permissions = ["network", "filesystem", "subprocess"]

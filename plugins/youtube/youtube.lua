@@ -1,19 +1,28 @@
 -- @name YouTube & yt-dlp
--- @version 1.0.0
+-- @version 1.1.0
 -- @author Vivi
 -- @description List, size and download YouTube (and other yt-dlp) videos and playlists.
 --
 -- Keys: Alt+u  paste a URL from the clipboard and add its entries to the playlist
 --
 -- yt-dlp: a system copy is preferred when it is recent (released in the last 90 days):
--- PATH, common install folders and, inside the Flatpak, the host through
--- `flatpak-spawn --host` (needs the org.freedesktop.Flatpak permission, so usually not).
--- Otherwise the plugin downloads its own copy from the official GitHub releases
+-- PATH and common install folders. Otherwise the plugin downloads its own copy from the official GitHub releases
 -- (https://github.com/yt-dlp/yt-dlp/releases/latest), checks it against SHA2-256SUMS and
 -- keeps it in $XDG_DATA_HOME/vivi/plugin-data/youtube/bin, where Vivi also looks for it
 -- (it appends that folder to PATH, so mpv's ytdl_hook finds it in the Flatpak). Only that
 -- managed copy is updated (`yt-dlp -U`, daily when "auto-update" is on). The chosen yt-dlp
 -- is also handed to mpv's ytdl_hook (script-opt ytdl_hook-ytdl_path) for streaming.
+--
+-- ffmpeg (merging separate video + audio, audio conversion): a system ffmpeg is used when
+-- there is one (not inside the Flatpak, whose runtime has no ffmpeg program). A managed
+-- static build is downloaded only when needed: video at 1080p or more / "Best", or
+-- audio converted to mp3/m4a/opus. Sources: BtbN/FFmpeg-Builds (Linux x86_64/aarch64,
+-- Windows x64/arm64; archive checked against checksums.sha256) and osxexperts.net
+-- (macOS arm64/Intel; binaries checked against the sha256 on that page). Kept in
+-- plugin-data/youtube/ffmpeg (ffmpeg + ffprobe), passed to yt-dlp with
+-- --ffmpeg-location; only this copy is updated (*Update ffmpeg*, or every 30 days with
+-- auto-update when the published build changed). Lower qualities without ffmpeg use
+-- single-file formats.
 --
 -- Sizes: from yt-dlp's filesize / filesize_approx (or bitrate × duration) of the formats
 -- the chosen quality would pick; shown before every download and with "Show sizes".
@@ -46,13 +55,14 @@ local RELEASES = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
 local MAX_AGE = 90 * 86400
 local FLATPAK = utils.file_info("/.flatpak-info") ~= nil
 
-local ytdlp = nil      -- { cmd = {...}, kind = "system"|"host"|"managed", version, path }
+local ytdlp = nil      -- { cmd = {...}, kind = "system"|"managed", version, path }
 local resolving = nil  -- callbacks waiting for detection
 local ffmpeg = nil     -- true/false once checked
 local job = nil        -- running download
 local info_cache = {}  -- url -> yt-dlp JSON (single video)
 
 local function toast(msg, secs)
+  mp.msg.info(msg)
   mp.osd_message(msg, secs or 3)
   mp.commandv("script-message", "vivi-toast", msg)
 end
@@ -140,10 +150,6 @@ local function find_system(cb)
     if list[i] then
       probe({ list[i] }, function(v)
         if v then cb({ cmd = { list[i] }, version = v, path = list[i], kind = "system" }) else nxt() end
-      end)
-    elseif FLATPAK then
-      probe({ "flatpak-spawn", "--host", "yt-dlp" }, function(v)
-        cb(v and { cmd = { "flatpak-spawn", "--host", "yt-dlp" }, version = v, path = "host yt-dlp", kind = "host" } or nil)
       end)
     else
       cb(nil)
@@ -253,11 +259,9 @@ local function maybe_auto_update()
   if os.time() - t > 86400 then self_update(true) end
 end
 
--- Hand the chosen yt-dlp to mpv's ytdl_hook (not possible for the host copy).
+-- Hand the chosen yt-dlp to mpv's ytdl_hook.
 local function tell_ytdl_hook(y)
-  if y.kind ~= "host" then
-    mp.commandv("change-list", "script-opts", "append", "ytdl_hook-ytdl_path=" .. y.path)
-  end
+  mp.commandv("change-list", "script-opts", "append", "ytdl_hook-ytdl_path=" .. y.path)
 end
 
 local function chose(y, cb_err)
@@ -308,12 +312,6 @@ local function with_ytdlp(cb)
     if not y then return toast(err or "yt-dlp is not available", 6) end
     cb(y)
   end)
-end
-
-local function has_ffmpeg(y, cb)
-  if ffmpeg ~= nil then return cb(ffmpeg) end
-  local cmd = y.kind == "host" and { "flatpak-spawn", "--host", "ffmpeg", "-version" } or { "ffmpeg", "-version" }
-  run(cmd, function(r) ffmpeg = r.status == 0 cb(ffmpeg) end)
 end
 
 local function ytdlp_json(y, args, cb)
@@ -400,12 +398,286 @@ local function format_args(ff)
   return { "-f", "b" .. lim .. "/b" }
 end
 
+-- ---------- ffmpeg ----------
+
+local FF_DIR = DATA .. SEP .. "ffmpeg"
+local FF_MANAGED = FF_DIR .. SEP .. "ffmpeg" .. EXE
+local BTBN = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/"
+local OSXEXPERTS = "https://www.osxexperts.net/"
+local FF_UPDATE_EVERY = 30 * 86400
+
+local function rmtree(dir, cb)
+  if windows then run({ "cmd", "/c", "rmdir", "/s", "/q", dir }, cb or function() end)
+  else run({ "rm", "-rf", dir }, cb or function() end) end
+end
+
+local function read_file(p)
+  local f = io.open(p, "r")
+  if not f then return nil end
+  local s = f:read("*a")
+  f:close()
+  return s
+end
+
+local function write_file(p, s)
+  local f = io.open(p, "w")
+  if f then f:write(s) f:close() end
+end
+
+local function ff_probe(exe, cb)
+  run({ exe, "-version" }, function(r)
+    cb(r.status == 0 and ((r.stdout or ""):match("ffmpeg version (%S+)") or "?") or nil)
+  end)
+end
+
+-- System ffmpeg (never inside the Flatpak: the runtime has none and PATH holds no host tools).
+local function find_system_ffmpeg(cb)
+  if FLATPAK or os.getenv("VIVI_TEST_NO_SYSTEM_FFMPEG") then return cb(nil) end
+  local list, seen = {}, {}
+  local function add(dir)
+    if not dir or dir == "" or dir == FF_DIR or dir == BIN_DIR then return end
+    local p = dir .. SEP .. "ffmpeg" .. EXE
+    if not seen[p] and utils.file_info(p) then seen[p] = true list[#list + 1] = p end
+  end
+  for dir in (os.getenv("PATH") or ""):gmatch(windows and "[^;]+" or "[^:]+") do add(dir) end
+  if not windows then
+    for _, d in ipairs({ "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin", "/opt/local/bin", "/snap/bin" }) do add(d) end
+  end
+  local i = 0
+  local function nxt()
+    i = i + 1
+    if not list[i] then return cb(nil) end
+    ff_probe(list[i], function(v)
+      if v then
+        local dir = list[i]:match("^(.*)[/\\][^/\\]+$")
+        cb({ kind = "system", path = list[i], dir = dir, version = v })
+      else nxt() end
+    end)
+  end
+  nxt()
+end
+
+-- Bytes of a URL (HEAD, following redirects), or nil.
+local function remote_size(url, cb)
+  run({ "curl", "-sIL", url }, function(r)
+    local n
+    for v in (r.stdout or ""):gmatch("[Cc]ontent%-[Ll]ength:%s*(%d+)") do n = tonumber(v) end
+    cb(n)
+  end)
+end
+
+-- What to download for this computer: cb({ files = { {url, sha, member, name, archive} }, id }) or cb(nil, err).
+-- BtbN: one archive (sha of the archive) with <top>/bin/ffmpeg and ffprobe.
+-- osxexperts: one zip per program (sha of the binary inside).
+local function ff_source(cb)
+  local function btbn(plat, ext)
+    run({ "curl", "-fsSL", BTBN .. "checksums.sha256" }, function(r)
+      if r.status ~= 0 then return cb(nil, "cannot reach the BtbN ffmpeg builds") end
+      local best, bestv, bestsha
+      for sha, name in (r.stdout or ""):gmatch("(%x+)%s+%*?([^\r\n]+)") do
+        local v = name:match("^ffmpeg%-n([%d%.]+)%-latest%-" .. plat .. "%-gpl%-[%d%.]+" .. ext:gsub("%.", "%%.") .. "$")
+        if v then
+          local a, b = v:match("^(%d+)%.?(%d*)")
+          local num = tonumber(a) * 1000 + (tonumber(b) or 0)
+          if not bestv or num > bestv then best, bestv, bestsha = name, num, sha:lower() end
+        end
+      end
+      if not best then return cb(nil, "no ffmpeg build for " .. plat) end
+      local top = best:sub(1, #best - #ext)
+      cb({ id = bestsha, files = { {
+        url = BTBN .. best, sha = bestsha, archive = true,
+        members = { top .. "/bin/ffmpeg" .. EXE, top .. "/bin/ffprobe" .. EXE },
+      } } })
+    end)
+  end
+  if windows then
+    local a = (os.getenv("PROCESSOR_ARCHITEW6432") or os.getenv("PROCESSOR_ARCHITECTURE") or ""):upper()
+    return btbn(a == "ARM64" and "winarm64" or "win64", ".zip")
+  end
+  run({ "uname", "-sm" }, function(u)
+    local s = u.stdout or ""
+    if s:match("Linux") and s:match("x86_64") then return btbn("linux64", ".tar.xz") end
+    if s:match("Linux") and (s:match("aarch64") or s:match("arm64")) then return btbn("linuxarm64", ".tar.xz") end
+    if not s:match("Darwin") then return cb(nil, "no ffmpeg build for " .. s:gsub("%s+$", "")) end
+    local arm = s:match("arm64") ~= nil
+    run({ "curl", "-fsSL", OSXEXPERTS }, function(r)
+      local page = r.stdout or ""
+      local text = page:gsub("<[^>]+>", " ")
+      local sums = { FFmpeg = {}, ffprobe = {} }
+      for prog, sha in text:gmatch("SHA256 checksum of (%w+) file%s*:%s*(%x+)") do
+        if sums[prog] and #sha == 64 then table.insert(sums[prog], sha:lower()) end
+      end
+      local files = {}
+      for _, prog in ipairs({ "ffmpeg", "ffprobe" }) do
+        local url = page:match('href="(https://www%.osxexperts%.net/' .. prog .. '%d*' .. (arm and "arm" or "intel") .. '%.zip)"')
+        -- The page lists each program's arm64 checksum first, then Intel.
+        local sha = sums[prog == "ffmpeg" and "FFmpeg" or "ffprobe"][arm and 1 or 2]
+        if not url or not sha then return cb(nil, "cannot read the osxexperts.net ffmpeg page") end
+        files[#files + 1] = { url = url, sha = sha, archive = false, members = { prog } }
+      end
+      cb({ id = files[1].sha .. files[2].sha, files = files })
+    end)
+  end)
+end
+
+-- Download, verify and install the managed ffmpeg + ffprobe. cb(ff | nil, err)
+-- Archives (BtbN) are checked before unpacking, osxexperts binaries after.
+local function install_ffmpeg(src, cb)
+  local tmp = FF_DIR .. SEP .. ".x"
+  local function fail(msg) rmtree(tmp) cb(nil, msg) end
+  local function finish()
+    for _, prog in ipairs({ "ffmpeg", "ffprobe" }) do
+      local found
+      for _, f in ipairs(src.files) do
+        for _, m in ipairs(f.members) do
+          local pth = tmp .. SEP .. m:gsub("/", SEP)
+          if m:sub(-#(prog .. EXE) - 1) == "/" .. prog .. EXE or m == prog .. EXE then
+            if utils.file_info(pth) then found = pth end
+          end
+        end
+      end
+      if not found then return fail(prog .. " missing from the download") end
+      local dst = FF_DIR .. SEP .. prog .. EXE
+      os.remove(dst)
+      local ok, e = os.rename(found, dst)
+      if not ok then return fail(e) end
+    end
+    rmtree(tmp)
+    write_file(FF_DIR .. SEP .. "source", src.id)
+    write_file(FF_DIR .. SEP .. "last-update", tostring(os.time()))
+    local function probe_new()
+      ff_probe(FF_MANAGED, function(v)
+        if not v then return cb(nil, "the downloaded ffmpeg does not run") end
+        cb({ kind = "managed", path = FF_MANAGED, dir = FF_DIR, version = v })
+      end)
+    end
+    if windows then return probe_new() end
+    run({ "chmod", "755", FF_MANAGED, FF_DIR .. "/ffprobe" }, probe_new)
+  end
+  local function verify(file, want, nxt)
+    sha256(file, function(got)
+      if not got then return fail("no sha256 tool (sha256sum/shasum/certutil) to verify ffmpeg") end
+      if got ~= want then return fail("ffmpeg checksum mismatch, not installed") end
+      nxt()
+    end)
+  end
+  local function fetch(i)
+    local f = src.files[i]
+    if not f then return finish() end
+    local dl = tmp .. SEP .. "download" .. i .. (f.url:match("%.tar%.xz$") and ".tar.xz" or ".zip")
+    run({ "curl", "-fsSL", "--retry", "2", "-o", dl, f.url }, function(r)
+      if r.status ~= 0 then return fail("ffmpeg download failed: " .. (r.stderr or "")) end
+      local function unpack(after)
+        run(concat({ "tar", "-xf", dl, "-C", tmp }, f.members), function(x)
+          os.remove(dl)
+          if x.status ~= 0 then return fail("cannot unpack ffmpeg: " .. (x.stderr or "")) end
+          after()
+        end)
+      end
+      if f.archive then
+        verify(dl, f.sha, function() unpack(function() fetch(i + 1) end) end)
+      else
+        unpack(function() verify(tmp .. SEP .. f.members[1], f.sha, function() fetch(i + 1) end) end)
+      end
+    end)
+  end
+  rmtree(tmp, function()
+    mkdir(tmp, function()
+      -- Announce the download size first (HEAD requests).
+      local n, total = 0, 0
+      for _, f in ipairs(src.files) do
+        remote_size(f.url, function(sz)
+          total = total + (sz or 0)
+          n = n + 1
+          if n == #src.files then
+            toast("Downloading ffmpeg (" .. human(total) .. ") for merging / converting…", 6)
+            fetch(1)
+          end
+        end)
+      end
+    end)
+  end)
+end
+
+local ffm = nil        -- { kind = "system"|"managed", path, dir, version }
+local ff_waiting = nil
+
+-- ffmpeg if available; with `need`, download the managed copy when there is none.
+local function get_ffmpeg(need, cb)
+  if ffm then return cb(ffm) end
+  if ff_waiting then ff_waiting[#ff_waiting + 1] = { need, cb } return end
+  ff_waiting = { { need, cb } }
+  local function finish(f, err)
+    ffm = f
+    local w = ff_waiting
+    ff_waiting = nil
+    local needers_failed = false
+    for _, x in ipairs(w) do
+      if not f and x[1] and err then needers_failed = true end
+      x[2](f)
+    end
+    if needers_failed then toast(err, 8) end
+  end
+  find_system_ffmpeg(function(sys)
+    if sys then return finish(sys) end
+    if utils.file_info(FF_MANAGED) then
+      return ff_probe(FF_MANAGED, function(v)
+        if v then return finish({ kind = "managed", path = FF_MANAGED, dir = FF_DIR, version = v }) end
+        finish(nil)
+      end)
+    end
+    local any_need = false
+    for _, x in ipairs(ff_waiting) do any_need = any_need or x[1] end
+    if not any_need then return finish(nil) end
+    ff_source(function(src, e)
+      if not src then return finish(nil, e) end
+      mkdir(FF_DIR, function() install_ffmpeg(src, function(f, e2) finish(f, e2) end) end)
+    end)
+  end)
+end
+
+-- Re-download the managed ffmpeg when the published build changed.
+local function update_ffmpeg(quiet)
+  if not utils.file_info(FF_MANAGED) then
+    if not quiet then toast("No managed ffmpeg installed (it is downloaded when needed)") end
+    return
+  end
+  ff_source(function(src, e)
+    write_file(FF_DIR .. SEP .. "last-update", tostring(os.time()))
+    if not src then if not quiet then toast("ffmpeg update: " .. e, 6) end return end
+    if (read_file(FF_DIR .. SEP .. "source") or "") == src.id then
+      if not quiet then toast("ffmpeg is up to date (" .. (ffm and ffm.version or "managed") .. ")") end
+      return
+    end
+    install_ffmpeg(src, function(f, e2)
+      if f then
+        if not ffm or ffm.kind == "managed" then ffm = f end
+        toast("ffmpeg updated to " .. f.version, 5)
+      else
+        toast("ffmpeg update failed: " .. e2, 6)
+      end
+    end)
+  end)
+end
+
+local function maybe_update_ffmpeg()
+  if not o["auto-update"] or not utils.file_info(FF_MANAGED) then return end
+  local t = tonumber(read_file(FF_DIR .. SEP .. "last-update") or "") or 0
+  if os.time() - t > FF_UPDATE_EVERY then update_ffmpeg(true) end
+end
+
+-- Whether the current settings need ffmpeg (and may download it).
+local function needs_ffmpeg()
+  if o.mode == "Audio only" then return o["audio-format"] ~= "Original" end
+  return height_limit(o.quality) >= 1080
+end
+
 local QUALITIES = { "Best available", "2160p", "1440p", "1080p", "720p", "480p", "360p" }
 
 local function size_list(info, ff)
   local parts, seen = {}, {}
   for _, q in ipairs(QUALITIES) do
-    local s, h = estimate(info, q, false, ff)
+    local s, h = estimate(info, q, false, ff or height_limit(q) >= 1080)
     local key = tostring(h) .. tostring(s)
     if h and not seen[key] then
       seen[key] = true
@@ -490,11 +762,11 @@ local function show_sizes()
   if not url then return toast("Enter a video URL first") end
   with_ytdlp(function(y)
     toast("Checking sizes…", 2)
-    has_ffmpeg(y, function(ff)
+    get_ffmpeg(false, function(ff)
       video_info(y, url, function(info, e)
         if not info then return toast("YouTube: " .. e, 6) end
         local head = info._playlist and ("First video of " .. info._playlist .. ": ") or ""
-        toast(head .. size_list(info, ff) .. (ff and "" or " (no ffmpeg: single-file formats only)"), 10)
+        toast(head .. size_list(info, ff ~= nil) .. (ff and "" or " (below 1080p without ffmpeg: single-file formats)"), 10)
       end)
     end)
   end)
@@ -530,7 +802,11 @@ local function download()
   local url = current_url()
   if not url then return toast("Enter a video or playlist URL first") end
   with_ytdlp(function(y)
-    has_ffmpeg(y, function(ff)
+    get_ffmpeg(needs_ffmpeg(), function(ffi)
+      local ff = ffi ~= nil
+      if not ff and needs_ffmpeg() then
+        return toast("Download needs ffmpeg, which could not be installed; pick a lower quality or Original audio", 8)
+      end
       local folder = (o.folder or ""):gsub("^%s+", ""):gsub("%s+$", "")
       if folder == "" then folder = default_folder() end
       folder = folder:gsub("^~", HOME)
@@ -543,8 +819,10 @@ local function download()
             "--newline", "--progress", "--no-colors", "--yes-playlist",
             "--progress-template",
             "download:[vivi] %(progress._percent_str)s|%(progress._total_bytes_str,progress._total_bytes_estimate_str)s|%(progress._eta_str)s|%(info.playlist_index)s|%(info.n_entries)s|%(info.title)s",
-            "-P", folder, "-o", "%(playlist_index&{} - |)s%(title)s [%(id)s].%(ext)s",
-          }, concat(format_args(ff), { url })))
+            -- Audio gets its own name: -x deletes its source file, which could be a video
+            -- downloaded earlier under the same name.
+            "-P", folder, "-o", "%(playlist_index&{} - |)s%(title)s [%(id)s]" .. (o.mode == "Audio only" and " (audio)" or "") .. ".%(ext)s",
+          }, concat(format_args(ff), ffi and { "--ffmpeg-location", ffi.dir, url } or { url })))
           if not windows then
             args = concat({ "sh", "-c", 'log=$1; shift; exec "$@" >"$log" 2>&1', "sh", log }, args)
             log_timer = mp.add_periodic_timer(2, function() read_progress(log) end)
@@ -592,9 +870,12 @@ end
 local function show_info()
   ensure(function(y, err)
     if not y then return toast(err or "No yt-dlp available", 6) end
-    local what = ({ system = "system", host = "host (flatpak-spawn)", managed = "managed" })[y.kind]
-    toast(string.format("Using %s yt-dlp %s (%s)%s", what, y.version, y.path,
-      recent(y.version) and "" or " — old, YouTube may fail"), 8)
+    get_ffmpeg(false, function(f)
+      local fs = f and string.format("%s ffmpeg %s (%s)", f.kind, f.version, f.path)
+        or "no ffmpeg yet (downloaded for 1080p+ or audio conversion)"
+      toast(string.format("Using %s yt-dlp %s (%s)%s; %s", y.kind, y.version, y.path,
+        recent(y.version) and "" or " — old, YouTube may fail", fs), 10)
+    end)
   end)
 end
 
@@ -628,6 +909,10 @@ mp.register_script_message("update", function()
   self_update(false)
 end)
 mp.register_script_message("info", show_info)
+mp.register_script_message("update-ffmpeg", function()
+  toast("Checking for a newer ffmpeg…", 2)
+  update_ffmpeg(false)
+end)
 mp.register_script_message("pick-folder", function()
   mp.commandv("script-message", "vivi-pick-folder", "youtube", "folder")
 end)
@@ -643,6 +928,7 @@ mp.register_event("shutdown", function() if job then mp.abort_async_command(job)
 if o.source ~= "System" and utils.file_info(MANAGED) then
   ensure(function() end)
 end
+mp.add_timeout(30, maybe_update_ffmpeg)
 
 -- For tests: `script-message-to youtube selftest <json file>` prints size estimates.
 mp.register_script_message("selftest", function(file)
@@ -652,6 +938,11 @@ mp.register_script_message("selftest", function(file)
   print("sizes(ffmpeg): " .. size_list(j, true))
   print("sizes(no ffmpeg): " .. size_list(j, false))
   print("fmt(1080p,ff): " .. table.concat(format_args(true), " "))
+  print("needs_ffmpeg(1080p video)=" .. tostring(needs_ffmpeg()))
+  if file:match("ffmpeg") then
+    get_ffmpeg(true, function(f) print("ffmpeg: " .. (f and (f.kind .. " " .. f.version .. " " .. f.path) or "none")) mp.command("quit") end)
+    return
+  end
   print("recent(2000.01.01)=" .. tostring(recent("2000.01.01")) .. " recent(today)=" .. tostring(recent(os.date("%Y.%m.%d"))))
   mp.command("quit")
 end)

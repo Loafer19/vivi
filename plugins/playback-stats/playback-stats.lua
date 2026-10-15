@@ -1,5 +1,5 @@
 -- @name Playback Statistics
--- @version 1.0.1
+-- @version 1.0.2
 -- @author Vivi
 -- @description Local watch/listen time statistics (Vivi plugin package).
 --
