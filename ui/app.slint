@@ -17,6 +17,7 @@ import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, NowPlayingCard, Ta
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
+// Icon-only control (Figma player bar). `tip` is hover Tooltip + a11y only — never drawn on the icon.
 component IconButton inherits Rectangle {
     in property <image> icon;
     in property <bool> primary: false;
@@ -25,13 +26,25 @@ component IconButton inherits Rectangle {
     callback clicked();
     width: primary ? 44px : 36px; height: primary ? 36px : 32px;
     border-radius: Theme.radius-lg;
+    clip: true;
     background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
                         : (ta.has-hover ? Theme.bg-a1 : transparent);
-    Icon {
-        source: root.icon;
-        tint: root.primary ? Theme.bg-b2 : (root.active ? Theme.accent : (ta.has-hover ? Theme.fg-1 : Theme.fg-2));
+    HorizontalLayout {
+        alignment: center;
+        Icon {
+            source: root.icon;
+            width: root.primary ? 22px : 20px;
+            height: root.primary ? 22px : 20px;
+            tint: root.primary ? Theme.bg-b2 : (root.active ? Theme.accent : (ta.has-hover ? Theme.fg-1 : Theme.fg-2));
+        }
     }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+        accessible-role: button;
+        accessible-label: root.tip;
+    }
+    if root.tip != "": Tooltip { text: @markdown("\{root.tip}"); }
 }
 
 component SeekBar inherits Rectangle {
@@ -184,6 +197,7 @@ component BarItem inherits HorizontalLayout {
     spacing: 6px;
     if root.shown && root.id == "volume": IconButton {
         y: 4px;
+        tip: Tools.label("volume");
         icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
             : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
             : root.volume < 100 ? @image-url("../assets/icons/close-medium.svg")
@@ -194,8 +208,9 @@ component BarItem inherits HorizontalLayout {
         y: 6px; value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
     }
+    // Icon only on the bar (labels live in the ⋯ overflow menu and hover Tooltip).
     if root.shown && root.id != "volume": IconButton {
-        y: 4px; active: root.active;
+        y: 4px; active: root.active; tip: Tools.label(root.id);
         icon: root.id == "fullscreen" && root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : Tools.icon(root.id);
         clicked => { root.act(root.id); }
     }
@@ -789,39 +804,51 @@ export component AppWindow inherits Window {
                 fmt(t) => { root.fmt(t) }
                 seek(t) => { root.seek(t); fs.focus(); }
             }
+            // Side clusters are clipped so time labels / icons cannot paint over the
+            // center transport (transparent IconButtons were letting white text show through).
             Rectangle {
                 height: 40px;
-                HorizontalLayout {
-                    x: 0; width: self.preferred-width; height: parent.height;
-                    spacing: 6px;
-                    Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; }
-                    Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
-                    Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
-                    Rectangle { width: 8px; }
-                    for id[i] in root.bar-left: BarItem {
-                        id: id; shown: i < root.bar-left-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
-                        act(x) => { root.bar-act(x); fs.focus(); }
-                        volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+                property <length> side-max: max(0px, (self.width - 168px) / 2);
+                Rectangle {
+                    x: 0; width: min(left-row.preferred-width, parent.side-max); height: parent.height;
+                    clip: true;
+                    left-row := HorizontalLayout {
+                        width: self.preferred-width; height: parent.height;
+                        spacing: 6px;
+                        Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; }
+                        Text { text: "/"; color: Theme.fg-a3; vertical-alignment: center; }
+                        Text { text: fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; vertical-alignment: center; }
+                        Rectangle { width: 8px; }
+                        for id[i] in root.bar-left: BarItem {
+                            id: id; shown: i < root.bar-left-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                            act(x) => { root.bar-act(x); fs.focus(); }
+                            volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+                        }
                     }
                 }
                 HorizontalLayout {
+                    z: 1;
                     x: (parent.width - self.preferred-width) / 2; width: self.preferred-width; height: parent.height;
                     spacing: 8px; alignment: center;
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
-                    IconButton { y: 2px; primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
-                    IconButton { y: 4px; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
+                    IconButton { y: 4px; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
+                    IconButton { y: 2px; primary: true; tip: root.playing ? "Pause" : "Play"; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
+                    IconButton { y: 4px; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
                 }
-                HorizontalLayout {
-                    x: parent.width - self.preferred-width; width: self.preferred-width; height: parent.height;
-                    spacing: 6px;
-                    if root.bar-hidden > 0: IconButton {
-                        y: 4px; icon: @image-url("../assets/icons/more.svg"); tip: "More";
-                        clicked => { overflow.show(); }
-                    }
-                    for id[i] in root.bar-right: BarItem {
-                        id: id; shown: i < root.bar-right-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
-                        act(x) => { root.bar-act(x); fs.focus(); }
-                        volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+                Rectangle {
+                    x: parent.width - self.width; width: min(right-row.preferred-width, parent.side-max); height: parent.height;
+                    clip: true;
+                    right-row := HorizontalLayout {
+                        x: parent.width - self.preferred-width; width: self.preferred-width; height: parent.height;
+                        spacing: 6px;
+                        if root.bar-hidden > 0: IconButton {
+                            y: 4px; icon: @image-url("../assets/icons/more.svg"); tip: "More";
+                            clicked => { overflow.show(); }
+                        }
+                        for id[i] in root.bar-right: BarItem {
+                            id: id; shown: i < root.bar-right-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                            act(x) => { root.bar-act(x); fs.focus(); }
+                            volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+                        }
                     }
                 }
             }
@@ -836,7 +863,8 @@ export component AppWindow inherits Window {
         IconButton { x: 6px; y: 6px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
         IconButton {
             x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg");
+            primary: true; tip: root.playing ? "Pause" : "Play";
+            icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg");
             clicked => { root.toggle-play(); fs.focus(); }
         }
         Rectangle {
@@ -854,9 +882,9 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             x: (parent.width - self.preferred-width) / 2; y: (parent.height - 40px) / 2; width: self.preferred-width; height: 40px;
             spacing: 18px; alignment: center;
-            IconButton { y: 4px; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
-            IconButton { y: 2px; primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : (root.duration > 0 && root.position >= root.duration - 0.5 ? @image-url("../assets/icons/replay.svg") : @image-url("../assets/icons/play.svg")); clicked => { root.toggle-play(); fs.focus(); } }
-            IconButton { y: 4px; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
+            IconButton { y: 4px; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
+            IconButton { y: 2px; primary: true; tip: root.playing ? "Pause" : (root.duration > 0 && root.position >= root.duration - 0.5 ? "Replay" : "Play"); icon: root.playing ? @image-url("../assets/icons/pause.svg") : (root.duration > 0 && root.position >= root.duration - 0.5 ? @image-url("../assets/icons/replay.svg") : @image-url("../assets/icons/play.svg")); clicked => { root.toggle-play(); fs.focus(); } }
+            IconButton { y: 4px; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
         }
         Rectangle {
             x: 10px; width: parent.width - 20px; y: parent.height - 18px; height: 14px;

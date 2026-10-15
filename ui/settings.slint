@@ -53,6 +53,7 @@ global PluginIcons {
 }
 
 // Extensions card: icon, name, version · author · source, description and ON/OFF.
+// clip + max-height keep long descriptions inside the fixed-height row.
 component PluginCard inherits Rectangle {
     in property <SettingRow> setting;
     callback changed(string, string);
@@ -60,6 +61,7 @@ component PluginCard inherits Rectangle {
     border-radius: 8px;
     background: Theme.bg-a3;
     border-width: 1px; border-color: on ? Theme.accent.with-alpha(0.35) : transparent;
+    clip: true;
     HorizontalLayout {
         padding: 12px; spacing: 12px;
         VerticalLayout { alignment: center;
@@ -71,14 +73,22 @@ component PluginCard inherits Rectangle {
         }
         VerticalLayout {
             horizontal-stretch: 1; alignment: center; spacing: 3px;
-            HorizontalLayout { spacing: 8px; alignment: start;
-                Text { text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600; overflow: elide; }
+            HorizontalLayout { spacing: 8px;
+                Text {
+                    text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600;
+                    overflow: elide; horizontal-stretch: 1;
+                }
                 Text {
                     text: (setting.options[0] != "" ? "v" + setting.options[0] + "  ·  " : "") + (setting.options[1] != "" ? setting.options[1] + "  ·  " : "") + setting.options[3];
                     color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; font-family: "DM Mono";
+                    overflow: elide;
                 }
             }
-            Text { text: setting.info; color: Theme.fg-a2; font-size: 12px; wrap: word-wrap; overflow: elide; }
+            // ~2 lines at 12px; elide rather than bleed into the next card.
+            Text {
+                text: setting.info; color: Theme.fg-a2; font-size: 12px;
+                wrap: word-wrap; overflow: elide; height: 32px;
+            }
         }
         VerticalLayout { alignment: center;
             Toggle { on: root.on; toggled => { root.changed(setting.id, root.on ? "false" : "true"); } }
@@ -88,6 +98,7 @@ component PluginCard inherits Rectangle {
 
 // Catalog card (Extensions → Browse): icon, name, meta, description, permissions and
 // Install / Update / Uninstall buttons, or the permission prompt.
+// clip + capped description/meta keep long catalog copy inside the card.
 component PackageCard inherits Rectangle {
     in property <SettingRow> setting;
     callback changed(string, string);
@@ -95,6 +106,7 @@ component PackageCard inherits Rectangle {
     border-radius: 8px;
     background: Theme.bg-a3;
     border-width: 1px; border-color: confirm ? Theme.accent : transparent;
+    clip: true;
     HorizontalLayout {
         padding: 12px; spacing: 12px;
         VerticalLayout { alignment: center;
@@ -105,17 +117,25 @@ component PackageCard inherits Rectangle {
         }
         VerticalLayout {
             horizontal-stretch: 1; alignment: center; spacing: 3px;
-            HorizontalLayout { spacing: 8px; alignment: start;
-                Text { text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600; overflow: elide; }
+            HorizontalLayout { spacing: 8px;
+                Text {
+                    text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600;
+                    overflow: elide; horizontal-stretch: 1;
+                }
                 Text {
                     text: "v" + setting.options[0] + "  ·  " + setting.options[1] + "  ·  " + setting.options[5];
                     color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; font-family: "DM Mono";
+                    overflow: elide;
                 }
             }
-            Text { text: setting.info; color: Theme.fg-a2; font-size: 12px; wrap: word-wrap; overflow: elide; }
+            Text {
+                text: setting.info; color: Theme.fg-a2; font-size: 12px;
+                wrap: word-wrap; overflow: elide; height: 32px;
+            }
             Text {
                 text: root.confirm ? setting.options[4] : setting.options[3] + (setting.options[4] != "" ? "  ·  " + setting.options[4] : "");
-                color: root.confirm ? Theme.fg-1 : Theme.fg-a3; font-size: 11px; wrap: word-wrap; overflow: elide;
+                color: root.confirm ? Theme.fg-1 : Theme.fg-a3; font-size: 11px;
+                wrap: word-wrap; overflow: elide; height: 16px;
             }
         }
         VerticalLayout { alignment: center; spacing: 4px;
