@@ -1,5 +1,6 @@
 name: Helper ffmpeg
-# Minimal static ffmpeg + ffprobe for the YouTube plugin (helpers/ffmpeg/build.sh), built for
+# Minimal static ffmpeg + ffprobe for the YouTube plugin (helpers/ffmpeg/build.sh), plus the
+# ffmpeg-media / ffprobe-media pair with video decoders (Chapter Thumbnails, Subtitle Auto-Sync), built for
 # linux-x86_64, linux-aarch64, windows-x86_64 and macos-aarch64 and published as release
 # "helper-ffmpeg-v<RELEASE>" (helpers/ffmpeg/RELEASE) with SHA256SUMS. A release that
 # already exists is never replaced: bump RELEASE to publish a new build, then pin the new
@@ -31,17 +32,19 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/w" -w /w alpine:3.22 sh -c '
             apk add --no-cache bash build-base nasm pkgconf curl xz tar perl coreutils &&
-            WORK=/tmp/b bash helpers/ffmpeg/build.sh out && chown -R '"$(id -u):$(id -g)"' out'
+            WORK=/tmp/b bash helpers/ffmpeg/build.sh out && FLAVOR=media WORK=/tmp/b bash helpers/ffmpeg/build.sh out && chown -R '"$(id -u):$(id -g)"' out'
       - name: Build (MinGW cross)
         if: matrix.platform == 'windows-x86_64'
         run: |
           sudo apt-get update && sudo apt-get install -y mingw-w64 nasm pkg-config
           WORK=/tmp/b helpers/ffmpeg/build.sh out x86_64-w64-mingw32
+          FLAVOR=media WORK=/tmp/b helpers/ffmpeg/build.sh out x86_64-w64-mingw32
       - name: Build (macOS)
         if: startsWith(matrix.platform, 'macos')
         run: |
           brew install pkgconf || true
           MACOSX_DEPLOYMENT_TARGET=11.0 WORK=/tmp/b helpers/ffmpeg/build.sh out
+          FLAVOR=media MACOSX_DEPLOYMENT_TARGET=11.0 WORK=/tmp/b helpers/ffmpeg/build.sh out
       - name: Check
         if: matrix.platform != 'windows-x86_64'
         run: |
@@ -49,11 +52,14 @@ jobs:
           out/ffmpeg -hide_banner -muxers | grep -E ' (mp4|ipod|matroska|webm|mp3|opus) '
           out/ffmpeg -hide_banner -encoders | grep -E 'libmp3lame|libopus| aac '
           out/ffprobe -version | head -1
+          out/ffmpeg-media -hide_banner -decoders | grep -E ' (h264|hevc|vp9|ac3) '
+          out/ffmpeg-media -hide_banner -muxers | grep -E ' (image2|s16le) '
+          out/ffprobe-media -version | head -1
           if [ "$(uname)" = Linux ]; then file out/ffmpeg | grep -q 'statically linked'; else otool -L out/ffmpeg; fi
       - name: Name assets
         run: |
           mkdir dist; ext=""; [ -f out/ffmpeg.exe ] && ext=.exe
-          for p in ffmpeg ffprobe; do cp "out/$p$ext" "dist/$p-${{ matrix.platform }}$ext"; done
+          for p in ffmpeg ffprobe ffmpeg-media ffprobe-media; do cp "out/$p$ext" "dist/$p-${{ matrix.platform }}$ext"; done
           ls -l dist
       - uses: actions/upload-artifact@v4
         with:
@@ -78,4 +84,4 @@ jobs:
           cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
           gh release create "$tag" --latest=false --target "$GITHUB_SHA" \
             --title "Helper: minimal ffmpeg $(cat ../helpers/ffmpeg/RELEASE)" \
-            --notes "Minimal static ffmpeg + ffprobe for the YouTube plugin (remux/merge mp4, webm, mkv, m4a; mp3 via LAME, aac, opus via libopus; no network). Built by helpers/ffmpeg/build.sh. LGPL-2.1+; sources: FFmpeg, libopus, LAME (versions in the script)." *
+            --notes "Minimal static ffmpeg + ffprobe for the YouTube plugin (remux/merge mp4, webm, mkv, m4a; mp3 via LAME, aac, opus via libopus; no network). ffmpeg-media + ffprobe-media add the common video decoders, swscale, JPEG/raw frame and PCM output for the Chapter Thumbnails and Subtitle Auto-Sync plugins. Built by helpers/ffmpeg/build.sh. LGPL-2.1+; sources: FFmpeg, libopus, LAME (versions in the script)." *

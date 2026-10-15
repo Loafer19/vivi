@@ -5,6 +5,11 @@
 #
 #   helpers/ffmpeg/build.sh <out-dir> [cross-prefix]
 #
+# FLAVOR=media builds a second pair, ffmpeg-media + ffprobe-media, for the Chapter
+# Thumbnails and Subtitle Auto-Sync plugins: everything above plus the common video
+# decoders (h264, hevc, vp8, vp9, mpeg1/2/4, mjpeg; no AV1), swscale, JPEG and raw
+# frame output, surround audio decoders (ac3, eac3, dca, truehd) and raw PCM output.
+#
 # cross-prefix e.g. x86_64-w64-mingw32 (Windows from Linux). Needs a C compiler, make,
 # pkg-config and curl. Linux CI runs it in Alpine (musl) for fully static binaries.
 set -euo pipefail
@@ -59,7 +64,21 @@ case "$(uname -s)" in
   *) case "$CROSS" in *mingw32) ldflags="$ldflags -static" ;; *) ldflags="$ldflags -Wl,--gc-sections -static" ;; esac ;;
 esac
 
+media=()
+suffix=
+if [ "${FLAVOR:-}" = media ]; then
+  suffix=-media
+  media=(--enable-swscale
+    --enable-demuxer=avi,flv,mpegps,mpegvideo,h264,hevc,ac3,eac3,dts,truehd,srt,ass,webvtt
+    --enable-muxer=image2,rawvideo,pcm_s16le,mjpeg
+    --enable-decoder=h264,hevc,vp8,vp9,mpeg1video,mpeg2video,mpeg4,msmpeg4v3,mjpeg,png,ac3,eac3,dca,truehd,alac,pcm_s24le,pcm_s32le,pcm_f32le
+    --enable-encoder=mjpeg,rawvideo,pcm_s16le
+    --enable-parser=mpeg4video,mpegvideo,ac3,dca,mjpeg
+    --enable-filter=scale,pad,fps,select,thumbnail,showinfo,pan,aformat)
+fi
+
 cd ffmpeg-$FFMPEG_VER
+make distclean >/dev/null 2>&1 || true
 ./configure ${cross[@]+"${cross[@]}"} --prefix="$PREFIX" --pkg-config-flags=--static \
   --extra-cflags="-I$PREFIX/include $CFLAGS" --extra-ldflags="$ldflags" \
   --disable-everything --disable-autodetect --disable-network --disable-doc --disable-debug \
@@ -74,10 +93,10 @@ cd ffmpeg-$FFMPEG_VER
   --enable-parser=aac,h264,hevc,vp8,vp9,av1,opus,vorbis,mpegaudio,flac \
   --enable-bsf=aac_adtstoasc,extract_extradata,vp9_superframe,h264_mp4toannexb,hevc_mp4toannexb \
   --enable-filter=aresample,anull,aformat,abuffer,abuffersink,null,buffer,buffersink,format,atrim,trim,volume,anullsrc \
-  || { tail -50 ffbuild/config.log; exit 1; }
+  ${media[@]+"${media[@]}"} || { tail -50 ffbuild/config.log; exit 1; }
 make -j"$JOBS"
 exe=; [ -f ffmpeg.exe ] && exe=.exe
 strip=${CROSS:+$CROSS-}strip
-for p in ffmpeg ffprobe; do cp "$p$exe" "$OUT/"; "$strip" "$OUT/$p$exe" || true; done
+for p in ffmpeg ffprobe; do cp "$p$exe" "$OUT/$p$suffix$exe"; "$strip" "$OUT/$p$suffix$exe" || true; done
 ./ffmpeg$exe -hide_banner -version 2>/dev/null | head -1 || true
 ls -l "$OUT"
