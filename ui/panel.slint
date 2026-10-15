@@ -1,7 +1,10 @@
 // Right side panel (Figma "sidebar", "Audio - Equalizer", "Video - Essential/Crop/Colors").
-// 400px wide, tabs Subtitles / Audio / Video / Playback.
+// 400px wide. Two tab groups: Playback / Video / Audio / Subtitles (quick settings)
+// and Queue / Bookmarks / Chapters / Library (lists). Tab ids: 0 subs, 1 audio,
+// 2 video, 3 playback, 4 queue, 5 library, 6 bookmarks, 7 chapters.
 import { ScrollView, LineEdit } from "std-widgets.slint";
 import { Theme, Icon } from "theme.slint";
+import { Field, Toggle, AccentSlider, Segmented, TextField, Dropdown } from "controls.slint";
 import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 
 export struct Item { key: string, label: string, selected: bool }
@@ -29,20 +32,6 @@ component OptionList inherits VerticalLayout {
             }
             if it.selected: Icon { source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; width: 18px; height: 32px; }
         }
-        ta := TouchArea { mouse-cursor: pointer; clicked => { root.pick(it); } }
-    }
-}
-
-// Row of small choice chips.
-component Chips inherits HorizontalLayout {
-    in property <[Item]> items;
-    callback pick(Item);
-    spacing: 6px; alignment: start;
-    for it in items: Rectangle {
-        height: 28px; width: t.preferred-width + 20px;
-        border-radius: Theme.radius;
-        background: it.selected ? Theme.accent : (ta.has-hover ? Theme.divider : Theme.bg-a1);
-        t := Text { text: it.label; font-size: 13px; color: it.selected ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
         ta := TouchArea { mouse-cursor: pointer; clicked => { root.pick(it); } }
     }
 }
@@ -97,18 +86,61 @@ component SliderRow inherits VerticalLayout {
     }
 }
 
+// Underlined text tab (Figma side-panel tabs): icon + label, active = accent + underline.
 component Tab inherits Rectangle {
     in property <image> icon;
     in property <string> label;
     in property <bool> active;
+    in property <bool> compact;
     callback clicked();
-    height: 56px; horizontal-stretch: 1;
-    border-radius: Theme.radius-lg;
-    background: active ? Theme.accent-bg : (ta.has-hover ? Theme.bg-a1 : transparent);
-    VerticalLayout {
-        alignment: center; spacing: 4px;
-        HorizontalLayout { alignment: center; Icon { source: root.icon; tint: root.active ? Theme.accent : Theme.fg-a1; } }
-        Text { text: root.label; font-size: 12px; horizontal-alignment: center; color: root.active ? Theme.accent-bright : Theme.fg-a1; }
+    height: 44px; horizontal-stretch: 1;
+    background: ta.has-hover && !active ? Theme.bg-a1.with-alpha(0.5) : transparent;
+    HorizontalLayout {
+        alignment: center; spacing: 6px;
+        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: root.active ? Theme.accent : Theme.fg-a3; }
+        if !root.compact: Text { text: root.label; font-size: 13px; vertical-alignment: center; color: root.active ? Theme.fg-1 : Theme.fg-a2; }
+    }
+    Rectangle { y: parent.height - 2px; height: 2px; width: parent.width - 12px; x: 6px; border-radius: 1px; background: root.active ? Theme.accent : transparent; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Section title with a hairline above it (settings tabs).
+component Group inherits VerticalLayout {
+    in property <string> title;
+    in property <bool> first;
+    spacing: 10px; padding-top: first ? 2px : 6px;
+    if !root.first: Rectangle { height: 1px; background: Theme.divider.with-alpha(0.5); }
+    Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: 14px; }
+    @children
+}
+
+// Label on the left, control on the right.
+component Line inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> hint;
+    spacing: 10px; min-height: 36px;
+    VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 1px;
+        Text { text: root.label; color: Theme.fg-a1; font-size: 13px; overflow: elide; }
+        if root.hint != "": Text { text: root.hint; color: Theme.fg-a3; font-size: 11px; overflow: elide; }
+    }
+    VerticalLayout { alignment: center; @children }
+}
+
+// Small value pill (e.g. "1.00×", "-0.40 s").
+component Badge inherits Rectangle {
+    in property <string> text;
+    height: 26px; width: max(52px, bt.preferred-width + 18px); border-radius: 5px; background: Field.fill;
+    bt := Text { text: root.text; color: Theme.fg-2; font-family: "DM Mono"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+// Footer button that opens the full Settings window on a category.
+component AdvancedLink inherits Rectangle {
+    callback clicked();
+    height: 36px; border-radius: 6px;
+    background: ta.has-hover ? Theme.bg-a1 : transparent;
+    HorizontalLayout { alignment: center; spacing: 8px;
+        Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: @image-url("../assets/icons/settings.svg"); tint: Theme.fg-a2; }
+        Text { text: "Open Advanced Settings"; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; }
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
@@ -161,6 +193,85 @@ component QueueRow inherits Rectangle {
     }
 }
 
+// "#RRGGBB" field with a live swatch.
+component ColorField inherits HorizontalLayout {
+    in-out property <string> value;
+    callback accepted(string);
+    spacing: 6px; width: 170px;
+    TextField { horizontal-stretch: 1; text <=> root.value; placeholder: "#FFFFFF"; accepted(t) => { root.accepted(t); } }
+    Rectangle { width: 26px; height: 26px; y: 3px; border-radius: 4px; border-width: 1px; border-color: Theme.divider;
+        background: root.value == "#000000" ? #000000 : root.value == "#FFFFFF" ? #FFFFFF : root.value == "#FFFF00" ? #FFFF00 : Theme.fg-2; }
+}
+
+// Collapsible "Show preset" card (Figma "Default Preset").
+component PresetCard inherits Rectangle {
+    in property <string> name;
+    callback save();
+    property <bool> open;
+    border-radius: 6px; background: Field.fill; clip: true;
+    VerticalLayout {
+        Rectangle { height: 40px;
+            HorizontalLayout { padding-left: 12px; padding-right: 10px;
+                Text { text: "Show Preset"; color: Theme.fg-2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+                Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2;
+                    source: root.open ? @image-url("../assets/icons/chevron-up.svg") : @image-url("../assets/icons/chevron-down.svg"); } }
+            TouchArea { mouse-cursor: pointer; clicked => { root.open = !root.open; } } }
+        if root.open: VerticalLayout { padding: 12px; padding-top: 0; spacing: 10px;
+            Text { text: "Saves delays, subtitle size/position and track languages for “" + root.name + "”. Applied automatically to other episodes."; color: Theme.fg-a3; wrap: word-wrap; font-size: 12px; }
+            Button { text: "Save preset for this show"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.save(); } } }
+    }
+}
+
+// "N Bookmarks   −  +" header shared by the list tabs.
+component ListHeader inherits HorizontalLayout {
+    in property <string> text;
+    in property <bool> show-minus: true;
+    in property <string> minus-tip;
+    in property <string> plus-tip;
+    callback minus();
+    callback plus();
+    height: 36px; spacing: 4px;
+    Text { text: root.text; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+    if root.show-minus: Rectangle { width: 30px; border-radius: 4px; background: ma.has-hover ? Theme.bg-a1 : transparent;
+        Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/remove.svg"); tint: Theme.fg-a2; }
+        ma := TouchArea { mouse-cursor: pointer; clicked => { root.minus(); } } }
+    Rectangle { width: 30px; border-radius: 4px; background: pa.has-hover ? Theme.bg-a1 : transparent;
+        Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-a2; }
+        pa := TouchArea { mouse-cursor: pointer; clicked => { root.plus(); } } }
+}
+
+// Numbered / named row with a right-aligned monospace timestamp.
+component TimeRow inherits Rectangle {
+    in property <string> number;
+    in property <string> title;
+    in property <string> time;
+    in property <bool> current;
+    callback clicked();
+    height: 38px; border-radius: Theme.radius;
+    background: ta.has-hover ? Theme.bg-a1 : (current ? Theme.accent-bg.with-alpha(0.5) : transparent);
+    HorizontalLayout {
+        padding-left: 10px; padding-right: 10px; spacing: 12px;
+        if root.number != "": Text { width: 22px; text: root.number; color: Theme.accent; font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; }
+        Text { text: root.title; horizontal-stretch: 1; overflow: elide; vertical-alignment: center; color: root.current ? Theme.accent-bright : Theme.fg-2; }
+        Text { text: root.time; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+global TimeFmt {
+    // seconds → "HH:MM:SS" (with ".mmm" when ms is true)
+    pure public function hms(t: float, ms: bool) -> string {
+        let s = floor(max(t, 0));
+        let h = floor(s / 3600);
+        let m = floor(mod(s, 3600) / 60);
+        let sec = mod(s, 60);
+        let base = (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+        if (!ms) { return base; }
+        let f = round((t - s) * 1000);
+        return base + "." + (f < 10 ? "00" : f < 100 ? "0" : "") + f;
+    }
+}
+
 export component SidePanel inherits Rectangle {
     in-out property <int> tab: 0;
     in-out property <length> scroll-y;
@@ -168,6 +279,7 @@ export component SidePanel inherits Rectangle {
     in property <[Item]> audio-tracks;
     in property <[Item]> audio-devices;
     in property <[Item]> chapters;
+    in property <[string]> chapter-times;
     in property <[image]> chapter-thumbs;
     in property <[bool]> chapter-has-thumb;
     callback chapters-refresh();
@@ -190,9 +302,15 @@ export component SidePanel inherits Rectangle {
     callback save-preset();
     callback seek-to(string);
     callback add-bookmark();
+    callback remove-bookmark();
     in property <string> ab-state: "Off";
     in property <string> sleep-state: "";
     in property <string> hwdec: "auto-safe";
+    in property <[string]> viz-modes: ["Disabled"];
+    in property <int> viz-mode;
+    callback viz-select(int);
+    // Settings-window category to open (see settings.rs CATEGORIES).
+    callback open-settings(int);
 
     callback set-prop(string, string);
     callback run(string);
@@ -200,7 +318,7 @@ export component SidePanel inherits Rectangle {
     callback sleep(int);
     callback close();
 
-    // Local UI state (nothing persisted yet).
+    // Slider values (synced from mpv by the app).
     in-out property <float> sub-delay: 0;
     in-out property <float> sub-scale: 1;
     in-out property <float> sub-pos: 100;
@@ -215,135 +333,237 @@ export component SidePanel inherits Rectangle {
     in-out property <float> saturation: 0;
     in-out property <float> gamma: 0;
     in-out property <float> speed: 1;
+    // Local toggles mirrored to mpv on change (session only).
+    in-out property <bool> stats-on;
+    in-out property <bool> reverse-on;
+    in-out property <bool> sub-timeline;
+    in-out property <float> sub-speed: 1;
+    in-out property <bool> sub-ass-override: false;
+    in-out property <string> sub-font: "Inter";
+    in-out property <string> sub-color: "#FFFFFF";
+    in-out property <string> sub-outline-color: "#000000";
+    in-out property <string> flip: "None";
+    in-out property <string> stereo: "Auto";
+    in-out property <string> hdr: "Auto";
+    property <string> sleep-choice: root.sleep-state == "" ? "Off" : root.sleep-state;
+    property <bool> settings-group: root.tab <= 3;
+    property <bool> narrow: root.width < 360px;
 
     width: 400px;
     background: Theme.bar;
     TouchArea { } // keep clicks inside the panel
 
     VerticalLayout {
-        padding: 12px; spacing: 12px;
-        HorizontalLayout {
-            spacing: 4px;
-            Tab { icon: @image-url("../assets/icons/subtitles.svg"); label: "Subtitles"; active: root.tab == 0; clicked => { root.tab = 0; } }
-            Tab { icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == 1; clicked => { root.tab = 1; } }
-            Tab { icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == 2; clicked => { root.tab = 2; } }
-            Tab { icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; root.chapters-refresh(); } }
-            Tab { icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == 4; clicked => { root.tab = 4; } }
-            Tab { icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == 5; clicked => { root.tab = 5; root.library-search(""); } }
-            Rectangle {
-                width: 28px;
-                Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
-                TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+        spacing: 0;
+        Rectangle {
+            height: 44px; background: Theme.bg-b1.with-alpha(0.7);
+            HorizontalLayout {
+                padding-left: 4px; padding-right: 4px;
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == 2; clicked => { root.tab = 2; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == 1; clicked => { root.tab = 1; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/subtitles.svg"); label: "Subtitles"; active: root.tab == 0; clicked => { root.tab = 0; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == 4; clicked => { root.tab = 4; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/bookmark.svg"); label: "Bookmarks"; active: root.tab == 6; clicked => { root.tab = 6; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/chapters.svg"); label: "Chapters"; active: root.tab == 7; clicked => { root.tab = 7; root.chapters-refresh(); } }
+                if !root.settings-group: Tab { compact: true; icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == 5; clicked => { root.tab = 5; root.library-search(""); } }
+                Rectangle {
+                    width: 32px;
+                    Icon { source: @image-url("../assets/icons/close.svg"); width: 16px; height: 16px; tint: Theme.fg-a3; }
+                    TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                }
             }
         }
-        Rectangle { height: 1px; background: Theme.divider; }
 
         ScrollView {
             vertical-stretch: 1;
             content-y <=> root.scroll-y;
             VerticalLayout {
-                spacing: 14px; padding-right: 10px; alignment: start;
-                // ---- Subtitles ----
-                if root.tab == 0: VerticalLayout {
-                    spacing: 14px; alignment: start;
-                    Section { text: "Track"; }
-                    OptionList {
-                        items: [{ key: "no", label: "Off", selected: false }];
-                        pick(it) => { root.set-prop("sid", it.key); }
+                spacing: 14px; padding: 16px; padding-right: 20px; alignment: start;
+                // ---- Playback ----
+                if root.tab == 3: VerticalLayout {
+                    spacing: 6px; alignment: start;
+                    Group { first: true; title: "Speed";
+                        HorizontalLayout { spacing: 6px;
+                            for v in [0.5, 1, 1.25, 1.5, 2]: Rectangle {
+                                height: 28px; horizontal-stretch: 1; border-radius: 5px;
+                                background: abs(root.speed - v) < 0.001 ? Theme.accent.mix(Field.fill, 30%) : (sa.has-hover ? Field.raised : Field.fill);
+                                Text { text: v + "×"; font-size: 12px; color: abs(root.speed - v) < 0.001 ? Theme.accent : Theme.fg-a2; }
+                                sa := TouchArea { mouse-cursor: pointer; clicked => { root.speed = v; root.set-prop("speed", v); } }
+                            }
+                            Badge { text: round(root.speed * 100) / 100 + "×"; }
+                        }
+                        AccentSlider {
+                            value: root.speed; minimum: 0.25; maximum: 2; step: 0.05; ticks: 6;
+                            labels: ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
+                            changed(v) => { root.speed = v; root.set-prop("speed", v); }
+                        }
                     }
-                    OptionList { items: root.sub-tracks; empty-text: "No subtitle tracks"; pick(it) => { root.set-prop("sid", it.key); } }
-                    Button { text: "Add subtitle file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
-                    Section { text: "Timing"; }
-                    SliderRow {
-                        label: "Delay"; unit: " s"; decimals: 2; minimum: -5; maximum: 5; step: 0.05;
-                        value <=> root.sub-delay;
-                        changed(v) => { root.set-prop("sub-delay", v); }
+                    Group { title: "Display";
+                        Line { label: "Show Statistics"; hint: "mpv stats overlay";
+                            Toggle { on: root.stats-on; toggled => { root.stats-on = !root.stats-on; root.run("script-binding stats/display-stats-toggle"); } } }
+                        Line { label: "Subtitle Timeline on Seekbar"; hint: "Coming soon";
+                            Toggle { on: root.sub-timeline; enabled: false; toggled => { root.sub-timeline = !root.sub-timeline; } } }
+                        Line { label: "Audio Visualizer"; hint: "Audio-only files";
+                            Dropdown { width: 170px; options: root.viz-modes; value: root.viz-modes.length > root.viz-mode ? root.viz-modes[root.viz-mode] : ""; selected(i, o) => { root.viz-select(i); } } }
                     }
-                    Section { text: "Appearance"; }
-                    SliderRow {
-                        label: "Size"; unit: "×"; decimals: 2; minimum: 0.5; maximum: 2.5; step: 0.05; default-value: 1;
-                        value <=> root.sub-scale;
-                        changed(v) => { root.set-prop("sub-scale", v); }
+                    Group { title: "Control";
+                        Line { label: "Reverse"; hint: "Play backwards (mpv play-direction)";
+                            Toggle { on: root.reverse-on; toggled => { root.reverse-on = !root.reverse-on; root.set-prop("play-direction", root.reverse-on ? "backward" : "forward"); } } }
+                        Line { label: "Sleep Timer"; hint: root.sleep-state;
+                            Dropdown { width: 170px; options: ["Off", "15 min", "30 min", "60 min", "End of file"]; value: root.sleep-state == "" ? "Off" : "On";
+                                selected(i, o) => { root.sleep(i == 0 ? 0 : i == 1 ? 15 : i == 2 ? 30 : i == 3 ? 60 : -1); } } }
+                        Line { label: "A-B Loop"; hint: root.ab-state;
+                            Button { width: 110px; text: "Set A / B"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } } }
                     }
-                    SliderRow {
-                        label: "Position"; unit: "%"; minimum: 0; maximum: 150; default-value: 100;
-                        value <=> root.sub-pos;
-                        changed(v) => { root.set-prop("sub-pos", round(v)); }
-                    }
-                    Section { text: "Show preset"; }
-                    Text { text: "Saves delays, subtitle size/position and track languages for “" + root.preset-name + "”. Applied automatically to other episodes."; color: Theme.fg-a3; wrap: word-wrap; font-size: 12px; }
-                    Button { text: "Save preset for this show"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.save-preset(); } }
-                }
-                // ---- Audio ----
-                if root.tab == 1: VerticalLayout {
-                    spacing: 14px; alignment: start;
-                    Section { text: "Track"; }
-                    OptionList { items: root.audio-tracks; empty-text: "No audio tracks"; pick(it) => { root.set-prop("aid", it.key); } }
-                    Section { text: "Output device"; }
-                    OptionList { items: root.audio-devices; pick(it) => { root.set-prop("audio-device", it.key); } }
-                    Section { text: "Adjust"; }
-                    SliderRow {
-                        label: "Delay"; unit: " s"; decimals: 2; minimum: -2; maximum: 2; step: 0.05;
-                        value <=> root.audio-delay;
-                        changed(v) => { root.set-prop("audio-delay", v); }
-                    }
-                    SliderRow {
-                        label: "Volume (boost)"; unit: "%"; minimum: 0; maximum: 150; default-value: 100;
-                        value <=> root.boost;
-                        changed(v) => { root.set-prop("volume", round(v)); }
-                    }
-                    Section { text: "Equalizer"; }
-                    Equalizer { }
-                    AudioEffects { }
+                    AdvancedLink { clicked => { root.open-settings(4); } }
                 }
                 // ---- Video ----
                 if root.tab == 2: VerticalLayout {
-                    spacing: 14px; alignment: start;
-                    Section { text: "Aspect ratio"; }
-                    Chips {
-                        items: [
-                            { key: "-1", label: "Auto", selected: root.aspect == "-1" },
-                            { key: "16:9", label: "16:9", selected: root.aspect == "16:9" },
-                            { key: "4:3", label: "4:3", selected: root.aspect == "4:3" },
-                            { key: "2.35:1", label: "2.35:1", selected: root.aspect == "2.35:1" },
-                            { key: "1:1", label: "1:1", selected: root.aspect == "1:1" },
-                        ];
-                        pick(it) => { root.aspect = it.key; root.set-prop("video-aspect-override", it.key); }
+                    spacing: 6px; alignment: start;
+                    Group { first: true; title: "Geometry";
+                        Text { text: "Flip"; color: Theme.fg-a1; font-size: 13px; }
+                        Segmented { options: ["None", "Horizontal", "Vertical"]; value: root.flip;
+                            selected(o) => {
+                                root.flip = o;
+                                root.run("vf remove @vflip");
+                                if (o == "Horizontal") { root.run("vf add @vflip:hflip"); }
+                                if (o == "Vertical") { root.run("vf add @vflip:vflip"); }
+                            } }
+                        Line { label: "Rotate";
+                            Segmented { width: 200px; options: ["0°", "90°", "180°", "270°"]; value: root.rotate + "°";
+                                selected(o) => { root.rotate = o == "90°" ? 90 : o == "180°" ? 180 : o == "270°" ? 270 : 0; root.set-prop("video-rotate", root.rotate); } } }
+                        Line { label: "Zoom";
+                            Dropdown { width: 170px; options: ["0.5×", "1:1 Original", "1.5×", "2×"];
+                                value: root.zoom <= -0.9 ? "0.5×" : root.zoom >= 0.95 ? "2×" : root.zoom >= 0.5 ? "1.5×" : abs(root.zoom) < 0.01 ? "1:1 Original" : round(pow(2, root.zoom) * 100) / 100 + "×";
+                                selected(i, o) => { root.zoom = i == 0 ? -1 : i == 2 ? 0.585 : i == 3 ? 1 : 0; root.set-prop("video-zoom", root.zoom); } } }
+                        Line { label: "Aspect Ratio";
+                            Dropdown { width: 170px; options: ["Default", "16:9", "4:3", "2.35:1", "1:1"]; value: root.aspect == "-1" ? "Default" : root.aspect;
+                                selected(i, o) => { root.aspect = i == 0 ? "-1" : o; root.set-prop("video-aspect-override", root.aspect); } } }
+                        Line { label: "Crop"; hint: "Pan & scan to fill";
+                            Dropdown { width: 170px; options: ["Default", "Fill 50%", "Fill"]; value: root.panscan >= 99 ? "Fill" : root.panscan >= 1 ? "Fill 50%" : "Default";
+                                selected(i, o) => { root.panscan = i * 50; root.set-prop("panscan", i * 0.5); } } }
                     }
-                    Section { text: "Rotate"; }
-                    Chips {
-                        items: [
-                            { key: "0", label: "0°", selected: root.rotate == 0 },
-                            { key: "90", label: "90°", selected: root.rotate == 90 },
-                            { key: "180", label: "180°", selected: root.rotate == 180 },
-                            { key: "270", label: "270°", selected: root.rotate == 270 },
-                        ];
-                        pick(it) => { root.rotate = it.key.to-float(); root.set-prop("video-rotate", it.key); }
+                    Group { title: "Rendering";
+                        Line { label: "HDR"; hint: "Tone mapping";
+                            Dropdown { width: 170px; options: ["Auto", "Passthrough", "Tone-map to SDR"]; value: root.hdr;
+                                selected(i, o) => { root.hdr = o; root.set-prop("target-colorspace-hint", i == 1 ? "yes" : "no"); root.set-prop("tone-mapping", i == 2 ? "bt.2390" : "auto"); } } }
+                        Line { label: "Hardware Decoding";
+                            Segmented { width: 170px; options: ["Auto", "Off"]; value: root.hwdec == "no" ? "Off" : "Auto";
+                                selected(o) => { root.set-prop("hwdec", o == "Off" ? "no" : "auto-safe"); } } }
                     }
-                    Section { text: "Zoom & crop"; }
-                    SliderRow {
-                        label: "Zoom"; decimals: 2; minimum: -1; maximum: 2; step: 0.05;
-                        value <=> root.zoom;
-                        changed(v) => { root.set-prop("video-zoom", v); }
+                    Group { title: "Filters";
+                        VideoFilters { }
                     }
-                    SliderRow {
-                        label: "Crop to fill (pan & scan)"; unit: "%"; minimum: 0; maximum: 100;
-                        value <=> root.panscan;
-                        changed(v) => { root.set-prop("panscan", v / 100); }
+                    PresetCard { name: root.preset-name; save => { root.save-preset(); } }
+                    AdvancedLink { clicked => { root.open-settings(5); } }
+                }
+                // ---- Audio ----
+                if root.tab == 1: VerticalLayout {
+                    spacing: 6px; alignment: start;
+                    Group { first: true; title: "Track";
+                        OptionList { items: root.audio-tracks; empty-text: "No audio tracks"; pick(it) => { root.set-prop("aid", it.key); } }
+                        Line { label: "Stereo Mode";
+                            Dropdown { width: 170px; options: ["Auto", "Stereo", "Mono", "Swap L/R"]; value: root.stereo;
+                                selected(i, o) => {
+                                    root.stereo = o;
+                                    root.set-prop("audio-channels", i == 1 ? "stereo" : i == 2 ? "mono" : "auto-safe");
+                                    root.run("af remove @stereo");
+                                    if (i == 3) { root.run("af add @stereo:lavfi=[pan=stereo|c0=c1|c1=c0]"); }
+                                } } }
                     }
-                    Section { text: "Colors"; }
-                    SliderRow { label: "Brightness"; minimum: -100; maximum: 100; value <=> root.brightness; changed(v) => { root.set-prop("brightness", round(v)); } }
-                    SliderRow { label: "Contrast"; minimum: -100; maximum: 100; value <=> root.contrast; changed(v) => { root.set-prop("contrast", round(v)); } }
-                    SliderRow { label: "Saturation"; minimum: -100; maximum: 100; value <=> root.saturation; changed(v) => { root.set-prop("saturation", round(v)); } }
-                    SliderRow { label: "Gamma"; minimum: -100; maximum: 100; value <=> root.gamma; changed(v) => { root.set-prop("gamma", round(v)); } }
-                    VideoFilters { }
-                    Section { text: "Hardware decoding"; }
-                    Chips {
-                        items: [
-                            { key: "auto-safe", label: "Auto", selected: root.hwdec == "auto-safe" },
-                            { key: "no", label: "Off (software)", selected: root.hwdec == "no" },
-                        ];
-                        pick(it) => { root.set-prop("hwdec", it.key); }
+                    Group { title: "Output Device";
+                        OptionList { items: root.audio-devices; pick(it) => { root.set-prop("audio-device", it.key); } }
+                    }
+                    Group { title: "Synchronization";
+                        SliderRow { label: "Audio Delay"; unit: " s"; decimals: 2; minimum: -2; maximum: 2; step: 0.05;
+                            value <=> root.audio-delay; changed(v) => { root.set-prop("audio-delay", v); } }
+                        SliderRow { label: "Volume Boost"; unit: "%"; minimum: 0; maximum: 150; default-value: 100;
+                            value <=> root.boost; changed(v) => { root.set-prop("volume", round(v)); } }
+                    }
+                    Group { title: "Equalizer";
+                        Equalizer { }
+                    }
+                    Group { title: "Effects";
+                        AudioEffects { }
+                    }
+                    PresetCard { name: root.preset-name; save => { root.save-preset(); } }
+                    AdvancedLink { clicked => { root.open-settings(6); } }
+                }
+                // ---- Subtitles ----
+                if root.tab == 0: VerticalLayout {
+                    spacing: 6px; alignment: start;
+                    Group { first: true; title: "Track";
+                        OptionList {
+                            items: [{ key: "no", label: "Off", selected: false }];
+                            pick(it) => { root.set-prop("sid", it.key); }
+                        }
+                        OptionList { items: root.sub-tracks; empty-text: "No subtitle tracks"; pick(it) => { root.set-prop("sid", it.key); } }
+                        Button { text: "Add subtitle file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
+                    }
+                    Group { title: "Synchronization";
+                        SliderRow { label: "Delay"; unit: " s"; decimals: 2; minimum: -10; maximum: 10; step: 0.05;
+                            value <=> root.sub-delay; changed(v) => { root.set-prop("sub-delay", v); } }
+                        HorizontalLayout {
+                            Text { text: "−10 s"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; }
+                            Text { text: "0 s"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; horizontal-alignment: center; }
+                            Text { text: "+10 s"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; horizontal-alignment: right; }
+                        }
+                        SliderRow { label: "Speed"; unit: "×"; decimals: 2; minimum: 0.5; maximum: 2; step: 0.01; default-value: 1;
+                            value <=> root.sub-speed; changed(v) => { root.set-prop("sub-speed", v); } }
+                    }
+                    Group { title: "Appearance";
+                        SliderRow { label: "Size"; unit: "×"; decimals: 2; minimum: 0.5; maximum: 2.5; step: 0.05; default-value: 1;
+                            value <=> root.sub-scale; changed(v) => { root.set-prop("sub-scale", v); } }
+                        SliderRow { label: "Position"; unit: "%"; minimum: 0; maximum: 150; default-value: 100;
+                            value <=> root.sub-pos; changed(v) => { root.set-prop("sub-pos", round(v)); } }
+                        Line { label: "Override Embedded Style"; hint: "Force these settings on ASS subs";
+                            Toggle { on: root.sub-ass-override; toggled => { root.sub-ass-override = !root.sub-ass-override; root.set-prop("sub-ass-override", root.sub-ass-override ? "force" : "scale"); } } }
+                        Line { label: "Font";
+                            TextField { width: 170px; text <=> root.sub-font; placeholder: "Inter"; accepted(t) => { root.set-prop("sub-font", t); } } }
+                        Line { label: "Text Color";
+                            ColorField { value <=> root.sub-color; accepted(t) => { root.set-prop("sub-color", t); } } }
+                        Line { label: "Outline Color";
+                            ColorField { value <=> root.sub-outline-color; accepted(t) => { root.set-prop("sub-border-color", t); } } }
+                    }
+                    PresetCard { name: root.preset-name; save => { root.save-preset(); } }
+                    AdvancedLink { clicked => { root.open-settings(7); } }
+                }
+                // ---- Bookmarks ----
+                if root.tab == 6: VerticalLayout {
+                    spacing: 4px; alignment: start;
+                    ListHeader {
+                        text: root.bookmarks.length + (root.bookmarks.length == 1 ? " Bookmark" : " Bookmarks");
+                        show-minus: root.bookmarks.length > 0;
+                        minus => { root.remove-bookmark(); } plus => { root.add-bookmark(); }
+                    }
+                    if root.bookmarks.length == 0: Text { text: "No bookmarks yet — press + or Ctrl+B."; color: Theme.fg-a3; wrap: word-wrap; }
+                    for it in root.bookmarks: TimeRow {
+                        title: it.label; time: TimeFmt.hms(it.key.to-float(), true);
+                        clicked => { root.seek-to(it.key); }
+                    }
+                }
+                // ---- Chapters ----
+                if root.tab == 7: VerticalLayout {
+                    spacing: 2px; alignment: start;
+                    if root.chapters.length == 0: Text { text: "No chapters in this file."; color: Theme.fg-a3; }
+                    for it[i] in root.chapters: crow := Rectangle {
+                        property <bool> thumb: i < root.chapter-has-thumb.length && root.chapter-has-thumb[i];
+                        height: self.thumb ? 52px : 38px;
+                        border-radius: Theme.radius;
+                        background: cta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg.with-alpha(0.5) : transparent);
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 10px; spacing: 12px;
+                            Text { width: 22px; text: i + 1; color: Theme.accent; font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; }
+                            if crow.thumb: Rectangle {
+                                y: 6px; width: 71px; height: 40px; border-radius: 3px; clip: true; background: #000000;
+                                Image { width: parent.width; height: parent.height; source: root.chapter-thumbs[i]; image-fit: ImageFit.cover; }
+                            }
+                            Text { text: it.label; overflow: elide; vertical-alignment: center; horizontal-stretch: 1;
+                                color: it.selected ? Theme.accent-bright : Theme.fg-2; }
+                            Text { text: i < root.chapter-times.length ? root.chapter-times[i] : ""; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
+                        }
+                        cta := TouchArea { mouse-cursor: pointer; clicked => { root.set-prop("chapter", it.key); } }
                     }
                 }
                 // ---- Compact library ----
@@ -367,11 +587,10 @@ export component SidePanel inherits Rectangle {
                 // ---- Queue & playlists (Figma "Miniplayer", "playlist", "new playlist") ----
                 if root.tab == 4: VerticalLayout {
                     spacing: 14px; alignment: start;
-                    HorizontalLayout {
-                        Section { text: "Up next  ·  " + root.queue.length; horizontal-stretch: 1; vertical-alignment: center; }
-                        Button { width: 96px; text: "Add"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.queue-add(); } }
-                        Rectangle { width: 6px; }
-                        Button { width: 80px; text: "Clear"; icon: @image-url("../assets/icons/remove.svg"); clicked => { root.queue-clear(); } }
+                    ListHeader {
+                        text: root.queue.length + (root.queue.length == 1 ? " Item" : " Items") + " in Queue";
+                        minus-tip: "Clear queue"; plus-tip: "Add files";
+                        minus => { root.queue-clear(); } plus => { root.queue-add(); }
                     }
                     if root.queue.length == 0: Text { text: "Queue is empty — add files or drop them on the window."; color: Theme.fg-a3; wrap: word-wrap; }
                     VerticalLayout {
@@ -404,73 +623,6 @@ export component SidePanel inherits Rectangle {
                                 TouchArea { clicked => { root.playlist-delete(pl.key); } } }
                         }
                     }
-                }
-                // ---- Playback ----
-                if root.tab == 3: VerticalLayout {
-                    spacing: 14px; alignment: start;
-                    Section { text: "Speed"; }
-                    Chips {
-                        items: [
-                            { key: "0.5", label: "0.5×", selected: root.speed == 0.5 },
-                            { key: "0.75", label: "0.75×", selected: root.speed == 0.75 },
-                            { key: "1", label: "1×", selected: root.speed == 1 },
-                            { key: "1.25", label: "1.25×", selected: root.speed == 1.25 },
-                            { key: "1.5", label: "1.5×", selected: root.speed == 1.5 },
-                            { key: "2", label: "2×", selected: root.speed == 2 },
-                        ];
-                        pick(it) => { root.speed = it.key.to-float(); root.set-prop("speed", it.key); }
-                    }
-                    SliderRow {
-                        label: "Custom"; unit: "×"; decimals: 2; minimum: 0.25; maximum: 4; step: 0.05; default-value: 1;
-                        value <=> root.speed;
-                        changed(v) => { root.set-prop("speed", v); }
-                    }
-                    Section { text: "A-B loop"; }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Button { text: "Set A / B / clear"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } }
-                        Text { text: root.ab-state; color: Theme.fg-a1; vertical-alignment: center; }
-                    }
-                    Section { text: "Sleep timer"; }
-                    Chips {
-                        items: [
-                            { key: "0", label: "Off", selected: root.sleep-state == "" },
-                            { key: "15", label: "15 min", selected: false },
-                            { key: "30", label: "30 min", selected: false },
-                            { key: "60", label: "60 min", selected: false },
-                            { key: "-1", label: "End of file", selected: false },
-                        ];
-                        pick(it) => { root.sleep(it.key.to-float()); }
-                    }
-                    if root.sleep-state != "": Text { text: root.sleep-state; color: Theme.accent-bright; }
-                    Section { text: "Chapters"; }
-                    // Chapters, with thumbnails from the Scene Chapters package when cached (#62).
-                    VerticalLayout {
-                        spacing: 2px; alignment: start;
-                        if root.chapters.length == 0: Text { text: "No chapters"; color: Theme.fg-a3; }
-                        for it[i] in root.chapters: crow := Rectangle {
-                            property <bool> thumb: i < root.chapter-has-thumb.length && root.chapter-has-thumb[i];
-                            height: self.thumb ? 48px : 32px;
-                            border-radius: Theme.radius;
-                            background: cta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg : transparent);
-                            HorizontalLayout {
-                                padding-left: crow.thumb ? 4px : 10px; padding-right: 8px; spacing: 10px;
-                                if crow.thumb: Rectangle {
-                                    y: 4px; width: 71px; height: 40px; border-radius: 3px; clip: true; background: #000000;
-                                    Image { width: parent.width; height: parent.height; source: root.chapter-thumbs[i]; image-fit: ImageFit.cover; }
-                                }
-                                Text {
-                                    text: it.label; overflow: elide; vertical-alignment: center; horizontal-stretch: 1;
-                                    color: it.selected ? Theme.accent-bright : Theme.fg-2;
-                                }
-                                if it.selected: Icon { source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; width: 18px; height: 32px; y: (parent.height - 32px) / 2; }
-                            }
-                            cta := TouchArea { mouse-cursor: pointer; clicked => { root.set-prop("chapter", it.key); } }
-                        }
-                    }
-                    Section { text: "Bookmarks"; }
-                    OptionList { items: root.bookmarks; empty-text: "No bookmarks yet (Ctrl+B)"; pick(it) => { root.seek-to(it.key); } }
-                    Button { text: "Add bookmark (Ctrl+B)"; icon: @image-url("../assets/icons/bookmark.svg"); clicked => { root.add-bookmark(); } }
                 }
             }
         }

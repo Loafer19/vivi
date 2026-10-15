@@ -587,16 +587,17 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
             .map(|(n, d)| (n.clone(), d, n == cur_dev)),
     ));
     let cur_ch: i64 = p.mpv.get_property("chapter").unwrap_or(-1);
-    a.set_chapters(items(p.chapters().into_iter().enumerate().map(
-        |(i, (t, s))| {
-            let m = (s / 60.0) as i64;
-            (
-                i.to_string(),
-                format!("{t}  ·  {m}:{:02}", (s as i64) % 60),
-                i as i64 == cur_ch,
-            )
-        },
+    let chs = p.chapters();
+    a.set_chapter_times(slint::ModelRc::new(slint::VecModel::from(
+        chs.iter()
+            .map(|(_, s)| slint::SharedString::from(hms(*s)))
+            .collect::<Vec<_>>(),
     )));
+    a.set_chapters(items(
+        chs.into_iter()
+            .enumerate()
+            .map(|(i, (t, _))| (i.to_string(), t, i as i64 == cur_ch)),
+    ));
     chapter_thumbs(a, p);
     a.set_hwdec(p.get("hwdec").unwrap_or_default().into());
     let q = p.queue();
@@ -705,19 +706,21 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     // In-memory bookmarks (persisted later with settings).
     let marks: Rc<slint::VecModel<Item>> = Rc::new(slint::VecModel::default());
     app.set_bookmarks(marks.clone().into());
+    {
+        let marks = marks.clone();
+        app.on_remove_bookmark(move || {
+            let n = marks.row_count();
+            if n > 0 {
+                marks.remove(n - 1);
+            }
+        });
+    }
     let p = player.clone();
     app.on_add_bookmark(move || {
         let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
-        let s = t as i64;
         marks.push(Item {
             key: format!("{t:.3}").into(),
-            label: format!(
-                "Bookmark {}  ·  {}:{:02}",
-                marks.row_count() + 1,
-                s / 60,
-                s % 60
-            )
-            .into(),
+            label: format!("Bookmark {}", marks.row_count() + 1).into(),
             selected: false,
         });
         if log {
@@ -1340,5 +1343,20 @@ mod key_tests {
     #[test]
     fn ctrl_control_chars() {
         assert_eq!(mpv_key("\u{1}", true, false).as_deref(), Some("Ctrl+a"));
+    }
+}
+
+/// Seconds → "HH:MM:SS" (side-panel chapter list).
+fn hms(s: f64) -> String {
+    let s = s.max(0.0) as u64;
+    format!("{:02}:{:02}:{:02}", s / 3600, s % 3600 / 60, s % 60)
+}
+
+#[cfg(test)]
+mod hms_tests {
+    #[test]
+    fn formats_hours() {
+        assert_eq!(super::hms(0.0), "00:00:00");
+        assert_eq!(super::hms(3725.9), "01:02:05");
     }
 }
