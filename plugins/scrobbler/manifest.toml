@@ -1,7 +1,7 @@
 id = "scrobbler"
-name = "ListenBrainz Scrobbler"
-version = "1.0.1"
-description = "Sends what you listen to to ListenBrainz: now playing when a track starts and a listen after half the track or 4 minutes. Listens made offline are queued and sent later. Needs your ListenBrainz user token."
+name = "Scrobbler (Last.fm & ListenBrainz)"
+version = "1.1.0"
+description = "Sends what you listen to to Last.fm and/or ListenBrainz: now playing when a track starts and a scrobble after half the track or 4 minutes. Scrobbles made offline are queued and sent later. Needs your ListenBrainz user token, or your Last.fm API key + shared secret (free) and one browser authorisation."
 author = "Vivi"
 kind = "mpv-lua"
 entry = "scrobbler.lua"
@@ -9,12 +9,42 @@ min_vivi = "0.9.0"
 icon = "scrobble"
 lucide = "radio-tower"
 permissions = ["network", "filesystem", "subprocess"]
-issue = 63
+issue = 77
 default_enabled = true
 
 [[settings]]
 key = "token"
-title = "ListenBrainz user token"
+title = "ListenBrainz user token (listenbrainz.org/settings)"
+type = "secret"
+default = ""
+
+[[settings]]
+key = "lastfm_key"
+title = "Last.fm API key (create one free at last.fm/api/account/create)"
+type = "text"
+default = ""
+
+[[settings]]
+key = "lastfm_secret"
+title = "Last.fm shared secret"
+type = "secret"
+default = ""
+
+[[settings]]
+key = "lastfm_connect"
+title = "Authorise Vivi in the browser"
+type = "action"
+label = "Connect Last.fm"
+
+[[settings]]
+key = "lastfm_finish"
+title = "After allowing access in the browser"
+type = "action"
+label = "Finish connecting"
+
+[[settings]]
+key = "lastfm_session"
+title = "Last.fm session key (filled in by Connect)"
 type = "secret"
 default = ""
 

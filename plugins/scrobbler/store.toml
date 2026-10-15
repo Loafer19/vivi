@@ -1,8 +1,13 @@
 # Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
 # so editing it needs no new plugin version.
 categories = ["Music", "Integrations"]
-tags = ["listenbrainz", "scrobbling"]
+tags = ["lastfm", "listenbrainz", "scrobbling"]
 screenshots = ["scrobbler-settings"]
+
+[[changelog]]
+version = "1.1.0"
+date = "2026-10-15"
+notes = "Last.fm scrobbling and now playing (your API key + browser authorisation), next to ListenBrainz; separate offline queue per service."
 
 [[changelog]]
 version = "1.0.1"
