@@ -16,6 +16,13 @@
 //!
 //! *Tag library folder* scans a folder (default: the first library folder), keeps the
 //! best confident match per file and lets the user write them all at once.
+//!
+//! The AcoustID package (#76) fingerprints with `fpcalc` itself and hands its AcoustID
+//! answer to this preview with `script-message vivi-tagger-acoustid <path> <json>`
+//! (`{"acoustid": <lookup response>, "pattern": "{artist} - {title}"}`): the recordings
+//! are looked up on MusicBrainz here, and each candidate also proposes a new file name
+//! from the pattern, shown as a "File name" row in the review and renamed on apply
+//! (Undo renames back).
 
 use super::web;
 use super::{Ctx, Manifest, Plugin, SettingSpec};
@@ -50,6 +57,8 @@ pub struct Tags {
     pub copyright: String,
     pub license: String,
     pub comment: String,
+    /// Lyrics, LRC text when synced (written per format by [`write_tags`], #80).
+    pub lyrics: String,
 }
 
 impl Tags {
@@ -91,6 +100,72 @@ pub fn diff(old: &Tags, new: &Tags) -> Vec<(&'static str, String, String)> {
         .collect()
 }
 
+/// File name for `path` from a pattern such as `{artist} - {title}` (fields: artist, title,
+/// album, albumartist, year, date, track, genre; `{track}` is zero-padded to two digits).
+/// Characters that are not allowed in file names become `_`; the extension is kept.
+/// None when the title is unknown, the result is empty or it equals the current name.
+pub fn rename_to(pattern: &str, t: &Tags, path: &Path) -> Option<String> {
+    if t.title.trim().is_empty() || pattern.trim().is_empty() {
+        return None;
+    }
+    let track = t.track.split('/').next().unwrap_or("").trim().to_string();
+    let track = match track.parse::<u32>() {
+        Ok(n) => format!("{n:02}"),
+        Err(_) => track,
+    };
+    let year: String = t.date.chars().take(4).collect();
+    let mut out = pattern.to_string();
+    for (k, v) in [
+        ("{artist}", t.artist.as_str()),
+        ("{title}", t.title.as_str()),
+        ("{album}", t.album.as_str()),
+        ("{albumartist}", t.album_artist.as_str()),
+        ("{year}", year.as_str()),
+        ("{date}", t.date.as_str()),
+        ("{track}", track.as_str()),
+        ("{genre}", t.genre.as_str()),
+    ] {
+        out = out.replace(k, v);
+    }
+    let clean: String = out
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    // Tidy separators left by empty fields: "Artist -  - Title", leading/trailing " - ".
+    let mut name = clean.split_whitespace().collect::<Vec<_>>().join(" ");
+    while name.contains("- -") {
+        name = name.replace("- -", "-");
+    }
+    let name = name
+        .trim_matches(|c: char| c == '-' || c == ' ' || c == '.')
+        .to_string();
+    if name.is_empty() {
+        return None;
+    }
+    let file = match path.extension() {
+        Some(e) => format!("{name}.{}", e.to_string_lossy()),
+        None => name,
+    };
+    let current = path.file_name().map(|f| f.to_string_lossy().into_owned());
+    (current.as_deref() != Some(file.as_str())).then_some(file)
+}
+
+/// Rename `path` to `name` in the same folder; never replaces an existing file.
+pub fn rename_file(path: &Path, name: &str) -> Result<PathBuf, String> {
+    let to = path.with_file_name(name);
+    if to.exists() {
+        return Err(format!("{name} already exists"));
+    }
+    std::fs::rename(path, &to).map_err(|e| e.to_string())?;
+    Ok(to)
+}
+
 /// Current tags and duration (seconds) of a file.
 pub fn read_tags(path: &Path) -> Result<(Tags, f64), String> {
     let tf = lofty::read_from_path(path).map_err(|e| e.to_string())?;
@@ -118,6 +193,14 @@ pub fn read_tags(path: &Path) -> Result<(Tags, f64), String> {
             copyright: g(ItemKey::CopyrightMessage),
             license: g(ItemKey::License),
             comment: g(ItemKey::Comment),
+            lyrics: {
+                let l = g(ItemKey::Lyrics);
+                if l.is_empty() {
+                    g(ItemKey::UnsyncLyrics)
+                } else {
+                    l
+                }
+            },
         };
     }
     Ok((t, dur))
@@ -259,6 +342,10 @@ pub struct Candidate {
     /// 0–100: AcoustID score or MusicBrainz search score.
     pub score: u32,
     pub source: &'static str,
+    /// Review fields filled by another source than `source`: (field label, source).
+    pub sources: Vec<(&'static str, &'static str)>,
+    /// Cover URLs from other sources: (label, url).
+    pub extra_covers: Vec<(String, String)>,
 }
 
 fn credit(v: &serde_json::Value) -> String {
@@ -332,6 +419,8 @@ pub fn candidates_from_recording(
                 release_group: r["release-group"]["id"].as_str().unwrap_or("").into(),
                 score,
                 source,
+                sources: Vec::new(),
+                extra_covers: Vec::new(),
             }
         })
         .collect();
@@ -341,6 +430,8 @@ pub fn candidates_from_recording(
             release_group: String::new(),
             score,
             source,
+            sources: Vec::new(),
+            extra_covers: Vec::new(),
         });
     }
     out
@@ -621,6 +712,17 @@ pub fn write_tags(path: &Path, t: &Tags, cover: Option<&[u8]>) -> Result<(), Str
             tag.insert_text(key, v.to_string());
         }
     }
+    let id3 = tt == lofty::tag::TagType::Id3v2;
+    if !t.lyrics.is_empty() {
+        // ID3v2: USLT with the LRC text (SYLT is added below); Vorbis comments: LYRICS;
+        // MP4: ©lyr.
+        let key = if id3 {
+            ItemKey::UnsyncLyrics
+        } else {
+            ItemKey::Lyrics
+        };
+        tag.insert_text(key, t.lyrics.clone());
+    }
     if let Some(c) = cover {
         tag.remove_picture_type(PictureType::CoverFront);
         tag.push_picture(
@@ -631,7 +733,83 @@ pub fn write_tags(path: &Path, t: &Tags, cover: Option<&[u8]>) -> Result<(), Str
         );
     }
     tag.save_to_path(path, WriteOptions::default())
+        .map_err(|e| e.to_string())?;
+    if id3 && !t.lyrics.is_empty() {
+        write_sylt(path, &t.lyrics)?;
+    }
+    Ok(())
+}
+
+/// (milliseconds, text) lines of LRC lyrics; empty when it has no time tags.
+pub fn lrc_lines(lrc: &str) -> Vec<(u32, String)> {
+    super::lyrics::Lrc::parse(lrc)
+        .lines
+        .into_iter()
+        .map(|(t, l)| ((t * 1000.0).round() as u32, l))
+        .collect()
+}
+
+/// Replace the ID3v2 SYLT (synchronised lyrics, ms timestamps) frame of an MP3.
+fn write_sylt(path: &Path, lrc: &str) -> Result<(), String> {
+    use lofty::config::ParseOptions;
+    use lofty::id3::v2::{
+        BinaryFrame, Frame, FrameId, SyncTextContentType, SynchronizedTextFrame, TimestampFormat,
+    };
+    use lofty::TextEncoding;
+    let lines = lrc_lines(lrc);
+    if lines.is_empty() {
+        return Ok(());
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    let mut mf =
+        lofty::mpeg::MpegFile::read_from(&mut f, ParseOptions::new()).map_err(|e| e.to_string())?;
+    let Some(tag) = mf.id3v2_mut() else {
+        return Ok(());
+    };
+    let sylt = SynchronizedTextFrame::new(
+        TextEncoding::UTF8,
+        *b"XXX",
+        TimestampFormat::MS,
+        SyncTextContentType::Lyrics,
+        None,
+        lines,
+    );
+    let data = sylt
+        .as_bytes(WriteOptions::default())
+        .map_err(|e| e.to_string())?;
+    let id = FrameId::Valid("SYLT".into());
+    let _ = tag.remove(&id).count();
+    tag.insert(Frame::Binary(BinaryFrame::new(id, data)));
+    use std::io::Seek;
+    f.rewind().map_err(|e| e.to_string())?;
+    mf.save_to(&mut f, WriteOptions::default())
         .map_err(|e| e.to_string())
+}
+
+/// Text of the SYLT frame of an MP3 as (ms, line), for tests and the preview.
+#[cfg(test)]
+pub fn read_sylt(path: &Path) -> Vec<(u32, String)> {
+    use lofty::config::ParseOptions;
+    use lofty::id3::v2::{Frame, FrameFlags, FrameId, SynchronizedTextFrame};
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mf) = lofty::mpeg::MpegFile::read_from(&mut f, ParseOptions::new()) else {
+        return Vec::new();
+    };
+    let Some(tag) = mf.id3v2() else {
+        return Vec::new();
+    };
+    match tag.get(&FrameId::Valid("SYLT".into())) {
+        Some(Frame::Binary(b)) => SynchronizedTextFrame::parse(&b.data, FrameFlags::default())
+            .map(|s| s.content)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
 }
 
 // ---------- review: per-field diff, cover candidates, apply + undo ----------
@@ -650,7 +828,24 @@ pub fn review_fields(old: &Tags, new: &Tags) -> Vec<(&'static str, String, Strin
         ("Year", old.date.clone(), new.date.clone()),
         ("Track", old.track.clone(), new.track.clone()),
         ("Genre", old.genre.clone(), new.genre.clone()),
+        ("Lyrics", old.lyrics.clone(), new.lyrics.clone()),
     ]
+}
+
+/// Short form of lyrics for the review row: "Synced, 42 lines: first line".
+pub fn lyrics_summary(l: &str) -> String {
+    if l.trim().is_empty() {
+        return String::new();
+    }
+    let synced = lrc_lines(l);
+    let (kind, n, first) = if synced.is_empty() {
+        let lines: Vec<&str> = l.lines().filter(|x| !x.trim().is_empty()).collect();
+        ("Plain", lines.len(), lines.first().map(|x| x.to_string()))
+    } else {
+        let first = synced.iter().find(|x| !x.1.is_empty()).map(|x| x.1.clone());
+        ("Synced", synced.len(), first)
+    };
+    format!("{kind}, {n} lines: {}", first.unwrap_or_default())
 }
 
 /// Whether a proposed value would change the field (empty proposals never overwrite).
@@ -677,6 +872,7 @@ pub fn pick_fields(new: &Tags, on: &[bool]) -> Tags {
         date: g(4, &new.date),
         track: g(5, &new.track),
         genre: g(6, &new.genre),
+        lyrics: g(7, &new.lyrics),
         mb_recording: if any {
             new.mb_recording.clone()
         } else {
@@ -795,6 +991,8 @@ pub fn caa_images(release: &str) -> Vec<(String, String)> {
 /// then the fronts of the other matched releases.
 pub fn cover_candidates(c: &Candidate, others: &[Candidate], max: usize) -> Vec<CoverOpt> {
     let mut urls: Vec<(String, String)> = caa_images(&c.tags.mb_release);
+    // Deezer / iTunes / Discogs covers (often larger) right after the release's own.
+    urls.extend(c.extra_covers.iter().cloned());
     if !c.release_group.is_empty() {
         urls.push((
             "Group front".into(),
@@ -855,6 +1053,9 @@ pub struct Review {
     pub covers: Vec<CoverOpt>,
     /// Chosen cover candidate; None keeps the current cover.
     pub cover: Option<usize>,
+    /// Proposed new file name (AcoustID package's pattern) and whether to apply it.
+    pub rename: Option<String>,
+    pub rename_on: bool,
 }
 
 impl Review {
@@ -881,11 +1082,21 @@ impl Review {
             old_cover,
             covers,
             cover,
+            rename: None,
+            rename_on: false,
         }
+    }
+    /// Propose a new file name (ticked by default).
+    pub fn with_rename(mut self, name: Option<String>) -> Self {
+        self.rename_on = name.is_some();
+        self.rename = name;
+        self
     }
     /// Number of fields (cover included) this file would change.
     pub fn changes(&self) -> usize {
-        self.fields.iter().filter(|b| **b).count() + usize::from(self.cover.is_some())
+        self.fields.iter().filter(|b| **b).count()
+            + usize::from(self.cover.is_some())
+            + usize::from(self.rename_on && self.rename.is_some())
     }
 }
 
@@ -929,6 +1140,8 @@ struct Row {
     path: PathBuf,
     old: Tags,
     cand: Candidate,
+    /// Proposed file name (AcoustID package).
+    rename: Option<String>,
 }
 
 enum Msg {
@@ -943,6 +1156,7 @@ enum Msg {
         covers: usize,
         lines: Vec<String>,
         paths: Vec<PathBuf>,
+        renamed: Vec<(PathBuf, PathBuf)>,
     },
 }
 
@@ -955,6 +1169,8 @@ pub struct AutoTagger {
     reviews: Vec<Review>,
     /// Backup folder of the last apply and the files it changed (Undo).
     session: Option<(PathBuf, Vec<PathBuf>)>,
+    /// Files the last apply renamed: (old, new).
+    renamed: Vec<(PathBuf, PathBuf)>,
 }
 
 fn cover_cache() -> PathBuf {
@@ -1053,6 +1269,12 @@ impl AutoTagger {
             let o = if o.is_empty() { "—".to_string() } else { o };
             s += &format!("{f}:  {o}  →  {n}\n");
         }
+        if let Some(n) = &r.rename {
+            s += &format!(
+                "File name:  {}  →  {n}\n",
+                r.path.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
         s += "Cover:  front cover from the Cover Art Archive, if there is one\n";
         s
     }
@@ -1063,17 +1285,43 @@ impl AutoTagger {
             .reviews
             .iter()
             .map(|r| {
-                let fields: Vec<TagField> = review_fields(&r.old, &r.cand.tags)
+                let mut fields: Vec<TagField> = review_fields(&r.old, &r.cand.tags)
                     .into_iter()
                     .zip(&r.fields)
-                    .map(|((name, o, n), on)| TagField {
-                        name: name.into(),
-                        changed: field_changes(&o, &n),
-                        old: o.into(),
-                        new: n.into(),
-                        checked: *on,
+                    .map(|((name, o, n), on)| {
+                        let changed = field_changes(&o, &n);
+                        let (o, n) = if name == "Lyrics" {
+                            (lyrics_summary(&o), lyrics_summary(&n))
+                        } else {
+                            (o, n)
+                        };
+                        TagField {
+                            name: name.into(),
+                            changed,
+                            old: o.into(),
+                            new: n.into(),
+                            checked: *on,
+                            source: super::tagsources::source_of(&r.cand, name).into(),
+                        }
                     })
                     .collect();
+                // Rename proposal: the row after the tag fields.
+                if let Some(n) = &r.rename {
+                    fields.push(TagField {
+                        name: "File name".into(),
+                        changed: true,
+                        old: r
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .as_ref()
+                            .into(),
+                        new: n.as_str().into(),
+                        checked: r.rename_on,
+                        source: "Your pattern".into(),
+                    });
+                }
                 let covers: Vec<TagCover> = r
                     .covers
                     .iter()
@@ -1093,7 +1341,7 @@ impl AutoTagger {
                         .into(),
                     source: format!(
                         "{} · {}%",
-                        if r.cand.source == "AcoustID" {
+                        if r.cand.source.starts_with("AcoustID") {
                             "AcoustID + MusicBrainz"
                         } else {
                             "MusicBrainz search"
@@ -1151,18 +1399,33 @@ impl AutoTagger {
             return;
         }
         let embed = cx.flag("cover");
+        let opts = super::tagsources::Opts {
+            deezer: cx.flag("deezer"),
+            itunes: cx.flag("itunes"),
+            lastfm_key: cx.get("lastfm-key"),
+            discogs_token: cx.get("discogs-token"),
+            lyrics: cx.flag("lyrics"),
+        };
         let (tx, rx) = channel();
         self.rx = Some(rx);
-        Self::ui(cx, "Fetching cover art candidates…", true);
+        Self::ui(cx, "Asking more sources and fetching cover art…", true);
         std::thread::spawn(move || {
             let total = picks.len();
             let v = picks
                 .into_iter()
                 .enumerate()
-                .map(|(i, (r, others))| {
+                .map(|(i, (mut r, others))| {
+                    let _ = tx.send(Msg::Status(format!(
+                        "Deezer / iTunes / Last.fm / Discogs / lyrics {}/{total}…",
+                        i + 1
+                    )));
+                    let dur = read_tags(&r.path).map(|(_, d)| d).unwrap_or(0.0);
+                    for n in super::tagsources::enrich(&mut r.cand, &opts, dur) {
+                        eprintln!("vivi: tagger source: {n}");
+                    }
                     let _ = tx.send(Msg::Status(format!("Fetching covers {}/{total}…", i + 1)));
                     let covers = cover_candidates(&r.cand, &others, 6);
-                    Review::new(r.path, r.old, r.cand, covers, embed)
+                    Review::new(r.path, r.old, r.cand, covers, embed).with_rename(r.rename)
                 })
                 .collect();
             let _ = tx.send(Msg::Reviews(v));
@@ -1193,7 +1456,7 @@ impl AutoTagger {
         self.session = Some((session, Vec::new()));
         std::thread::spawn(move || {
             let (mut files, mut fields, mut covers) = (0, 0, 0);
-            let (mut lines, mut paths) = (Vec::new(), Vec::new());
+            let (mut lines, mut paths, mut renamed) = (Vec::new(), Vec::new(), Vec::new());
             for r in &todo {
                 let name = r
                     .path
@@ -1206,7 +1469,9 @@ impl AutoTagger {
                         files += 1;
                         fields += n;
                         covers += usize::from(c);
-                        paths.push(r.path.clone());
+                        if n > 0 || c {
+                            paths.push(r.path.clone());
+                        }
                         lines.push(format!(
                             "✓ {name}: {n} field{}{}",
                             if n == 1 { "" } else { "s" },
@@ -1228,6 +1493,15 @@ impl AutoTagger {
                                 lines.push(format!("      {f}:  {o}  →  {nv}"));
                             }
                         }
+                        if let (true, Some(n)) = (r.rename_on, &r.rename) {
+                            match rename_file(&r.path, n) {
+                                Ok(to) => {
+                                    lines.push(format!("      File name:  {name}  →  {n}"));
+                                    renamed.push((r.path.clone(), to));
+                                }
+                                Err(e) => lines.push(format!("      File name not changed: {e}")),
+                            }
+                        }
                     }
                     Err(e) => lines.push(format!("✗ {name}: {e}")),
                 }
@@ -1238,6 +1512,7 @@ impl AutoTagger {
                 covers,
                 lines,
                 paths,
+                renamed,
             });
         });
     }
@@ -1247,6 +1522,12 @@ impl AutoTagger {
             return;
         };
         let (mut ok, mut errs) = (0, Vec::new());
+        // Rename back first: the backups are keyed by the original path.
+        for (old, new) in std::mem::take(&mut self.renamed) {
+            if let Err(e) = std::fs::rename(&new, &old) {
+                errs.push(format!("{}: {e}", new.display()));
+            }
+        }
         for p in &paths {
             match restore(&dir, p) {
                 Ok(()) => ok += 1,
@@ -1266,6 +1547,55 @@ impl AutoTagger {
         cx.app.set_tr_summary("Changes undone".into());
         cx.app.set_tr_status(s.as_str().into());
         cx.toast(&s);
+    }
+
+    /// Candidates from the AcoustID package: `args` = [path, json] with the AcoustID lookup
+    /// response and the file name pattern. MusicBrainz is queried here (same as
+    /// [`identify`]), then the usual candidates list and review follow.
+    fn external(&mut self, cx: &Ctx, args: &[String]) {
+        let (Some(path), Some(json)) = (args.first(), args.get(1)) else {
+            return;
+        };
+        let v: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+        let pattern = v["pattern"].as_str().unwrap_or("").to_string();
+        let ids = parse_acoustid(&v["acoustid"]);
+        let target = PathBuf::from(path);
+        self.cancel.store(true, Ordering::Relaxed);
+        self.cancel = Arc::new(AtomicBool::new(false));
+        let a = cx.app;
+        a.set_settings_open(false);
+        a.set_md_owner(ID.into());
+        a.set_md_title("Auto-tagger".into());
+        a.set_md_placeholder("File or folder to tag".into());
+        a.set_md_search_label("Identify".into());
+        a.set_md_primary("Review changes…".into());
+        a.set_md_secondary("Review all files…".into());
+        a.set_md_sources(ModelRc::new(VecModel::from(
+            Vec::<slint::SharedString>::new(),
+        )));
+        a.set_md_query(path.as_str().into());
+        a.set_md_detail("".into());
+        a.set_md_open(true);
+        self.batch = false;
+        self.rows.clear();
+        self.show_rows(cx, None);
+        Self::ui(
+            cx,
+            "AcoustID match from the plugin: looking up MusicBrainz…",
+            true,
+        );
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+        std::thread::spawn(move || {
+            let m = match external_rows(&target, &ids, &pattern) {
+                Ok(rows) if rows.is_empty() => {
+                    Msg::Done("AcoustID: no match for the fingerprint".into())
+                }
+                Ok(rows) => Msg::Rows(rows, "Fingerprinted by the AcoustID plugin".into()),
+                Err(e) => Msg::Done(e),
+            };
+            let _ = tx.send(m);
+        });
     }
 
     fn start(&mut self, cx: &Ctx) {
@@ -1302,6 +1632,7 @@ impl AutoTagger {
                                 path: target.clone(),
                                 old: old.clone(),
                                 cand,
+                                rename: None,
                             })
                             .collect();
                         Msg::Rows(rows, notes.join(". "))
@@ -1315,6 +1646,24 @@ impl AutoTagger {
             self.rx = None;
         }
     }
+}
+
+/// Rows for AcoustID recording ids (score ≥ 50, best three) with rename proposals.
+fn external_rows(path: &Path, ids: &[(String, u32)], pattern: &str) -> Result<Vec<Row>, String> {
+    let (old, _) = read_tags(path)?;
+    let mut rows = Vec::new();
+    for (id, score) in ids.iter().filter(|(_, s)| *s >= 50).take(3) {
+        let rec = lookup_recording(id)?;
+        for cand in candidates_from_recording(&rec, *score, "AcoustID", 4) {
+            rows.push(Row {
+                path: path.to_path_buf(),
+                old: old.clone(),
+                rename: rename_to(pattern, &cand.tags, path),
+                cand,
+            });
+        }
+    }
+    Ok(rows)
 }
 
 fn batch(dir: &Path, key: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
@@ -1338,6 +1687,7 @@ fn batch(dir: &Path, key: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
                         path: p.clone(),
                         old,
                         cand,
+                        rename: None,
                     })));
                 }
                 _ => skipped += 1,
@@ -1355,7 +1705,7 @@ impl Plugin for AutoTagger {
         Manifest::builtin(
             ID,
             "Auto-tagger",
-            "Identifies songs by their audio (AcoustID fingerprint) or tags, looks them up on MusicBrainz and writes title, artist, album, date, track, genre and Cover Art Archive covers after a preview. Originals are backed up.",
+            "Identifies songs by their audio (AcoustID fingerprint) or tags, looks them up on MusicBrainz, Deezer, iTunes, Last.fm and Discogs and writes tags, hi-res covers and optional LRCLIB synced lyrics after a preview that shows each field's source. Originals are backed up.",
             "tag",
         )
         .setting(SettingSpec::secret(
@@ -1368,6 +1718,34 @@ impl Plugin for AutoTagger {
             "Embed cover art",
             "Download the front cover from the Cover Art Archive.",
             true,
+        ))
+        .setting(SettingSpec::toggle(
+            "deezer",
+            "Deezer",
+            "Fill album, track, date and add a 1000 px cover from Deezer (no account needed).",
+            true,
+        ))
+        .setting(SettingSpec::toggle(
+            "itunes",
+            "iTunes",
+            "Fill album, track, date, genre and add a 1400 px cover from the iTunes Search API (no account needed).",
+            true,
+        ))
+        .setting(SettingSpec::secret(
+            "lastfm-key",
+            "Last.fm API key",
+            "Optional. Genre from Last.fm's top tags; create a free key at last.fm/api/account/create.",
+        ))
+        .setting(SettingSpec::secret(
+            "discogs-token",
+            "Discogs token",
+            "Optional. Year, genre/style and cover from Discogs; personal access token from discogs.com/settings/developers.",
+        ))
+        .setting(SettingSpec::toggle(
+            "lyrics",
+            "Embed synced lyrics",
+            "Adds LRCLIB lyrics to the review: MP3 gets SYLT + USLT, FLAC/Ogg/Opus a LYRICS comment, M4A ©lyr (LRC text).",
+            false,
         ))
         .setting(SettingSpec::text(
             "folder",
@@ -1440,6 +1818,7 @@ impl Plugin for AutoTagger {
                 None => cx.toast("Play a local file first"),
             },
             "search" => self.start(cx),
+            "acoustid" => self.external(cx, args),
             "select" => {
                 if let Some(i) = idx() {
                     cx.app.set_md_detail(self.detail(i).into());
@@ -1464,6 +1843,9 @@ impl Plugin for AutoTagger {
                 };
                 match (name, j) {
                     ("toggle-file", _) => r.on = !r.on,
+                    ("toggle-field", Some(j)) if j as usize >= r.fields.len() => {
+                        r.rename_on = !r.rename_on && r.rename.is_some();
+                    }
                     ("toggle-field", Some(j)) => {
                         let (o, n) = {
                             let f = review_fields(&r.old, &r.cand.tags);
@@ -1492,6 +1874,7 @@ impl Plugin for AutoTagger {
                     if r.cover.is_none() && !r.covers.is_empty() {
                         r.cover = Some(0);
                     }
+                    r.rename_on = r.rename.is_some();
                 }
                 self.render_review(cx);
                 self.apply_reviews(cx);
@@ -1579,8 +1962,10 @@ impl Plugin for AutoTagger {
                     covers,
                     lines,
                     paths,
+                    renamed,
                 } => {
                     self.rx = None;
+                    self.renamed = renamed;
                     if let Some(s) = &mut self.session {
                         s.1 = paths;
                     }
@@ -1706,6 +2091,8 @@ mod tests {
             release_group: String::new(),
             score: 95,
             source: "AcoustID",
+            sources: Vec::new(),
+            extra_covers: Vec::new(),
         };
         let cover = CoverOpt {
             label: "Front".into(),
@@ -1728,6 +2115,99 @@ mod tests {
         assert_ne!(embedded_cover(&p).as_deref(), Some(png.as_slice()));
         let _ = std::fs::remove_dir_all(&session);
         let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn embeds_synced_lyrics() {
+        let Some(p) = tmp_copy("lyrics") else { return };
+        let lrc = "[00:01.50]First line\n[00:04.00]Second line\n";
+        let t = Tags {
+            lyrics: lrc.into(),
+            ..Default::default()
+        };
+        write_tags(&p, &t, None).unwrap();
+        let (back, _) = read_tags(&p).unwrap();
+        assert_eq!(back.lyrics.trim(), lrc.trim(), "USLT holds the LRC text");
+        assert_eq!(
+            read_sylt(&p),
+            vec![
+                (1500, "First line".to_string()),
+                (4000, "Second line".to_string())
+            ]
+        );
+        // Writing again replaces the SYLT frame instead of adding one.
+        write_tags(&p, &t, None).unwrap();
+        assert_eq!(read_sylt(&p).len(), 2);
+        assert_eq!(lyrics_summary(lrc), "Synced, 2 lines: First line");
+        // FLAC / Opus / M4A: one text field (LYRICS / ©lyr) with the LRC.
+        for ext in ["flac", "opus", "m4a"] {
+            let out = p.with_extension(ext);
+            let ok = std::process::Command::new("ffmpeg")
+                .args(["-v", "error", "-y", "-i"])
+                .arg(&p)
+                .args(["-t", "3", "-map", "0:a"])
+                .arg(&out)
+                .status()
+                .is_ok_and(|s| s.success());
+            if !ok {
+                continue;
+            }
+            write_tags(&out, &t, None).unwrap();
+            assert_eq!(
+                read_tags(&out).unwrap().0.lyrics.trim(),
+                lrc.trim(),
+                "{ext}"
+            );
+            let _ = std::fs::remove_file(&out);
+        }
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn rename_pattern() {
+        let t = Tags {
+            title: "Song: Part 1/2".into(),
+            artist: "AC/DC".into(),
+            album: "Album".into(),
+            date: "1980-07-25".into(),
+            track: "3/10".into(),
+            ..Default::default()
+        };
+        let p = Path::new("/m/01 track.mp3");
+        assert_eq!(
+            rename_to("{artist} - {title}", &t, p).as_deref(),
+            Some("AC_DC - Song_ Part 1_2.mp3")
+        );
+        assert_eq!(
+            rename_to("{track} {artist} - {album} ({year}) - {title}", &t, p).as_deref(),
+            Some("03 AC_DC - Album (1980) - Song_ Part 1_2.mp3")
+        );
+        // Empty fields leave no dangling separators.
+        let bare = Tags {
+            title: "T".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            rename_to("{artist} - {title}", &bare, p).as_deref(),
+            Some("T.mp3")
+        );
+        assert_eq!(rename_to("{artist} - {title}", &Tags::default(), p), None);
+        assert_eq!(
+            rename_to("{title}", &bare, Path::new("/m/T.mp3")),
+            None,
+            "same name"
+        );
+        let d = std::env::temp_dir().join(format!("vivi-rename-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("a.mp3"), b"x").unwrap();
+        std::fs::write(d.join("b.mp3"), b"y").unwrap();
+        assert!(
+            rename_file(&d.join("a.mp3"), "b.mp3").is_err(),
+            "never overwrites"
+        );
+        let to = rename_file(&d.join("a.mp3"), "c.mp3").unwrap();
+        assert_eq!(std::fs::read(to).unwrap(), b"x");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

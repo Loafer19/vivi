@@ -1,0 +1,10 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Music", "Tools"]
+tags = ["acoustid", "musicbrainz", "chromaprint", "tagging", "rename"]
+screenshots = ["acoustid-settings"]
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-15"
+notes = "First release: fpcalc fingerprint (system or downloaded), AcoustID + MusicBrainz lookup into the Auto-tagger review, file name proposal from a pattern."

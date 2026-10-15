@@ -27,6 +27,7 @@ pub mod skip_intro;
 pub mod streams;
 pub mod subtitles;
 pub mod tagger;
+pub mod tagsources;
 pub mod web;
 
 use crate::config::Config;
@@ -496,6 +497,7 @@ pub fn client_message(args: &[String]) {
     match args {
         [m, id, key, value] if m == "vivi-setting" => return store_setting(id, key, value),
         [m, id, key] if m == "vivi-pick-folder" => return pick_folder(id, key),
+        [m, path, json] if m == "vivi-tagger-acoustid" => return tagger_acoustid(path, json),
         _ => {}
     }
     let Some(text) = toast_text(args) else { return };
@@ -504,6 +506,33 @@ pub fn client_message(args: &[String]) {
             show_toast(&a, text);
         }
     });
+}
+
+/// `script-message vivi-tagger-acoustid <path> <json>` (AcoustID package): open the
+/// Auto-tagger's candidates and preview for that file.
+fn tagger_acoustid(path: &str, json: &str) {
+    let on = with(|r| {
+        r.entries
+            .iter()
+            .any(|e| e.active && e.manifest.id == tagger::ID)
+    })
+    .unwrap_or(false);
+    if on {
+        command(
+            tagger::ID,
+            "acoustid",
+            &[path.to_string(), json.to_string()],
+        );
+    } else {
+        with(|r| {
+            if let Some(a) = r.app.upgrade() {
+                show_toast(
+                    &a,
+                    "Turn on the Auto-tagger plugin to review AcoustID matches",
+                );
+            }
+        });
+    }
 }
 
 /// `script-message vivi-setting <id> <key> <value>`: a package saves one of its own

@@ -387,7 +387,7 @@ export component NowPlayingCard inherits Rectangle {
 }
 
 // ---------- Auto-tagger review (src/plugins/tagger.rs) ----------
-export struct TagField { name: string, old: string, new: string, changed: bool, checked: bool }
+export struct TagField { name: string, old: string, new: string, changed: bool, checked: bool, source: string }  // source: where `new` comes from
 export struct TagCover { img: image, label: string, info: string }
 export struct TagFile {
     name: string, source: string, confidence: int, checked: bool, fields: [TagField],
@@ -470,7 +470,7 @@ export component TagReviewDialog inherits Rectangle {
                 VerticalLayout {
                     padding: 16px; spacing: 14px; alignment: start;
                     for f[fi] in root.files: card := Rectangle {
-                        property <length> colw: (tdlg.width - 32px - 14px - 24px - 28px - 110px - 16px - 30px) / 2;
+                        property <length> colw: (tdlg.width - 32px - 14px - 24px - 28px - 110px - 16px - 30px - 110px) / 2;
                         border-radius: 8px; background: Theme.bg-a3; border-width: 1px; border-color: Theme.bg-a1;
                         opacity: f.checked ? 1 : 0.55;
                         VerticalLayout {
@@ -493,6 +493,7 @@ export component TagReviewDialog inherits Rectangle {
                                 Text { width: card.colw; text: "Current"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
                                 Text { width: 16px; text: ""; }
                                 Text { width: card.colw; text: "Proposed"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
+                                Text { width: 100px; text: "Source"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
                             }
                             for t[ti] in f.fields: Rectangle {
                                 height: 28px; border-radius: 4px;
@@ -506,6 +507,7 @@ export component TagReviewDialog inherits Rectangle {
                                     Text { width: 16px; text: t.changed ? "→" : "="; color: t.changed ? Theme.accent : Theme.fg-a3; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; }
                                     Text { width: card.colw; text: t.changed ? t.new : (t.old == "" ? "—" : t.old); font-size: 13px; vertical-alignment: center; overflow: elide;
                                         color: t.changed ? (t.checked ? Theme.accent-bright : Theme.fg-a2) : Theme.fg-a3; font-weight: t.changed ? 600 : 400; }
+                                    Text { width: 100px; text: t.changed ? t.source : ""; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; overflow: elide; }
                                 }
                             }
                             // Cover art: current vs. candidates
