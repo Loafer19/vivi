@@ -31,6 +31,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Music visualizer for audio-only files (no video track; cover art does not count): Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](docs/screenshots/visualizer.png)
 - Settings window rebuilt per Figma: grouped sidebar (App / Media / System), 13 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
 - Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), Auto-tagger (AcoustID + MusicBrainz + Cover Art Archive), Free Music (Internet Archive / Jamendo), Network Streams (Internet radio, M3U/IPTV, saved streams), Discord Rich Presence, Remote Control (phone web page), the visualizer, plus downloadable plugins installed and updated from Settings → Extensions → Browse (A-B Loop, Night Mode, Playback Statistics, ListenBrainz Scrobbler, Subtitle Auto-Sync, SponsorBlock, Scene Chapters & Thumbnails) and mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
+- 10-band equalizer with VLC presets and custom presets, plus video filters (adjust, crop, colour effects) and audio effects (compressor, reverb, delay), saved in `~/.config/vivi/fx.toml`
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
 | Library | Side panel |
@@ -46,6 +47,12 @@ instant startup, a simple interface by default with deep customization when you 
 | <img src="docs/screenshots/customize.png" width="420"> | <img src="docs/screenshots/light.png" width="420"> |
 | **Miniplayer** | **Onboarding** |
 | <img src="docs/screenshots/miniplayer.png" width="260"> | <img src="docs/screenshots/onboarding.png" width="420"> |
+| **Equalizer** | **Audio effects** |
+| <img src="docs/screenshots/panel-audio.png" width="420"> | <img src="docs/screenshots/audio-effects.png" width="420"> |
+| **Open Network Stream** | **New Playlist** |
+| <img src="docs/screenshots/network.png" width="420"> | <img src="docs/screenshots/new-playlist.png" width="420"> |
+| **Video filters** | **Miniplayer queue** |
+| <img src="docs/screenshots/panel-video.png" width="420"> | <img src="docs/screenshots/miniplayer-queue.png" width="200"> |
 
 All screenshots are in [docs/screenshots](docs/screenshots) (every settings page is there as `settings-<page>.png`).
 They are captured on Xvfb from the release build with `VIVI_SCREENSHOT=1`, which enables the same

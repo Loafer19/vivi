@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "_site"
 ICON_DIR = ROOT / "docs/site/icons"
 IMAGES = ["player", "extensions", "lyrics", "skip-intro", "add-subtitles", "visualizer", "library-home",
-          "settings", "panel-subtitles", "menu-main", "miniplayer"]
+          "settings", "panel-subtitles", "menu-main", "miniplayer", "panel-audio", "network"]
 
 
 def icon(name: str) -> str:
