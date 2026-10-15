@@ -2,10 +2,15 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-15
+
+Highlights: Discord Rich Presence and Remote Control become downloadable plugins with small native helpers, a new YouTube & yt-dlp plugin (playlists, sizes, downloads; manages its own yt-dlp and ffmpeg), an MCP server for AI agents, radio lyrics, a visualizer fed by mpv's real output, and the Inter font bundled in the Flatpak and AppImage.
+
 ### Added
 - **MCP server for AI agents** (#68): new `vivi-mcp` binary (stdio transport, std + serde_json only) that controls a running Vivi over a private local socket (`$XDG_RUNTIME_DIR/vivi.sock`, mode 0600). Tools: play/pause/stop, seek, volume, open file or URL, queue list/add/play/next/previous, now-playing status, library search, subtitles on/off, EQ presets; resources `vivi://status` and `vivi://playlist`. Off by default: *Settings → General → Remote control* or `VIVI_IPC=1`. Docs with client configs in `docs/mcp.md` and on the site; scripted client test in `tests/mcp.rs`.
 - **Radio lyrics** (Lyrics plugin): on network streams, every change of the stream title (`icy-title`, else `media-title`) is parsed as "Artist - Title" (decorations like "(Radio Edit)" and "feat." dropped) and looked up on LRCLIB (`/api/get`, then `/api/search`, also matching "Title - Artist"). Ads, jingles, station IDs and titles equal to the station name are skipped; results are cached in memory and in `~/.cache/vivi/lyrics` (misses too). Plain lyrics are shown as a scrollable block because the song's start is unknown; the *Radio lyrics* setting can switch to *Approximate sync* (synced lines timed from the title change, plus *Radio sync offset* in seconds) or *Off*.
 - **YouTube & yt-dlp** plugin (`youtube`): list a video or playlist URL into the playlist (`Alt+U` pastes from the clipboard), estimated size per quality, download video or audio only into a chosen folder with progress toasts. Uses a recent system yt-dlp, otherwise manages (verifies, updates) its own copy from the official GitHub releases. Vivi appends that copy's folder to `PATH`, so the Flatpak streams YouTube with it.
+- The YouTube plugin uses a system ffmpeg, or downloads a verified static ffmpeg + ffprobe (BtbN builds for Linux/Windows, osxexperts.net for macOS) only when a download needs it (1080p+ merging, mp3/m4a/opus conversion); only that managed copy is updated. Its size is shown in Browse and before it downloads.
 - Flatpak and AppImage bundle the **Inter** UI font (`share/vivi/fonts`, used through `SLINT_FONT_PATH`); the Flatpak may reach Discord's IPC socket.
 
 ### Changed
@@ -13,6 +18,9 @@
 - **Discord Rich Presence** and **Remote Control** moved out of the core into downloadable plugins (`discord`, `remote-control`, same ids so settings carry over). Each is a Lua script plus a small native helper (`vivi-discord`, `vivi-remote`, sources in `helpers/`) that talks to mpv over its JSON IPC. The `discord-rich-presence` crate is gone from Vivi.
 - Plugin packages can ship per-platform native helpers: manifest `binaries`, catalog `needs`/`binaries` with one sha256 per platform asset, built by CI for Linux x86_64/aarch64, Windows x64 and macOS. Browse shows the size including the helper, or "Not available for <platform>".
 - Packages get their folder as script-opt `<id>-pkgdir`, can save their own settings (`vivi-setting`) and open a folder dialog (`vivi-pick-folder`); action settings can set a button `label`.
+
+### Fixed
+- Downloadable plugins declared `min_vivi = 0.8.0`, but packages exist only since 0.9.0; they now say 0.9.0 (new patch versions of A-B Loop, Night Mode, Playback Statistics, Scene Chapters, ListenBrainz Scrobbler, SponsorBlock, Subtitle Auto-Sync).
 
 ## [0.9.0] - 2026-10-15
 
