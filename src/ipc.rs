@@ -7,8 +7,10 @@
 //! `$VIVI_SOCKET`, else `$XDG_RUNTIME_DIR/vivi.sock`, else `<cache dir>/vivi.sock`, and is
 //! created with mode 0600, so only the current user can connect. Unix only.
 
+#[cfg(unix)]
 use serde_json::{json, Value};
 
+#[cfg(unix)]
 /// Path of the control socket (keep in sync with `src/bin/vivi-mcp.rs`).
 pub fn socket_path() -> std::path::PathBuf {
     if let Some(p) = std::env::var_os("VIVI_SOCKET") {
@@ -20,6 +22,7 @@ pub fn socket_path() -> std::path::PathBuf {
     }
 }
 
+#[cfg(unix)]
 /// Library search (runs on the connection thread, not the UI thread).
 fn search(args: &Value) -> Result<Value, String> {
     let q = args["query"].as_str().unwrap_or("").to_lowercase();
@@ -50,6 +53,7 @@ fn search(args: &Value) -> Result<Value, String> {
 }
 
 /// Radio + TV directory search (network; runs on the connection thread).
+#[cfg(unix)]
 fn search_streams(args: &Value) -> Result<Value, String> {
     let q = args["query"].as_str().unwrap_or("").trim();
     if q.is_empty() {
@@ -169,6 +173,7 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
 #[cfg(not(unix))]
 pub fn setup(_: &crate::AppWindow, _: &std::rc::Rc<crate::player::Player>, _: bool) {}
 
+#[cfg(unix)]
 fn target(args: &Value) -> Result<String, String> {
     let t = args["target"].as_str().unwrap_or("").trim();
     if t.is_empty() {
@@ -177,6 +182,7 @@ fn target(args: &Value) -> Result<String, String> {
     Ok(t.strip_prefix("file://").unwrap_or(t).to_string())
 }
 
+#[cfg(unix)]
 fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
     let num = |k: &str| p.get(k).and_then(|s| s.parse::<f64>().ok());
     let path = p.get("path").unwrap_or_default();
@@ -202,8 +208,10 @@ fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
     })
 }
 
+#[cfg(unix)]
 use slint::{ComponentHandle, Model};
 
+#[cfg(unix)]
 fn handle(
     a: &crate::AppWindow,
     p: &crate::player::Player,

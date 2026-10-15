@@ -292,6 +292,7 @@ pub fn manifests() -> Vec<Manifest> {
 }
 
 /// All plugins with whether each is enabled (for the control socket).
+#[cfg(unix)]
 pub fn states() -> Vec<(Manifest, bool)> {
     with(|r| {
         let c = r.cfg.borrow();

@@ -5,7 +5,7 @@
 //! `std` and `serde_json`, so it stays tiny and does not link the player or the UI.
 
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
 const PROTOCOL: &str = "2025-06-18";
@@ -30,6 +30,7 @@ fn socket_path() -> PathBuf {
 /// Send one request to Vivi and return its result.
 #[cfg(unix)]
 fn call_vivi(cmd: &str, args: Value) -> Result<Value, String> {
+    use std::io::BufReader;
     use std::os::unix::net::UnixStream;
     let path = socket_path();
     let mut s = UnixStream::connect(&path).map_err(|e| {

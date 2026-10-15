@@ -318,6 +318,7 @@ pub fn make_thumb(m: &Media) -> Option<PathBuf> {
 }
 
 /// Cover art (audio) or a frame at ~10 % (video) as a 256 px PNG, for MPRIS widgets.
+#[cfg(target_os = "linux")]
 pub fn make_art(path: &str, out: &Path) {
     if let Some(d) = out.parent() {
         let _ = std::fs::create_dir_all(d);

@@ -66,7 +66,7 @@ export component LyricsView inherits Rectangle {
     // Plain lyrics (no timing): every line, scroll with the wheel or by dragging.
     if root.plain: Flickable {
         x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
-        viewport-height: col.preferred-height;
+        content-height: col.preferred-height;
         col := VerticalLayout {
             padding-top: 12px; padding-bottom: 12px;
             for l in root.lines: Text {
