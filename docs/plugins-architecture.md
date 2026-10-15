@@ -20,6 +20,7 @@ Status: implemented in the Unreleased version (after v0.8.0). Code: `src/plugins
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint), with a results list. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
+| Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
 | Free Music | Search dialog with results, licence details, preview and download; writes tags with lofty. |
 
 These use the Rust UI directly. The ListenBrainz Scrobbler needs no UI beyond its settings, so it is a
@@ -38,6 +39,19 @@ WASM step below. They stay built in until that exists.
 MusicBrainz calls share one process-wide limiter (at most one request per second) and send
 `User-Agent: Vivi/<version> ( https://github.com/Loafer19/vivi )`. Last.fm scrobbling needs an
 MD5-signed desktop auth flow through the browser; it is left for a later built-in plugin.
+
+### Network Streams (#67)
+
+Built in (`network-streams`): it needs a list dialog, so it reuses the shared plugin dialog
+(source dropdown, query, results, detail pane) rather than the *Open Network Stream* dialog,
+which keeps its Figma design. Sources: radio-browser.info (`/json/stations/search` by
+name / country / countrycode / tag, `/json/stations/topvote`, `hidebroken=true`, ordered by
+votes, mirrors `de1`, `fi1`, `at1` tried in turn; a play is reported to `/json/url` as the API
+asks), M3U / extended M3U / IPTV playlists from a path or URL (`#EXTINF` name, `tvg-logo`,
+`group-title`, `tvg-country`; relative entries skipped), and JSON lists `saved.json` /
+`recent.json` (30 entries, de-duplicated by URL) under `$XDG_DATA_HOME/vivi/streams/`.
+Stream info reads mpv's `icy-title`, `icy-name`, codec, bitrate and `demuxer-cache-duration`.
+No key. Later: EPG for IPTV, podcasts (RSS), logos in the list.
 
 ## Options considered
 

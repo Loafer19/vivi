@@ -209,6 +209,32 @@
       ]
     },
     {
+      "id": "network-streams",
+      "name": "Network Streams",
+      "description": "Browse Internet radio (radio-browser.info), import M3U/IPTV playlists, keep saved and recent streams, and see stream info (now-playing title, codec, bitrate, buffer). No key needed.",
+      "version": "0.8.0",
+      "author": "Vivi",
+      "icon": "streams",
+      "lucide": "radio",
+      "kind": "builtin",
+      "default_enabled": true,
+      "issue": 67,
+      "settings": [
+        {
+          "key": "open",
+          "title": "Browse streams",
+          "type": "action",
+          "default": ""
+        },
+        {
+          "key": "info",
+          "title": "Stream info",
+          "type": "action",
+          "default": ""
+        }
+      ]
+    },
+    {
       "id": "script-now-playing",
       "name": "Now Playing OSD",
       "description": "Example mpv Lua script: shows the title on the OSD when a file starts.",

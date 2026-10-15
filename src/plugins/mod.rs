@@ -24,6 +24,7 @@ pub mod lyrics;
 pub mod packages;
 pub mod scripts;
 pub mod skip_intro;
+pub mod streams;
 pub mod subtitles;
 pub mod tagger;
 pub mod web;
@@ -233,6 +234,7 @@ pub fn builtin() -> Vec<Box<dyn Plugin>> {
         Box::new(subtitles::SubtitleSearch::default()),
         Box::new(tagger::AutoTagger::default()),
         Box::new(free_music::FreeMusic::default()),
+        Box::new(streams::Streams::default()),
     ]
 }
 
