@@ -61,3 +61,4 @@ h2 { font-size:22px; margin:36px 0 14px; }
 .settings li { padding:6px 0; border-bottom:1px solid var(--line); font-size:14px; color:var(--fg2); } .settings b { color:var(--fg); font-weight:500; }
 footer { border-top:1px solid var(--line); color:var(--fg3); font-size:13px; text-align:center; padding:28px 24px; }
 @media (max-width:760px) { .cols { grid-template-columns:1fr; } .phead { flex-direction:column; } .hero h1 { font-size:34px; } .wide { display:none; } .toolbar { position:static; } }
+.card[hidden], [hidden] { display:none !important; }
