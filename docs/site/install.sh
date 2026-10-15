@@ -36,7 +36,7 @@ uninstall() {
       [ -n "$f" ] && rm -f "$f"
     done < "$MANIFEST"
     rm -rf "$DATA/vivi-installer"
-    have update-desktop-database && update-desktop-database "$DATA/applications" >/dev/null 2>&1 || true
+    if have update-desktop-database; then update-desktop-database "$DATA/applications" >/dev/null 2>&1 || true; fi
   elif ! is_arch; then
     warn "nothing to uninstall (no $MANIFEST)"
   fi
@@ -131,8 +131,8 @@ install_local() {
   put 644 "$src/vivi.svg" "$icons/scalable/apps/vivi.svg"
   put 644 "$src/vivi.png" "$icons/256x256/apps/vivi.png"
   mv -f "$MANIFEST.new" "$MANIFEST"
-  have update-desktop-database && update-desktop-database "$apps" >/dev/null 2>&1 || true
-  have gtk-update-icon-cache && gtk-update-icon-cache -q -t "$icons" >/dev/null 2>&1 || true
+  if have update-desktop-database; then update-desktop-database "$apps" >/dev/null 2>&1 || true; fi
+  if have gtk-update-icon-cache; then gtk-update-icon-cache -q -t "$icons" >/dev/null 2>&1 || true; fi
   check_deps "$bindir/vivi" || warn "Vivi is installed but will not start until the libraries above are installed"
   case :$PATH: in
     *:"$bindir":*) ;;

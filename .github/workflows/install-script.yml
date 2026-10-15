@@ -22,7 +22,7 @@ jobs:
           - { image: "debian:13", setup: "apt-get update && apt-get install -y curl ca-certificates libmpv2 libsqlite3-0 libfontconfig1" }
           - { image: "ubuntu:24.04", setup: "apt-get update && apt-get install -y curl ca-certificates libmpv2 libsqlite3-0 libfontconfig1" }
           - { image: "debian:13", setup: "apt-get update && apt-get install -y curl ca-certificates", nompv: true }
-          - { image: "fedora:43", setup: "dnf install -y --setopt=install_weak_deps=False curl tar gzip findutils which" , nompv: true }
+          - { image: "fedora:43", setup: "dnf install -y --setopt=install_weak_deps=False curl tar gzip findutils which util-linux shadow-utils" , nompv: true }
     runs-on: ubuntu-24.04
     container: ${{ matrix.image }}
     steps:
