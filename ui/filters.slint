@@ -1,0 +1,512 @@
+// Equalizer and filter panels per the Figma "Components" frames
+// (components-miniplayer-menus-eq.png, components-dropdowns-filters.png).
+// State lives in Rust (src/fx.rs); the FxState global carries it both ways.
+import { Theme, Icon } from "theme.slint";
+import { Field, Toggle, AccentSlider, TextField } from "controls.slint";
+
+export global FxState {
+    in property <[float]> eq: [12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    in property <[float]> video: [0, 0, 1, 1, 1, 0, 0, 0];
+    in property <[float]> crop: [0, 0, 0, 0, 0];
+    in property <[float]> color: [0, 0, 0.1, 0.3, 0, 0, 0, 0, 0, 0];
+    in property <[float]> comp: [0, 0.2, 25, 100, -11, 4, 5, 7];
+    in property <[float]> reverb: [0, 8, 10, 4, 3, 3];
+    in property <[float]> delay: [0, 20, 20, 30, 80];
+    in property <string> preset: "Flat";
+    in property <[string]> builtin;
+    in property <[string]> custom;
+    in property <[string]> gradients: ["Turbo", "Magma", "Viridis", "Heat", "Cividis"];
+    in property <string> extract-color: "#FF0000";
+    in property <string> threshold-color: "#FF0000";
+    in property <color> extract-swatch: #FF0000;
+    in property <color> threshold-swatch: #FF0000;
+    in-out property <bool> eq-open: true;
+    callback set(string, int, float);
+    // Text typed into a dB/px field ("3.5 dB" → 3.5).
+    callback set-text(string, int, string);
+    callback set-color(int, string);
+    // action: "select" | "new" | "rename" | "delete" | "reset"; name; argument (new name).
+    callback preset-action(string, string, string);
+    callback reset(string);
+}
+
+// Icon for a built-in preset (assets/icons/eq-*.svg).
+global PresetIcon {
+    pure public function of(n: string) -> image {
+        return n == "Classical" ? @image-url("../assets/icons/eq-classical.svg")
+            : n == "Club" ? @image-url("../assets/icons/eq-club.svg")
+            : n == "Dance" ? @image-url("../assets/icons/eq-dance.svg")
+            : n == "Full bass" ? @image-url("../assets/icons/eq-full_bass.svg")
+            : n == "Full bass & treble" ? @image-url("../assets/icons/eq-full_bass_and_treble.svg")
+            : n == "Full treble" ? @image-url("../assets/icons/eq-full_treble.svg")
+            : n == "Headphones" ? @image-url("../assets/icons/eq-headphones.svg")
+            : n == "Large hall" ? @image-url("../assets/icons/eq-large_hall.svg")
+            : n == "Live" ? @image-url("../assets/icons/eq-live.svg")
+            : n == "Party" ? @image-url("../assets/icons/eq-party.svg")
+            : n == "Pop" ? @image-url("../assets/icons/eq-pop.svg")
+            : n == "Reggae" ? @image-url("../assets/icons/eq-reggae.svg")
+            : n == "Rock" ? @image-url("../assets/icons/eq-rock.svg")
+            : n == "Ska" ? @image-url("../assets/icons/eq-ska.svg")
+            : n == "Soft" ? @image-url("../assets/icons/eq-soft.svg")
+            : n == "Soft rock" ? @image-url("../assets/icons/eq-soft_rock.svg")
+            : n == "Techno" ? @image-url("../assets/icons/eq-techno.svg")
+            : @image-url("../assets/icons/remove.svg");
+    }
+}
+
+// Formats a value with one decimal ("12.0").
+global Fmt {
+    pure public function one(v: float) -> string {
+        let r = round(v * 10) / 10;
+        return r == round(r) ? r + ".0" : r;
+    }
+}
+
+// Row in the presets popup.
+component PresetRow inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: true;
+    in property <bool> selected;
+    in property <bool> editable;
+    in property <bool> dim;
+    callback clicked();
+    callback rename();
+    callback delete();
+    height: 30px; border-radius: 4px;
+    background: ta.has-hover || root.selected ? (Theme.dark ? #2A2A2A : #DADADA) : transparent;
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    HorizontalLayout {
+        padding-left: 8px; padding-right: 6px; spacing: 8px;
+        if root.has-icon: Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: root.icon; tint: Theme.fg-a2; }
+        Text { text: root.text; color: root.dim ? Theme.fg-a3 : Theme.fg-a2; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        if root.editable: Rectangle {
+            width: 22px;
+            Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/edit.svg"); tint: ra.has-hover ? Theme.fg-1 : Theme.fg-a3; }
+            ra := TouchArea { mouse-cursor: pointer; clicked => { root.rename(); } }
+        }
+        if root.editable: Rectangle {
+            width: 22px;
+            Icon { width: 12px; height: 12px; source: @image-url("../assets/icons/close.svg"); tint: da.has-hover ? Theme.fg-1 : Theme.fg-a3; }
+            da := TouchArea { mouse-cursor: pointer; clicked => { root.delete(); } }
+        }
+        if root.selected: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; }
+    }
+}
+
+// Editable numeric box ("0.0 dB") on the field fill.
+export component ValueBox inherits Rectangle {
+    in property <string> group;
+    in property <int> index;
+    in property <float> value;
+    in property <string> unit: " dB";
+    in property <bool> mono: true;
+    height: 28px; border-radius: 6px; background: Field.fill;
+    border-width: ti.has-focus ? 1px : 0px; border-color: Theme.accent;
+    clip: true;
+    in property <length> font-size: 12px;
+    ti := TextInput {
+        x: 2px; width: parent.width - 4px; height: parent.height;
+        text: Fmt.one(root.value) + root.unit;
+        color: Theme.fg-a2; font-size: root.font-size; font-family: root.mono ? "DM Mono" : "Inter";
+        horizontal-alignment: center; vertical-alignment: center;
+        single-line: true;
+        selection-background-color: Theme.accent-bg;
+        accepted => { FxState.set-text(root.group, root.index, self.text); self.clear-focus(); }
+    }
+}
+
+component ResetLink inherits Rectangle {
+    callback clicked();
+    width: t.preferred-width + 16px; height: 24px; border-radius: 4px;
+    background: ra.has-hover ? Field.raised : transparent;
+    t := Text { text: "Reset"; color: Theme.fg-a2; font-size: 12px; }
+    ra := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component GradientPick inherits Rectangle {
+    height: 32px; border-radius: 6px;
+    background: ga.has-hover ? Field.raised : Field.fill;
+    property <int> cur: FxState.color[9];
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 8px;
+        Text { text: FxState.gradients[root.cur]; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; horizontal-alignment: center; }
+        Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
+    }
+    ga := TouchArea { mouse-cursor: pointer; clicked => { gp.show(); } }
+    gp := PopupWindow {
+        x: 0; y: root.height + 4px; width: root.width;
+        Rectangle { background: Theme.dark ? #1F1F1F : #EAEAEA; border-radius: 8px; drop-shadow-blur: 12px; drop-shadow-color: #00000066; }
+        VerticalLayout {
+            padding: 6px;
+            for g[i] in FxState.gradients: PresetRow {
+                text: g; has-icon: false; selected: i == root.cur;
+                clicked => { FxState.set("color", 9, i); gp.close(); }
+            }
+        }
+    }
+}
+
+
+// Figma "Expand Settings ›" bar; expanded it becomes the panel header "Collapse Settings ⌄".
+export component FilterBox inherits Rectangle {
+    in-out property <bool> expanded;
+    in property <string> collapsed-text: "Expand Settings";
+    in property <string> expanded-text: "Collapse Settings";
+    in property <bool> centered;
+    border-radius: 6px;
+    background: root.expanded ? (Theme.dark ? #1E1E1E : #E4E4E4) : Field.fill;
+    clip: true;
+    VerticalLayout {
+        Rectangle {
+            height: 36px;
+            HorizontalLayout {
+                padding-left: 12px; padding-right: 10px; spacing: 8px;
+                alignment: root.centered ? center : stretch;
+                Text {
+                    text: root.expanded ? root.expanded-text : root.collapsed-text;
+                    color: Theme.fg-a2; font-size: 13px; vertical-alignment: center;
+                    horizontal-stretch: root.centered ? 0 : 1;
+                }
+                Icon {
+                    y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2;
+                    source: root.expanded ? @image-url("../assets/icons/chevron-down.svg") : @image-url("../assets/icons/chevron-right.svg");
+                }
+            }
+            TouchArea { mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; } }
+        }
+        Rectangle {
+            height: root.expanded ? body.preferred-height : 0px;
+            clip: true;
+            body := VerticalLayout {
+                padding-left: 12px; padding-right: 12px; padding-bottom: 14px; padding-top: 4px; spacing: 12px;
+                @children
+            }
+        }
+    }
+}
+
+// Label + read-out above an accent slider (Figma filter rows).
+export component FxSlider inherits VerticalLayout {
+    in property <string> label;
+    in property <string> group;
+    in property <int> index;
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    in property <float> step: 0.1;
+    in property <string> unit;
+    in property <int> decimals: 1;
+    in property <bool> enabled: true;
+    in property <float> value;
+    spacing: 4px;
+    HorizontalLayout {
+        Text { text: root.label; color: Theme.fg-a2; font-size: 13px; horizontal-stretch: 1; }
+        Text {
+            text: (root.decimals == 0 ? round(root.value) : Fmt.one(root.value)) + root.unit;
+            color: Theme.fg-a2; font-family: "DM Mono"; font-size: 12px;
+        }
+    }
+    AccentSlider {
+        value: root.value; minimum: root.minimum; maximum: root.maximum; step: root.step;
+        enabled: root.enabled;
+        changed(v) => { FxState.set(root.group, root.index, v); }
+    }
+}
+
+
+
+// Vertical band slider (Figma equalizer): dark well, dim accent fill from the bottom, pill thumb.
+component BandSlider inherits Rectangle {
+    in property <float> value;
+    in property <float> minimum: -20;
+    in property <float> maximum: 20;
+    in property <bool> enabled: true;
+    callback changed(float);
+    property <float> frac: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
+    property <float> drag: -1;
+    property <float> shown: root.drag >= 0 ? root.drag : root.frac;
+    width: 28px;
+    opacity: root.enabled ? 1 : 0.45;
+    Rectangle {
+        x: (parent.width - self.width) / 2; width: 20px; border-radius: 6px;
+        background: Field.fill;
+        border-width: 1px; border-color: Theme.dark ? #000000 : #CFCFCF;
+        Rectangle {
+            x: 1px; width: parent.width - 2px; border-radius: 5px;
+            y: parent.height * (1 - root.shown); height: parent.height * root.shown;
+            background: Theme.accent.mix(Field.fill, 22%);
+        }
+    }
+    Rectangle {
+        x: 0; width: parent.width; height: 8px; border-radius: 4px;
+        y: clamp(parent.height * (1 - root.shown) - 4px, 0, parent.height - 8px);
+        background: Theme.accent;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        function at() -> float { return clamp(1 - self.mouse-y / self.height, 0, 1); }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.drag = self.at(); }
+            if (e.kind == PointerEventKind.up && root.drag >= 0) {
+                let raw = root.minimum + root.drag * (root.maximum - root.minimum);
+                root.changed(round(raw * 10) / 10);
+                root.drag = -1;
+            }
+        }
+        moved => { if (self.pressed) { root.drag = self.at(); } }
+        scroll-event(e) => {
+            root.changed(clamp(round((root.value + (e.delta-y > 0 ? 0.5 : -0.5)) * 10) / 10, root.minimum, root.maximum));
+            accept
+        }
+    }
+}
+
+
+// Figma "Default Preset ⌃" dropdown: New Preset, custom presets (rename/delete) and built-ins.
+export component PresetDropdown inherits Rectangle {
+    callback rename-request(string);
+    height: 32px; border-radius: 6px;
+    background: ta.has-hover ? Field.raised : Field.fill;
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 8px; spacing: 6px;
+        Text { text: FxState.preset; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    property <int> rows: 1 + FxState.custom.length + FxState.builtin.length;
+    pop := PopupWindow {
+        x: 0; y: root.height + 4px; width: root.width;
+        height: min(root.rows * 30px + 24px, 380px);
+        Rectangle {
+            background: Theme.dark ? #1F1F1F : #EAEAEA; border-radius: 8px;
+            border-width: 1px; border-color: Theme.dark ? #2B2B2B : #D0D0D0;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: #00000066;
+            clip: true;
+            Flickable {
+                content-height: root.rows * 30px + 24px;
+                VerticalLayout {
+                    padding: 6px; spacing: 0px; alignment: start;
+                    PresetRow {
+                        text: "New Preset"; icon: @image-url("../assets/icons/add.svg"); dim: true;
+                        clicked => { FxState.preset-action("new", "", ""); pop.close(); }
+                    }
+                    for c in FxState.custom: PresetRow {
+                        text: c; icon: @image-url("../assets/icons/more.svg"); editable: true;
+                        selected: c == FxState.preset;
+                        clicked => { FxState.preset-action("select", c, ""); pop.close(); }
+                        rename => { root.rename-request(c); pop.close(); }
+                        delete => { FxState.preset-action("delete", c, ""); pop.close(); }
+                    }
+                    Rectangle { height: 6px; Rectangle { y: 3px; height: 1px; background: Theme.divider; } }
+                    for b in FxState.builtin: PresetRow {
+                        text: b; icon: PresetIcon.of(b); selected: b == FxState.preset;
+                        clicked => { FxState.preset-action("select", b, ""); pop.close(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Figma equalizer: preamp + 10 vertical bands, labels and dB boxes, presets and on/off.
+export component Equalizer inherits VerticalLayout {
+    property <string> renaming;
+    property <[string]> labels: ["Preamp", "60 Hz", "170 Hz", "310 Hz", "600 Hz", "1 KHz", "3 KHz", "6 KHz", "12 KHz", "14 KHz", "16 KHz"];
+    property <bool> on: FxState.eq[11] > 0;
+    spacing: 10px;
+    HorizontalLayout {
+        spacing: 8px;
+        PresetDropdown { horizontal-stretch: 1; rename-request(n) => { root.renaming = n; } }
+        Toggle { y: 1px; on: root.on; toggled => { FxState.set("eq", 11, root.on ? 0 : 1); } }
+    }
+    if root.renaming != "": HorizontalLayout {
+        spacing: 6px;
+        rn := TextField {
+            horizontal-stretch: 1; text: root.renaming; placeholder: "Preset name";
+            accepted(t) => { FxState.preset-action("rename", root.renaming, t); root.renaming = ""; }
+            init => { self.text = root.renaming; }
+        }
+        Rectangle {
+            width: 64px; height: 32px; border-radius: 6px; background: sa.has-hover ? Theme.accent-bright : Theme.accent;
+            Text { text: "Rename"; color: Theme.bg-b2; font-size: 12px; font-weight: 600; }
+            sa := TouchArea { mouse-cursor: pointer; clicked => { FxState.preset-action("rename", root.renaming, rn.text); root.renaming = ""; } }
+        }
+    }
+    FilterBox {
+        expanded <=> FxState.eq-open; centered: true;
+        collapsed-text: "Open Equalizer"; expanded-text: "Close Equalizer";
+        HorizontalLayout {
+            height: 190px; spacing: 0px;
+            for i in 11: HorizontalLayout {
+                alignment: center; horizontal-stretch: 1;
+                BandSlider {
+                    value: FxState.eq[i]; minimum: i == 0 ? 0 : -20; maximum: 20;
+                    enabled: root.on;
+                    changed(v) => { FxState.set("eq", i, v); }
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 2px;
+            for l[i] in root.labels: VerticalLayout {
+                horizontal-stretch: 1; spacing: 6px;
+                Text { text: l; color: Theme.fg-a3; font-size: 9px; horizontal-alignment: center; overflow: elide; }
+                ValueBox { group: "eq"; index: i; value: FxState.eq[i]; unit: ""; height: 22px; font-size: 10px; }
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            Text { text: "dB · preamp 12 dB = unity"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; vertical-alignment: center; }
+            ResetLink { clicked => { FxState.reset("eq"); } }
+        }
+    }
+}
+
+
+// Small "label  [ON/OFF]" row used inside the colour panel.
+component ToggleRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <bool> on;
+    callback toggled();
+    spacing: 8px; height: 30px;
+    Text { text: root.label; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+    Toggle { on: root.on; toggled => { root.toggled(); } }
+}
+
+component ColorRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> hex;
+    in property <bool> on;
+    in property <int> index;
+    in property <color> swatch;
+    spacing: 8px; height: 30px;
+    Text { text: root.label; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+    hx := TextField { width: 84px; text: root.hex; accepted(t) => { FxState.set-color(root.index, t); } }
+    Rectangle { y: 4px; width: 22px; height: 22px; border-radius: 4px; background: root.swatch; }
+    Toggle { on: root.on; toggled => { FxState.set("color", root.index, root.on ? 0 : 1); } }
+}
+
+// Section header with an ON/OFF switch for audio effects.
+component EffectHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <bool> on;
+    callback toggled();
+    callback reset();
+    spacing: 8px;
+    Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: 14px; vertical-alignment: center; horizontal-stretch: 1; }
+    ResetLink { y: 3px; clicked => { root.reset(); } }
+    Toggle { on: root.on; toggled => { root.toggled(); } }
+}
+
+export component VideoFilters inherits VerticalLayout {
+    in-out property <bool> adjust-open: true;
+    in-out property <bool> crop-open;
+    in-out property <bool> color-open;
+    spacing: 12px;
+    HorizontalLayout {
+        Text { text: "Adjustments"; color: Theme.fg-1; font-weight: 600; font-size: 14px; horizontal-stretch: 1; vertical-alignment: center; }
+        ResetLink { clicked => { FxState.reset("video"); } }
+    }
+    FilterBox {
+        expanded <=> root.adjust-open;
+        FxSlider { label: "Hue"; group: "video"; index: 0; minimum: -180; maximum: 180; step: 1; decimals: 0; unit: "°"; value: FxState.video[0]; }
+        FxSlider { label: "Brightness"; group: "video"; index: 1; minimum: -1; maximum: 1; step: 0.05; value: FxState.video[1]; }
+        FxSlider { label: "Contrast"; group: "video"; index: 2; minimum: 0; maximum: 2; step: 0.05; value: FxState.video[2]; }
+        FxSlider { label: "Saturation"; group: "video"; index: 3; minimum: 0; maximum: 3; step: 0.05; value: FxState.video[3]; }
+        FxSlider { label: "Gamma"; group: "video"; index: 4; minimum: 0.1; maximum: 3; step: 0.05; value: FxState.video[4]; }
+        FxSlider { label: "Sharpen Sigma"; group: "video"; index: 5; minimum: 0; maximum: 2; step: 0.05; value: FxState.video[5]; }
+        FxSlider { label: "Banding Removal Radius"; group: "video"; index: 6; minimum: 0; maximum: 1; step: 0.05; value: FxState.video[6]; }
+        FxSlider { label: "Film Grain Variance"; group: "video"; index: 7; minimum: 0; maximum: 100; step: 1; decimals: 0; value: FxState.video[7]; }
+    }
+    HorizontalLayout {
+        Text { text: "Crop"; color: Theme.fg-1; font-weight: 600; font-size: 14px; horizontal-stretch: 1; vertical-alignment: center; }
+        ResetLink { clicked => { FxState.reset("crop"); } }
+    }
+    FilterBox {
+        expanded <=> root.crop-open;
+        for row in 2: HorizontalLayout {
+            spacing: 8px;
+            for side in 2: HorizontalLayout {
+                horizontal-stretch: 1; spacing: 6px;
+                property <int> idx: row * 2 + side;
+                Text { text: ["Top", "Bottom", "Left", "Right"][idx]; color: Theme.fg-a2; font-size: 12px; vertical-alignment: center; width: 44px; }
+                ValueBox { horizontal-stretch: 1; group: "crop"; index: idx; value: FxState.crop[idx]; unit: " px"; }
+            }
+            Rectangle {
+                width: 28px;
+                Icon {
+                    width: 18px; height: 18px;
+                    source: FxState.crop[4] > 0 ? @image-url("../assets/icons/link-active.svg") : @image-url("../assets/icons/link.svg");
+                    tint: FxState.crop[4] > 0 ? Theme.accent : Theme.fg-a2;
+                }
+                TouchArea { mouse-cursor: pointer; clicked => { FxState.set("crop", 4, FxState.crop[4] > 0 ? 0 : 1); } }
+            }
+        }
+    }
+    HorizontalLayout {
+        Text { text: "Colors & effects"; color: Theme.fg-1; font-weight: 600; font-size: 14px; horizontal-stretch: 1; vertical-alignment: center; }
+        ResetLink { clicked => { FxState.reset("color"); } }
+    }
+    FilterBox {
+        expanded <=> root.color-open;
+        ColorRow { label: "Color Extraction"; hex: FxState.extract-color; on: FxState.color[0] > 0; index: 0; swatch: FxState.extract-swatch; }
+        ColorRow { label: "Color Threshold"; hex: FxState.threshold-color; on: FxState.color[1] > 0; index: 1; swatch: FxState.threshold-swatch; }
+        FxSlider { label: "Saturation"; group: "color"; index: 2; minimum: 0; maximum: 1; step: 0.05; value: FxState.color[2]; }
+        FxSlider { label: "Similarity"; group: "color"; index: 3; minimum: 0.01; maximum: 1; step: 0.01; value: FxState.color[3]; }
+        ToggleRow { label: "Negate Colors"; on: FxState.color[4] > 0; toggled => { FxState.set("color", 4, FxState.color[4] > 0 ? 0 : 1); } }
+        ToggleRow { label: "Posterize"; on: FxState.color[5] > 0; toggled => { FxState.set("color", 5, FxState.color[5] > 0 ? 0 : 1); } }
+        ToggleRow { label: "Gradient"; on: FxState.color[6] > 0; toggled => { FxState.set("color", 6, FxState.color[6] > 0 ? 0 : 1); } }
+        GradientPick { }
+        ToggleRow { label: "Cartoon"; on: FxState.color[7] > 0; toggled => { FxState.set("color", 7, FxState.color[7] > 0 ? 0 : 1); } }
+        FxSlider { label: "Sepia Intensity"; group: "color"; index: 8; minimum: 0; maximum: 1; step: 0.05; value: FxState.color[8]; }
+    }
+}
+
+
+export component AudioEffects inherits VerticalLayout {
+    in-out property <bool> comp-open;
+    in-out property <bool> reverb-open;
+    in-out property <bool> delay-open;
+    spacing: 12px;
+    EffectHeader {
+        title: "Compressor"; on: FxState.comp[0] > 0;
+        toggled => { FxState.set("comp", 0, FxState.comp[0] > 0 ? 0 : 1); }
+        reset => { FxState.reset("comp"); }
+    }
+    FilterBox {
+        expanded <=> root.comp-open;
+        FxSlider { label: "RMS / Peak"; group: "comp"; index: 1; minimum: 0; maximum: 1; step: 0.1; value: FxState.comp[1]; }
+        FxSlider { label: "Attack"; group: "comp"; index: 2; minimum: 1; maximum: 200; step: 0.5; unit: " ms"; value: FxState.comp[2]; }
+        FxSlider { label: "Release"; group: "comp"; index: 3; minimum: 2; maximum: 800; step: 1; unit: " ms"; value: FxState.comp[3]; }
+        FxSlider { label: "Threshold"; group: "comp"; index: 4; minimum: -30; maximum: 0; step: 0.5; unit: " dB"; value: FxState.comp[4]; }
+        FxSlider { label: "Ratio"; group: "comp"; index: 5; minimum: 1; maximum: 20; step: 0.5; unit: " : 1"; value: FxState.comp[5]; }
+        FxSlider { label: "Knee Radius"; group: "comp"; index: 6; minimum: 0; maximum: 18; step: 0.5; unit: " dB"; value: FxState.comp[6]; }
+        FxSlider { label: "Makeup Gain"; group: "comp"; index: 7; minimum: 0; maximum: 24; step: 0.5; unit: " dB"; value: FxState.comp[7]; }
+    }
+    EffectHeader {
+        title: "Reverb"; on: FxState.reverb[0] > 0;
+        toggled => { FxState.set("reverb", 0, FxState.reverb[0] > 0 ? 0 : 1); }
+        reset => { FxState.reset("reverb"); }
+    }
+    FilterBox {
+        expanded <=> root.reverb-open;
+        FxSlider { label: "Size"; group: "reverb"; index: 1; minimum: 0; maximum: 10; step: 0.5; value: FxState.reverb[1]; }
+        FxSlider { label: "Width"; group: "reverb"; index: 2; minimum: 0; maximum: 10; step: 0.5; value: FxState.reverb[2]; }
+        FxSlider { label: "Wet"; group: "reverb"; index: 3; minimum: 0; maximum: 10; step: 0.5; value: FxState.reverb[3]; }
+        FxSlider { label: "Dry"; group: "reverb"; index: 4; minimum: 0; maximum: 10; step: 0.5; value: FxState.reverb[4]; }
+        FxSlider { label: "Damp"; group: "reverb"; index: 5; minimum: 0; maximum: 10; step: 0.5; value: FxState.reverb[5]; }
+    }
+    EffectHeader {
+        title: "Delay / Echo"; on: FxState.delay[0] > 0;
+        toggled => { FxState.set("delay", 0, FxState.delay[0] > 0 ? 0 : 1); }
+        reset => { FxState.reset("delay"); }
+    }
+    FilterBox {
+        expanded <=> root.delay-open;
+        FxSlider { label: "Delay Time"; group: "delay"; index: 1; minimum: 1; maximum: 1000; step: 1; unit: " ms"; value: FxState.delay[1]; }
+        FxSlider { label: "Feedback Gain"; group: "delay"; index: 2; minimum: 0; maximum: 90; step: 1; unit: " %"; value: FxState.delay[2]; }
+        FxSlider { label: "Crossfeed"; group: "delay"; index: 3; minimum: 0; maximum: 100; step: 1; unit: " %"; value: FxState.delay[3]; }
+        FxSlider { label: "Dry Mix"; group: "delay"; index: 4; minimum: 0; maximum: 100; step: 1; unit: " %"; value: FxState.delay[4]; }
+    }
+}

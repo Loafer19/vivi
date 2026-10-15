@@ -1,5 +1,5 @@
 //! Miniplayer: a compact, always-on-top window mode (Figma "Miniplayer": 391x339,
-//! plus a 351px queue view below). It is freely resizable down to 280x160; the UI adapts
+//! plus a 351px queue view above the video). It is freely resizable down to 280x160; the UI adapts
 //! (see `ui/app.slint`) and mpv letterboxes, so the video keeps its aspect ratio. The
 //! miniplayer geometry is saved in the config and the full-size geometry restored on exit.
 
@@ -123,4 +123,83 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
             }
         },
     );
+}
+
+thread_local! {
+    static DURATIONS: RefCell<std::collections::HashMap<String, Option<f64>>> = RefCell::default();
+}
+
+/// Length of a local file from its tags (cached); None for streams or unknown files.
+fn file_duration(path: &str) -> Option<f64> {
+    if path.contains("://") {
+        return None;
+    }
+    DURATIONS.with(|d| {
+        *d.borrow_mut().entry(path.to_string()).or_insert_with(|| {
+            use lofty::prelude::*;
+            lofty::read_from_path(path)
+                .ok()
+                .map(|f| f.properties().duration().as_secs_f64())
+                .filter(|s| *s > 0.0)
+        })
+    })
+}
+
+/// Miniplayer queue details: per-row lengths, "N items · 2h 3m", folder and subtitle.
+pub fn queue_meta(a: &AppWindow, p: &crate::player::Player, q: &[(String, bool)]) {
+    let cur_len: Option<f64> = p.mpv.get_property("duration").ok();
+    let lens: Vec<Option<f64>> = q
+        .iter()
+        .map(|(f, cur)| {
+            if *cur {
+                cur_len.or_else(|| file_duration(f))
+            } else {
+                file_duration(f)
+            }
+        })
+        .collect();
+    let rows: Vec<slint::SharedString> = lens
+        .iter()
+        .map(|l| l.map(crate::library::human_time).unwrap_or_default().into())
+        .collect();
+    a.set_queue_durations(slint::ModelRc::new(slint::VecModel::from(rows)));
+    a.set_mini_q_meta(meta(q.len(), lens.iter().flatten().sum()).into());
+    let path = p.get("path").unwrap_or_default();
+    let folder = std::path::Path::new(&path)
+        .parent()
+        .and_then(|d| d.file_name())
+        .map(|d| d.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    a.set_mini_folder(folder.into());
+    let sub = p
+        .tracks("sub")
+        .into_iter()
+        .find(|t| t.2)
+        .map(|t| t.1)
+        .unwrap_or_else(|| "Off".into());
+    a.set_mini_sub(sub.into());
+}
+
+fn meta(n: usize, secs: f64) -> String {
+    let items = if n == 1 {
+        "1 item".to_string()
+    } else {
+        format!("{n} items")
+    };
+    let m = (secs / 60.0).round() as i64;
+    match m {
+        0 => items,
+        m if m >= 60 => format!("{items} · {}h {}m", m / 60, m % 60),
+        m => format!("{items} · {m}m"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn meta() {
+        assert_eq!(super::meta(4, 7380.0), "4 items · 2h 3m");
+        assert_eq!(super::meta(1, 0.0), "1 item");
+        assert_eq!(super::meta(2, 600.0), "2 items · 10m");
+    }
 }

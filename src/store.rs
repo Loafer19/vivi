@@ -105,6 +105,34 @@ pub fn save_playlist(name: &str, files: &[String]) -> std::io::Result<PathBuf> {
 
 pub fn delete_playlist(path: &Path) {
     let _ = fs::remove_file(path);
+    if let Some(c) = playlist_cover(path) {
+        let _ = fs::remove_file(c);
+    }
+}
+
+const COVER_EXT: [&str; 4] = ["jpg", "jpeg", "png", "webp"];
+
+/// Thumbnail saved next to a playlist (`Name.m3u` → `Name.jpg`/`.png`/…).
+pub fn playlist_cover(playlist: &Path) -> Option<PathBuf> {
+    COVER_EXT
+        .iter()
+        .map(|e| playlist.with_extension(e))
+        .find(|p| p.is_file())
+}
+
+/// Copy `image` next to the playlist as its cover (replacing an older one).
+pub fn set_playlist_cover(playlist: &Path, image: &Path) -> std::io::Result<PathBuf> {
+    let ext = image
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .filter(|e| COVER_EXT.contains(&e.as_str()))
+        .ok_or_else(|| std::io::Error::other("unsupported image type"))?;
+    if let Some(old) = playlist_cover(playlist) {
+        let _ = fs::remove_file(old);
+    }
+    let dst = playlist.with_extension(ext);
+    fs::copy(image, &dst)?;
+    Ok(dst)
 }
 
 /// File name for display.

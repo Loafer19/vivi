@@ -320,6 +320,21 @@ impl Player {
             .mpv
             .command("playlist-move", &[&from.to_string(), &target.to_string()]);
     }
+    /// Sort the queue by file name (A→Z) with `playlist-move`, keeping the current entry playing.
+    pub fn sort_queue(&self) {
+        let mut names: Vec<String> = self
+            .queue()
+            .into_iter()
+            .map(|(f, _)| crate::store::display_name(&f).to_lowercase())
+            .collect();
+        for (i, j) in sort_moves(&names) {
+            let _ = self
+                .mpv
+                .command("playlist-move", &[&j.to_string(), &i.to_string()]);
+            let x = names.remove(j);
+            names.insert(i, x);
+        }
+    }
     pub fn clear_queue(&self) {
         let _ = self.mpv.command("playlist-clear", &[]);
     }
@@ -335,8 +350,34 @@ fn quote(path: &str) -> String {
     )
 }
 
+/// Selection-sort moves (from index j to position i) that order `v` ascending.
+fn sort_moves(v: &[String]) -> Vec<(usize, usize)> {
+    let mut v = v.to_vec();
+    let mut out = Vec::new();
+    for i in 0..v.len() {
+        let j = (i..v.len()).min_by(|a, b| v[*a].cmp(&v[*b])).unwrap_or(i);
+        if j != i {
+            let x = v.remove(j);
+            v.insert(i, x);
+            out.push((i, j));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sort_moves() {
+        let v: Vec<String> = ["c", "a", "b"].iter().map(|s| s.to_string()).collect();
+        let mut w = v.clone();
+        for (i, j) in super::sort_moves(&v) {
+            let x = w.remove(j);
+            w.insert(i, x);
+        }
+        assert_eq!(w, ["a", "b", "c"]);
+    }
+
     #[test]
     fn quoting() {
         assert_eq!(super::quote(r#"/a b/"x"\y"#), r#""/a b/\"x\"\\y""#);

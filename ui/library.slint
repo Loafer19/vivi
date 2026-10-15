@@ -111,45 +111,6 @@ component Grid inherits Rectangle {
     }
 }
 
-
-export component NetworkDialog inherits Rectangle {
-    in property <bool> ytdlp;
-    callback open(string);
-    callback close();
-    background: #00000080;
-    TouchArea { clicked => { root.close(); } }
-    Rectangle {
-        width: min(560px, root.width - 48px); height: col.preferred-height;
-        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
-        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
-        TouchArea { }
-        col := VerticalLayout {
-            padding: 22px; spacing: 12px;
-            Text { text: "Open Network Stream"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
-            Text {
-                text: "Enter a URL: http(s), HLS/DASH, an .m3u playlist, rtsp, rtmp, udp…" + (root.ytdlp ? " YouTube and other sites work through yt-dlp." : " Install yt-dlp to play YouTube and other sites.");
-                color: Theme.fg-a1; wrap: word-wrap;
-            }
-            url := LineEdit { placeholder-text: "https://…"; accepted(t) => { root.open(t); } }
-            HorizontalLayout {
-                spacing: 10px; alignment: end;
-                Rectangle {
-                    width: 90px; height: 36px; border-radius: Theme.radius-lg; background: ca.has-hover ? Theme.divider : Theme.bg-a1;
-                    Text { text: "Cancel"; color: Theme.fg-1; }
-                    ca := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
-                }
-                Rectangle {
-                    width: 90px; height: 36px; border-radius: Theme.radius-lg; background: pa.has-hover ? Theme.accent-bright : Theme.accent;
-                    Text { text: "Play"; color: Theme.bg-b2; font-weight: 600; }
-                    pa := TouchArea { mouse-cursor: pointer; clicked => { root.open(url.text); } }
-                }
-            }
-        }
-    }
-    init => { url.focus(); }
-}
-
-
 // One 32 px library row (Figma "media" / "playlist" components).
 component LibRow inherits Rectangle {
     in property <LibItem> it;

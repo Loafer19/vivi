@@ -2,6 +2,7 @@
 // 400px wide, tabs Subtitles / Audio / Video / Playback.
 import { ScrollView, LineEdit } from "std-widgets.slint";
 import { Theme, Icon } from "theme.slint";
+import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 
 export struct Item { key: string, label: string, selected: bool }
 
@@ -162,6 +163,7 @@ component QueueRow inherits Rectangle {
 
 export component SidePanel inherits Rectangle {
     in-out property <int> tab: 0;
+    in-out property <length> scroll-y;
     in property <[Item]> sub-tracks;
     in property <[Item]> audio-tracks;
     in property <[Item]> audio-devices;
@@ -201,7 +203,6 @@ export component SidePanel inherits Rectangle {
     in-out property <float> sub-pos: 100;
     in-out property <float> audio-delay: 0;
     in-out property <float> boost: 100;
-    property <string> eq: "flat";
     property <string> aspect: "-1";
     in-out property <int> rotate: 0;
     in-out property <float> zoom: 0;
@@ -236,6 +237,7 @@ export component SidePanel inherits Rectangle {
 
         ScrollView {
             vertical-stretch: 1;
+            content-y <=> root.scroll-y;
             VerticalLayout {
                 spacing: 14px; padding-right: 10px; alignment: start;
                 // ---- Subtitles ----
@@ -288,16 +290,8 @@ export component SidePanel inherits Rectangle {
                         changed(v) => { root.set-prop("volume", round(v)); }
                     }
                     Section { text: "Equalizer"; }
-                    Chips {
-                        items: [
-                            { key: "", label: "Flat", selected: root.eq == "flat" },
-                            { key: "lavfi=[bass=g=8]", label: "Bass", selected: root.eq == "Bass" },
-                            { key: "lavfi=[treble=g=6]", label: "Treble", selected: root.eq == "Treble" },
-                            { key: "lavfi=[equalizer=f=1500:t=q:w=1.2:g=6]", label: "Voice", selected: root.eq == "Voice" },
-                            { key: "lavfi=[loudnorm]", label: "Loudness", selected: root.eq == "Loudness" },
-                        ];
-                        pick(it) => { root.eq = it.key == "" ? "flat" : it.label; root.set-prop("af", it.key); }
-                    }
+                    Equalizer { }
+                    AudioEffects { }
                 }
                 // ---- Video ----
                 if root.tab == 2: VerticalLayout {
@@ -339,6 +333,7 @@ export component SidePanel inherits Rectangle {
                     SliderRow { label: "Contrast"; minimum: -100; maximum: 100; value <=> root.contrast; changed(v) => { root.set-prop("contrast", round(v)); } }
                     SliderRow { label: "Saturation"; minimum: -100; maximum: 100; value <=> root.saturation; changed(v) => { root.set-prop("saturation", round(v)); } }
                     SliderRow { label: "Gamma"; minimum: -100; maximum: 100; value <=> root.gamma; changed(v) => { root.set-prop("gamma", round(v)); } }
+                    VideoFilters { }
                     Section { text: "Hardware decoding"; }
                     Chips {
                         items: [

@@ -1,0 +1,225 @@
+// "Open Network Stream" and "New Playlist" dialogs per the Figma frame
+// docs/design/frames/dialog-network-playlist.png.
+import { Theme, Icon } from "theme.slint";
+import { Field, TextField } from "controls.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// Window chrome shared by both dialogs: dark title bar with the close cross.
+component DialogFrame inherits Rectangle {
+    in property <string> title;
+    in property <length> dialog-width: 760px;
+    callback close();
+    background: #00000099;
+    TouchArea { clicked => { root.close(); } }
+    Rectangle {
+        width: min(root.dialog-width, root.width - 32px);
+        height: min(col.preferred-height, root.height - 32px);
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+        background: Theme.dark ? #232323 : #E9E9E9; border-radius: 10px;
+        drop-shadow-blur: 24px; drop-shadow-offset-y: 10px; drop-shadow-color: #00000080;
+        clip: true;
+        TouchArea { }
+        col := VerticalLayout {
+            Rectangle {
+                height: 40px; background: Theme.dark ? #111111 : #DCDCDC;
+                HorizontalLayout {
+                    padding-left: 16px; padding-right: 8px;
+                    Text { text: root.title; color: Theme.fg-a2; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+                    VerticalLayout { alignment: center;
+                        Rectangle { width: 28px; height: 28px; border-radius: 4px; background: cx.has-hover ? Theme.bg-a1 : transparent;
+                            Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a2; }
+                            cx := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } } } }
+                }
+            }
+            @children
+        }
+    }
+}
+
+component Heading inherits VerticalLayout {
+    in property <string> title;
+    in property <string> extra;
+    in property <string> hint;
+    spacing: 8px;
+    HorizontalLayout {
+        spacing: 4px; alignment: start;
+        Text { text: root.title; color: Theme.fg-1; font-size: 14px; font-weight: 500; }
+        if root.extra != "": Text { text: root.extra; color: Theme.fg-a3; font-size: 14px; }
+    }
+    Text { text: root.hint; color: Theme.fg-a3; font-size: 12px; wrap: word-wrap; }
+}
+
+component DialogButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: max(72px, t.preferred-width + 32px); height: 30px; border-radius: 4px;
+    background: !root.enabled ? transparent
+        : root.primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
+        : (ta.has-hover ? Theme.bg-a1 : (Theme.dark ? #161616 : #D4D4D4));
+    t := Text {
+        text: root.text; font-size: 12px; font-weight: 500;
+        color: !root.enabled ? Theme.fg-a3 : root.primary ? Theme.bg-b2 : Theme.fg-1;
+    }
+    ta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Multi-line URL box; one link per line.
+export component NetworkStreamDialog inherits Rectangle {
+    in property <bool> ytdlp;
+    in property <[string]> history;
+    in property <string> error;
+    in-out property <string> urls;
+    in-out property <string> name;
+    // urls (newline separated), optional playlist name
+    callback submit(string, string);
+    callback close();
+    property <bool> has-urls: root.urls.character-count > 0;
+    DialogFrame {
+        title: "Open Network Stream"; dialog-width: 760px;
+        close => { root.close(); }
+        VerticalLayout {
+            padding: 20px; padding-top: 18px; spacing: 18px;
+            Heading {
+                title: "Network URL";
+                hint: "You can enter multiple links to load. http(s), HLS/DASH, .m3u, rtsp, rtmp, udp…"
+                    + (root.ytdlp ? " YouTube and other sites play through yt-dlp." : " Install yt-dlp to play YouTube and other sites.");
+            }
+            Rectangle {
+                height: 136px; border-radius: 4px; background: Theme.dark ? #0B0B0B : #F6F6F6;
+                border-width: box.has-focus ? 1px : 0px; border-color: Theme.accent;
+                clip: true;
+                if root.urls == "" && !box.has-focus: Text {
+                    x: 10px; y: 10px; text: "e.g., https://www.example.com/stream.avi";
+                    color: Theme.fg-a3; font-size: 12px;
+                }
+                box := TextInput {
+                    x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px;
+                    text <=> root.urls; single-line: false; wrap: word-wrap;
+                    color: Theme.fg-2; font-size: 12px; font-family: "DM Mono";
+                    selection-background-color: Theme.accent-bg;
+                }
+            }
+            if root.history.length > 0: VerticalLayout {
+                spacing: 4px;
+                Text { text: "Recent streams"; color: Theme.fg-a3; font-size: 12px; }
+                for h in root.history: Rectangle {
+                    height: 26px; border-radius: 4px;
+                    background: hta.has-hover ? Theme.bg-a1 : transparent;
+                    Text { x: 8px; width: parent.width - 16px; text: h; color: Theme.fg-a2; font-size: 12px; font-family: "DM Mono"; overflow: elide; vertical-alignment: center; }
+                    hta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.urls = root.urls == "" ? h : root.urls + "\n" + h; }
+                    }
+                }
+            }
+            Heading { title: "Playlist Name"; extra: "(optional)"; hint: "The playlist will be saved and displayed with this title."; }
+            TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite TV Channels"; }
+            if root.error != "": Text { text: root.error; color: #E5484D; font-size: 12px; wrap: word-wrap; }
+            Rectangle { height: 8px; }
+            HorizontalLayout {
+                alignment: space-between;
+                DialogButton { text: "Cancel"; clicked => { root.close(); } }
+                DialogButton {
+                    text: root.name == "" ? "Open" : "Save"; primary: root.has-urls; enabled: root.has-urls;
+                    clicked => { root.submit(root.urls, root.name); }
+                }
+            }
+        }
+    }
+    init => { box.focus(); }
+}
+
+// New Playlist: title + thumbnail, then a drop zone / file picker.
+export component NewPlaylistDialog inherits Rectangle {
+    in property <[string]> files;   // display names
+    in property <image> cover;
+    in property <bool> has-cover;
+    in property <bool> drag-over;
+    in property <string> error;
+    in-out property <string> name;
+    callback pick-cover();
+    callback pick-files();
+    callback remove-file(int);
+    callback save(string);
+    callback close();
+    DialogFrame {
+        title: "New Playlist"; dialog-width: 560px;
+        close => { root.close(); }
+        VerticalLayout {
+            padding: 20px; padding-top: 18px; spacing: 18px;
+            HorizontalLayout {
+                spacing: 16px;
+                VerticalLayout {
+                    horizontal-stretch: 1; spacing: 12px; alignment: start;
+                    Heading { title: "Playlist Details"; hint: "The playlist will be saved and displayed with this title and thumbnail."; }
+                    nm := TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite Videos"; accepted => { root.save(root.name); } }
+                }
+                Rectangle {
+                    width: 96px; height: 96px; border-radius: 4px; clip: true;
+                    background: Theme.dark ? #0B0B0B : #F6F6F6;
+                    border-width: ca.has-hover ? 1px : 0px; border-color: Theme.accent;
+                    if root.has-cover: Image { width: parent.width; height: parent.height; source: root.cover; image-fit: ImageFit.cover; }
+                    if !root.has-cover: Rectangle {
+                        width: 28px; height: 28px; border-radius: 4px; background: Theme.dark ? #262626 : #DADADA;
+                        Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; }
+                    }
+                    ca := TouchArea { mouse-cursor: pointer; clicked => { root.pick-cover(); } }
+                }
+            }
+            Heading { title: "Select Files"; hint: "These files will be added to the playlist."; }
+            Rectangle {
+                height: root.files.length == 0 ? 150px : 190px;
+                border-radius: 4px; background: Theme.dark ? #0B0B0B : #F6F6F6;
+                border-width: 1px; border-color: root.drag-over || za.has-hover ? Theme.accent : Theme.divider;
+                clip: true;
+                // Dashed outline per Figma: short dashes over the border.
+                if root.files.length == 0: VerticalLayout {
+                    alignment: center; spacing: 12px;
+                    Text { text: "Drag files into the box or click here to select files."; color: Theme.fg-a3; font-size: 12px; horizontal-alignment: center; }
+                    HorizontalLayout { alignment: center;
+                        Rectangle { width: 46px; height: 24px; border-radius: 4px; background: Theme.dark ? #262626 : #DADADA;
+                            Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; } } }
+                }
+                za := TouchArea { mouse-cursor: pointer; clicked => { root.pick-files(); } }
+                if root.files.length > 0: VerticalLayout {
+                    padding: 8px; spacing: 4px;
+                    HorizontalLayout {
+                        Text { text: root.files.length + (root.files.length == 1 ? " file" : " files"); color: Theme.fg-a2; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center; }
+                        Rectangle { width: 46px; height: 24px; border-radius: 4px; background: aa.has-hover ? Theme.divider : (Theme.dark ? #262626 : #DADADA);
+                            Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; }
+                            aa := TouchArea { mouse-cursor: pointer; clicked => { root.pick-files(); } } }
+                    }
+                    ScrollView {
+                        VerticalLayout {
+                            alignment: start; spacing: 0px;
+                            for f[i] in root.files: Rectangle {
+                                height: 28px; border-radius: 4px;
+                                background: fta.has-hover ? Theme.bg-a1 : transparent;
+                                fta := TouchArea { }
+                                HorizontalLayout {
+                                    padding-left: 8px; padding-right: 4px; spacing: 8px;
+                                    Text { text: (i + 1) + "."; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 11px; vertical-alignment: center; width: 24px; }
+                                    Text { text: f; color: Theme.fg-2; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                    Rectangle { width: 24px;
+                                        Icon { width: 12px; height: 12px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a3; }
+                                        TouchArea { mouse-cursor: pointer; clicked => { root.remove-file(i); } } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if root.error != "": Text { text: root.error; color: #E5484D; font-size: 12px; }
+            HorizontalLayout {
+                alignment: space-between;
+                DialogButton { text: "Cancel"; clicked => { root.close(); } }
+                DialogButton {
+                    text: "Save"; primary: root.name != ""; enabled: root.name != "";
+                    clicked => { root.save(root.name); }
+                }
+            }
+        }
+    }
+}

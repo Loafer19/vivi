@@ -8,12 +8,14 @@ import { SidePanel, Item } from "panel.slint";
 import { SettingsDialog, SettingRow } from "settings.slint";
 import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
-import { LibraryView, LibItem, NetworkDialog } from "library.slint";
+import { LibraryView, LibItem } from "library.slint";
+import { NetworkStreamDialog, NewPlaylistDialog } from "dialogs.slint";
+import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
 import { SkipButton, LyricsView, SubtitleDialog, MusicDialog } from "plugins.slint";
 export { MenuItem } from "menu.slint";
-export { Item, SettingRow, Theme, LibItem }
+export { Item, SettingRow, Theme, LibItem, FxState }
 
 component IconButton inherits Rectangle {
     in property <image> icon;
@@ -293,6 +295,7 @@ export component AppWindow inherits Window {
 
     // Side panel
     in-out property <bool> panel-open: false;
+    in-out property <length> panel-scroll;
     in-out property <int> panel-tab: 0;
     in property <[Item]> sub-tracks;
     in property <[Item]> audio-tracks;
@@ -378,6 +381,22 @@ export component AppWindow inherits Window {
     // Library
     in-out property <bool> library-open;
     in-out property <bool> network-open;
+    in property <[string]> net-history;
+    in-out property <string> net-error;
+    in-out property <string> net-urls;
+    in-out property <string> net-name;
+    callback network-submit(string, string);
+    in-out property <bool> np-open;
+    in property <[string]> np-files;
+    in property <image> np-cover;
+    in property <bool> np-has-cover;
+    in property <string> np-error;
+    in-out property <string> np-name;
+    callback np-pick-cover();
+    callback np-pick-files();
+    callback np-remove(int);
+    callback np-save(string);
+    callback np-close();
     in property <[LibItem]> lib-items;
     in property <[LibItem]> lib-continue;
     in property <[LibItem]> lib-recent;
@@ -434,10 +453,22 @@ export component AppWindow inherits Window {
     callback toggle-mini-queue();
     // Miniplayer layout: queue shown only when there is room; "tiny" = video-only.
     property <bool> mini-q-shown: root.mini && root.mini-queue && root.height >= 420px;
-    property <length> mini-video-h: root.mini-q-shown ? max(160px, root.height - 351px) : root.height;
-    property <bool> mini-tiny: root.width < 320px || root.mini-video-h < 200px;
-    property <float> mini-margin: root.mini-q-shown ? (root.height - root.mini-video-h) / root.height : 0;
-    changed mini-margin => { root.set-prop("video-margin-ratio-bottom", root.mini-margin); }
+    // Figma miniplayer: queue on top, the video, then a 52px info strip (not in the tiny variant).
+    property <length> mini-q-h: root.mini-q-shown ? min(351px, root.height - 212px) : 0px;
+    property <bool> mini-tiny: root.width < 320px || root.height - root.mini-q-h < 200px;
+    property <length> mini-strip-h: root.mini && !root.mini-tiny ? 52px : 0px;
+    property <length> mini-video-y: root.mini-q-h;
+    property <length> mini-video-h: root.height - root.mini-q-h - root.mini-strip-h;
+    property <float> mini-margin: root.mini ? root.mini-q-h / root.height : 0;
+    property <float> mini-margin-b: root.mini ? root.mini-strip-h / root.height : 0;
+    changed mini-margin-b => { root.set-prop("video-margin-ratio-bottom", root.mini-margin-b); }
+    in property <string> mini-folder;
+    in property <string> mini-sub;
+    in property <string> mini-q-meta;
+    in property <[string]> queue-durations;
+    callback queue-sort();
+    property <int> mini-q-sel: -1;
+    changed mini-margin => { root.set-prop("video-margin-ratio-top", root.mini-margin); }
     callback lib-refresh();
     callback lib-rescan();
     callback lib-navigate(string);
@@ -591,6 +622,7 @@ export component AppWindow inherits Window {
     // ---------- Side panel ----------
     if !root.mini && root.has-media && root.panel-open: SidePanel {
         // Overlays the video; full width on narrow windows.
+        scroll-y <=> root.panel-scroll;
         width: root.width < 800px ? root.width : 400px;
         x: root.width - self.width;
         y: 40px;
@@ -726,10 +758,10 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ---------- Miniplayer ----------
+    // ---------- Miniplayer (Figma "Miniplayer" variants) ----------
     // Tiny: video only; hovering shows play/pause and the way back.
     if root.mini && root.mini-tiny && root.has-media && root.show-ui: Rectangle {
-        width: root.width; height: root.mini-video-h; x: 0; y: 0;
+        width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
         background: #00000066;
         IconButton { x: 6px; y: 6px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
         IconButton {
@@ -743,75 +775,111 @@ export component AppWindow inherits Window {
             background: Theme.accent;
         }
     }
+    // Compact: × / ⧉ in the corners, transport in the middle, progress along the bottom edge.
     if root.mini && !root.mini-tiny && root.has-media && root.show-ui: Rectangle {
-        width: root.width; height: root.mini-video-h; x: 0; y: 0;
-        // top: back to the full player, title, queue toggle
+        width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
+        background: #00000059;
+        IconButton { x: 8px; y: 8px; icon: @image-url("../assets/icons/close.svg"); tip: "Stop and close the miniplayer"; clicked => { root.stop(); root.toggle-mini(); } }
+        IconButton { x: parent.width - self.width - 8px; y: 8px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
+        HorizontalLayout {
+            x: (parent.width - self.preferred-width) / 2; y: (parent.height - 40px) / 2; width: self.preferred-width; height: 40px;
+            spacing: 18px; alignment: center;
+            IconButton { y: 4px; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
+            IconButton { y: 2px; primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : (root.duration > 0 && root.position >= root.duration - 0.5 ? @image-url("../assets/icons/replay.svg") : @image-url("../assets/icons/play.svg")); clicked => { root.toggle-play(); fs.focus(); } }
+            IconButton { y: 4px; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
+        }
         Rectangle {
-            y: 0; height: 44px;
-            background: @linear-gradient(180deg, #000000AA 0%, #00000000 100%);
-            HorizontalLayout {
-                padding: 6px; spacing: 4px;
-                IconButton { icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
-                Text { text: root.media-title; color: Theme.fg-1; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                if root.height >= 300px || root.mini-queue: IconButton { icon: @image-url("../assets/icons/queue.svg"); tip: "Queue"; active: root.mini-queue; clicked => { root.toggle-mini-queue(); } }
+            x: 10px; width: parent.width - 20px; y: parent.height - 18px; height: 14px;
+            Rectangle { y: 5px; height: 4px; border-radius: 2px; background: #FFFFFF26; }
+            Rectangle { x: 0; y: 5px; height: 4px; border-radius: 2px; width: root.duration > 0 ? parent.width * root.position / root.duration : 0; background: Theme.accent.mix(#000000, 70%); }
+            Rectangle {
+                x: (root.duration > 0 ? parent.width * root.position / root.duration : 0) - 5px; y: 2px;
+                width: 10px; height: 10px; border-radius: 5px; background: Theme.accent;
+            }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { if (root.duration > 0) { root.seek(clamp(self.mouse-x / self.width, 0, 1) * root.duration); } }
             }
         }
-        // bottom: seek bar + transport
-        Rectangle {
-            y: parent.height - self.height; height: 92px;
-            background: @linear-gradient(0deg, #000000CC 0%, #00000000 100%);
-            TouchArea { }
-            VerticalLayout {
-                padding-left: 14px; padding-right: 14px; padding-bottom: 6px; spacing: 0px;
-                alignment: end;
-                SeekBar {
-                    position: root.position; duration: root.duration;
-                    frames: root.preview-frames;
-                    fmt(t) => { root.fmt(t) }
-                    seek(t) => { root.seek(t); fs.focus(); }
-                }
+    }
+    // Info strip under the video: title, folder, subtitle track and the queue toggle.
+    if root.mini && !root.mini-tiny: Rectangle {
+        x: 0; y: root.mini-video-y + root.mini-video-h; width: root.width; height: root.mini-strip-h;
+        background: Theme.bar-solid;
+        TouchArea { }
+        VerticalLayout {
+            padding-left: 12px; padding-right: 8px; padding-top: 7px; padding-bottom: 5px; spacing: 2px;
+            Text { text: root.media-title; color: Theme.fg-a2; font-size: 12px; overflow: elide; }
+            HorizontalLayout {
+                spacing: 6px;
+                Icon { y: 4px; width: 14px; height: 14px; source: @image-url("../assets/icons/folder.svg"); tint: Theme.fg-a3; }
+                Text { text: root.mini-folder; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; overflow: elide; max-width: 120px; }
+                Rectangle { width: 6px; }
+                Icon { y: 4px; width: 14px; height: 14px; source: @image-url("../assets/icons/subtitles.svg"); tint: Theme.fg-a3; }
+                Text { text: root.mini-sub; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                 Rectangle {
-                    height: 44px;
-                    if root.width >= 360px: HorizontalLayout {
-                        x: 0; width: self.preferred-width; spacing: 4px;
-                        Text { text: fmt(root.position); color: Theme.fg-1; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
-                        Text { text: "/ " + fmt(root.duration); color: Theme.fg-a1; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
-                    }
-                    HorizontalLayout {
-                        x: (parent.width - self.preferred-width) / 2; width: self.preferred-width;
-                        spacing: 6px; alignment: center;
-                        IconButton { y: 4px; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
-                        IconButton { y: 2px; primary: true; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
-                        IconButton { y: 4px; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
-                    }
+                    width: 26px; height: 22px; border-radius: 4px;
+                    background: qta.has-hover ? Theme.bg-a1 : transparent;
+                    Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/queue.svg"); tint: root.mini-queue ? Theme.accent : Theme.fg-a2; }
+                    qta := TouchArea { mouse-cursor: pointer; clicked => { root.toggle-mini-queue(); } }
                 }
             }
         }
     }
+    // Queue variant: header, item count/length with sort/remove/add, draggable rows.
     if root.mini-q-shown: Rectangle {
-        y: root.mini-video-h; height: root.height - root.mini-video-h;
-        background: Theme.bg-a4;
+        y: 0; height: root.mini-q-h;
+        background: Theme.bar-solid;
         TouchArea { }
         VerticalLayout {
-            padding: 12px; spacing: 6px;
-            Text { text: "Up next · " + root.queue.length; color: Theme.fg-1; font-weight: 600; font-size: 14px; }
+            Rectangle {
+                height: 36px; background: Theme.dark ? #141414 : #E2E2E2;
+                Text { text: "Queue"; color: Theme.fg-a2; font-size: 12px; }
+            }
+            HorizontalLayout {
+                height: 34px; padding-left: 12px; padding-right: 6px; spacing: 2px;
+                Text { text: root.mini-q-meta; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; }
+                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/sort.svg"); tip: "Sort by name"; clicked => { root.queue-sort(); } }
+                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/remove.svg"); tip: "Remove selected"; clicked => { if (root.mini-q-sel >= 0) { root.queue-remove(root.mini-q-sel); root.mini-q-sel = -1; } } }
+                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/add.svg"); tip: "Add files"; clicked => { root.queue-add(); } }
+            }
             ScrollView {
+                vertical-stretch: 1;
                 VerticalLayout {
-                    alignment: start; spacing: 2px;
+                    alignment: start; spacing: 0px; padding-left: 6px; padding-right: 6px;
                     for it[i] in root.queue: Rectangle {
-                        height: 36px; border-radius: 6px;
-                        background: it.selected ? Theme.accent.with-alpha(0.18) : row-ta.has-hover ? #FFFFFF10 : transparent;
-                        row-ta := TouchArea { mouse-cursor: pointer; clicked => { root.queue-play(i); } }
+                        height: 30px; border-radius: 4px;
+                        property <length> dy;
+                        background: i == root.mini-q-sel ? Theme.bg-a1 : row-ta.has-hover ? (Theme.dark ? #FFFFFF0D : #0000000D) : transparent;
+                        row-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.mini-q-sel = i; }
+                            double-clicked => { root.queue-play(i); }
+                        }
                         HorizontalLayout {
-                            padding-left: 10px; padding-right: 10px; spacing: 8px;
-                            Text { text: i + 1; width: 20px; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
-                            Text { text: it.label; color: it.selected ? Theme.accent : Theme.fg-1; font-size: 13px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                            padding-left: 4px; padding-right: 8px; spacing: 8px;
+                            Rectangle {
+                                width: 22px;
+                                Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/list.svg"); tint: drag.pressed ? Theme.accent : Theme.fg-a3; }
+                                drag := TouchArea {
+                                    mouse-cursor: grab;
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.up) {
+                                            let d = round((self.mouse-y - self.pressed-y) / 30px);
+                                            if (d != 0) { root.queue-move(i, clamp(d, -i, root.queue.length - 1 - i)); }
+                                        }
+                                    }
+                                }
+                            }
+                            Text { text: it.label; color: it.selected ? Theme.accent : Theme.fg-a2; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                            Text { text: i < root.queue-durations.length ? root.queue-durations[i] : ""; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 11px; vertical-alignment: center; }
                         }
                     }
                 }
             }
         }
     }
+
 
     overflow := PopupWindow {
         x: root.width - 220px; y: root.height - 72px - self.height - 6px;
@@ -828,11 +896,24 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Network stream ----------
-    if root.network-open: NetworkDialog {
+    if root.network-open: NetworkStreamDialog {
         width: root.width; height: root.height;
-        ytdlp: root.ytdlp;
-        open(u) => { root.open-url(u); fs.focus(); }
-        close() => { root.network-open = false; fs.focus(); }
+        ytdlp: root.ytdlp; history: root.net-history; error: root.net-error;
+        urls <=> root.net-urls; name <=> root.net-name;
+        submit(u, n) => { root.network-submit(u, n); }
+        close() => { root.network-open = false; root.net-error = ""; fs.focus(); }
+    }
+
+    // ---------- New playlist ----------
+    if root.np-open: NewPlaylistDialog {
+        width: root.width; height: root.height;
+        files: root.np-files; cover: root.np-cover; has-cover: root.np-has-cover; error: root.np-error;
+        name <=> root.np-name;
+        pick-cover => { root.np-pick-cover(); }
+        pick-files => { root.np-pick-files(); }
+        remove-file(i) => { root.np-remove(i); }
+        save(n) => { root.np-save(n); }
+        close => { root.np-close(); fs.focus(); }
     }
 
     // ---------- Settings dialog ----------

@@ -1,6 +1,8 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod config;
 mod desktop;
+mod dialogs;
+mod fx;
 mod library;
 mod libview;
 mod menus;
@@ -56,6 +58,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     mini::setup(&app, cfg.clone());
     viz::setup(&app, &player);
     plugins::setup(&app, &player, cfg.clone());
+    fx::setup(&app, &player);
+    dialogs::setup(&app, &player);
     if screenshot_mode() {
         debug_ui(&app);
     }
@@ -400,8 +404,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         use slint::winit_030::{winit::event::WindowEvent, EventResult, WinitWindowAccessor};
         let p = player.clone();
+        let weak = app.as_weak();
         app.window().on_winit_window_event(move |_w, ev| {
             if let WindowEvent::DroppedFile(path) = ev {
+                if weak.upgrade().is_some_and(|a| dialogs::take_drop(&a, path)) {
+                    return EventResult::PreventDefault;
+                }
                 // Drop on an idle player opens; otherwise adds to the queue.
                 if p.get("path").is_some() {
                     p.enqueue(&path.to_string_lossy());
@@ -463,12 +471,13 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
         },
     )));
     a.set_hwdec(p.get("hwdec").unwrap_or_default().into());
+    let q = p.queue();
     a.set_queue(items(
-        p.queue()
-            .into_iter()
+        q.iter()
             .enumerate()
-            .map(|(i, (f, cur))| (i.to_string(), store::display_name(&f), cur)),
+            .map(|(i, (f, cur))| (i.to_string(), store::display_name(f), *cur)),
     ));
+    mini::queue_meta(a, p, &q);
     if log {
         eprintln!(
             "lists aid={:?} sid={:?} audio={:?} sub={:?} queue={:?}",
@@ -583,6 +592,17 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     if let Ok(t) = std::env::var("VIVI_PANEL") {
         app.set_panel_tab(t.parse().unwrap_or(0));
         app.set_panel_open(true);
+        if let Some(y) = std::env::var("VIVI_PANEL_SCROLL")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok())
+        {
+            let w = app.as_weak();
+            slint::Timer::single_shot(Duration::from_millis(2500), move || {
+                if let Some(a) = w.upgrade() {
+                    a.set_panel_scroll(-y);
+                }
+            });
+        }
     }
     if screenshot_mode() {
         if let Some(v) = std::env::var("VIVI_VOLUME")
@@ -652,7 +672,8 @@ fn screenshot_mode() -> bool {
 
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
-/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK, VIVI_URL=<url>, VIVI_LIBRARY,
+/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
+/// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
 /// VIVI_MENU, VIVI_SUB, VIVI_SUBS (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] (Auto-tagger / Free Music dialog, searched when a query is given).
 fn debug_ui(app: &AppWindow) {
@@ -697,7 +718,17 @@ fn debug_ui(app: &AppWindow) {
         });
     }
     if var("VIVI_NETWORK").is_some() {
+        if let Some(u) = var("VIVI_NET_URLS") {
+            app.set_net_urls(u.replace('|', "\n").into());
+        }
+        if let Some(n) = var("VIVI_NET_NAME") {
+            app.set_net_name(n.into());
+        }
         app.set_network_open(true);
+    }
+    if let Some(n) = var("VIVI_NEW_PLAYLIST") {
+        app.set_np_name(n.into());
+        app.set_np_open(true);
     }
     if var("VIVI_LIBRARY").is_some() {
         app.set_library_open(true);
@@ -796,6 +827,8 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
     app.on_queue_remove(move |i| p.remove_index(i));
     let p = player.clone();
     app.on_queue_clear(move || p.clear_queue());
+    let p = player.clone();
+    app.on_queue_sort(move || p.sort_queue());
     let p = player.clone();
     app.on_queue_add(move || {
         if let Some(files) = rfd::FileDialog::new()

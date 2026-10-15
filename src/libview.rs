@@ -99,6 +99,14 @@ impl Lib {
         }
     }
 
+    /// Use the playlist thumbnail chosen in the New Playlist dialog.
+    fn cover(it: &mut LibItem, playlist: &std::path::Path) {
+        if let Some(img) = store::playlist_cover(playlist).and_then(|c| library::load_thumb(&c)) {
+            it.thumb = img;
+            it.has_thumb = true;
+        }
+    }
+
     fn matches(&self, m: &Media) -> bool {
         let q = self.search.to_lowercase();
         q.is_empty()
@@ -303,13 +311,15 @@ impl Lib {
                             .filter(|l| !l.starts_with('#') && !l.is_empty())
                             .count()
                     });
-                    out.push(Self::group(
+                    let mut it = Self::group(
                         path.to_string_lossy().into_owned(),
                         &name,
                         format!("{n} items"),
                         "playlist",
                         false,
-                    ));
+                    );
+                    Self::cover(&mut it, &path);
+                    out.push(it);
                 }
             }
             _ => {
@@ -455,13 +465,15 @@ impl Lib {
             .into_iter()
             .take(12)
             .map(|(n, p)| {
-                Self::group(
+                let mut it = Self::group(
                     p.to_string_lossy().into_owned(),
                     &n,
                     String::new(),
                     "playlist",
                     false,
-                )
+                );
+                Self::cover(&mut it, &p);
+                it
             })
             .collect();
         // "Frequently Listened Artists": artists by number of recent plays, then library size.
@@ -1003,20 +1015,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     }
     {
         let w = app.as_weak();
-        let render = render.clone();
         app.on_lib_create_playlist(move || {
-            let names: Vec<String> = store::playlists().into_iter().map(|(n, _)| n).collect();
-            let name = (1..)
-                .map(|i| format!("Playlist {i}"))
-                .find(|n| !names.contains(n))
-                .unwrap_or_default();
-            if let Err(e) = store::save_playlist(&name, &[]) {
-                eprintln!("vivi: create playlist: {e}");
-            }
+            // Figma "New Playlist" dialog (src/dialogs.rs saves it).
             if let Some(a) = w.upgrade() {
-                a.set_playlists(crate::playlist_items());
+                a.set_np_open(true);
             }
-            render();
         });
     }
     render();
