@@ -1,5 +1,5 @@
 #!/bin/sh
-# Vivi installer: curl -fsSL https://loafer19.github.io/vivi/install.sh | sh
+# Vivi installer: curl -fsSL https://viviplayer.app/install.sh | sh
 #
 #   sh install.sh               install or update the latest release
 #   sh install.sh --uninstall   remove what this script installed (settings and library stay)
@@ -13,7 +13,7 @@ set -eu
 
 REPO=Loafer19/vivi
 GH=https://github.com/$REPO
-SITE=${VIVI_SITE:-https://loafer19.github.io/vivi}
+SITE=${VIVI_SITE:-https://viviplayer.app}
 PREFIX=${VIVI_PREFIX:-$HOME/.local}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 MANIFEST=$DATA/vivi-installer/files

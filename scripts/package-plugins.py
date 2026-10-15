@@ -19,6 +19,10 @@ kept (so --check works without the binaries).
 
     scripts/package-plugins.py --assets <id>  # print the helper files to upload for <id>
 
+Marketplace metadata lives next to the manifest in plugins/<id>/store.toml (categories,
+tags, screenshots, changelog). It is not part of the zip, so listings can change without a
+new plugin version; categories, tags and screenshots are copied into the index entry.
+
 Standard library only (Python 3.11+ for tomllib).
 """
 import hashlib
@@ -36,6 +40,8 @@ INDEX = ROOT / "plugins/index.json"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 ID = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 PERMISSIONS = {"network", "filesystem", "subprocess"}
+CATEGORIES = {"Music", "Video", "Subtitles", "Streaming", "Integrations", "Tools"}
+NOT_PACKAGED = {"store.toml"}
 HELPERS = ROOT / "dist/helpers"
 PLATFORMS = ["linux-x86_64", "linux-aarch64", "windows-x86_64", "macos-x86_64", "macos-aarch64"]
 RESERVED = {"pkgdir"}
@@ -66,14 +72,24 @@ def manifests() -> list[tuple[Path, dict]]:
         bad = set(m.get("permissions", [])) - PERMISSIONS
         if bad:
             sys.exit(f"{f}: unknown permissions {sorted(bad)}")
+        m["_store"] = store(d)
         out.append((d, m))
     return out
+
+
+def store(d: Path) -> dict:
+    f = d / "store.toml"
+    s = tomllib.loads(f.read_text()) if f.exists() else {}
+    bad = set(s.get("categories", [])) - CATEGORIES
+    if bad:
+        sys.exit(f"{f}: unknown categories {sorted(bad)} (use {sorted(CATEGORIES)})")
+    return s
 
 
 def build_zip(d: Path, m: dict) -> Path:
     DIST.mkdir(parents=True, exist_ok=True)
     z = DIST / f"{m['id']}-{m['version']}.zip"
-    files = sorted(p for p in d.rglob("*") if p.is_file() and not p.name.startswith("."))
+    files = sorted(p for p in d.rglob("*") if p.is_file() and not p.name.startswith(".") and p.name not in NOT_PACKAGED)
     with zipfile.ZipFile(z, "w", zipfile.ZIP_STORED) as zf:
         for p in files:
             info = zipfile.ZipInfo(p.relative_to(d).as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
@@ -142,6 +158,19 @@ def entry(m: dict, z: Path, old: dict | None = None) -> dict:
     }
     if "issue" in m:
         e["issue"] = m["issue"]
+    for k in ("categories", "tags", "screenshots"):
+        if m["_store"].get(k):
+            e[k] = m["_store"][k]
+    if m["_store"].get("changelog"):
+        e["changelog"] = [
+            {
+                "version": c["version"],
+                "date": c.get("date", ""),
+                "notes": c.get("notes", ""),
+                "url": f"https://github.com/{REPO}/releases/download/plugin-{m['id']}-v{c['version']}/{m['id']}-{c['version']}.zip",
+            }
+            for c in m["_store"]["changelog"]
+        ]
     if m.get("binaries"):
         e["needs"] = m["binaries"]
         e["binaries"] = binaries(m, tag, old)

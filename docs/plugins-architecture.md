@@ -182,7 +182,7 @@ the size in Browse (e.g. the YouTube plugin's own yt-dlp download).
 ## Registry (catalog)
 
 `plugins/index.json` in this repository, published by the Pages workflow at
-<https://loafer19.github.io/vivi/index.json> (override with `VIVI_PLUGIN_INDEX`).
+<https://plugins.viviplayer.app/index.json>, falling back to <https://loafer19.github.io/vivi/index.json> (override with `VIVI_PLUGIN_INDEX`).
 `schema: 1`; built-in plugins are listed with `kind: "builtin"`, packages with
 `kind: "package"` and:
 

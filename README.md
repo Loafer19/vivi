@@ -68,10 +68,10 @@ env-driven helpers as debug builds (`VIVI_SETTINGS`, `VIVI_PANEL`, `VIVI_LIBRARY
 Linux (x86_64), one line:
 
 ```sh
-curl -fsSL https://loafer19.github.io/vivi/install.sh | sh
+curl -fsSL https://viviplayer.app/install.sh | sh
 ```
 
-On Arch and derivatives it builds the `vivi-bin` package with `makepkg -si`; elsewhere it puts `vivi`, `vivi-mcp`, the desktop file and icons into `~/.local` and tells you if `libmpv` is missing (e.g. `sudo apt install libmpv2`). Downloads are checked against the release `SHA256SUMS`. Update by running it again; remove with `curl -fsSL https://loafer19.github.io/vivi/install.sh | sh -s -- --uninstall` (settings and library stay). [Read the script](docs/site/install.sh) first if you like.
+On Arch and derivatives it builds the `vivi-bin` package with `makepkg -si`; elsewhere it puts `vivi`, `vivi-mcp`, the desktop file and icons into `~/.local` and tells you if `libmpv` is missing (e.g. `sudo apt install libmpv2`). Downloads are checked against the release `SHA256SUMS`. Update by running it again; remove with `curl -fsSL https://viviplayer.app/install.sh | sh -s -- --uninstall` (settings and library stay). [Read the script](docs/site/install.sh) first if you like.
 
 | Platform | Package |
 |---|---|
@@ -144,7 +144,7 @@ Turn plugins on or off and change their settings in **Settings → Extensions** 
 | **Network Streams** | *Browse…* opens a streams browser (separate from *Open Network Stream*): Internet radio from [radio-browser.info](https://www.radio-browser.info) (search by name, top voted, by country or country code, by genre; no key), **M3U / IPTV** import from a file path or URL (`tvg-logo`, `group-title`; a plain word searches iptv-org channels), **TV** by country or category from [iptv-org](https://github.com/iptv-org/iptv) (cached playlists, filter as you type, channel logos), **Music** genres (popular, trending, top stations per tag) and [SomaFM](https://somafm.com) channels, **Saved** and **Recent** lists. *Play* plays the selection, *Save* / *Remove* manage the saved list. *Stream info* shows the ICY now-playing title, codec, bitrate and buffer. Lists are kept in `~/.local/share/vivi/streams/`. |
 
 ### Downloadable plugins
-Settings → Extensions has two tabs. **Installed** lists built-in plugins, downloaded plugins (with Update, Roll back and Uninstall) and mpv scripts. **Browse** shows the catalog from <https://loafer19.github.io/vivi/index.json> with Install / Update / Uninstall buttons, version, author, size and the permissions each plugin asks for (you confirm them before installing). Downloads run in the background (the size shown includes a plugin's native helper for your platform), are checked against the sha256 in the catalog and are installed atomically into `~/.local/share/vivi/plugins/<id>/<version>/`; the previous version is kept for rollback. Vivi checks for updates at most once a day on startup (can be turned off) or when you press *Check now*, and shows a notification when updates are available.
+Settings → Extensions has two tabs. **Installed** lists built-in plugins, downloaded plugins (with Update, Roll back and Uninstall) and mpv scripts. **Browse** shows the catalog from <https://plugins.viviplayer.app/index.json> (falls back to <https://loafer19.github.io/vivi/index.json>) with Install / Update / Uninstall buttons, version, author, size and the permissions each plugin asks for (you confirm them before installing). Downloads run in the background (the size shown includes a plugin's native helper for your platform), are checked against the sha256 in the catalog and are installed atomically into `~/.local/share/vivi/plugins/<id>/<version>/`; the previous version is kept for rollback. Vivi checks for updates at most once a day on startup (can be turned off) or when you press *Check now*, and shows a notification when updates are available.
 
 | Package | What it does |
 | --- | --- |
@@ -164,7 +164,7 @@ Packages are mpv Lua scripts with a `manifest.toml`, kept in [plugins/](plugins)
 ### mpv scripts
 Any mpv Lua or JavaScript script placed in `~/.config/vivi/scripts/` shows up as an **external plugin** with its own toggle. It is loaded with mpv `load-script`, and turning one off takes effect after a restart. Optional `-- @name`, `@description`, `@version` and `@author` header lines fill in the card. See [plugins/examples/now-playing.lua](plugins/examples/now-playing.lua).
 
-The machine-readable catalog is [plugins/index.json](plugins/index.json). The docs site in [docs/site](docs/site) has a landing page, the plugin catalog and a guide to writing plugins. Build it with `python3 scripts/build-site.py` (output in `_site/`). The [Pages workflow](.github/workflows/pages.yml) deploys it to **<https://loafer19.github.io/vivi/>** on every push to `master`. Site icons are [Lucide](https://lucide.dev) SVGs inlined at build time (no JavaScript); each catalog entry names its Lucide icon in the `lucide` field of `index.json`.
+The machine-readable catalog is [plugins/index.json](plugins/index.json). The docs site in [docs/site](docs/site) has a landing page, the plugin catalog and a guide to writing plugins. Build it with `python3 scripts/build-site.py` (output in `_site/`). The [Pages workflow](.github/workflows/pages.yml) deploys a mirror to <https://loafer19.github.io/vivi/> on every push to `master`; the main copy is **<https://viviplayer.app>** and the plugin marketplace **<https://plugins.viviplayer.app>** (Dokploy, see [deploy/](deploy)). Site icons are [Lucide](https://lucide.dev) SVGs inlined at build time (no JavaScript); each catalog entry names its Lucide icon in the `lucide` field of `index.json`.
 
 | Extensions | Lyrics | Skip intro | Add Subtitles |
 |---|---|---|---|

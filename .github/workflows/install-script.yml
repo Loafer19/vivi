@@ -1,5 +1,5 @@
 name: Install script
-# Lints docs/site/install.sh (served as https://loafer19.github.io/vivi/install.sh) and runs
+# Lints docs/site/install.sh (served as https://viviplayer.app/install.sh) and runs
 # install + --uninstall in Debian, Ubuntu, Fedora and Arch containers against the latest release.
 on:
   push:

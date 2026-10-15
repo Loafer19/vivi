@@ -11,7 +11,18 @@
       "lucide": "audio-waveform",
       "kind": "builtin",
       "default_enabled": true,
-      "settings": []
+      "settings": [],
+      "categories": [
+        "Music"
+      ],
+      "tags": [
+        "visualizer",
+        "spectrum",
+        "audio"
+      ],
+      "screenshots": [
+        "visualizer"
+      ]
     },
     {
       "id": "skip-intro",
@@ -52,6 +63,17 @@
           "title": "Clear ranges for this show",
           "type": "action"
         }
+      ],
+      "categories": [
+        "Video"
+      ],
+      "tags": [
+        "tv",
+        "chapters",
+        "skip"
+      ],
+      "screenshots": [
+        "skip-intro"
       ]
     },
     {
@@ -104,6 +126,17 @@
           "title": "Downloaded lyrics",
           "type": "action"
         }
+      ],
+      "categories": [
+        "Music"
+      ],
+      "tags": [
+        "lyrics",
+        "karaoke",
+        "lrclib"
+      ],
+      "screenshots": [
+        "lyrics"
       ]
     },
     {
@@ -141,6 +174,16 @@
           "type": "secret",
           "default": ""
         }
+      ],
+      "categories": [
+        "Subtitles"
+      ],
+      "tags": [
+        "opensubtitles",
+        "download"
+      ],
+      "screenshots": [
+        "add-subtitles"
       ]
     },
     {
@@ -191,7 +234,17 @@
           "type": "action",
           "default": ""
         }
-      ]
+      ],
+      "categories": [
+        "Music",
+        "Tools"
+      ],
+      "tags": [
+        "musicbrainz",
+        "acoustid",
+        "tags"
+      ],
+      "screenshots": []
     },
     {
       "id": "free-music",
@@ -223,7 +276,17 @@
           "type": "action",
           "default": ""
         }
-      ]
+      ],
+      "categories": [
+        "Music",
+        "Streaming"
+      ],
+      "tags": [
+        "creative-commons",
+        "internet-archive",
+        "jamendo"
+      ],
+      "screenshots": []
     },
     {
       "id": "network-streams",
@@ -249,6 +312,17 @@
           "type": "action",
           "default": ""
         }
+      ],
+      "categories": [
+        "Streaming"
+      ],
+      "tags": [
+        "radio",
+        "iptv",
+        "m3u"
+      ],
+      "screenshots": [
+        "network"
       ]
     },
     {
@@ -262,7 +336,15 @@
       "kind": "script",
       "default_enabled": true,
       "source": "plugins/examples/now-playing.lua",
-      "settings": []
+      "settings": [],
+      "categories": [
+        "Tools"
+      ],
+      "tags": [
+        "example",
+        "lua"
+      ],
+      "screenshots": []
     },
     {
       "id": "ab-loop",
@@ -306,7 +388,36 @@
           "type": "action"
         }
       ],
-      "issue": 59
+      "issue": 59,
+      "categories": [
+        "Video",
+        "Tools"
+      ],
+      "tags": [
+        "loop",
+        "frame-step",
+        "practice"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.2",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-ab-loop-v1.0.2/ab-loop-1.0.2.zip"
+        },
+        {
+          "version": "1.0.1",
+          "date": "2026-10-14",
+          "notes": "Shows confirmations as Vivi toasts.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-ab-loop-v1.0.1/ab-loop-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-14",
+          "notes": "First release: A-B loop points, frame nudging and stepping, on-screen loop bar.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-ab-loop-v1.0.0/ab-loop-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "discord",
@@ -354,6 +465,23 @@
         }
       ],
       "issue": 57,
+      "categories": [
+        "Integrations",
+        "Music"
+      ],
+      "tags": [
+        "discord",
+        "rich-presence",
+        "status"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release as a downloadable plugin with the native vivi-discord helper (moved out of the core).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-discord-v1.0.0/discord-1.0.0.zip"
+        }
+      ],
       "needs": [
         "vivi-discord"
       ],
@@ -432,7 +560,42 @@
           "default": "Medium"
         }
       ],
-      "issue": 60
+      "issue": 60,
+      "categories": [
+        "Video",
+        "Tools"
+      ],
+      "tags": [
+        "audio",
+        "dynamic-range",
+        "dialogue"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.3",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.3/night-mode-1.0.3.zip"
+        },
+        {
+          "version": "1.0.2",
+          "date": "2026-10-14",
+          "notes": "Shows confirmations as Vivi toasts.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.2/night-mode-1.0.2.zip"
+        },
+        {
+          "version": "1.0.1",
+          "date": "2026-10-14",
+          "notes": "Reports the strength when it is changed while Night Mode is off.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.1/night-mode-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-14",
+          "notes": "First release.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.0/night-mode-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "playback-stats",
@@ -481,7 +644,36 @@
           "type": "action"
         }
       ],
-      "issue": 66
+      "issue": 66,
+      "categories": [
+        "Tools",
+        "Music"
+      ],
+      "tags": [
+        "statistics",
+        "history",
+        "csv"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.2",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-playback-stats-v1.0.2/playback-stats-1.0.2.zip"
+        },
+        {
+          "version": "1.0.1",
+          "date": "2026-10-14",
+          "notes": "Shows confirmations as Vivi toasts.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-playback-stats-v1.0.1/playback-stats-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-14",
+          "notes": "First release.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-playback-stats-v1.0.0/playback-stats-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "remote-control",
@@ -524,6 +716,23 @@
         }
       ],
       "issue": 58,
+      "categories": [
+        "Integrations",
+        "Tools"
+      ],
+      "tags": [
+        "remote",
+        "phone",
+        "web"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release as a downloadable plugin with a native helper (moved out of the core).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-remote-control-v1.0.0/remote-control-1.0.0.zip"
+        }
+      ],
       "needs": [
         "vivi-remote"
       ],
@@ -621,7 +830,30 @@
           "type": "action"
         }
       ],
-      "issue": 62
+      "issue": 62,
+      "categories": [
+        "Video",
+        "Tools"
+      ],
+      "tags": [
+        "chapters",
+        "thumbnails",
+        "ffmpeg"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scene-chapters-v1.0.1/scene-chapters-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scene-chapters-v1.0.0/scene-chapters-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "scrobbler",
@@ -680,7 +912,29 @@
           "type": "action"
         }
       ],
-      "issue": 63
+      "issue": 63,
+      "categories": [
+        "Music",
+        "Integrations"
+      ],
+      "tags": [
+        "listenbrainz",
+        "scrobbling"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.0.1/scrobbler-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-14",
+          "notes": "First release: ListenBrainz now playing and listens with an offline queue.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-scrobbler-v1.0.0/scrobbler-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "sponsorblock",
@@ -732,7 +986,30 @@
           "default": "https://sponsor.ajay.app"
         }
       ],
-      "issue": 64
+      "issue": 64,
+      "categories": [
+        "Video",
+        "Streaming"
+      ],
+      "tags": [
+        "youtube",
+        "sponsorblock",
+        "skip"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.0.1/sponsorblock-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-sponsorblock-v1.0.0/sponsorblock-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "subtitle-sync",
@@ -777,7 +1054,30 @@
           "type": "action"
         }
       ],
-      "issue": 56
+      "issue": 56,
+      "categories": [
+        "Subtitles",
+        "Tools"
+      ],
+      "tags": [
+        "alass",
+        "ffsubsync",
+        "timing"
+      ],
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-15",
+          "notes": "Requires Vivi 0.9.0 (managed ffmpeg support).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.0.1/subtitle-sync-1.0.1.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-subtitle-sync-v1.0.0/subtitle-sync-1.0.0.zip"
+        }
+      ]
     },
     {
       "id": "youtube",
@@ -914,6 +1214,47 @@
           "title": "Which yt-dlp and ffmpeg are used",
           "type": "action",
           "label": "Show"
+        }
+      ],
+      "categories": [
+        "Streaming",
+        "Video"
+      ],
+      "tags": [
+        "youtube",
+        "yt-dlp",
+        "download"
+      ],
+      "changelog": [
+        {
+          "version": "1.2.0",
+          "date": "2026-10-15",
+          "notes": "Managed ffmpeg is Vivi's minimal static build (about 6 MB instead of 150 MB), checksums pinned.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.2.0/youtube-1.2.0.zip"
+        },
+        {
+          "version": "1.1.2",
+          "date": "2026-10-15",
+          "notes": "Declares the pkgdir option (no 'unknown key' warning).",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.2/youtube-1.1.2.zip"
+        },
+        {
+          "version": "1.1.1",
+          "date": "2026-10-15",
+          "notes": "Short size note in Browse; sizes moved to the description.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.1/youtube-1.1.1.zip"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-15",
+          "notes": "Downloads ffmpeg on demand.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.1.0/youtube-1.1.0.zip"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-15",
+          "notes": "First release: YouTube and yt-dlp support.",
+          "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.0.0/youtube-1.0.0.zip"
         }
       ],
       "size_note": "+ yt-dlp, ffmpeg if needed"

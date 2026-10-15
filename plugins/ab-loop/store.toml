@@ -1,0 +1,20 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Video", "Tools"]
+tags = ["loop", "frame-step", "practice"]
+screenshots = []
+
+[[changelog]]
+version = "1.0.2"
+date = "2026-10-15"
+notes = "Requires Vivi 0.9.0 (managed ffmpeg support)."
+
+[[changelog]]
+version = "1.0.1"
+date = "2026-10-14"
+notes = "Shows confirmations as Vivi toasts."
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-14"
+notes = "First release: A-B loop points, frame nudging and stepping, on-screen loop bar."

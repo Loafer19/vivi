@@ -667,7 +667,7 @@ pub fn refresh_ui() {
 }
 
 /// Docs site with the plugin catalog ("Find more extensions").
-pub const CATALOG_URL: &str = "https://loafer19.github.io/vivi/plugins.html";
+pub const CATALOG_URL: &str = "https://plugins.viviplayer.app/";
 
 /// Extensions page (Figma "Add-ons & Scripts") with two tabs:
 /// * Installed: one card per plugin (built-in, downloaded package, mpv script) with its

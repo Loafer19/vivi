@@ -1,0 +1,15 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Video", "Streaming"]
+tags = ["youtube", "sponsorblock", "skip"]
+screenshots = []
+
+[[changelog]]
+version = "1.0.1"
+date = "2026-10-15"
+notes = "Requires Vivi 0.9.0 (managed ffmpeg support)."
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-15"
+notes = "First release."

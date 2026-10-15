@@ -2,7 +2,8 @@
 //!
 //! A package is a zip with a `manifest.toml` at its root and an mpv Lua/JavaScript entry
 //! script (see `docs/plugins-architecture.md`). The catalog is `plugins/index.json`,
-//! served by GitHub Pages at [`INDEX_URL`]; package entries carry the download URL (a
+//! served by the plugin marketplace at [`INDEX_URL`] (GitHub Pages copy at
+//! [`FALLBACK_INDEX_URL`]); package entries carry the download URL (a
 //! GitHub release asset tagged `plugin-<id>-v<version>`), its sha256 and size.
 //!
 //! Layout on disk (`$XDG_DATA_HOME/vivi/plugins`):
@@ -35,8 +36,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-/// Catalog published by the docs site (`plugins/index.json`).
-pub const INDEX_URL: &str = "https://loafer19.github.io/vivi/index.json";
+/// Catalog published by the plugin marketplace (`plugins/index.json`).
+pub const INDEX_URL: &str = "https://plugins.viviplayer.app/index.json";
+/// Same catalog on GitHub Pages, tried when [`INDEX_URL`] cannot be loaded.
+pub const FALLBACK_INDEX_URL: &str = "https://loafer19.github.io/vivi/index.json";
 /// Config entry (`[plugins.packages]`) for the catalog settings.
 pub const GLOBAL_ID: &str = "packages";
 /// Automatic catalog checks run at most this often.
@@ -53,6 +56,32 @@ pub const PERMISSIONS: [(&str, &str); 3] = [
 /// Catalog URL; `VIVI_PLUGIN_INDEX` overrides it (testing, mirrors).
 pub fn index_url() -> String {
     std::env::var("VIVI_PLUGIN_INDEX").unwrap_or_else(|_| INDEX_URL.into())
+}
+
+/// URLs to try in order: the configured catalog, then the GitHub Pages mirror when the
+/// default is used.
+fn index_urls() -> Vec<String> {
+    let url = index_url();
+    if url == INDEX_URL {
+        vec![url, FALLBACK_INDEX_URL.into()]
+    } else {
+        vec![url]
+    }
+}
+
+/// Plugin id from a marketplace deep link: `vivi://plugin/<id>` (also `vivi://install/<id>`).
+pub fn deep_link(arg: &str) -> Option<String> {
+    let rest = arg.strip_prefix("vivi://")?;
+    let (kind, id) = rest.split_once('/')?;
+    let id = id.trim_end_matches('/');
+    let ok = !id.is_empty()
+        && id.len() <= 64
+        && id.split('-').all(|w| {
+            !w.is_empty()
+                && w.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        });
+    (matches!(kind, "plugin" | "install") && ok).then(|| id.to_string())
 }
 
 /// Where packages are installed.
@@ -701,15 +730,28 @@ pub fn check(manual: bool) {
     if manual {
         status("Checking for plugin updates…".into());
     }
-    let url = index_url();
+    let urls = index_urls();
+    let url = urls[0].clone();
     std::thread::spawn(move || {
-        let res = download(&url).and_then(|b| {
-            let s = String::from_utf8(b).map_err(|e| e.to_string())?;
-            let c = parse_index(&s)?;
+        let fetch = |u: &str| {
+            download(u).and_then(|b| {
+                let s = String::from_utf8(b).map_err(|e| e.to_string())?;
+                let c = parse_index(&s)?;
+                Ok((s, c))
+            })
+        };
+        let mut res = fetch(&urls[0]);
+        for u in &urls[1..] {
+            if let Err(e) = &res {
+                eprintln!("vivi: plugin catalog {}: {e}; trying {u}", urls[0]);
+                res = fetch(u);
+            }
+        }
+        let res = res.map(|(s, c)| {
             if let Err(e) = crate::store::write_atomic(&cache_file(), &s) {
                 eprintln!("vivi: plugin catalog cache: {e}");
             }
-            Ok(c)
+            c
         });
         let _ = slint::invoke_from_event_loop(move || {
             with_state(|s| s.fetching = false);
@@ -1022,5 +1064,20 @@ mod tests {
             assert!(cmp_version(&e.min_vivi, &next).is_le(), "{}", e.id);
             assert_eq!(m.binaries, e.needs, "{}", e.id);
         }
+    }
+}
+
+#[cfg(test)]
+mod deep_link_tests {
+    use super::deep_link;
+
+    #[test]
+    fn parses_plugin_links() {
+        assert_eq!(deep_link("vivi://plugin/ab-loop"), Some("ab-loop".into()));
+        assert_eq!(deep_link("vivi://install/youtube/"), Some("youtube".into()));
+        assert_eq!(deep_link("vivi://plugin/../etc"), None);
+        assert_eq!(deep_link("vivi://plugin/"), None);
+        assert_eq!(deep_link("vivi://status"), None);
+        assert_eq!(deep_link("https://example.com/a"), None);
     }
 }

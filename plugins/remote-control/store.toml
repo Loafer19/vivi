@@ -1,0 +1,10 @@
+# Marketplace listing (plugins.viviplayer.app). Not part of the package zip,
+# so editing it needs no new plugin version.
+categories = ["Integrations", "Tools"]
+tags = ["remote", "phone", "web"]
+screenshots = []
+
+[[changelog]]
+version = "1.0.0"
+date = "2026-10-15"
+notes = "First release as a downloadable plugin with a native helper (moved out of the core)."

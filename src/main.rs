@@ -213,7 +213,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // First CLI file opens once rendering is ready; further files are queued.
-    let cli: Vec<String> = std::env::args().skip(1).collect();
+    // vivi://plugin/<id> (marketplace "Open in Vivi") opens the plugin in Extensions → Browse.
+    let (links, cli): (Vec<String>, Vec<String>) = std::env::args()
+        .skip(1)
+        .partition(|a| a.starts_with("vivi://"));
+    if let Some(id) = links.iter().find_map(|a| plugins::packages::deep_link(a)) {
+        open_plugin_link(&app, &id);
+    }
     let p = player.clone();
     render::attach(&app, player.mpv.clone(), move || {
         let mut it = cli.iter();
@@ -794,6 +800,24 @@ fn screenshot_mode() -> bool {
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
 /// VIVI_MENU, VIVI_SUB, VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] (Auto-tagger / Free Music dialog, searched when a query is given).
+/// Show plugin `id` in Settings → Extensions → Browse (search filtered to its name).
+fn open_plugin_link(app: &AppWindow, id: &str) {
+    use plugins::packages;
+    packages::with_state(|s| s.tab = "Browse".into());
+    let name = packages::with_state(|s| {
+        s.catalog
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| e.name.clone())
+    });
+    let n = 12; // Extensions
+    let q: slint::SharedString = name.unwrap_or_default().into();
+    app.set_settings_open(true);
+    app.set_settings_category(n);
+    app.set_settings_search(q.clone());
+    app.invoke_settings_refresh(n, q, false);
+}
+
 fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
     if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
