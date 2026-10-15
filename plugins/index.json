@@ -706,6 +706,139 @@
         }
       ],
       "issue": 56
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube & yt-dlp",
+      "description": "Paste a video or playlist URL (or press Alt+U with one in the clipboard) to list its entries in the playlist, see the estimated size of each quality, and download video or audio only into a folder you choose, with progress toasts. Uses your system yt-dlp when it is recent, otherwise downloads and updates its own copy from the official yt-dlp GitHub releases.",
+      "version": "1.0.0",
+      "author": "Vivi",
+      "icon": "streams",
+      "lucide": "youtube",
+      "kind": "package",
+      "runtime": "mpv-lua",
+      "default_enabled": true,
+      "min_vivi": "0.9.1",
+      "permissions": [
+        "network",
+        "filesystem",
+        "subprocess"
+      ],
+      "source": "plugins/youtube",
+      "url": "https://github.com/Loafer19/vivi/releases/download/plugin-youtube-v1.0.0/youtube-1.0.0.zip",
+      "sha256": "19f02c796ff0e8e887be5e1d2d6a95e83fe771794e5ebd0292a5f622c680b07d",
+      "size": 29537,
+      "settings": [
+        {
+          "key": "url",
+          "title": "Video or playlist URL (Alt+U pastes from the clipboard)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "add",
+          "title": "List the entries in the playlist",
+          "type": "action",
+          "label": "Add to playlist"
+        },
+        {
+          "key": "quality",
+          "title": "Download quality",
+          "type": "choice",
+          "options": [
+            "Best available",
+            "2160p",
+            "1440p",
+            "1080p",
+            "720p",
+            "480p",
+            "360p"
+          ],
+          "default": "1080p"
+        },
+        {
+          "key": "mode",
+          "title": "Download",
+          "type": "choice",
+          "options": [
+            "Video",
+            "Audio only"
+          ],
+          "default": "Video"
+        },
+        {
+          "key": "audio-format",
+          "title": "Audio-only format (conversion needs ffmpeg)",
+          "type": "choice",
+          "options": [
+            "Original",
+            "mp3",
+            "m4a",
+            "opus"
+          ],
+          "default": "Original"
+        },
+        {
+          "key": "sizes",
+          "title": "Estimated size per quality",
+          "type": "action",
+          "label": "Show sizes"
+        },
+        {
+          "key": "folder",
+          "title": "Download folder (empty: Downloads/Vivi)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "pick-folder",
+          "title": "Choose the download folder",
+          "type": "action",
+          "label": "Choose…"
+        },
+        {
+          "key": "download",
+          "title": "Download the URL (or the playing video)",
+          "type": "action",
+          "label": "Download"
+        },
+        {
+          "key": "cancel",
+          "title": "Stop the running download",
+          "type": "action",
+          "label": "Cancel"
+        },
+        {
+          "key": "source",
+          "title": "yt-dlp to use",
+          "type": "choice",
+          "options": [
+            "Auto (system if recent, else managed)",
+            "System",
+            "Managed copy"
+          ],
+          "default": "Auto (system if recent, else managed)"
+        },
+        {
+          "key": "auto-update",
+          "title": "Update the managed yt-dlp daily",
+          "type": "toggle",
+          "default": "true"
+        },
+        {
+          "key": "update",
+          "title": "Update the managed yt-dlp now",
+          "type": "action",
+          "label": "Update"
+        },
+        {
+          "key": "info",
+          "title": "Which yt-dlp is used",
+          "type": "action",
+          "label": "Show"
+        }
+      ],
+      "size_note": "+ yt-dlp 18–40 MB on first use, unless a recent system yt-dlp is found"
     }
   ]
 }

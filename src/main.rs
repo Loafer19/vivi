@@ -45,6 +45,9 @@ fn show_stream_error(app: &AppWindow, msg: &str) {
 /// Environment for bundled files, set before any thread starts:
 /// * `SLINT_FONT_PATH`: the Inter font shipped by the Flatpak/AppImage in
 ///   `<prefix>/share/vivi/fonts` (next to `<prefix>/bin/vivi`), unless already set.
+/// * `PATH` gets the YouTube plugin's managed yt-dlp folder appended, so mpv's ytdl_hook
+///   and the library find it when there is no system yt-dlp (always the case in the
+///   Flatpak). A system yt-dlp earlier in `PATH` still wins.
 fn bundled_env() {
     if std::env::var_os("SLINT_FONT_PATH").is_none() {
         let fonts = std::env::current_exe()
@@ -52,6 +55,16 @@ fn bundled_env() {
             .and_then(|e| Some(e.parent()?.parent()?.join("share/vivi/fonts")));
         if let Some(f) = fonts.filter(|f| f.is_dir()) {
             std::env::set_var("SLINT_FONT_PATH", f);
+        }
+    }
+    let ytdlp = store::data_dir().join("plugin-data/youtube/bin");
+    let mut paths: Vec<_> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    if !paths.contains(&ytdlp) {
+        paths.push(ytdlp);
+        if let Ok(p) = std::env::join_paths(paths) {
+            std::env::set_var("PATH", p);
         }
     }
 }
