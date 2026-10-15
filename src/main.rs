@@ -3,6 +3,7 @@ mod config;
 mod desktop;
 mod dialogs;
 mod fx;
+mod ipc;
 mod library;
 mod libview;
 mod loading;
@@ -76,6 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     plugins::setup(&app, &player, cfg.clone());
     fx::setup(&app, &player);
     dialogs::setup(&app, &player);
+    ipc::setup(&app, &player, cfg.borrow().general.remote_control);
     if screenshot_mode() {
         debug_ui(&app);
     }

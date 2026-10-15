@@ -215,6 +215,13 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
             &s(""),
             false,
         )
+        .header("Remote control")
+        .toggle(
+            "general.remote_control",
+            "Allow AI agents and scripts",
+            "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.",
+            c.general.remote_control,
+        )
         .header("Diagnostics")
         .toggle(
             "general.save_log",
@@ -1597,6 +1604,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     "interface.theme" => c.interface.theme = v.to_lowercase(),
                     "general.language" => c.general.language = v.into(),
                     "general.save_log" => c.general.save_log = v == "true",
+                    "general.remote_control" => c.general.remote_control = v == "true",
                     "general.log_level" => c.general.log_level = v.into(),
                     "general.log_file" | "video.screenshot_dir" | "recording.dir" => {
                         let mut val = v.to_string();

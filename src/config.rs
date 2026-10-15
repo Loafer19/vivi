@@ -121,6 +121,8 @@ pub struct General {
     pub log_file: String,
     /// "Errors only" | "Warnings" | "Everything"
     pub log_level: String,
+    /// Local control socket for `vivi-mcp` and other tools (see `src/ipc.rs`).
+    pub remote_control: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -194,6 +196,7 @@ impl Default for General {
                 .to_string_lossy()
                 .into_owned(),
             log_level: "Errors only".into(),
+            remote_control: false,
         }
     }
 }
