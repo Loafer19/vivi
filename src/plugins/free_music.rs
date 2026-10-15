@@ -128,7 +128,7 @@ pub fn rank(mut v: Vec<Track>, query: &str) -> Vec<Track> {
     if sc.iter().any(|(s, _)| *s > 0) {
         sc.retain(|(s, _)| *s > 0);
     }
-    sc.sort_by(|a, b| b.0.cmp(&a.0));
+    sc.sort_by_key(|a| std::cmp::Reverse(a.0));
     sc.into_iter().map(|(_, t)| t).collect()
 }
 
