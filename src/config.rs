@@ -56,6 +56,8 @@ pub struct Interface {
     pub bar_layout: String,
     /// Show -10s / +10s buttons beside play in the compact bar.
     pub skip_buttons: bool,
+    /// Draw an audio waveform on the seekbar for audio files.
+    pub waveform: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -314,6 +316,7 @@ impl Default for Interface {
             mini_window: None,
             bar_layout: "Compact".into(),
             skip_buttons: true,
+            waveform: true,
         }
     }
 }

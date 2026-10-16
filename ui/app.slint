@@ -53,6 +53,9 @@ component SeekBar inherits Rectangle {
     in property <[image]> frames; // evenly spaced preview frames (may be empty / partial)
     in property <[float]> chapters; // chapter start times (s) → segment gaps on the track
     in property <[float]> peaks; // audio waveform peaks 0..1 (empty = plain bar)
+    in property <float> range-a: -1; // plugin range (vivi-range), drawn in blue
+    in property <float> range-b: -1;
+    in property <string> range-label;
     in property <float> ab-a: -1; // A-B loop / range bounds in seconds (-1 = unset)
     in property <float> ab-b: -1;
     in property <length> track-h: 8px;
@@ -93,8 +96,19 @@ component SeekBar inherits Rectangle {
         // Chapter boundaries cut the track into segments.
         for c in root.chapters: Rectangle {
             visible: root.duration > 0 && c > 0.5 && c < root.duration - 0.5;
-            x: parent.width * c / max(root.duration, 1) - 1px; width: 2px;
+            x: parent.width * c / max(root.duration, 1) - 2px; width: 4px;
             height: parent.height; background: Theme.bar.with-alpha(1);
+            // Notch above and below so boundaries read on thin tracks too.
+            Rectangle { x: 1px; width: 2px; y: -4px; height: 3px; border-radius: 1px; background: Theme.fg-a2; }
+            Rectangle { x: 1px; width: 2px; y: parent.height + 1px; height: 3px; border-radius: 1px; background: Theme.fg-a2; }
+        }
+        // Plugin range (Cut & Export In/Out)
+        if root.duration > 0 && root.range-a >= 0: Rectangle {
+            property <float> e: root.range-b >= 0 ? root.range-b : root.position;
+            x: parent.width * clamp(min(root.range-a, self.e) / root.duration, 0, 1);
+            width: parent.width * clamp(abs(self.e - root.range-a) / root.duration, 0, 1);
+            height: parent.height; border-radius: 2px;
+            background: #4FC3F740; border-width: 1px; border-color: #4FC3F7;
         }
         // A-B range overlay
         if root.ra >= 0 && root.rb >= 0: Rectangle {
@@ -675,6 +689,11 @@ export component AppWindow inherits Window {
     callback ab-set(float, float);
     in property <[float]> chapter-starts;
     in property <[float]> wave-peaks;
+    in property <string> wave-path;
+    // Plugin range on the seekbar (`script-message vivi-range <a> <b> [label]`), e.g. Cut & Export In/Out.
+    in property <float> range-a: -1;
+    in property <float> range-b: -1;
+    in property <string> range-label;
     in property <bool> bar-classic: false;
     in property <bool> bar-skip: true;
     out property <length> bar-h: root.bar-classic ? 72px : 56px;
@@ -953,7 +972,7 @@ export component AppWindow inherits Window {
                 position: root.position; duration: root.duration;
                 frames: root.preview-frames;
                 fmt(t) => { root.fmt(t) }
-                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b;
+                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b; range-a: root.range-a; range-b: root.range-b; range-label: root.range-label;
                 ab-set(x, y) => { root.ab-set(x, y); }
                 seek(t) => { root.seek(t); fs.focus(); }
             }
@@ -1050,7 +1069,7 @@ export component AppWindow inherits Window {
                 track-h: 6px;
                 position: root.position; duration: root.duration;
                 frames: root.preview-frames; peaks: root.wave-peaks;
-                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b;
+                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b; range-a: root.range-a; range-b: root.range-b; range-label: root.range-label;
                 ab-set(x, y) => { root.ab-set(x, y); }
                 fmt(t) => { root.fmt(t) }
                 seek(t) => { root.seek(t); fs.focus(); }

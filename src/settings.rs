@@ -32,7 +32,7 @@ const ACCENTS: [&str; 9] = [
     "#8C8C8C",
 ];
 
-pub const SHORTCUTS: [(&str, &str); 17] = [
+pub const SHORTCUTS: [(&str, &str); 18] = [
     ("Play / pause", "Space  K"),
     ("Seek (short skip)", "←  →"),
     ("Seek (long skip)", "Shift ← →"),
@@ -44,6 +44,7 @@ pub const SHORTCUTS: [(&str, &str); 17] = [
     ("Add bookmark", "Ctrl B"),
     ("Settings", "Ctrl ,"),
     ("Karaoke lyrics view", "L"),
+    ("A-B loop: set A / set B / clear", "Shift+L"),
     ("Find lyrics", "Ctrl L"),
     ("Lyrics timing offset", "[  ]  (Shift ±0.5 s)"),
     ("Subtitle offset (per file)", "Z  X  (Shift ±1 s)"),
@@ -263,6 +264,7 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
         .choice("interface.profile", "Toolbar profile", "Which buttons appear in the bottom bar. Minimal, Default and Power are built in; Custom is your own layout.", &c.interface.profile, &["Minimal", "Default", "Power", "Custom"])
         .choice("interface.bar_layout", "Control bar layout", "Compact puts transport, seekbar and buttons on one row; Classic keeps the seekbar above the buttons.", &c.interface.bar_layout, &["Compact", "Classic"])
         .toggle("interface.skip_buttons", "Skip buttons", "Show −10 s / +10 s buttons beside play in the compact bar.", c.interface.skip_buttons)
+        .toggle("interface.waveform", "Waveform seekbar", "For audio files, draw the waveform on the seekbar (decoded once, cached in ~/.cache/vivi/peaks).", c.interface.waveform)
         .action("interface.customize", "Customize player", "Choose, order and remove bottom-bar buttons.", "Customize…")
         .slider("interface.autohide", "Hide controls after", "Seconds without mouse movement before bars and cursor hide during playback.", c.interface.autohide_secs as f64, (1.0, 10.0, 1.0), &["1 s", "5 s", "10 s"])
         .header("Window")
@@ -1670,6 +1672,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         return;
                     }
                     "interface.bar_layout" => c.interface.bar_layout = v.into(),
+                    "interface.waveform" => c.interface.waveform = v == "true",
                     "interface.skip_buttons" => c.interface.skip_buttons = v == "true",
                     "interface.autohide" => c.interface.autohide_secs = num as u32,
                     "playback.resume" => c.playback.resume = v == "true",

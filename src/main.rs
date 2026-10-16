@@ -11,6 +11,7 @@ mod menus;
 mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
+mod peaks;
 mod player;
 mod plugins;
 mod preview;
@@ -155,6 +156,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 dur,
                                 cfg.borrow().library.thumbnails,
                             );
+                            peaks::start(
+                                &a,
+                                &player.get("path").unwrap_or_default(),
+                                cfg.borrow().interface.waveform && viz::audio_only(&player),
+                            );
+                            a.set_range_a(-1.0);
+                            a.set_range_b(-1.0);
                             let c = cfg.borrow();
                             let key = settings::apply_preset(&player, &c, log);
                             settings::sync_panel(&a, &player);
@@ -205,6 +213,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     );
                                 }
                                 Some("vivi-chapter-thumbs") => chapter_thumbs(&a, &player),
+                                // `vivi-range <a> <b> [label]` / `vivi-range clear`: a plugin's
+                                // range (Cut & Export In/Out) drawn on the seekbar.
+                                Some("vivi-range") => {
+                                    let t = |i: usize| {
+                                        args.get(i)
+                                            .and_then(|v| v.parse::<f32>().ok())
+                                            .unwrap_or(-1.0)
+                                    };
+                                    a.set_range_a(t(1));
+                                    a.set_range_b(t(2));
+                                    a.set_range_label(
+                                        args.get(3).cloned().unwrap_or_default().into(),
+                                    );
+                                }
                                 // `vivi-fullscreen [toggle|on|off]` (Remote Control package):
                                 // Vivi owns the window, so mpv's own fullscreen does nothing.
                                 Some("vivi-fullscreen") => {
@@ -406,6 +428,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ if !ctrl && (s == "n" || s == "N") => p.playlist_step(!shift),
             // Lyrics: L karaoke view, Ctrl+L search, [ ] timing offset (Shift: 0.5 s).
+            // Shift+L: set A, then B, then clear the A-B loop (plain L is the lyrics view).
+            _ if shift && !ctrl && (s == "l" || s == "L") => {
+                if let Some(a) = weak.upgrade() {
+                    a.invoke_run("ab-loop".into());
+                }
+            }
             _ if s == "l" || s == "L" => {
                 let cmd = if ctrl { "search-open" } else { "karaoke" };
                 crate::plugins::command(plugins::lyrics::ID, cmd, &[]);
