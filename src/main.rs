@@ -205,6 +205,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     );
                                 }
                                 Some("vivi-chapter-thumbs") => chapter_thumbs(&a, &player),
+                                // `vivi-fullscreen [toggle|on|off]` (Remote Control package):
+                                // Vivi owns the window, so mpv's own fullscreen does nothing.
+                                Some("vivi-fullscreen") => {
+                                    let w = a.window();
+                                    let fs = match args.get(1).map(String::as_str) {
+                                        Some("on") => true,
+                                        Some("off") => false,
+                                        _ => !w.is_fullscreen(),
+                                    };
+                                    w.set_fullscreen(fs);
+                                    a.set_fullscreen(fs);
+                                }
                                 _ => plugins::client_message(&args),
                             }
                         }

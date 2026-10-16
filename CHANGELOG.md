@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Plugin hooks** for Remote Control 1.1.0: `script-message vivi-qr <title> <text> [caption]` shows a QR code dialog (above Settings), used by *Remote Control → Show QR code* to pair a phone; `script-message vivi-fullscreen [toggle|on|off]` switches Vivi's window fullscreen (mpv's own `fullscreen` property does not reach Vivi's window).
 - **Network Streams** 0.9.0: XMLTV program guide — now / next per `tvg-id` from the playlist `url-tvg` / `x-tvg-url` or a guide URL setting (`.xml` / `.xml.gz`); only the next 12 h, three titles per channel, cached compactly for 6 h. **Favorites** (formerly Saved) pinned on top with a ★; `group-title` chips and iptv-org category chips (News, Sports, Movies, Kids, Music, …); **My playlists**: custom M3U URLs or files that refresh themselves (24 h / 6 h / 7 days), show channel count, last update and the last error, and keep the last good copy when a link breaks; **Search all (TV + radio)** across favorites, iptv-org, your playlists and radio-browser; **Add to queue** and **Mini player** actions; broken logo URLs remembered for a week and the logo cache capped at 64 MB.
 - **MCP** (`vivi-mcp`): `list_audio_tracks` / `set_audio_track`, `list_subtitle_tracks` / `set_subtitle_track`, `get_chapters` / `seek_chapter`, `set_speed`, `screenshot`, `open_network_stream`, `search_streams`, `list_plugins` / `plugin_info` (read-only) and `get_lyrics`, with matching control-socket commands.
 

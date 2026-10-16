@@ -517,6 +517,15 @@ pub fn client_message(args: &[String]) {
         [m, id, key, value] if m == "vivi-setting" => return store_setting(id, key, value),
         [m, id, key] if m == "vivi-pick-folder" => return pick_folder(id, key),
         [m, path, json] if m == "vivi-tagger-acoustid" => return tagger_acoustid(path, json),
+        [m, title, text, rest @ ..] if m == "vivi-qr" => {
+            let caption = rest.first().map(String::as_str).unwrap_or("");
+            with(|r| {
+                if let Some(a) = r.app.upgrade() {
+                    crate::dialogs::show_qr(&a, title, text, caption);
+                }
+            });
+            return;
+        }
         _ => {}
     }
     let Some(text) = toast_text(args) else { return };
