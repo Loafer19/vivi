@@ -22,7 +22,7 @@ Status: implemented in v0.9.0. Code: `src/plugins/packages.rs`,
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint), with a results list. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
 | Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
-| Free Music | Search dialog with results, licence details, preview and download; writes tags with lofty. |
+| Free Music | Shared music dialog in rich mode (`FmRow` rows with covers, badges and licence chips, `MdFilter` dropdowns, infinite scroll); Jamendo + Internet Archive searched in parallel and merged; download queue writes tags with lofty. |
 
 These use the Rust UI directly. Discord Rich Presence (#57) and Remote Control (#58) were
 built in until 0.9.0; they need a socket client / server that Lua cannot do, so they are now
