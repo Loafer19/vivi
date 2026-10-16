@@ -3,10 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vivi MCP server – control Vivi from Claude, Cursor and other AI agents</title>
+<title>Vivi MCP server – control the Vivi media player from Claude, Cursor and AI agents</title>
+<meta name="description" content="Control the Vivi media player from AI agents with the vivi-mcp Model Context Protocol server: example prompts, setup for Claude Desktop, Cursor, Claude Code and VS Code, and all 30 tools.">
 <link rel="icon" href="img/vivi.svg">
 <meta name="theme-color" content="#0e0e0e">
 <link rel="stylesheet" href="style.css">
+<style>
+.mhero{text-align:center;padding:56px 0 18px}
+.mhero h1{font-size:44px;line-height:1.1;margin:0 0 10px;letter-spacing:-.02em}
+.mhero h1 span{color:var(--accent)}
+.mhero p{color:var(--fg2);font-size:17px;max-width:620px;margin:0 auto 18px}
+.mhero .cta{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.pnav{position:sticky;top:56px;z-index:5;background:rgba(14,14,14,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin:24px -24px 0;padding:8px 24px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.pnav a{color:var(--fg2);font-size:14px;padding:6px 12px;border-radius:999px;white-space:nowrap}
+.pnav a:hover,.pnav a.on{color:var(--fg);background:var(--accent-bg);text-decoration:none}
+.pnav a.on{color:var(--accent)}
+section[id]{scroll-margin-top:120px}
+#prompts h2{margin-top:36px}
+.cloud{position:relative;overflow:hidden;padding:6px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.cloud .row{overflow:hidden;padding:7px 0}
+.cloud .track{display:flex;gap:12px;width:max-content;animation:mq 70s linear infinite}
+.cloud .dup{display:flex;gap:12px}
+.cloud .r1 .track{animation-duration:85s;animation-direction:reverse}
+.cloud .r2 .track{animation-duration:78s}
+.cloud:hover .track{animation-play-state:paused}
+@keyframes mq{to{transform:translateX(-50%)}}
+@keyframes fl{50%{transform:translateY(-4px)}}
+.chip{font:inherit;cursor:pointer;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:9px 16px;display:inline-flex;align-items:baseline;gap:8px;white-space:nowrap;transition:border-color .2s,color .2s,background .2s;animation:fl 6s ease-in-out infinite}
+.chip:nth-child(3n){animation-delay:-2s}.chip:nth-child(3n+1){animation-delay:-4s}
+.chip.s{font-size:13px}.chip.m{font-size:15px}.chip.l{font-size:17px;font-weight:500}
+.chip small{font-family:"DM Mono",ui-monospace,monospace;font-size:11px;color:var(--fg3)}
+.chip:hover,.chip:focus-visible{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);outline:none}
+.chip:hover small{color:var(--accent)}
+.hint{color:var(--fg3);font-size:13px;text-align:center;margin:8px 0 0}
+@media (prefers-reduced-motion:reduce){.cloud{-webkit-mask-image:none;mask-image:none}.cloud .track,.chip{animation:none}.cloud .track{width:auto;flex-wrap:wrap;justify-content:center}.cloud .dup{display:none}.chip{white-space:normal}}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;counter-reset:s;margin-top:16px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;position:relative}
+.step::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#111;font-weight:700;font-size:14px;margin-bottom:10px}
+.step h3{margin:0 0 6px;font-size:16px}.step p{margin:0;color:var(--fg2);font-size:14px}
+.flow{display:flex;align-items:center;gap:10px;margin:18px 0 6px;flex-wrap:wrap}
+.flow .n{flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;text-align:center}
+.flow .n b{display:block;font-size:15px}.flow .n span{color:var(--fg3);font-size:12px}
+.flow .n.v{border-color:var(--accent)}
+.flow .a{color:var(--accent);font-size:12px;text-align:center;font-family:"DM Mono",monospace;line-height:1.3}
+.flow .a::after{content:"⟶";display:block;font-size:20px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-top:16px}
+.tabs button,.os button{font:inherit;cursor:pointer;background:none;border:0;color:var(--fg2);padding:10px 14px;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--fg)}
+.panel{background:var(--card);border:1px solid var(--line);border-top:0;border-radius:0 0 var(--radius) var(--radius);padding:20px}
+.panel[hidden]{display:none}
+.panel p{margin:0 0 12px;color:var(--fg2);font-size:14px}
+.panel .path code{word-break:break-all}
+.panel .path{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.os{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.os button{padding:5px 12px;font-size:13px;border:0;margin:0}
+.os button[aria-pressed=true]{background:var(--accent-bg);color:var(--accent)}
+.code{position:relative;margin:0 0 12px}
+.code pre{margin:0;padding-right:72px}
+.copy{position:absolute;top:8px;right:8px;font:inherit;font-size:12px;cursor:pointer;background:var(--bg);color:var(--fg2);border:1px solid var(--line);border-radius:6px;padding:4px 10px}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+.tsearch{display:flex;gap:10px;align-items:center;margin:12px 0}
+.tsearch input{flex:1;font:inherit;font-size:14px;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.tsearch input:focus{outline:none;border-color:var(--accent)}
+.tsearch span{color:var(--fg3);font-size:13px;white-space:nowrap}
+#tooltable td:first-child{white-space:nowrap}
+#tooltable tr.grp th{background:var(--bg2);color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:10px}
+#tooltable tr.grp span{color:var(--fg3)}
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);opacity:0;background:var(--accent);color:#111;font-weight:600;font-size:14px;padding:10px 18px;border-radius:999px;transition:.25s;pointer-events:none;z-index:50;max-width:90vw}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media (max-width:760px){.steps{grid-template-columns:1fr}.mhero{padding-top:36px}.mhero h1{font-size:32px}.pnav{top:52px}.flow{flex-direction:column;align-items:stretch}.flow .a::after{content:"↓"}
+#tooltable thead{display:none}#tooltable tr:not(.grp){display:grid;padding:10px 0;border-bottom:1px solid var(--line)}#tooltable td{border:0;padding:2px 8px}#tooltable td:nth-child(2){color:var(--fg3);font-size:13px}.tabs button{padding:8px 10px}}
+</style>
 </head>
 <body>
 <header class="nav"><div class="in">
@@ -19,107 +87,162 @@
   </nav>
 </div></header>
 <main>
-<section class="hero">
+<section class="mhero">
   <h1>Control Vivi from <span>AI agents</span></h1>
-  <p><code>vivi-mcp</code> is a tiny <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server that lets
-  Claude, Cursor, VS Code and other MCP clients play, search, queue and inspect media in a running Vivi.</p>
+  <p><code>vivi-mcp</code> is a tiny <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server: ask Claude, Cursor
+  or any MCP client to play, search, queue, subtitle and inspect media in a running Vivi.</p>
   <div class="cta"><a class="btn primary" href="#setup"><i data-lucide="terminal"></i>Set it up</a>
-  <a class="btn ghost" href="#tools"><i data-lucide="wrench"></i>All tools</a></div>
+  <a class="btn ghost" href="#tools"><i data-lucide="wrench"></i>All 30 tools</a></div>
+</section>
+<nav class="pnav" aria-label="On this page">
+  <a href="#prompts">Prompts</a><a href="#setup">Setup</a><a href="#clients">Clients</a><a href="#how">How it works</a><a href="#tools">Tools</a><a href="#security">Security</a><a href="#troubleshooting">Troubleshooting</a>
+</nav>
+
+<section id="prompts">
+<h2>Example prompts</h2>
+<p class="lead">Things you can just say to your agent once <code>vivi-mcp</code> is connected. Click any prompt to copy it.</p>
+<div class="cloud"><div class="row r0"><div class="track"><button type="button" class="chip s" data-copy="Play something by Kevin MacLeod from my library at 40% volume" title="Click to copy · uses search_library">Play something by Kevin MacLeod from my library at 40% volume<small>search_library</small></button><button type="button" class="chip m" data-copy="What am I watching right now, and how much is left?" title="Click to copy · uses get_status">What am I watching right now, and how much is left?<small>get_status</small></button><button type="button" class="chip l" data-copy="Pause, and resume in a moment" title="Click to copy · uses toggle_pause">Pause, and resume in a moment<small>toggle_pause</small></button><button type="button" class="chip s" data-copy="Skip back 30 seconds" title="Click to copy · uses seek">Skip back 30 seconds<small>seek</small></button><button type="button" class="chip m" data-copy="Switch to the Japanese audio track" title="Click to copy · uses set_audio_track">Switch to the Japanese audio track<small>set_audio_track</small></button><button type="button" class="chip l" data-copy="Turn on English subtitles" title="Click to copy · uses set_subtitle_track">Turn on English subtitles<small>set_subtitle_track</small></button><button type="button" class="chip s" data-copy="List the chapters and jump to the third one" title="Click to copy · uses get_chapters">List the chapters and jump to the third one<small>get_chapters</small></button><button type="button" class="chip m" data-copy="Skip to the next chapter" title="Click to copy · uses seek_chapter">Skip to the next chapter<small>seek_chapter</small></button><span class="dup" aria-hidden="true"><button type="button" class="chip s" data-copy="Play something by Kevin MacLeod from my library at 40% volume" title="Click to copy · uses search_library">Play something by Kevin MacLeod from my library at 40% volume<small>search_library</small></button><button type="button" class="chip m" data-copy="What am I watching right now, and how much is left?" title="Click to copy · uses get_status">What am I watching right now, and how much is left?<small>get_status</small></button><button type="button" class="chip l" data-copy="Pause, and resume in a moment" title="Click to copy · uses toggle_pause">Pause, and resume in a moment<small>toggle_pause</small></button><button type="button" class="chip s" data-copy="Skip back 30 seconds" title="Click to copy · uses seek">Skip back 30 seconds<small>seek</small></button><button type="button" class="chip m" data-copy="Switch to the Japanese audio track" title="Click to copy · uses set_audio_track">Switch to the Japanese audio track<small>set_audio_track</small></button><button type="button" class="chip l" data-copy="Turn on English subtitles" title="Click to copy · uses set_subtitle_track">Turn on English subtitles<small>set_subtitle_track</small></button><button type="button" class="chip s" data-copy="List the chapters and jump to the third one" title="Click to copy · uses get_chapters">List the chapters and jump to the third one<small>get_chapters</small></button><button type="button" class="chip m" data-copy="Skip to the next chapter" title="Click to copy · uses seek_chapter">Skip to the next chapter<small>seek_chapter</small></button></span></div></div><div class="row r1"><div class="track"><button type="button" class="chip l" data-copy="Play this lecture at 1.5× speed" title="Click to copy · uses set_speed">Play this lecture at 1.5× speed<small>set_speed</small></button><button type="button" class="chip s" data-copy="Take a screenshot of this frame without subtitles" title="Click to copy · uses screenshot">Take a screenshot of this frame without subtitles<small>screenshot</small></button><button type="button" class="chip m" data-copy="Find a jazz radio station and play it" title="Click to copy · uses search_streams">Find a jazz radio station and play it<small>search_streams</small></button><button type="button" class="chip l" data-copy="Find Ukrainian news TV channels" title="Click to copy · uses search_streams">Find Ukrainian news TV channels<small>search_streams</small></button><button type="button" class="chip s" data-copy="Open this HLS stream and call it “Lobby cam”" title="Click to copy · uses open_network_stream">Open this HLS stream and call it “Lobby cam”<small>open_network_stream</small></button><button type="button" class="chip m" data-copy="Queue BBC Radio 1 after this song" title="Click to copy · uses open_network_stream">Queue BBC Radio 1 after this song<small>open_network_stream</small></button><button type="button" class="chip l" data-copy="Which plugins do I have enabled?" title="Click to copy · uses list_plugins">Which plugins do I have enabled?<small>list_plugins</small></button><button type="button" class="chip s" data-copy="What settings does the Lyrics plugin have?" title="Click to copy · uses plugin_info">What settings does the Lyrics plugin have?<small>plugin_info</small></button><span class="dup" aria-hidden="true"><button type="button" class="chip l" data-copy="Play this lecture at 1.5× speed" title="Click to copy · uses set_speed">Play this lecture at 1.5× speed<small>set_speed</small></button><button type="button" class="chip s" data-copy="Take a screenshot of this frame without subtitles" title="Click to copy · uses screenshot">Take a screenshot of this frame without subtitles<small>screenshot</small></button><button type="button" class="chip m" data-copy="Find a jazz radio station and play it" title="Click to copy · uses search_streams">Find a jazz radio station and play it<small>search_streams</small></button><button type="button" class="chip l" data-copy="Find Ukrainian news TV channels" title="Click to copy · uses search_streams">Find Ukrainian news TV channels<small>search_streams</small></button><button type="button" class="chip s" data-copy="Open this HLS stream and call it “Lobby cam”" title="Click to copy · uses open_network_stream">Open this HLS stream and call it “Lobby cam”<small>open_network_stream</small></button><button type="button" class="chip m" data-copy="Queue BBC Radio 1 after this song" title="Click to copy · uses open_network_stream">Queue BBC Radio 1 after this song<small>open_network_stream</small></button><button type="button" class="chip l" data-copy="Which plugins do I have enabled?" title="Click to copy · uses list_plugins">Which plugins do I have enabled?<small>list_plugins</small></button><button type="button" class="chip s" data-copy="What settings does the Lyrics plugin have?" title="Click to copy · uses plugin_info">What settings does the Lyrics plugin have?<small>plugin_info</small></button></span></div></div><div class="row r2"><div class="track"><button type="button" class="chip m" data-copy="Show me the current lyric line and the next few" title="Click to copy · uses get_lyrics">Show me the current lyric line and the next few<small>get_lyrics</small></button><button type="button" class="chip l" data-copy="Find English subtitles for this episode" title="Click to copy · uses search_subtitles">Find English subtitles for this episode<small>search_subtitles</small></button><button type="button" class="chip s" data-copy="Load the best hash-matched Ukrainian subtitle" title="Click to copy · uses load_subtitle">Load the best hash-matched Ukrainian subtitle<small>load_subtitle</small></button><button type="button" class="chip m" data-copy="Subtitles are 2 seconds late, fix them" title="Click to copy · uses set_subtitle_offset">Subtitles are 2 seconds late, fix them<small>set_subtitle_offset</small></button><button type="button" class="chip l" data-copy="Auto-sync these subtitles to the audio" title="Click to copy · uses sync_subtitles">Auto-sync these subtitles to the audio<small>sync_subtitles</small></button><button type="button" class="chip s" data-copy="Set the EQ to Bass boost" title="Click to copy · uses set_eq_preset">Set the EQ to Bass boost<small>set_eq_preset</small></button><button type="button" class="chip m" data-copy="Add everything by Daft Punk to the queue" title="Click to copy · uses playlist_add">Add everything by Daft Punk to the queue<small>playlist_add</small></button><button type="button" class="chip l" data-copy="What&#x27;s next in my queue?" title="Click to copy · uses playlist_list">What&#x27;s next in my queue?<small>playlist_list</small></button><span class="dup" aria-hidden="true"><button type="button" class="chip m" data-copy="Show me the current lyric line and the next few" title="Click to copy · uses get_lyrics">Show me the current lyric line and the next few<small>get_lyrics</small></button><button type="button" class="chip l" data-copy="Find English subtitles for this episode" title="Click to copy · uses search_subtitles">Find English subtitles for this episode<small>search_subtitles</small></button><button type="button" class="chip s" data-copy="Load the best hash-matched Ukrainian subtitle" title="Click to copy · uses load_subtitle">Load the best hash-matched Ukrainian subtitle<small>load_subtitle</small></button><button type="button" class="chip m" data-copy="Subtitles are 2 seconds late, fix them" title="Click to copy · uses set_subtitle_offset">Subtitles are 2 seconds late, fix them<small>set_subtitle_offset</small></button><button type="button" class="chip l" data-copy="Auto-sync these subtitles to the audio" title="Click to copy · uses sync_subtitles">Auto-sync these subtitles to the audio<small>sync_subtitles</small></button><button type="button" class="chip s" data-copy="Set the EQ to Bass boost" title="Click to copy · uses set_eq_preset">Set the EQ to Bass boost<small>set_eq_preset</small></button><button type="button" class="chip m" data-copy="Add everything by Daft Punk to the queue" title="Click to copy · uses playlist_add">Add everything by Daft Punk to the queue<small>playlist_add</small></button><button type="button" class="chip l" data-copy="What&#x27;s next in my queue?" title="Click to copy · uses playlist_list">What&#x27;s next in my queue?<small>playlist_list</small></button></span></div></div></div>
+<p class="hint">Hover to pause · the grey label is the tool the agent will call</p>
 </section>
 
-<h2 id="what">What it is</h2>
-<p class="lead">A separate small binary that speaks MCP over <strong>stdio</strong> and forwards tool calls to Vivi through a
-private local socket. The player only adds a tiny socket listener; <code>vivi-mcp</code> depends on nothing but
-<code>std</code> and <code>serde_json</code>. There is no network listener and nothing leaves your machine.</p>
-<pre><code>AI client (Claude Desktop, Cursor, …) ──stdio / JSON-RPC──▶ vivi-mcp ──Unix socket / JSON lines──▶ Vivi</code></pre>
+<section id="setup">
+<h2>Set up in two minutes</h2>
+<div class="steps">
+  <div class="step"><h3>Enable remote control</h3><p>Off by default. Turn on <em>Settings → General → Remote control → Allow AI agents and scripts</em> and restart Vivi, or run <code>VIVI_IPC=1 vivi</code> once.</p></div>
+  <div class="step"><h3>Get <code>vivi-mcp</code></h3><p>It ships with Vivi: Arch installs <code>/usr/bin/vivi-mcp</code>, Flatpak <code>/app/bin/vivi-mcp</code>, <code>cargo build --release</code> gives <code>target/release/vivi-mcp</code>.</p></div>
+  <div class="step"><h3>Add it to your client</h3><p>Paste the config below and restart the client. <code>vivi-mcp --help</code> prints the socket path it uses.</p></div>
+</div>
+</section>
 
-<h2 id="setup">Set up in two minutes</h2>
-<h3>1. Enable remote control in Vivi</h3>
-<p>It is <strong>off by default</strong>. Turn on <em>Settings → General → Remote control → Allow AI agents and scripts</em>
-and restart Vivi, or start it once with <code>VIVI_IPC=1 vivi</code>.</p>
-<h3>2. Get <code>vivi-mcp</code></h3>
-<p>It ships with Vivi: the Arch package installs <code>/usr/bin/vivi-mcp</code>, the Flatpak <code>/app/bin/vivi-mcp</code>,
-and <code>cargo build --release</code> produces <code>target/release/vivi-mcp</code>. Run <code>vivi-mcp --help</code> to see
-the socket path it will use.</p>
-<h3 id="clients">3. Add it to your client</h3>
-<div class="cols2">
-  <div class="card"><h3>Claude Desktop</h3><p><code>~/.config/Claude/claude_desktop_config.json</code> (macOS: <code>~/Library/Application Support/Claude/</code>)</p>
-<pre><code>{
-  "mcpServers": {
-    "vivi": { "command": "/usr/bin/vivi-mcp" }
+<section id="clients">
+<h2>Add it to your client</h2>
+<p class="lead">Every client runs the same command: <code>/usr/bin/vivi-mcp</code> (or the path from <code>which vivi-mcp</code> / <code>target/release/vivi-mcp</code>). GUI apps often have a minimal <code>PATH</code>, so an absolute path is safest.</p>
+<div class="tabs" role="tablist" aria-label="MCP clients">
+  <button role="tab" aria-selected="true" aria-controls="t-desk" id="b-desk">Claude Desktop</button>
+  <button role="tab" aria-selected="false" aria-controls="t-cur" id="b-cur" tabindex="-1">Cursor</button>
+  <button role="tab" aria-selected="false" aria-controls="t-cc" id="b-cc" tabindex="-1">Claude Code</button>
+  <button role="tab" aria-selected="false" aria-controls="t-vs" id="b-vs" tabindex="-1">VS Code / Copilot</button>
+  <button role="tab" aria-selected="false" aria-controls="t-oth" id="b-oth" tabindex="-1">Others &amp; Flatpak</button>
+</div>
+<div class="panel" role="tabpanel" id="t-desk" aria-labelledby="b-desk">
+  <div class="path"><div class="os" role="group" aria-label="Operating system"><button type="button" data-os="linux" aria-pressed="true">Linux</button><button type="button" data-os="mac" aria-pressed="false">macOS</button></div>
+  <code data-path-linux="~/.config/Claude/claude_desktop_config.json" data-path-mac="~/Library/Application Support/Claude/claude_desktop_config.json" class="ospath">~/.config/Claude/claude_desktop_config.json</code></div>
+  <div class="code"><button type="button" class="copy" data-target="c-desk">Copy</button><pre><code id="c-desk">{
+  &quot;mcpServers&quot;: {
+    &quot;vivi&quot;: { &quot;command&quot;: &quot;/usr/bin/vivi-mcp&quot; }
   }
 }</code></pre></div>
-  <div class="card"><h3>Cursor</h3><p><code>~/.cursor/mcp.json</code>, or <code>.cursor/mcp.json</code> in a project</p>
-<pre><code>{
-  "mcpServers": {
-    "vivi": { "command": "vivi-mcp", "args": [] }
-  }
-}</code></pre></div>
-  <div class="card"><h3>Claude Code</h3><p>One command, available in every session:</p>
-<pre><code>claude mcp add vivi -- vivi-mcp</code></pre></div>
-  <div class="card"><h3>VS Code / GitHub Copilot</h3><p><code>.vscode/mcp.json</code></p>
-<pre><code>{
-  "servers": {
-    "vivi": { "type": "stdio", "command": "vivi-mcp" }
+  <p>Restart Claude Desktop; the vivi tools appear in the tools menu. Windows is not supported yet (Vivi's control socket is a Unix socket).</p>
+</div>
+<div class="panel" role="tabpanel" id="t-cur" aria-labelledby="b-cur" hidden>
+  <p><code>~/.cursor/mcp.json</code> (global, Linux and macOS) or <code>.cursor/mcp.json</code> in a project</p>
+  <div class="code"><button type="button" class="copy" data-target="c-cur">Copy</button><pre><code id="c-cur">{
+  &quot;mcpServers&quot;: {
+    &quot;vivi&quot;: { &quot;command&quot;: &quot;/usr/bin/vivi-mcp&quot; }
   }
 }</code></pre></div>
 </div>
-<p><strong>Windsurf, Zed, Continue, Cline, …</strong> any client that launches stdio servers works with <code>command: vivi-mcp</code>.
-<strong>Flatpak:</strong> use <code>"command": "flatpak", "args": ["run", "--command=vivi-mcp", "io.github.loafer19.vivi"]</code>.</p>
+<div class="panel" role="tabpanel" id="t-cc" aria-labelledby="b-cc" hidden>
+  <p>One command, available in every session (add <code>--scope project</code> to share it via <code>.mcp.json</code>):</p>
+  <div class="code"><button type="button" class="copy" data-target="c-cc">Copy</button><pre><code id="c-cc">claude mcp add vivi -- /usr/bin/vivi-mcp</code></pre></div>
+</div>
+<div class="panel" role="tabpanel" id="t-vs" aria-labelledby="b-vs" hidden>
+  <p><code>.vscode/mcp.json</code> in your workspace</p>
+  <div class="code"><button type="button" class="copy" data-target="c-vs">Copy</button><pre><code id="c-vs">{
+  &quot;servers&quot;: {
+    &quot;vivi&quot;: { &quot;type&quot;: &quot;stdio&quot;, &quot;command&quot;: &quot;/usr/bin/vivi-mcp&quot; }
+  }
+}</code></pre></div>
+</div>
+<div class="panel" role="tabpanel" id="t-oth" aria-labelledby="b-oth" hidden>
+  <p><strong>Windsurf, Zed, Continue, Cline, …</strong> any client that launches stdio servers works with the same command. If it does not inherit <code>XDG_RUNTIME_DIR</code>, pass the socket explicitly:</p>
+  <div class="code"><button type="button" class="copy" data-target="c-oth">Copy</button><pre><code id="c-oth">{
+  &quot;mcpServers&quot;: {
+    &quot;vivi&quot;: {
+      &quot;command&quot;: &quot;/usr/bin/vivi-mcp&quot;,
+      &quot;env&quot;: { &quot;VIVI_SOCKET&quot;: &quot;/run/user/1000/vivi.sock&quot; }
+    }
+  }
+}</code></pre></div>
+  <p><strong>Flatpak:</strong> run it through the sandbox instead:</p>
+  <div class="code"><button type="button" class="copy" data-target="c-fp">Copy</button><pre><code id="c-fp">{
+  &quot;mcpServers&quot;: {
+    &quot;vivi&quot;: {
+      &quot;command&quot;: &quot;flatpak&quot;,
+      &quot;args&quot;: [&quot;run&quot;, &quot;--command=vivi-mcp&quot;, &quot;io.github.loafer19.vivi&quot;]
+    }
+  }
+}</code></pre></div>
+</div>
+</section>
 
-<h2 id="tools">Tools</h2>
+<section id="how">
+<h2>How it works</h2>
+<p class="lead">A separate small binary that speaks MCP over <strong>stdio</strong> and forwards tool calls to Vivi through a private local socket. It depends on nothing but <code>std</code> and <code>serde_json</code>; there is no network listener and nothing leaves your machine.</p>
+<div class="flow" role="img" aria-label="AI client talks stdio JSON-RPC to vivi-mcp, which talks JSON lines over a Unix socket to Vivi">
+  <div class="n"><b>AI client</b><span>Claude, Cursor, VS Code…</span></div>
+  <div class="a">stdio<br>JSON-RPC</div>
+  <div class="n"><b>vivi-mcp</b><span>MCP server, 30 tools</span></div>
+  <div class="a">Unix socket<br>JSON lines</div>
+  <div class="n v"><b>Vivi</b><span>mpv playback, plugins</span></div>
+</div>
+</section>
+
+<section id="tools">
+<h2>Tools</h2>
 <p class="lead">Resources <code>vivi://status</code> and <code>vivi://playlist</code> (JSON) are also exposed.</p>
-<table>
+<div class="tsearch"><input type="search" id="tq" placeholder="Filter tools, e.g. subtitle, stream, chapter…" aria-label="Filter tools"><span id="tcount">30 tools</span></div>
+<table id="tooltable">
 <thead><tr><th>Tool</th><th>Arguments</th><th>What it does</th></tr></thead>
-<tbody>
+<tbody><tr class="grp"><th colspan="3">Playback <span>6</span></th></tr>
 <tr><td><code>get_status</code></td><td>–</td><td>Now playing: title, artist, album, path, position, duration, volume, mute, playing, subtitles, queue position, EQ preset</td></tr>
 <tr><td><code>play</code>, <code>pause</code>, <code>toggle_pause</code>, <code>stop</code></td><td>–</td><td>Transport (<code>stop</code> pauses and rewinds)</td></tr>
 <tr><td><code>seek</code></td><td><code>position</code> <em>or</em> <code>offset</code> (s)</td><td>Absolute or relative seek</td></tr>
 <tr><td><code>set_volume</code></td><td><code>level</code>, <code>muted</code></td><td>Volume in % and/or mute</td></tr>
 <tr><td><code>open</code></td><td><code>target</code></td><td>Play a file path or URL now (yt-dlp sites work when yt-dlp is installed)</td></tr>
+<tr><td><code>set_speed</code></td><td><code>speed</code> (0.1–4)</td><td>Playback speed</td></tr>
+</tbody>
+<tbody><tr class="grp"><th colspan="3">Queue &amp; library <span>5</span></th></tr>
 <tr><td><code>playlist_list</code></td><td>–</td><td>Queue entries with index and current flag</td></tr>
 <tr><td><code>playlist_add</code></td><td><code>target</code></td><td>Append to the queue</td></tr>
 <tr><td><code>playlist_play</code></td><td><code>index</code></td><td>Jump to a queue entry</td></tr>
 <tr><td><code>next</code>, <code>previous</code></td><td>–</td><td>Queue navigation</td></tr>
 <tr><td><code>search_library</code></td><td><code>query</code>, <code>kind</code>, <code>limit</code></td><td>Words matched in title/artist/album/genre/path of the scanned library</td></tr>
+</tbody>
+<tbody><tr class="grp"><th colspan="3">Tracks &amp; chapters <span>7</span></th></tr>
 <tr><td><code>set_subtitles</code></td><td><code>enabled</code></td><td>Show/hide subtitles</td></tr>
-<tr><td><code>list_eq_presets</code></td><td>–</td><td>Built-in and custom EQ presets, current one</td></tr>
-<tr><td><code>set_eq_preset</code></td><td><code>name</code></td><td>Select a preset, or <code>Off</code> to disable the equalizer</td></tr>
 <tr><td><code>list_audio_tracks</code></td><td>–</td><td>Audio tracks: <code>id</code>, <code>title</code> (with language), <code>selected</code></td></tr>
 <tr><td><code>set_audio_track</code></td><td><code>id</code> (integer, <code>auto</code> or <code>no</code>)</td><td>Switch the audio track</td></tr>
 <tr><td><code>list_subtitle_tracks</code></td><td>–</td><td>Subtitle tracks (embedded and external)</td></tr>
 <tr><td><code>set_subtitle_track</code></td><td><code>id</code> (integer, <code>auto</code> or <code>no</code>)</td><td>Switch subtitles; <code>no</code> turns them off</td></tr>
 <tr><td><code>get_chapters</code></td><td>–</td><td><code>current</code> index and <code>chapters</code> (<code>index</code>, <code>title</code>, <code>start</code> s)</td></tr>
 <tr><td><code>seek_chapter</code></td><td><code>index</code> <em>or</em> <code>offset</code> (+1/-1)</td><td>Jump to a chapter</td></tr>
-<tr><td><code>set_speed</code></td><td><code>speed</code> (0.1–4)</td><td>Playback speed</td></tr>
-<tr><td><code>screenshot</code></td><td><code>path</code>, <code>mode</code> (<code>subtitles</code>/<code>video</code>/<code>window</code>)</td><td>Saves the current frame and returns its path; default folder is Settings → Video → screenshot folder. Errors on audio-only items</td></tr>
+</tbody>
+<tbody><tr class="grp"><th colspan="3">Streams <span>2</span></th></tr>
 <tr><td><code>open_network_stream</code></td><td><code>target</code>, <code>name</code>, <code>queue</code></td><td>Play (or queue) a stream URL: Internet radio, IPTV <code>.m3u8</code>/HLS, DASH, RTMP/RTSP/UDP, Icecast. <code>name</code> is shown while it loads</td></tr>
 <tr><td><code>search_streams</code></td><td><code>query</code>, <code>kind</code> (<code>radio</code>/<code>tv</code>), <code>limit</code></td><td>Search radio-browser.info, iptv-org TV, your Network Streams favorites and playlists; returns <code>url</code>s for <code>open_network_stream</code> (needs network; may take a few seconds)</td></tr>
+</tbody>
+<tbody><tr class="grp"><th colspan="3">Subtitles <span>4</span></th></tr>
+<tr><td><code>search_subtitles</code></td><td><code>query</code>, <code>languages</code>, <code>limit</code></td><td>OpenSubtitles results for the playing file: hash matches first, then by name or IMDb id (<code>tt…</code>); returns <code>file_id</code>, language, downloads, rating. Needs the API key in the Subtitle Search plugin</td></tr>
+<tr><td><code>load_subtitle</code></td><td><code>file_id</code>, <code>language</code></td><td>Download (one from the daily quota; cached copies are free) and show it; remembered for the file</td></tr>
+<tr><td><code>set_subtitle_offset</code></td><td><code>seconds</code> / <code>delta</code> / <code>reset</code></td><td>Subtitle timing (positive = later), saved per file; returns <code>offset_seconds</code></td></tr>
+<tr><td><code>sync_subtitles</code></td><td>–</td><td>Align subtitles to the audio (Subtitle Auto-Sync plugin)</td></tr>
+</tbody>
+<tbody><tr class="grp"><th colspan="3">Media &amp; plugins <span>6</span></th></tr>
+<tr><td><code>list_eq_presets</code></td><td>–</td><td>Built-in and custom EQ presets, current one</td></tr>
+<tr><td><code>set_eq_preset</code></td><td><code>name</code></td><td>Select a preset, or <code>Off</code> to disable the equalizer</td></tr>
+<tr><td><code>screenshot</code></td><td><code>path</code>, <code>mode</code> (<code>subtitles</code>/<code>video</code>/<code>window</code>)</td><td>Saves the current frame and returns its path; default folder is Settings → Video → screenshot folder. Errors on audio-only items</td></tr>
 <tr><td><code>list_plugins</code></td><td>–</td><td>Plugins: <code>id</code>, <code>name</code>, <code>version</code>, <code>kind</code>, <code>enabled</code> (read-only)</td></tr>
 <tr><td><code>plugin_info</code></td><td><code>id</code></td><td>Description, author, version and setting keys/titles (no values)</td></tr>
-<tr><td><code>get_lyrics</code></td><td>–</td><td>Lines shown by the Lyrics plugin, <code>synced</code>, <code>current_line</code></td></tr>
-<tr><td><code>search_subtitles</code></td><td><code>query</code>, <code>languages</code>, <code>limit</code></td><td>OpenSubtitles results for the playing file: exact hash matches first, then by name or IMDb id</td></tr>
-<tr><td><code>load_subtitle</code></td><td><code>file_id</code>, <code>language</code></td><td>Download and show a result; remembered for the file</td></tr>
-<tr><td><code>set_subtitle_offset</code></td><td><code>seconds</code> / <code>delta</code> / <code>reset</code></td><td>Subtitle timing, saved per file</td></tr>
-<tr><td><code>sync_subtitles</code></td><td>–</td><td>Align subtitles to the audio (Subtitle Auto-Sync plugin)</td></tr>
+<tr><td><code>get_lyrics</code></td><td>–</td><td>Lines shown by the Lyrics plugin, <code>synced</code>, <code>current_line</code>, <code>source</code>, <code>offset_seconds</code>, <code>karaoke</code></td></tr>
 </tbody>
 </table>
 <p>IPTV and radio: <code>open</code> also plays URLs, but <code>open_network_stream</code> validates the URL, can queue instead of
 replacing, and shows a station name. A whole <code>.m3u</code> playlist URL can be passed to <code>open</code> (mpv expands it into the queue).</p>
+</section>
 
-<h2 id="prompts">Example prompts</h2>
-<ul class="prompts">
-  <li>Play something by Kevin MacLeod from my library and turn the volume down to 40%.”</li>
-  <li>What am I watching right now, and how much is left?”</li>
-  <li>Switch to the Japanese audio track and English subtitles.”</li>
-  <li>Skip to the next chapter and play it at 1.25× speed.”</li>
-  <li>Take a screenshot of this frame without subtitles.”</li>
-  <li>Find a jazz radio station and queue it after this song.”</li>
-  <li>Which plugins do I have enabled?”</li>
-  <li>Show me the current lyric line and the next few lines.”</li>
-</ul>
-
-<h2 id="security">Security</h2>
+<section id="security">
+<h2>Security</h2>
 <div class="note">
 <p><strong>Off by default.</strong> Nothing listens until you enable Remote control.<br>
 <strong>Local only.</strong> The socket is <code>$XDG_RUNTIME_DIR/vivi.sock</code> (fallback <code>~/.cache/vivi/vivi.sock</code>,
@@ -128,7 +251,9 @@ override with <code>VIVI_SOCKET</code>), created with mode <code>0600</code>, so
 settings cannot be changed. Anything an agent opens plays with your user's permissions, so keep the usual care with untrusted URLs.</p>
 </div>
 
-<h2 id="troubleshooting">Troubleshooting</h2>
+</section>
+<section id="troubleshooting">
+<h2>Troubleshooting</h2>
 <dl class="faq">
   <dt>“Vivi is not running” or connection refused</dt>
   <dd>Start Vivi with Remote control enabled (restart after changing the setting) or run <code>VIVI_IPC=1 vivi</code>. Only one Vivi instance owns the socket.</dd>
@@ -146,7 +271,27 @@ echo '{"cmd":"status"}' | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/vivi.sock</code>
   <dd>Not supported yet: the control socket is a Unix socket (Linux and macOS). Only the stdio transport is available.</dd>
 </dl>
 <p>Full reference: <a href="https://github.com/Loafer19/vivi/blob/master/docs/mcp.md">docs/mcp.md</a>.</p>
+</section>
 </main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+(()=>{const t=document.getElementById('toast');let h;
+const toast=m=>{t.textContent=m;t.classList.add('show');clearTimeout(h);h=setTimeout(()=>t.classList.remove('show'),1800)};
+const cp=(s,m)=>{(navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject()).then(()=>toast(m),()=>{const a=document.createElement('textarea');a.value=s;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();toast(m)})};
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>cp(c.dataset.copy,'Prompt copied ✓')));
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{cp(document.getElementById(b.dataset.target).textContent,'Copied to clipboard ✓');b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1500)}));
+const tabs=[...document.querySelectorAll('[role=tab]')];
+const sel=b=>{tabs.forEach(x=>{const on=x===b;x.setAttribute('aria-selected',on);x.tabIndex=on?0:-1;document.getElementById(x.getAttribute('aria-controls')).hidden=!on});b.focus()};
+tabs.forEach((b,i)=>{b.addEventListener('click',()=>sel(b));b.addEventListener('keydown',e=>{if(e.key==='ArrowRight')sel(tabs[(i+1)%tabs.length]);if(e.key==='ArrowLeft')sel(tabs[(i+tabs.length-1)%tabs.length])})});
+const p=document.querySelector('.ospath');
+document.querySelectorAll('[data-os]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-os]').forEach(x=>x.setAttribute('aria-pressed',x===b));p.textContent=p.dataset['path'+(b.dataset.os==='mac'?'Mac':'Linux')]}));
+if(/Mac/.test(navigator.platform))document.querySelector('[data-os=mac]').click();
+const q=document.getElementById('tq'),cnt=document.getElementById('tcount');
+q.addEventListener('input',()=>{const v=q.value.trim().toLowerCase();let n=0;document.querySelectorAll('#tooltable tbody').forEach(g=>{let k=0;g.querySelectorAll('tr:not(.grp)').forEach(r=>{const m=!v||r.textContent.toLowerCase().includes(v);r.hidden=!m;if(m)k+=r.querySelectorAll('td:first-child code').length});g.hidden=!g.querySelector('tr:not(.grp):not([hidden])');n+=k});cnt.textContent=n+' tool'+(n===1?'':'s')});
+const links=[...document.querySelectorAll('.pnav a')],secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id))}}),{rootMargin:'-40% 0px -55% 0px'});secs.forEach(s=>s&&io.observe(s));
+})();
+</script>
 <footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC)</footer>
 </body>
