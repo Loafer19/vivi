@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Compact control bar matches the reference density: 36 px row, all buttons on one vertical centre (no per-icon offsets), smaller equal-size buttons, near-black seek track with a dim orange played fill and a slim bright handle, times next to the bar, smaller volume wedge. Title bar buttons are centred in the 40 px strip.
+
 ## [0.11.0] - 2026-10-17
 
 Highlights: compact single-row control bar, waveform seekbar and seekbar ranges (chapters, A-B loop, plugin ranges such as Cut & Export In/Out); Subtitle Search rework with hash matching, previews and per-file offsets; Free Music rework (Jamendo, Internet Archive, FMA); full-screen karaoke lyrics; merged, ranked Auto-tagger results; more MCP tools.
