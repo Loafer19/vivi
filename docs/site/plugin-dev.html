@@ -96,7 +96,7 @@ impl Plugin for Hello {
 }</code></pre>
 <p>2. Add <code>pub mod hello;</code> to <code>src/plugins/mod.rs</code> and
 <code>Box::new(hello::Hello)</code> to <code>builtin()</code>.</p>
-<p>3. Add an entry to <code>plugins/index.json</code> (a unit test checks that every built-in is listed with
+<p>3. Add an entry to <code>plugins/index.json</code> in <a href="https://github.com/Loafer19/vivi-plugins">vivi-plugins</a> (a unit test, run with <code>VIVI_PLUGINS_DIR</code> pointing at a checkout, checks that every built-in is listed with
 the same name, icon and setting keys), then run <code>cargo test</code>.</p>
 
 <h2 id="hooks">Hooks and context</h2>
@@ -148,7 +148,7 @@ default key bindings; keys Vivi does not use itself (and all <code>Alt</code> co
 from Settings → Extensions → Browse. Why this format and how install, update and rollback work:
 <a href="architecture.html">Plugin distribution</a>.</p>
 <ol>
-<li>Create <code>plugins/&lt;id&gt;/</code> with <code>manifest.toml</code>, the entry script
+<li>Fork <a href="https://github.com/Loafer19/vivi-plugins">Loafer19/vivi-plugins</a> and create <code>plugins/&lt;id&gt;/</code> with <code>manifest.toml</code>, the entry script
 <code>&lt;id&gt;.lua</code> and optionally a README and more files.</li>
 <li>Write the manifest:
 <pre><code>id = "night-mode"
@@ -187,15 +187,15 @@ Users see them before installing.</li>
 Test locally by copying the folder to <code>~/.config/vivi/scripts/</code>.</li>
 <li>Commit and push (or open a pull request). The <code>Plugins</code> workflow checks Lua syntax and the
 index, then publishes a release <code>plugin-&lt;id&gt;-v&lt;version&gt;</code> with the zip and verifies the
-uploaded asset's sha256. The <code>Docs site</code> workflow publishes the new catalog; Vivi picks it up on its
+uploaded asset's sha256. Dokploy redeploys the marketplace with the new catalog; Vivi picks it up on its
 next daily check or on <em>Check now</em>.</li>
 </ol>
 <p>A released version is immutable: change anything, bump <code>version</code>.</p>
 
 <h2 id="catalog">Listing in the catalog</h2>
-<p>The <a href="plugins.html">catalog</a> is generated from <code>plugins/index.json</code> by
+<p>The <a href="plugins.html">catalog</a> is generated from <code>plugins/index.json</code> of <a href="https://github.com/Loafer19/vivi-plugins">vivi-plugins</a> by
 <code>scripts/build-site.py</code>. Entries use the manifest fields above plus <code>kind</code>
-(<code>builtin</code> or <code>script</code>) and, for scripts, <code>source</code> (a path in the repository).</p>
+(<code>builtin</code> or <code>script</code>) and, for scripts, <code>source</code> (a path in the vivi-plugins repository).</p>
 <pre><code>python3 scripts/build-site.py   # builds _site/
 python3 -m http.server -d _site</code></pre>
 </main>

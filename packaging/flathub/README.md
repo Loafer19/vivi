@@ -46,7 +46,7 @@ commit, cargo sources, screenshot URLs and the new `<release>` here on every rel
    the three files from the bot's packaging commit there and push (or open a PR).
 
 The Flathub build has no ffmpeg program and no host yt-dlp; the YouTube plugin downloads
-its own (see `plugins/youtube/README.md`).
+its own (see [plugins/youtube/README.md](https://github.com/Loafer19/vivi-plugins/blob/master/plugins/youtube/README.md)).
 
 ## Winget and Scoop
 

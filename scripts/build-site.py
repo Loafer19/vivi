@@ -2,7 +2,10 @@
 """Build the docs site into _site/ (or the directory given as the first argument).
 
 Copies docs/site/, adds the logo and screenshots, and renders plugins.html (the plugin
-catalog) from plugins/index.json into docs/site/plugins.template.html.
+catalog) from the plugin catalog into docs/site/plugins.template.html. The catalog lives in
+https://github.com/Loafer19/vivi-plugins (plugins/index.json); it is downloaded at build time
+(or read from $VIVI_PLUGINS_INDEX, a local file). The catalog itself is served by
+plugins.viviplayer.app and the vivi-plugins GitHub Pages, not by this site.
 Icons are Lucide (https://lucide.dev, ISC license) SVGs kept in docs/site/icons/; every
 <i data-lucide="name"></i> placeholder is replaced by the inline SVG, so the site needs no JavaScript.
 Standard library only, so it runs as-is in GitHub Actions.
@@ -11,7 +14,9 @@ import html
 import re
 import json
 import shutil
+import os
 import sys
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,6 +24,7 @@ OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "_site"
 ICON_DIR = ROOT / "docs/site/icons"
 SITE = "https://viviplayer.app"
 MARKET = "https://plugins.viviplayer.app"
+INDEX_URL = "https://raw.githubusercontent.com/Loafer19/vivi-plugins/master/plugins/index.json"
 # Per page: (description, sitemap priority). Canonical URLs always point at viviplayer.app,
 # also on the GitHub Pages mirror (loafer19.github.io/vivi), so search engines index one copy.
 PAGES = {
@@ -119,7 +125,7 @@ def card(p: dict) -> str:
     kind = p.get("kind", "builtin")
     src = p.get("source")
     link = (
-        f' · <a href="https://github.com/Loafer19/vivi/tree/master/{e(src)}">source</a>' if src else ""
+        f' · <a href="https://github.com/Loafer19/vivi-plugins/tree/master/{e(src)}">source</a>' if src else ""
     )
     cls, label = KIND_TAG.get(kind, KIND_TAG["builtin"])
     extra = ""
@@ -142,8 +148,17 @@ def card(p: dict) -> str:
 </div>"""
 
 
+def catalog() -> str:
+    local = os.environ.get("VIVI_PLUGINS_INDEX")
+    if local:
+        return Path(local).read_text()
+    with urllib.request.urlopen(INDEX_URL, timeout=30) as r:
+        return r.read().decode()
+
+
 def main() -> None:
-    idx = json.loads((ROOT / "plugins/index.json").read_text())
+    raw = catalog()
+    idx = json.loads(raw)
     if OUT.exists():
         shutil.rmtree(OUT)
     shutil.copytree(ROOT / "docs/site", OUT, ignore=shutil.ignore_patterns("*.template.html", "icons"))
@@ -153,7 +168,6 @@ def main() -> None:
     shutil.copy(ROOT / "packaging/vivi.svg", img / "vivi.svg")
     for name in IMAGES:
         shutil.copy(ROOT / f"docs/screenshots/{name}.png", img / f"{name}.png")
-    shutil.copy(ROOT / "plugins/index.json", OUT / "index.json")
     # install.sh builds this on Arch (kept at the latest release by the release workflow).
     (OUT / "vivi-bin").mkdir(exist_ok=True)
     shutil.copy(ROOT / "packaging/aur/vivi-bin/PKGBUILD", OUT / "vivi-bin/PKGBUILD")

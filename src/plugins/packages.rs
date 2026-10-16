@@ -1,8 +1,9 @@
 //! Downloadable plugin packages.
 //!
 //! A package is a zip with a `manifest.toml` at its root and an mpv Lua/JavaScript entry
-//! script (see `docs/plugins-architecture.md`). The catalog is `plugins/index.json`,
-//! served by the plugin marketplace at [`INDEX_URL`] (GitHub Pages copy at
+//! script (see `docs/plugins-architecture.md`). The catalog is `plugins/index.json` of
+//! <https://github.com/Loafer19/vivi-plugins>,
+//! served by the plugin marketplace at [`INDEX_URL`] (GitHub Pages copy of that repository at
 //! [`FALLBACK_INDEX_URL`]); package entries carry the download URL (a
 //! GitHub release asset tagged `plugin-<id>-v<version>`), its sha256 and size.
 //!
@@ -39,7 +40,7 @@ use std::time::{Duration, SystemTime};
 /// Catalog published by the plugin marketplace (`plugins/index.json`).
 pub const INDEX_URL: &str = "https://plugins.viviplayer.app/index.json";
 /// Same catalog on GitHub Pages, tried when [`INDEX_URL`] cannot be loaded.
-pub const FALLBACK_INDEX_URL: &str = "https://loafer19.github.io/vivi/index.json";
+pub const FALLBACK_INDEX_URL: &str = "https://loafer19.github.io/vivi-plugins/index.json";
 /// Config entry (`[plugins.packages]`) for the catalog settings.
 pub const GLOBAL_ID: &str = "packages";
 /// Automatic catalog checks run at most this often.
@@ -1068,15 +1069,18 @@ mod tests {
         let _ = fs::remove_dir_all(&r);
     }
 
-    /// Every package in `plugins/index.json` matches its `plugins/<id>/manifest.toml`.
+    /// Every package in the catalog matches its `plugins/<id>/manifest.toml`. Needs a checkout
+    /// of https://github.com/Loafer19/vivi-plugins in `$VIVI_PLUGINS_DIR`; skipped without it.
     #[test]
     fn repo_index_packages() {
-        let c = parse_index(include_str!("../../plugins/index.json")).unwrap();
+        let Some(root) = std::env::var_os("VIVI_PLUGINS_DIR").map(std::path::PathBuf::from) else {
+            eprintln!("VIVI_PLUGINS_DIR not set, skipping");
+            return;
+        };
+        let c = parse_index(&fs::read_to_string(root.join("plugins/index.json")).unwrap()).unwrap();
         assert!(c.len() >= 3);
         for e in &c {
-            let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("plugins")
-                .join(&e.id);
+            let dir = root.join("plugins").join(&e.id);
             let m = read_manifest(&dir).unwrap();
             assert_eq!(m.version, e.version, "{}", e.id);
             assert_eq!(m.permissions, e.permissions, "{}", e.id);

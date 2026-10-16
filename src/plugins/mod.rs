@@ -821,11 +821,18 @@ mod tests {
         }
     }
 
-    /// `plugins/index.json` must describe every built-in plugin as its manifest does.
+    /// The catalog (`plugins/index.json` in https://github.com/Loafer19/vivi-plugins, checked out
+    /// in `$VIVI_PLUGINS_DIR`) must describe every built-in plugin as its manifest does.
+    /// Skipped when `VIVI_PLUGINS_DIR` is not set.
     #[test]
     fn index_json_matches_manifests() {
-        let idx: serde_json::Value =
-            serde_json::from_str(include_str!("../../plugins/index.json")).unwrap();
+        let Some(root) = std::env::var_os("VIVI_PLUGINS_DIR") else {
+            eprintln!("VIVI_PLUGINS_DIR not set, skipping");
+            return;
+        };
+        let text = std::fs::read_to_string(std::path::Path::new(&root).join("plugins/index.json"))
+            .unwrap();
+        let idx: serde_json::Value = serde_json::from_str(&text).unwrap();
         let list = idx["plugins"].as_array().unwrap();
         for p in builtin() {
             let m = p.manifest();

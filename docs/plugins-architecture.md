@@ -1,7 +1,8 @@
 # Plugin distribution: how plugins are downloaded and updated
 
 Status: implemented in v0.9.0. Code: `src/plugins/packages.rs`,
-`scripts/package-plugins.py`, `.github/workflows/plugins.yml`.
+`scripts/package-plugins.py` and `.github/workflows/plugins.yml` in
+[Loafer19/vivi-plugins](https://github.com/Loafer19/vivi-plugins) (packages, helpers, catalog, marketplace and all plugin/helper releases live there).
 
 ## Goals
 
@@ -189,8 +190,8 @@ the size in Browse (e.g. the YouTube plugin's own yt-dlp download).
 
 ## Registry (catalog)
 
-`plugins/index.json` in this repository, published by the Pages workflow at
-<https://plugins.viviplayer.app/index.json>, falling back to <https://loafer19.github.io/vivi/index.json> (override with `VIVI_PLUGIN_INDEX`).
+`plugins/index.json` in vivi-plugins, published at
+<https://plugins.viviplayer.app/index.json>, falling back to <https://loafer19.github.io/vivi-plugins/index.json> (override with `VIVI_PLUGIN_INDEX`).
 `schema: 1`; built-in plugins are listed with `kind: "builtin"`, packages with
 `kind: "package"` and:
 
@@ -198,7 +199,7 @@ the size in Browse (e.g. the YouTube plugin's own yt-dlp download).
 {
   "id": "night-mode", "version": "1.0.0", "min_vivi": "0.8.0", "runtime": "mpv-lua",
   "permissions": [], "size": 2731,
-  "url": "https://github.com/Loafer19/vivi/releases/download/plugin-night-mode-v1.0.0/night-mode-1.0.0.zip",
+  "url": "https://github.com/Loafer19/vivi-plugins/releases/download/plugin-night-mode-v1.0.0/night-mode-1.0.0.zip",
   "sha256": "…"
 }
 ```
@@ -211,7 +212,7 @@ checked against its sha256; a detached signature can be added without breaking c
 
 ## Publishing (CI)
 
-`.github/workflows/plugins.yml` on every push touching `plugins/`:
+`.github/workflows/plugins.yml` (vivi-plugins) on every push touching `plugins/`:
 
 1. Lua syntax check (`luajit -bl`).
 2. `package-plugins.py --check` — fails if `index.json` is stale.
@@ -219,7 +220,7 @@ checked against its sha256; a detached signature can be added without breaking c
    with the zip asset (`--latest=false`, so the app release stays "latest").
 4. Download every published asset and compare its sha256 with the index.
 
-The Pages workflow deploys the new `index.json` from the same push.
+Dokploy redeploys plugins.viviplayer.app from the same push; the vivi-plugins Pages mirror follows.
 
 ## Client
 
