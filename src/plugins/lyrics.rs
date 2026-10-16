@@ -445,16 +445,50 @@ fn agent() -> ureq::Agent {
         .into()
 }
 
+/// Runs an LRCLIB request, retrying when the server is busy. LRCLIB answers uncached
+/// lookups with `503 ServerOverloaded` (Retry-After: 1) under load and `429` when rate
+/// limited; both are transient, so wait 1 s, then 2 s, before giving up.
+fn call(
+    mut send: impl FnMut() -> Result<ureq::http::Response<ureq::Body>, ureq::Error>,
+) -> Result<ureq::http::Response<ureq::Body>, ureq::Error> {
+    let mut wait = 1;
+    loop {
+        match send() {
+            Err(ureq::Error::StatusCode(503 | 429)) if wait <= 2 => {
+                std::thread::sleep(Duration::from_secs(wait));
+                wait *= 2;
+            }
+            r => return r,
+        }
+    }
+}
+
+/// Human-readable error, so a busy LRCLIB is not reported as a bare "http status: 503".
+fn err(e: ureq::Error) -> String {
+    match e {
+        ureq::Error::StatusCode(503) => {
+            "LRCLIB is busy right now (HTTP 503), try again in a moment".into()
+        }
+        ureq::Error::StatusCode(429) => {
+            "LRCLIB rate limit reached (HTTP 429), try again later".into()
+        }
+        e => e.to_string(),
+    }
+}
+
 /// LRCLIB `/api/search` by artist and title (title only when the artist is empty).
 pub fn search_lrclib(artist: &str, title: &str) -> Result<Vec<LrclibItem>, String> {
     let a = agent();
-    let mut req = a.get("https://lrclib.net/api/search");
-    req = if artist.trim().is_empty() {
-        req.query("q", title)
-    } else {
-        req.query("artist_name", artist).query("track_name", title)
-    };
-    let mut r = req.call().map_err(|e| e.to_string())?;
+    let mut r = call(|| {
+        let req = a.get("https://lrclib.net/api/search");
+        if artist.trim().is_empty() {
+            req.query("q", title)
+        } else {
+            req.query("artist_name", artist).query("track_name", title)
+        }
+        .call()
+    })
+    .map_err(err)?;
     let items: Vec<LrclibItem> = r.body_mut().read_json().map_err(|e| e.to_string())?;
     Ok(items.into_iter().filter(|i| i.has_lyrics()).collect())
 }
@@ -463,18 +497,21 @@ pub fn search_lrclib(artist: &str, title: &str) -> Result<Vec<LrclibItem>, Strin
 /// closest duration). Plain lyrics are returned when no synced ones exist.
 pub fn fetch_lrclib(t: &Track) -> Result<Option<String>, String> {
     let a = agent();
-    let mut req = a
-        .get("https://lrclib.net/api/get")
-        .query("artist_name", &t.artist)
-        .query("track_name", &t.title);
-    if !t.album.is_empty() {
-        req = req.query("album_name", &t.album);
-    }
-    if t.duration > 0.0 {
-        req = req.query("duration", format!("{}", t.duration.round()));
-    }
+    let get = || {
+        let mut req = a
+            .get("https://lrclib.net/api/get")
+            .query("artist_name", &t.artist)
+            .query("track_name", &t.title);
+        if !t.album.is_empty() {
+            req = req.query("album_name", &t.album);
+        }
+        if t.duration > 0.0 {
+            req = req.query("duration", format!("{}", t.duration.round()));
+        }
+        req.call()
+    };
     let mut plain = None;
-    match req.call() {
+    match call(get) {
         Ok(mut r) => {
             let it: LrclibItem = r.body_mut().read_json().map_err(|e| e.to_string())?;
             if let Some(s) = non_empty(&it.synced) {
@@ -483,7 +520,7 @@ pub fn fetch_lrclib(t: &Track) -> Result<Option<String>, String> {
             plain = non_empty(&it.plain).map(String::from);
         }
         Err(ureq::Error::StatusCode(404)) => {}
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(err(e)),
     }
     let mut items = search_lrclib(&t.artist, &t.title)?;
     rank(&mut items, t.duration);
@@ -633,12 +670,12 @@ fn norm(s: &str) -> String {
 /// some stations send "Title - Artist").
 pub fn fetch_radio(artist: &str, title: &str) -> Result<Option<LrclibItem>, String> {
     let a = agent();
-    match a
-        .get("https://lrclib.net/api/get")
-        .query("artist_name", artist)
-        .query("track_name", title)
-        .call()
-    {
+    match call(|| {
+        a.get("https://lrclib.net/api/get")
+            .query("artist_name", artist)
+            .query("track_name", title)
+            .call()
+    }) {
         Ok(mut r) => {
             let it: LrclibItem = r.body_mut().read_json().map_err(|e| e.to_string())?;
             if it.has_lyrics() {
@@ -646,13 +683,14 @@ pub fn fetch_radio(artist: &str, title: &str) -> Result<Option<LrclibItem>, Stri
             }
         }
         Err(ureq::Error::StatusCode(404)) => {}
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(err(e)),
     }
-    let mut r = a
-        .get("https://lrclib.net/api/search")
-        .query("q", format!("{artist} {title}"))
-        .call()
-        .map_err(|e| e.to_string())?;
+    let mut r = call(|| {
+        a.get("https://lrclib.net/api/search")
+            .query("q", format!("{artist} {title}"))
+            .call()
+    })
+    .map_err(err)?;
     let items: Vec<LrclibItem> = r.body_mut().read_json().map_err(|e| e.to_string())?;
     let (na, nt) = (norm(artist), norm(title));
     let close =

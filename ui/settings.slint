@@ -84,10 +84,16 @@ component PluginCard inherits Rectangle {
                     overflow: elide;
                 }
             }
-            // ~2 lines at 12px; elide rather than bleed into the next card.
-            Text {
-                text: setting.info; color: Theme.fg-a2; font-size: 12px;
-                wrap: word-wrap; overflow: elide; height: 32px;
+            // Exactly 2 lines at 12px. Wrapped text reports its full height as the layout
+            // minimum, so a bare Text grew past the card and painted over the next row;
+            // the fixed-height clipping box keeps long descriptions inside the card.
+            Rectangle {
+                height: 32px; clip: true;
+                Text {
+                    x: 0; y: 0; width: parent.width; height: 32px;
+                    text: setting.info; color: Theme.fg-a2; font-size: 12px;
+                    wrap: word-wrap; overflow: elide; vertical-alignment: top;
+                }
             }
         }
         VerticalLayout { alignment: center;
@@ -128,9 +134,13 @@ component PackageCard inherits Rectangle {
                     overflow: elide;
                 }
             }
-            Text {
-                text: setting.info; color: Theme.fg-a2; font-size: 12px;
-                wrap: word-wrap; overflow: elide; height: 32px;
+            Rectangle {  // 2 lines, clipped (see PluginCard)
+                height: 32px; clip: true;
+                Text {
+                    x: 0; y: 0; width: parent.width; height: 32px;
+                    text: setting.info; color: Theme.fg-a2; font-size: 12px;
+                    wrap: word-wrap; overflow: elide; vertical-alignment: top;
+                }
             }
             Text {
                 text: root.confirm ? setting.options[4] : setting.options[3] + (setting.options[4] != "" ? "  ·  " + setting.options[4] : "");
