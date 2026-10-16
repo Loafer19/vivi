@@ -2,7 +2,7 @@
 
 Source: a local copy of the `.fig` file (not committed). Format: zip → `canvas.fig` (fig-kiwi, schema +
 data, deflate), `meta.json`, `thumbnail.png`, `images/`. Parsed with a small script on `kiwi-schema` +
-`pako` (11,613 nodes). Icons: `assets/icons/*.svg` (201, contact sheet `docs/design/icons.png`).
+`pako` (11,613 nodes). Icons: `assets/icons/*.svg` (201).
 Frames were not rendered to PNG (no open-source .fig renderer).
 
 ## Frames (Page 1)
