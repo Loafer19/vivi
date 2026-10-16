@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Settings → About** (last item of the System group): app icon, version and build info (commit, build date, target OS/arch, libmpv and Slint versions, install type), **Check for updates** against the latest GitHub release with an "Up to date" / "Version X available" status, release-notes excerpt and a Download button (matching AppImage / tarball / Windows / macOS asset, release page for Flatpak and pacman installs), optional *Check automatically on startup* (off by default), What's new, links (website, plugins, source, prefilled bug report, license) and credits. **Copy system info** puts the build and OS details on the clipboard for bug reports. `VIVI_SETTINGS=<category>` opens Settings on start (screenshot helper).
+
 ### Changed
 - **Customize Player** rework: every bottom-bar element is a movable item — previous, play, next, ±10 s, elapsed / total time, the seekbar, flexible spaces, volume and all buttons (no fixed centre). Pick the **progress bar style** in the dialog: Compact inline, Classic (full width on top), Waveform (audio files) or Plain thin; the bar under the dialog is a live preview. Profiles: Minimal (Plain), Default (compact reference layout), Power (Waveform, all controls). The separate *Control bar layout*, *Skip buttons* and *Waveform seekbar* settings are gone; existing choices are migrated into the item list and style on load.
 

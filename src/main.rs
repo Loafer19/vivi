@@ -1,4 +1,5 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+mod about;
 mod config;
 mod desktop;
 mod dialogs;
@@ -827,6 +828,14 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         }
     });
     // Debug/screenshot helpers.
+    if let Some(c) = std::env::var("VIVI_SETTINGS")
+        .ok()
+        .and_then(|c| c.parse().ok())
+    {
+        app.set_settings_category(c);
+        app.set_settings_open(true);
+        app.invoke_settings_refresh(c, "".into(), false);
+    }
     if let Ok(t) = std::env::var("VIVI_PANEL") {
         app.set_panel_tab(t.parse().unwrap_or(0));
         app.set_panel_open(true);

@@ -1,6 +1,7 @@
 // Settings window per the Figma frames "Settings - General/Interface/…/Extensions"
 // (docs/design/frames/settings-*.png): search + grouped sidebar, section headers,
 // rows built from the reusable controls in controls.slint.
+import { AboutPage } from "about.slint";
 import { ScrollView } from "std-widgets.slint";
 import { Theme, Icon } from "theme.slint";
 import { Dropdown, Toggle, AccentSlider, Segmented, TextField, PathField, FlatButton, AdvancedBar, Field } from "controls.slint";
@@ -281,7 +282,7 @@ export component SettingsDialog inherits Rectangle {
         @image-url("../assets/icons/audio.svg"), @image-url("../assets/icons/subtitles.svg"),
         @image-url("../assets/icons/folder.svg"), @image-url("../assets/icons/streaming.svg"),
         @image-url("../assets/icons/speed.svg"), @image-url("../assets/icons/record.svg"),
-        @image-url("../assets/icons/plugins.svg"),
+        @image-url("../assets/icons/plugins.svg"), @image-url("../assets/icons/info.svg"),
     ];
     function group(i: int) -> string {
         i == 0 ? "App" : i == 4 ? "Media" : i == 9 ? "System" : ""
@@ -365,7 +366,7 @@ export component SettingsDialog inherits Rectangle {
                         padding-left: 24px; padding-right: 12px; spacing: 10px;
                         Text {
                             horizontal-stretch: 1;
-                            text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category] + " Settings";
+                            text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category] == "About" ? "About vivi" : root.categories[root.category] + " Settings";
                             color: Theme.fg-1; font-size: 16px; vertical-alignment: center;
                         }
                         VerticalLayout { alignment: center;
@@ -377,7 +378,12 @@ export component SettingsDialog inherits Rectangle {
                             } }
                     }
                 }
-                ScrollView {
+                property <bool> about: root.search == "" && root.categories[root.category] == "About";
+                if about: ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout { padding-left: 24px; padding-right: 24px; padding-bottom: 24px; AboutPage { } }
+                }
+                if !about: ScrollView {
                     vertical-stretch: 1;
                     VerticalLayout {
                         alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;

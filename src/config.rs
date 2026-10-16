@@ -132,6 +132,8 @@ pub struct General {
     pub log_level: String,
     /// Local control socket for `vivi-mcp` and other tools (see `src/ipc.rs`).
     pub remote_control: bool,
+    /// Settings → About: query GitHub for a newer release on startup (off by default).
+    pub check_updates: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -206,6 +208,7 @@ impl Default for General {
                 .into_owned(),
             log_level: "Errors only".into(),
             remote_control: false,
+            check_updates: false,
         }
     }
 }

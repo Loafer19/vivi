@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// Seconds of inactivity before the controls hide (read by the auto-hide timer).
 pub static AUTOHIDE_SECS: AtomicU32 = AtomicU32::new(2);
 
-const CATEGORIES: [&str; 13] = [
+const CATEGORIES: [&str; 14] = [
     "General",
     "Interface",
     "Privacy",
@@ -26,6 +26,7 @@ const CATEGORIES: [&str; 13] = [
     "Performance",
     "Recording",
     "Extensions",
+    "About",
 ];
 const ACCENTS: [&str; 9] = [
     "#D37918", "#C8452E", "#A68A1C", "#2E9A44", "#1E9AAE", "#2155C4", "#7C3FD1", "#C23B98",
@@ -1570,6 +1571,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let refresh = refresh.clone();
         REFRESH.with(|r| *r.borrow_mut() = Some(Rc::new(refresh)));
     }
+    crate::about::setup(app, player, &cfg, save.clone());
     customize(app, player, &cfg, save.clone(), log);
     onboarding(app, &cfg, save.clone());
     {
@@ -1871,7 +1873,8 @@ mod tests {
     #[test]
     fn every_category_has_rows() {
         let c = Config::default();
-        for i in 0..CATEGORIES.len() {
+        // About is a custom page (ui/about.slint), not setting rows.
+        for i in 0..CATEGORIES.len() - 1 {
             assert!(!filtered(&c, &[], i as i32, "", false).is_empty(), "{i}");
         }
         assert_eq!(mpv_color("#FF0000", 50), "#7FFF0000");

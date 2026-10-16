@@ -1,0 +1,162 @@
+// Settings → About: app identity, build info, update check, links, credits.
+import { Theme, Icon } from "theme.slint";
+import { Toggle, Field } from "controls.slint";
+
+// Filled from Rust (src/about.rs).
+export global About {
+    in property <string> version;
+    in property <[string]> build-keys;
+    in property <[string]> build-values;
+    in property <string> license: "MIT License";
+    in property <string> sysinfo;
+    // "idle" | "checking" | "current" | "available" | "error"
+    in property <string> state: "idle";
+    in property <string> latest;
+    in property <string> notes;
+    in property <string> message;
+    in property <string> download-label: "Download";
+    in-out property <bool> auto-check;
+    in-out property <string> copied;
+    callback check();
+    callback download();
+    callback link(string);
+    callback auto-toggled(bool);
+}
+
+component Card inherits Rectangle {
+    background: Theme.bg-a3; border-radius: 8px;
+    border-width: 1px; border-color: Theme.bg-a1;
+}
+
+component Btn inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 34px; min-width: t.preferred-width + 28px; border-radius: 6px;
+    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent) : (ta.has-hover ? Field.knob : Field.raised);
+    opacity: enabled ? 1 : 0.5;
+    t := Text { text: root.text; color: root.primary ? Theme.bg-b2 : Theme.fg-1; font-size: 13px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    ta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component LinkRow inherits Rectangle {
+    in property <string> title;
+    in property <string> sub;
+    in property <string> url;
+    height: 44px; border-radius: 6px;
+    background: ta.has-hover ? Theme.bg-a1 : transparent;
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; spacing: 12px;
+        Icon { width: 18px; height: 18px; y: (parent.height - 18px) / 2; source: @image-url("../assets/icons/link.svg"); tint: ta.has-hover ? Theme.accent : Theme.fg-a2; }
+        Text { text: root.title; color: Theme.fg-1; font-size: 14px; vertical-alignment: center; }
+        Text { horizontal-stretch: 1; text: root.sub; color: Theme.fg-a3; font-size: 13px; vertical-alignment: center; horizontal-alignment: right; overflow: elide; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { About.link(root.url); } }
+}
+
+component SectionTitle inherits Text {
+    color: Theme.fg-a3; font-size: 12px; font-weight: 600; letter-spacing: 0.6px;
+}
+
+export component AboutPage inherits VerticalLayout {
+    spacing: 16px; padding-top: 20px; alignment: start;
+    // Hero
+    Card {
+        HorizontalLayout {
+            padding: 20px; spacing: 20px;
+            Image { width: 88px; height: 88px; source: @image-url("../packaging/vivi.png"); image-fit: contain; }
+            VerticalLayout {
+                alignment: center; spacing: 4px; horizontal-stretch: 1;
+                HorizontalLayout { spacing: 10px; alignment: start;
+                    Text { text: "vivi"; color: Theme.fg-1; font-size: 28px; font-weight: 700; }
+                    Rectangle {
+                        y: 8px; height: 22px; width: vt.preferred-width + 16px; border-radius: 11px; background: Theme.accent-bg;
+                        vt := Text { text: "v" + About.version; color: Theme.accent-bright; font-size: 12px; font-weight: 600; }
+                    }
+                }
+                Text { text: "Fast, lightweight media player built on libmpv and Slint."; color: Theme.fg-a1; font-size: 13px; wrap: word-wrap; }
+                Text { text: About.license + " · © 2026 Ruslan Popelyshyn"; color: Theme.fg-a3; font-size: 12px; }
+            }
+        }
+    }
+    // Updates
+    Card {
+        VerticalLayout {
+            padding: 18px; spacing: 12px;
+            HorizontalLayout { spacing: 12px;
+                VerticalLayout { horizontal-stretch: 1; alignment: center; spacing: 2px;
+                    Text {
+                        font-size: 15px; font-weight: 600;
+                        color: About.state == "available" ? Theme.accent-bright : Theme.fg-1;
+                        text: About.state == "checking" ? "Checking for updates…"
+                            : About.state == "current" ? "vivi is up to date"
+                            : About.state == "available" ? "Version " + About.latest + " available"
+                            : About.state == "error" ? "Could not check for updates" : "Updates";
+                    }
+                    Text { text: About.message; color: Theme.fg-a3; font-size: 12px; wrap: word-wrap; }
+                }
+                if About.state == "available": VerticalLayout { alignment: center; Btn { text: About.download-label; primary: true; clicked => { About.download(); } } }
+                VerticalLayout { alignment: center; Btn { text: "Check for updates"; enabled: About.state != "checking"; clicked => { About.check(); } } }
+            }
+            if About.state == "available" && About.notes != "": Rectangle {
+                background: Field.fill; border-radius: 6px;
+                VerticalLayout { padding: 12px; spacing: 6px;
+                    SectionTitle { text: "RELEASE NOTES"; }
+                    Text { text: About.notes; color: Theme.fg-2; font-size: 13px; wrap: word-wrap; }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.divider; }
+            HorizontalLayout { spacing: 12px;
+                VerticalLayout { horizontal-stretch: 1; alignment: center;
+                    Text { text: "Check automatically on startup"; color: Theme.fg-1; font-size: 14px; }
+                    Text { text: "Contacts api.github.com once per launch. Off by default."; color: Theme.fg-a3; font-size: 12px; }
+                }
+                Toggle { on: About.auto-check; toggled => { About.auto-check = !About.auto-check; About.auto-toggled(About.auto-check); } }
+            }
+            HorizontalLayout { alignment: start;
+                LinkRow { width: 220px; title: "What's new"; sub: "Changelog"; url: "changelog"; }
+            }
+        }
+    }
+    // Build info
+    Card {
+        VerticalLayout {
+            padding: 18px; spacing: 6px;
+            HorizontalLayout {
+                SectionTitle { horizontal-stretch: 1; text: "BUILD"; vertical-alignment: center; }
+                Btn { text: About.copied != "" ? About.copied : "Copy system info"; clicked => { ti.select-all(); ti.copy(); ti.clear-selection(); About.copied = "Copied ✓"; } }
+            }
+            for k[i] in About.build-keys: HorizontalLayout {
+                height: 24px;
+                Text { width: 140px; text: k; color: Theme.fg-a3; font-size: 13px; vertical-alignment: center; }
+                Text { horizontal-stretch: 1; text: About.build-values[i]; color: Theme.fg-2; font-size: 13px; vertical-alignment: center; overflow: elide; }
+            }
+            // Invisible carrier for the clipboard copy.
+            Rectangle { height: 0px; clip: true;
+                ti := TextInput { text: About.sysinfo; read-only: true; single-line: false; }
+            }
+        }
+    }
+    // Links
+    Card {
+        VerticalLayout {
+            padding: 10px; spacing: 0px;
+            LinkRow { title: "Website"; sub: "viviplayer.app"; url: "https://viviplayer.app"; }
+            LinkRow { title: "Plugins"; sub: "plugins.viviplayer.app"; url: "https://plugins.viviplayer.app"; }
+            LinkRow { title: "Source code"; sub: "github.com/Loafer19/vivi"; url: "https://github.com/Loafer19/vivi"; }
+            LinkRow { title: "Report a bug"; sub: "Opens a prefilled GitHub issue"; url: "bug"; }
+            LinkRow { title: "License"; sub: About.license; url: "https://github.com/Loafer19/vivi/blob/master/LICENSE"; }
+        }
+    }
+    // Credits
+    Card {
+        VerticalLayout {
+            padding: 18px; spacing: 8px;
+            SectionTitle { text: "CREDITS"; }
+            Text { text: "Playback by libmpv (mpv.io) · Interface by Slint (slint.dev)"; color: Theme.fg-2; font-size: 13px; wrap: word-wrap; }
+            Text { text: "Data sources: LRCLIB, OpenSubtitles, Jamendo, Internet Archive, AcoustID / MusicBrainz, Discogs, Deezer, iTunes, Last.fm"; color: Theme.fg-a1; font-size: 13px; wrap: word-wrap; }
+            Text { text: "Design inspired by Juxtopposed's VLC redesign."; color: Theme.fg-a3; font-size: 12px; }
+        }
+    }
+}
