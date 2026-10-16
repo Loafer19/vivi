@@ -624,10 +624,10 @@ export component NowPlayingCard inherits Rectangle {
 }
 
 // ---------- Auto-tagger review (src/plugins/tagger.rs) ----------
-export struct TagField { name: string, old: string, new: string, changed: bool, checked: bool, source: string }  // source: where `new` comes from
+export struct TagField { name: string, old: string, new: string, changed: bool, checked: bool, source: string, alts: int }  // source: where `new` comes from; alts: other sources' values (⇄ cycles)
 export struct TagCover { img: image, label: string, info: string }
 export struct TagFile {
-    name: string, source: string, confidence: int, checked: bool, fields: [TagField],
+    name: string, source: string, confidence: int, note: string, checked: bool, fields: [TagField],
     has-old-cover: bool, old-cover: image, old-cover-info: string,
     covers: [TagCover], cover-pick: int,   // -1 keeps the existing cover
 }
@@ -707,7 +707,7 @@ export component TagReviewDialog inherits Rectangle {
                 VerticalLayout {
                     padding: 16px; spacing: 14px; alignment: start;
                     for f[fi] in root.files: card := Rectangle {
-                        property <length> colw: (tdlg.width - 32px - 14px - 24px - 28px - 110px - 16px - 30px - 110px) / 2;
+                        property <length> colw: (tdlg.width - 32px - 14px - 24px - 28px - 110px - 16px - 30px - 140px) / 2;
                         border-radius: 8px; background: Theme.bg-a3; border-width: 1px; border-color: Theme.bg-a1;
                         opacity: f.checked ? 1 : 0.55;
                         VerticalLayout {
@@ -715,7 +715,9 @@ export component TagReviewDialog inherits Rectangle {
                             HorizontalLayout {
                                 spacing: 10px; height: 28px;
                                 Check { y: 5px; checked: f.checked; toggled => { root.cmd("toggle-file", fi); } }
-                                Text { horizontal-stretch: 1; text: f.name; color: Theme.fg-1; font-size: 14px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                                VerticalLayout { horizontal-stretch: 1; alignment: center;
+                                    Text { text: f.name; color: Theme.fg-1; font-size: 14px; font-weight: 600; overflow: elide; }
+                                }
                                 Rectangle {
                                     width: src.preferred-width + 16px; height: 22px; y: 3px; border-radius: 11px;
                                     background: (f.confidence >= 90 ? #2E7D32 : f.confidence >= 70 ? #B8860B : #B23B3B).with-alpha(0.25);
@@ -723,6 +725,7 @@ export component TagReviewDialog inherits Rectangle {
                                         color: f.confidence >= 90 ? #7CC47F : f.confidence >= 70 ? #E2B44A : #E57373; }
                                 }
                             }
+                            if f.note != "": Text { x: 28px; text: f.note; color: Theme.fg-a3; font-size: 11px; overflow: elide; }
                             // Column headers
                             HorizontalLayout {
                                 spacing: 10px; height: 22px; padding-left: 28px;
@@ -730,7 +733,7 @@ export component TagReviewDialog inherits Rectangle {
                                 Text { width: card.colw; text: "Current"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
                                 Text { width: 16px; text: ""; }
                                 Text { width: card.colw; text: "Proposed"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
-                                Text { width: 100px; text: "Source"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
+                                Text { width: 130px; text: "Source"; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; }
                             }
                             for t[ti] in f.fields: Rectangle {
                                 height: 28px; border-radius: 4px;
@@ -744,7 +747,22 @@ export component TagReviewDialog inherits Rectangle {
                                     Text { width: 16px; text: t.changed ? "→" : "="; color: t.changed ? Theme.accent : Theme.fg-a3; font-size: 13px; vertical-alignment: center; horizontal-alignment: center; }
                                     Text { width: card.colw; text: t.changed ? t.new : (t.old == "" ? "—" : t.old); font-size: 13px; vertical-alignment: center; overflow: elide;
                                         color: t.changed ? (t.checked ? Theme.accent-bright : Theme.fg-a2) : Theme.fg-a3; font-weight: t.changed ? 600 : 400; }
-                                    Text { width: 100px; text: t.changed ? t.source : ""; color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                                    HorizontalLayout { width: 130px; spacing: 4px;
+                                        Rectangle {
+                                            width: min(sl.preferred-width + 12px, t.alts > 0 ? 82px : 130px); height: 18px; y: 5px; border-radius: 9px;
+                                            visible: t.changed || t.alts > 0;
+                                            background: t.source == "MusicBrainz" ? #FFFFFF10 : Theme.accent.with-alpha(0.14);
+                                            sl := Text { text: t.source; color: t.source == "MusicBrainz" ? Theme.fg-a2 : Theme.accent-bright; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; overflow: elide; }
+                                        }
+                                        if t.alts > 0: Rectangle {
+                                            width: 42px; height: 18px; y: 5px; border-radius: 9px;
+                                            border-width: 1px; border-color: alt.has-hover ? Theme.accent : Theme.divider;
+                                            background: alt.has-hover ? Theme.accent.with-alpha(0.18) : transparent;
+                                            Text { text: "⇄ " + t.alts; color: alt.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
+                                            alt := TouchArea { enabled: f.checked; mouse-cursor: pointer; clicked => { root.cmd("field-alt", fi + ":" + ti); } }
+                                        }
+                                        Rectangle { horizontal-stretch: 1; }
+                                    }
                                 }
                             }
                             // Cover art: current vs. candidates

@@ -12,7 +12,7 @@
 //! * **LRCLIB** (shared with the Lyrics plugin): synced lyrics (LRC) to embed.
 
 use super::lyrics;
-use super::tagger::{Candidate, Tags};
+use super::tagger::{Alt, Candidate};
 use super::web;
 
 /// Which sources to ask (from the Auto-tagger settings).
@@ -159,26 +159,65 @@ pub fn parse_discogs(v: &serde_json::Value) -> Option<Found> {
     })
 }
 
-/// Fill the empty fields of `c` from `f`, remembering `src` per review field; the cover
-/// becomes a candidate labelled "<src>".
+/// Whether two values of `field` say the same thing (years compare by their first four
+/// digits, track numbers without "/total" and leading zeros).
+pub fn agrees(field: &str, a: &str, b: &str) -> bool {
+    match field {
+        "Year" => a.chars().take(4).eq(b.chars().take(4)),
+        "Track" => {
+            let n = |x: &str| {
+                x.split('/')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_start_matches('0')
+                    .to_string()
+            };
+            n(a) == n(b)
+        }
+        _ => norm(a) == norm(b),
+    }
+}
+
+/// Merge what source `src` knows into `c`: empty fields are filled (and remembered as
+/// coming from `src`), a value that matches counts `src` as agreeing (raises the
+/// confidence), a different value becomes an alternative the review can switch to. The
+/// cover becomes a candidate labelled "<src>".
 pub fn merge(c: &mut Candidate, f: &Found, src: &'static str) {
-    fn fill(
-        dst: &mut String,
-        v: &str,
-        field: &'static str,
-        src: &'static str,
-        s: &mut Vec<(&'static str, &'static str)>,
-    ) {
-        if dst.trim().is_empty() && !v.trim().is_empty() {
-            *dst = v.trim().to_string();
-            s.push((field, src));
+    let mut agreed = false;
+    for (field, v) in [
+        ("Album", &f.album),
+        ("Track", &f.track),
+        ("Year", &f.date),
+        ("Genre", &f.genre),
+    ] {
+        let v = v.trim();
+        if v.is_empty() {
+            continue;
+        }
+        let Some(dst) = super::tagger::field_mut(&mut c.tags, field) else {
+            continue;
+        };
+        if dst.trim().is_empty() {
+            *dst = v.to_string();
+            c.sources.push((field, src));
+        } else if agrees(field, dst, v) {
+            agreed = true;
+        } else if !c
+            .alts
+            .iter()
+            .any(|a| a.field == field && agrees(field, &a.value, v))
+        {
+            c.alts.push(Alt {
+                field,
+                value: v.to_string(),
+                source: src,
+            });
         }
     }
-    let t: &mut Tags = &mut c.tags;
-    fill(&mut t.album, &f.album, "Album", src, &mut c.sources);
-    fill(&mut t.track, &f.track, "Track", src, &mut c.sources);
-    fill(&mut t.date, &f.date, "Year", src, &mut c.sources);
-    fill(&mut t.genre, &f.genre, "Genre", src, &mut c.sources);
+    if agreed && !c.agree.contains(&src) {
+        c.agree.push(src);
+    }
     if !f.cover.is_empty() && !c.extra_covers.iter().any(|(_, u)| u == &f.cover) {
         c.extra_covers.push((src.to_string(), f.cover.clone()));
     }
@@ -268,7 +307,7 @@ pub fn enrich(c: &mut Candidate, o: &Opts, duration: f64) -> Vec<String> {
             }
         }));
     }
-    if !o.lastfm_key.trim().is_empty() && c.tags.genre.is_empty() {
+    if !o.lastfm_key.trim().is_empty() {
         note(lastfm(o.lastfm_key.trim(), &artist, &title).map(|g| {
             if let Some(g) = g {
                 let f = Found {
@@ -295,8 +334,16 @@ pub fn enrich(c: &mut Candidate, o: &Opts, duration: f64) -> Vec<String> {
         };
         note(lyrics::fetch_lrclib(&t).map(|l| {
             if let Some(l) = l {
+                let synced = !super::tagger::lrc_lines(&l).is_empty();
                 c.tags.lyrics = l;
-                c.sources.push(("Lyrics", "LRCLIB"));
+                c.sources.push((
+                    "Lyrics",
+                    if synced {
+                        "LRCLIB synced"
+                    } else {
+                        "LRCLIB plain"
+                    },
+                ));
             }
         }));
     }
@@ -307,6 +354,7 @@ pub fn enrich(c: &mut Candidate, o: &Opts, duration: f64) -> Vec<String> {
 pub fn source_of(c: &Candidate, field: &str) -> &'static str {
     c.sources
         .iter()
+        .rev()
         .find(|(f, _)| *f == field)
         .map(|(_, s)| *s)
         .unwrap_or(match c.source {
@@ -318,6 +366,7 @@ pub fn source_of(c: &Candidate, field: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::tagger::Tags;
     use serde_json::json;
 
     fn cand() -> Candidate {
@@ -333,6 +382,8 @@ mod tests {
             source: "AcoustID",
             sources: Vec::new(),
             extra_covers: Vec::new(),
+            alts: Vec::new(),
+            agree: Vec::new(),
         }
     }
 
@@ -389,6 +440,48 @@ mod tests {
         assert_eq!(source_of(&c, "Genre"), "iTunes");
         assert_eq!(source_of(&c, "Album"), "MusicBrainz");
         assert_eq!(c.extra_covers.len(), 1, "same cover once");
+    }
+
+    #[test]
+    fn merge_keeps_alternatives_and_counts_agreement() {
+        let mut c = cand();
+        c.tags.date = "2001".into();
+        c.score = 80;
+        let deezer = Found {
+            album: "MB album".into(), // same album, other case: agrees
+            date: "2001-03-12".into(),
+            ..Default::default()
+        };
+        let itunes = Found {
+            album: "MB Album (Deluxe)".into(),
+            genre: "Electronic".into(),
+            ..Default::default()
+        };
+        let discogs = Found {
+            album: "mb album (deluxe)".into(), // same alternative once
+            genre: "House".into(),
+            ..Default::default()
+        };
+        merge(&mut c, &deezer, "Deezer");
+        merge(&mut c, &itunes, "iTunes");
+        merge(&mut c, &discogs, "Discogs");
+        assert_eq!(c.agree, vec!["Deezer"]);
+        assert_eq!(c.confidence(), 84);
+        assert_eq!(c.tags.genre, "Electronic");
+        let alts: Vec<(&str, &str, &str)> = c
+            .alts
+            .iter()
+            .map(|a| (a.field, a.value.as_str(), a.source))
+            .collect();
+        assert_eq!(
+            alts,
+            vec![
+                ("Album", "MB Album (Deluxe)", "iTunes"),
+                ("Genre", "House", "Discogs")
+            ]
+        );
+        assert!(agrees("Track", "03/12", "3"));
+        assert!(!agrees("Year", "1999", "2001"));
     }
 
     #[test]

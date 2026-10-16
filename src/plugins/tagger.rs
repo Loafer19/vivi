@@ -127,24 +127,7 @@ pub fn rename_to(pattern: &str, t: &Tags, path: &Path) -> Option<String> {
     ] {
         out = out.replace(k, v);
     }
-    let clean: String = out
-        .chars()
-        .map(|c| {
-            if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    // Tidy separators left by empty fields: "Artist -  - Title", leading/trailing " - ".
-    let mut name = clean.split_whitespace().collect::<Vec<_>>().join(" ");
-    while name.contains("- -") {
-        name = name.replace("- -", "-");
-    }
-    let name = name
-        .trim_matches(|c: char| c == '-' || c == ' ' || c == '.')
-        .to_string();
+    let name = sanitize_file_name(&out);
     if name.is_empty() {
         return None;
     }
@@ -156,10 +139,72 @@ pub fn rename_to(pattern: &str, t: &Tags, path: &Path) -> Option<String> {
     (current.as_deref() != Some(file.as_str())).then_some(file)
 }
 
-/// Rename `path` to `name` in the same folder; never replaces an existing file.
+/// Longest file name stem kept (bytes), well under the 255-byte limit of most file systems.
+const MAX_STEM: usize = 180;
+
+/// A file name stem safe on Linux, macOS and Windows: path separators, `: * ? " < > |`
+/// and control characters become `_`, whitespace is collapsed, separators left by empty
+/// fields ("Artist -  - Title") are tidied, leading/trailing dots, dashes and spaces are
+/// dropped, Windows device names (CON, NUL, COM1…) get a `_` suffix and the result is
+/// cut to [`MAX_STEM`] bytes on a character boundary.
+pub fn sanitize_file_name(s: &str) -> String {
+    let clean: String = s
+        .chars()
+        .map(|c| {
+            if c.is_whitespace() {
+                ' '
+            } else if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+                || c.is_control()
+            {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let mut name = clean.split_whitespace().collect::<Vec<_>>().join(" ");
+    while name.contains("- -") {
+        name = name.replace("- -", "-");
+    }
+    let trim = |n: &str| {
+        n.trim_matches(|c: char| c == '-' || c == ' ' || c == '.')
+            .to_string()
+    };
+    let mut name = trim(&name);
+    if name.len() > MAX_STEM {
+        let mut end = MAX_STEM;
+        while !name.is_char_boundary(end) {
+            end -= 1;
+        }
+        name = trim(&name[..end]);
+    }
+    let base = name.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let reserved = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((base.starts_with("COM") || base.starts_with("LPT"))
+            && base.len() == 4
+            && base.as_bytes()[3].is_ascii_digit());
+    if reserved {
+        name.insert(name.find('.').unwrap_or(name.len()), '_');
+    }
+    name
+}
+
+/// Rename `path` to `name` in the same folder; never replaces an existing file (also
+/// one that differs only in case) and never leaves the folder.
 pub fn rename_file(path: &Path, name: &str) -> Result<PathBuf, String> {
+    if name.contains('/') || name.contains('\\') || name.starts_with('.') || name.is_empty() {
+        return Err(format!("{name}: not a plain file name"));
+    }
     let to = path.with_file_name(name);
-    if to.exists() {
+    let clash = std::fs::read_dir(path.parent().unwrap_or(Path::new(".")))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|e| {
+            let n = e.file_name().to_string_lossy().to_lowercase();
+            n == name.to_lowercase() && e.path() != path
+        });
+    if to.exists() || clash {
         return Err(format!("{name} already exists"));
     }
     std::fs::rename(path, &to).map_err(|e| e.to_string())?;
@@ -209,10 +254,12 @@ pub fn read_tags(path: &Path) -> Result<(Tags, f64), String> {
 // ---------- fingerprinting ----------
 
 /// Chromaprint fingerprint (compressed, base64url) and duration in seconds.
-pub fn fingerprint(path: &Path) -> Result<(u32, String), String> {
+/// Also says which fingerprinter ran: the system `fpcalc` first (no extra download or
+/// binary size), otherwise the built-in Chromaprint port.
+pub fn fingerprint_with(path: &Path) -> Result<(u32, String, &'static str), String> {
     match fpcalc(path) {
-        Some(r) => Ok(r),
-        None => fingerprint_builtin(path),
+        Some((d, f)) => Ok((d, f, "system fpcalc")),
+        None => fingerprint_builtin(path).map(|(d, f)| (d, f, "built-in Chromaprint")),
     }
 }
 
@@ -346,6 +393,83 @@ pub struct Candidate {
     pub sources: Vec<(&'static str, &'static str)>,
     /// Cover URLs from other sources: (label, url).
     pub extra_covers: Vec<(String, String)>,
+    /// Values other sources propose for a field that is already set (pick in the review).
+    pub alts: Vec<Alt>,
+    /// Sources that confirmed this candidate (same album / year / track / genre).
+    pub agree: Vec<&'static str>,
+}
+
+/// An alternative value for a review field and where it comes from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Alt {
+    pub field: &'static str,
+    pub value: String,
+    pub source: &'static str,
+}
+
+impl Candidate {
+    /// Match confidence 0–100: the AcoustID / MusicBrainz score plus 4 per other source
+    /// that agrees with it (at most +12).
+    pub fn confidence(&self) -> u32 {
+        (self.score + 4 * (self.agree.len() as u32).min(3)).min(100)
+    }
+}
+
+/// Field of `t` by review label.
+pub fn field_mut<'a>(t: &'a mut Tags, name: &str) -> Option<&'a mut String> {
+    Some(match name {
+        "Title" => &mut t.title,
+        "Artist" => &mut t.artist,
+        "Album" => &mut t.album,
+        "Album artist" => &mut t.album_artist,
+        "Year" => &mut t.date,
+        "Track" => &mut t.track,
+        "Genre" => &mut t.genre,
+        "Lyrics" => &mut t.lyrics,
+        _ => return None,
+    })
+}
+
+fn rank_key(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Merge and rank candidates from all lookups (AcoustID, MusicBrainz search): duplicates
+/// (same recording + release, or same title/artist/album) collapse into the best scored
+/// one, candidates whose title and artist match the file's current tags get +5, then
+/// they are sorted by confidence (ties: official dates first, as they arrived).
+pub fn rank_candidates(v: Vec<Candidate>, current: &Tags) -> Vec<Candidate> {
+    let mut out: Vec<Candidate> = Vec::new();
+    for mut c in v {
+        if !current.title.is_empty()
+            && rank_key(&c.tags.title) == rank_key(&current.title)
+            && (current.artist.is_empty() || rank_key(&c.tags.artist) == rank_key(&current.artist))
+        {
+            c.score = (c.score + 5).min(100);
+        }
+        let key = |c: &Candidate| {
+            if !c.tags.mb_release.is_empty() {
+                format!("{}|{}", c.tags.mb_recording, c.tags.mb_release)
+            } else {
+                format!(
+                    "{}|{}|{}",
+                    rank_key(&c.tags.title),
+                    rank_key(&c.tags.artist),
+                    rank_key(&c.tags.album)
+                )
+            }
+        };
+        match out.iter_mut().find(|o| key(o) == key(&c)) {
+            Some(o) if c.score > o.score => *o = c,
+            Some(_) => {}
+            None => out.push(c),
+        }
+    }
+    out.sort_by_key(|c| std::cmp::Reverse(c.confidence()));
+    out
 }
 
 fn credit(v: &serde_json::Value) -> String {
@@ -421,6 +545,8 @@ pub fn candidates_from_recording(
                 source,
                 sources: Vec::new(),
                 extra_covers: Vec::new(),
+                alts: Vec::new(),
+                agree: Vec::new(),
             }
         })
         .collect();
@@ -432,6 +558,8 @@ pub fn candidates_from_recording(
             source,
             sources: Vec::new(),
             extra_covers: Vec::new(),
+            alts: Vec::new(),
+            agree: Vec::new(),
         });
     }
     out
@@ -562,7 +690,10 @@ pub fn identify(path: &Path, key: &str) -> Result<(Tags, Vec<Candidate>, Vec<Str
     let mut notes = Vec::new();
     let mut out = Vec::new();
     if !key.trim().is_empty() {
-        match fingerprint(path).and_then(|(d, fp)| acoustid_lookup(key.trim(), d, &fp)) {
+        match fingerprint_with(path).and_then(|(d, fp, how)| {
+            notes.push(format!("Fingerprint: {how}"));
+            acoustid_lookup(key.trim(), d, &fp)
+        }) {
             Ok(ids) => {
                 for (id, score) in ids.into_iter().filter(|(_, s)| *s >= 50).take(3) {
                     let rec = lookup_recording(&id)?;
@@ -581,7 +712,7 @@ pub fn identify(path: &Path, key: &str) -> Result<(Tags, Vec<Candidate>, Vec<Str
         let (title, artist) = search_terms(&old, path);
         out = search_musicbrainz(&title, &artist, dur)?;
     }
-    Ok((old, out, notes))
+    Ok((old.clone(), rank_candidates(out, &old), notes))
 }
 
 /// Front cover from the Cover Art Archive (release, then release group), ≤ 500 px.
@@ -1055,6 +1186,8 @@ pub struct Review {
     /// Proposed new file name (AcoustID package's pattern) and whether to apply it.
     pub rename: Option<String>,
     pub rename_on: bool,
+    /// How the file was identified (fingerprinter, sources, lyrics setting).
+    pub note: String,
 }
 
 impl Review {
@@ -1083,13 +1216,58 @@ impl Review {
             cover,
             rename: None,
             rename_on: false,
+            note: String::new(),
         }
     }
-    /// Propose a new file name (ticked by default).
+    /// Propose a new file name; renaming is opt-in (unticked until the user ticks it).
     pub fn with_rename(mut self, name: Option<String>) -> Self {
-        self.rename_on = name.is_some();
+        self.rename_on = false;
         self.rename = name;
         self
+    }
+    /// Alternatives other sources offer for review field `j`.
+    pub fn alts_of(&self, j: usize) -> usize {
+        let name = review_fields(&self.old, &self.cand.tags)
+            .get(j)
+            .map(|f| f.0)
+            .unwrap_or("");
+        self.cand.alts.iter().filter(|a| a.field == name).count()
+    }
+    /// Switch review field `j` to its next alternative value: the current value (and its
+    /// source) goes to the back of the list, so repeated clicks cycle through all of them.
+    /// The field is ticked when the new value changes the file.
+    pub fn next_alt(&mut self, j: usize) -> bool {
+        let Some(name) = review_fields(&self.old, &self.cand.tags)
+            .get(j)
+            .map(|f| f.0)
+        else {
+            return false;
+        };
+        let Some(k) = self.cand.alts.iter().position(|a| a.field == name) else {
+            return false;
+        };
+        let alt = self.cand.alts.remove(k);
+        let cur_src = super::tagsources::source_of(&self.cand, name);
+        let Some(v) = field_mut(&mut self.cand.tags, name) else {
+            return false;
+        };
+        let cur = std::mem::replace(v, alt.value.clone());
+        if !cur.trim().is_empty() {
+            self.cand.alts.push(Alt {
+                field: name,
+                value: cur,
+                source: cur_src,
+            });
+        }
+        self.cand.sources.push((name, alt.source));
+        let (o, n) = {
+            let f = review_fields(&self.old, &self.cand.tags);
+            (f[j].1.clone(), f[j].2.clone())
+        };
+        if let Some(b) = self.fields.get_mut(j) {
+            *b = field_changes(&o, &n);
+        }
+        true
     }
     /// Number of fields (cover included) this file would change.
     pub fn changes(&self) -> usize {
@@ -1139,8 +1317,10 @@ struct Row {
     path: PathBuf,
     old: Tags,
     cand: Candidate,
-    /// Proposed file name (AcoustID package).
+    /// Proposed file name (AcoustID fingerprint match or the AcoustID package).
     rename: Option<String>,
+    /// How it was identified ("Fingerprint: system fpcalc", …).
+    note: String,
 }
 
 enum Msg {
@@ -1193,6 +1373,30 @@ fn slint_image(data: &[u8]) -> slint::Image {
 }
 
 impl AutoTagger {
+    /// A key from the plugin settings, else from the environment (never logged).
+    fn secret(cx: &Ctx, key: &str, env: &[&str]) -> String {
+        let v = cx.get(key);
+        if !v.trim().is_empty() {
+            return v.trim().to_string();
+        }
+        env.iter()
+            .find_map(|e| std::env::var(e).ok().filter(|v| !v.trim().is_empty()))
+            .unwrap_or_default()
+    }
+
+    /// The rename pattern, empty when "Suggest file names" is off.
+    fn pattern(cx: &Ctx) -> String {
+        if cx.get("rename") == "false" {
+            return String::new();
+        }
+        let p = cx.get("rename-pattern");
+        if p.trim().is_empty() {
+            "{artist} - {title}".into()
+        } else {
+            p
+        }
+    }
+
     fn ui(cx: &Ctx, status: &str, busy: bool) {
         cx.app.set_md_status(status.into());
         cx.app.set_md_busy(busy);
@@ -1287,7 +1491,8 @@ impl AutoTagger {
                 let mut fields: Vec<TagField> = review_fields(&r.old, &r.cand.tags)
                     .into_iter()
                     .zip(&r.fields)
-                    .map(|((name, o, n), on)| {
+                    .enumerate()
+                    .map(|(j, ((name, o, n), on))| {
                         let changed = field_changes(&o, &n);
                         let (o, n) = if name == "Lyrics" {
                             (lyrics_summary(&o), lyrics_summary(&n))
@@ -1301,6 +1506,7 @@ impl AutoTagger {
                             new: n.into(),
                             checked: *on,
                             source: super::tagsources::source_of(&r.cand, name).into(),
+                            alts: r.alts_of(j) as i32,
                         }
                     })
                     .collect();
@@ -1319,6 +1525,7 @@ impl AutoTagger {
                         new: n.as_str().into(),
                         checked: r.rename_on,
                         source: "Your pattern".into(),
+                        alts: 0,
                     });
                 }
                 let covers: Vec<TagCover> = r
@@ -1345,10 +1552,11 @@ impl AutoTagger {
                         } else {
                             "MusicBrainz search"
                         },
-                        r.cand.score
+                        r.cand.confidence()
                     )
                     .into(),
-                    confidence: r.cand.score as i32,
+                    confidence: r.cand.confidence() as i32,
+                    note: r.note.as_str().into(),
                     checked: r.on,
                     fields: ModelRc::new(VecModel::from(fields)),
                     has_old_cover: r.old_cover.is_some(),
@@ -1369,7 +1577,7 @@ impl AutoTagger {
         let n: usize = on.iter().map(|r| r.changes()).sum();
         cx.app.set_tr_status(
             format!(
-                "{} of {} files selected · {n} changes (fields + covers) · double-click or 🔍 a cover to enlarge",
+                "{} of {} files selected · {n} changes · ⇄ switches to another source's value · 🔍 enlarges a cover",
                 on.len(),
                 self.reviews.len()
             )
@@ -1401,10 +1609,36 @@ impl AutoTagger {
         let opts = super::tagsources::Opts {
             deezer: cx.flag("deezer"),
             itunes: cx.flag("itunes"),
-            lastfm_key: cx.get("lastfm-key"),
-            discogs_token: cx.get("discogs-token"),
+            lastfm_key: Self::secret(cx, "lastfm-key", &["VIVI_LASTFM_KEY", "LASTFM_API_KEY"]),
+            discogs_token: Self::secret(
+                cx,
+                "discogs-token",
+                &["VIVI_DISCOGS_TOKEN", "DISCOGS_TOKEN"],
+            ),
             lyrics: cx.flag("lyrics"),
         };
+        let mut asked: Vec<&str> = vec!["MusicBrainz"];
+        if opts.deezer {
+            asked.push("Deezer");
+        }
+        if opts.itunes {
+            asked.push("iTunes");
+        }
+        if !opts.lastfm_key.is_empty() {
+            asked.push("Last.fm");
+        }
+        if !opts.discogs_token.is_empty() {
+            asked.push("Discogs");
+        }
+        let asked = format!(
+            "Sources: {}{}",
+            asked.join(", "),
+            if opts.lyrics {
+                " · lyrics: LRCLIB"
+            } else {
+                " · lyrics embedding off"
+            }
+        );
         let (tx, rx) = channel();
         self.rx = Some(rx);
         Self::ui(cx, "Asking more sources and fetching cover art…", true);
@@ -1424,7 +1658,15 @@ impl AutoTagger {
                     }
                     let _ = tx.send(Msg::Status(format!("Fetching covers {}/{total}…", i + 1)));
                     let covers = cover_candidates(&r.cand, &others, 6);
-                    Review::new(r.path, r.old, r.cand, covers, embed).with_rename(r.rename)
+                    let mut rv =
+                        Review::new(r.path, r.old, r.cand, covers, embed).with_rename(r.rename);
+                    rv.note = [r.note.as_str(), asked.as_str()]
+                        .iter()
+                        .filter(|s| !s.is_empty())
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" · ");
+                    rv
                 })
                 .collect();
             let _ = tx.send(Msg::Reviews(v));
@@ -1602,7 +1844,12 @@ impl AutoTagger {
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = self.cancel.clone();
         let target = PathBuf::from(cx.app.get_md_query().trim().to_string());
-        let key = cx.get("acoustid-key");
+        let key = Self::secret(
+            cx,
+            "acoustid-key",
+            &["VIVI_ACOUSTID_KEY", "ACOUSTID_API_KEY"],
+        );
+        let pattern = Self::pattern(cx);
         let (tx, rx) = channel();
         self.rx = Some(rx);
         self.rows.clear();
@@ -1611,7 +1858,7 @@ impl AutoTagger {
         self.batch = target.is_dir();
         if self.batch {
             Self::ui(cx, "Scanning folder…", true);
-            std::thread::spawn(move || batch(&target, &key, &cancel, &tx));
+            std::thread::spawn(move || batch(&target, &key, &pattern, &cancel, &tx));
         } else if target.is_file() {
             Self::ui(
                 cx,
@@ -1625,13 +1872,15 @@ impl AutoTagger {
             std::thread::spawn(move || {
                 let m = match identify(&target, &key) {
                     Ok((old, c, notes)) => {
+                        let note = notes.join(" · ");
                         let rows = c
                             .into_iter()
                             .map(|cand| Row {
                                 path: target.clone(),
                                 old: old.clone(),
+                                rename: proposal(&cand, &pattern, &target),
                                 cand,
-                                rename: None,
+                                note: note.clone(),
                             })
                             .collect();
                         Msg::Rows(rows, notes.join(". "))
@@ -1659,13 +1908,23 @@ fn external_rows(path: &Path, ids: &[(String, u32)], pattern: &str) -> Result<Ve
                 old: old.clone(),
                 rename: rename_to(pattern, &cand.tags, path),
                 cand,
+                note: "Fingerprint: AcoustID plugin (fpcalc)".into(),
             });
         }
     }
     Ok(rows)
 }
 
-fn batch(dir: &Path, key: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
+/// File name proposal for a fingerprint (AcoustID) match; None for tag/name searches or
+/// when renaming is off (empty pattern).
+fn proposal(cand: &Candidate, pattern: &str, path: &Path) -> Option<String> {
+    cand.source
+        .starts_with("AcoustID")
+        .then(|| rename_to(pattern, &cand.tags, path))
+        .flatten()
+}
+
+fn batch(dir: &Path, key: &str, pattern: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
     let files = audio_files(dir);
     let total = files.len();
     let (mut found, mut skipped) = (0, 0);
@@ -1674,19 +1933,21 @@ fn batch(dir: &Path, key: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
             return;
         }
         let _ = tx.send(Msg::Status(format!(
-            "Identifying {}/{total}: {}",
+            "{}% · identifying {}/{total}: {} · {found} matched, {skipped} skipped",
+            i * 100 / total.max(1),
             i + 1,
             p.file_name().unwrap_or_default().to_string_lossy()
         )));
         match identify(p, key) {
-            Ok((old, c, _)) => match c.into_iter().next() {
+            Ok((old, c, notes)) => match c.into_iter().next() {
                 Some(cand) if cand.score >= CONFIDENT && !diff(&old, &cand.tags).is_empty() => {
                     found += 1;
                     let _ = tx.send(Msg::Row(Box::new(Row {
                         path: p.clone(),
                         old,
+                        rename: proposal(&cand, pattern, p),
                         cand,
-                        rename: None,
+                        note: notes.join(" · "),
                     })));
                 }
                 _ => skipped += 1,
@@ -1745,6 +2006,19 @@ impl Plugin for AutoTagger {
             "Embed synced lyrics",
             "Adds LRCLIB lyrics to the review: MP3 gets SYLT + USLT, FLAC/Ogg/Opus a LYRICS comment, M4A ©lyr (LRC text).",
             false,
+        ))
+        .setting(SettingSpec::toggle(
+            "rename",
+            "Suggest file names",
+            "When the audio fingerprint identifies a song, the review offers a new file name (unticked: renaming is opt-in). Never overwrites a file; characters not allowed in file names become _.",
+            true,
+        ))
+        .setting(SettingSpec::text(
+            "rename-pattern",
+            "File name pattern",
+            "Fields: {artist} {title} {album} {albumartist} {year} {date} {track} {genre}.",
+            "{artist} - {title}",
+            "{artist} - {title}",
         ))
         .setting(SettingSpec::text(
             "folder",
@@ -1832,7 +2106,7 @@ impl Plugin for AutoTagger {
                     .collect();
                 self.review(cx, all);
             }
-            "toggle-file" | "toggle-field" | "cover-pick" => {
+            "toggle-file" | "toggle-field" | "cover-pick" | "field-alt" => {
                 let a = args.first().map(String::as_str).unwrap_or("");
                 let mut it = a.split(':');
                 let i = it.next().and_then(|x| x.parse::<usize>().ok());
@@ -1857,6 +2131,9 @@ impl Plugin for AutoTagger {
                             }
                         }
                     }
+                    ("field-alt", Some(j)) if j >= 0 => {
+                        r.next_alt(j as usize);
+                    }
                     ("cover-pick", Some(j)) => {
                         r.cover = (j >= 0 && (j as usize) < r.covers.len()).then_some(j as usize)
                     }
@@ -1873,7 +2150,7 @@ impl Plugin for AutoTagger {
                     if r.cover.is_none() && !r.covers.is_empty() {
                         r.cover = Some(0);
                     }
-                    r.rename_on = r.rename.is_some();
+                    // Renaming stays opt-in: only files whose rename box is ticked.
                 }
                 self.render_review(cx);
                 self.apply_reviews(cx);
@@ -2038,6 +2315,138 @@ mod tests {
         );
     }
 
+    fn cand(title: &str, artist: &str, album: &str, rel: &str, score: u32) -> Candidate {
+        Candidate {
+            tags: Tags {
+                title: title.into(),
+                artist: artist.into(),
+                album: album.into(),
+                mb_recording: "rec".into(),
+                mb_release: rel.into(),
+                ..Default::default()
+            },
+            release_group: String::new(),
+            score,
+            source: "MusicBrainz search",
+            sources: Vec::new(),
+            extra_covers: Vec::new(),
+            alts: Vec::new(),
+            agree: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn ranking_merges_duplicates_and_prefers_confirmed_matches() {
+        let current = Tags {
+            title: "Local Forecast".into(),
+            artist: "Kevin MacLeod".into(),
+            ..Default::default()
+        };
+        let mut confirmed = cand("Other Song", "Band", "B", "r3", 88);
+        confirmed.agree = vec!["Deezer", "iTunes", "Discogs", "Last.fm"];
+        let v = vec![
+            cand("Local Forecast", "Kevin MacLeod", "A", "r1", 80),
+            cand("Local Forecast", "Kevin MacLeod", "A", "r1", 90), // duplicate, better
+            cand("Something", "Else", "C", "r2", 92),
+            confirmed,
+        ];
+        let r = rank_candidates(v, &current);
+        assert_eq!(r.len(), 3, "same recording + release collapses");
+        // 88 + 12 (three agreeing sources max) = 100 beats 90 + 5 (tags match) and 92.
+        assert_eq!(r[0].tags.mb_release, "r3");
+        assert_eq!(r[0].confidence(), 100);
+        assert_eq!((r[1].tags.mb_release.as_str(), r[1].score), ("r1", 95));
+        assert_eq!(r[2].tags.mb_release, "r2");
+    }
+
+    #[test]
+    fn review_cycles_alternative_values() {
+        let old = Tags {
+            album: "Old".into(),
+            ..Default::default()
+        };
+        let mut c = cand("T", "A", "MB Album", "r1", 90);
+        c.alts.push(Alt {
+            field: "Album",
+            value: "Old".into(),
+            source: "iTunes",
+        });
+        c.alts.push(Alt {
+            field: "Album",
+            value: "Deezer Album".into(),
+            source: "Deezer",
+        });
+        let mut r = Review::new(PathBuf::from("/nonexistent.mp3"), old, c, Vec::new(), true);
+        assert_eq!(r.alts_of(2), 2);
+        assert!(r.fields[2]);
+        assert!(r.next_alt(2));
+        // "Old" equals the current value: nothing to write, the box unticks.
+        assert_eq!(r.cand.tags.album, "Old");
+        assert!(!r.fields[2]);
+        assert_eq!(
+            super::super::tagsources::source_of(&r.cand, "Album"),
+            "iTunes"
+        );
+        assert!(r.next_alt(2));
+        assert_eq!(r.cand.tags.album, "Deezer Album");
+        assert!(r.fields[2]);
+        assert!(r.next_alt(2));
+        assert_eq!(r.cand.tags.album, "MB Album");
+        assert_eq!(
+            super::super::tagsources::source_of(&r.cand, "Album"),
+            "MusicBrainz"
+        );
+        assert!(!r.next_alt(0), "no alternatives for the title");
+    }
+
+    #[test]
+    fn rename_sanitizes_and_never_overwrites() {
+        assert_eq!(
+            sanitize_file_name("AC/DC: Back <in> Black?"),
+            "AC_DC_ Back _in_ Black_"
+        );
+        assert_eq!(
+            sanitize_file_name("  ..Artist -  - Title.. "),
+            "Artist - Title"
+        );
+        assert_eq!(sanitize_file_name("con"), "con_");
+        assert_eq!(sanitize_file_name("COM3.x"), "COM3_.x");
+        assert_eq!(sanitize_file_name("Comet"), "Comet");
+        assert_eq!(sanitize_file_name("a\tb\u{7}c"), "a b_c");
+        let long = "ж".repeat(200);
+        let s = sanitize_file_name(&long);
+        assert!(s.len() <= MAX_STEM && s.chars().all(|c| c == 'ж'));
+        let t = Tags {
+            title: "Song/Live".into(),
+            artist: "Band".into(),
+            track: "3/12".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            rename_to("{track}. {artist} - {title}", &t, Path::new("/m/x.flac")).as_deref(),
+            Some("03. Band - Song_Live.flac")
+        );
+        assert_eq!(
+            rename_to("{title}", &t, Path::new("/m/Song_Live.mp3")),
+            None
+        );
+        let d = std::env::temp_dir().join(format!("vivi-rename-safe-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let a = d.join("a.mp3");
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(d.join("Taken.mp3"), b"b").unwrap();
+        assert!(
+            rename_file(&a, "taken.mp3").is_err(),
+            "case-insensitive clash"
+        );
+        assert!(rename_file(&a, "../escape.mp3").is_err());
+        assert!(rename_file(&a, ".hidden.mp3").is_err());
+        let to = rename_file(&a, "New.mp3").unwrap();
+        assert_eq!(std::fs::read(&to).unwrap(), b"a");
+        assert_eq!(std::fs::read(d.join("Taken.mp3")).unwrap(), b"b");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn terms_from_name() {
         let t = Tags::default();
@@ -2092,6 +2501,8 @@ mod tests {
             source: "AcoustID",
             sources: Vec::new(),
             extra_covers: Vec::new(),
+            alts: Vec::new(),
+            agree: Vec::new(),
         };
         let cover = CoverOpt {
             label: "Front".into(),
