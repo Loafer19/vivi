@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog, QrDialog } from "dialogs.slint"
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, KaraokeView, LyricsSearchDialog, KWord, LyricsHit } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
@@ -282,6 +282,29 @@ export component AppWindow inherits Window {
     // Plain (unsynced) lyrics, e.g. radio: a scrollable block without highlight.
     in property <bool> lyrics-plain;
     in property <float> lyrics-size: 22;
+    // Full-screen karaoke view and manual search (Lyrics plugin).
+    in property <bool> lyrics-enabled;
+    in-out property <bool> karaoke-open;
+    in property <[KWord]> lyrics-words;
+    in property <int> lyrics-rows;
+    in property <string> lyrics-source;
+    in property <float> lyrics-offset;
+    in property <string> lyrics-offset-label: "0.0 s";
+    in property <string> lyrics-title;
+    in property <string> lyrics-artist;
+    in property <bool> lyrics-can-save;
+    in property <bool> lyrics-manual;
+    out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
+    // Characters per karaoke row, for wrapping the word-timed current line.
+    out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
+    in-out property <bool> ls-open;
+    in-out property <string> ls-artist;
+    in-out property <string> ls-title;
+    in-out property <int> ls-selected: -1;
+    in property <[LyricsHit]> ls-results;
+    in property <string> ls-status;
+    in property <string> ls-preview;
+    in property <bool> ls-busy;
     in property <bool> subs-plugin;
     in-out property <bool> subs-open;
     in property <[Item]> subs-results;
@@ -359,6 +382,8 @@ export component AppWindow inherits Window {
     in property <[Item]> playlists;
     in property <[Item]> recent;
     in property <string> resume-text;
+    // Only the resume message (this text) offers "Start over"; other toasts just have OK.
+    in property <string> resume-offer;
     callback queue-play(int);
     callback queue-move(int, int);
     callback queue-remove(int);
@@ -629,11 +654,21 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
-    if root.has-media && root.lyrics-lines.length > 0 && !root.library-open && !root.mini: LyricsView {
+    if root.has-media && root.lyrics-lines.length > 0 && !root.library-open && !root.mini && !root.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
         y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - 72px - self.height - 60px;
         lines: root.lyrics-lines; index: root.lyrics-index; size: root.lyrics-size * 1px; plain: root.lyrics-plain;
         backdrop: !(root.viz-audio && root.viz-mode > 0);
+    }
+
+    // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
+    if root.has-media && root.karaoke-open && !root.library-open && !root.mini: KaraokeView {
+        width: root.width; height: root.height;
+        lines: root.lyrics-lines; index: root.lyrics-index; plain: root.lyrics-plain;
+        words: root.lyrics-words; rows: root.lyrics-rows; big: root.karaoke-big;
+        title: root.lyrics-title; artist: root.lyrics-artist; source: root.lyrics-source;
+        offset: root.lyrics-offset-label; can-save: root.lyrics-can-save; manual: root.lyrics-manual;
+        cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); }
     }
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
@@ -687,7 +722,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    if !root.mini && root.has-media && root.viz-audio && !root.library-open && (root.show-ui || top-ta.has-hover): VizDropdown {
+    if !root.mini && root.has-media && root.viz-audio && !root.library-open && !root.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
         x: 12px; y: 50px;
         modes: root.viz-modes; mode: root.viz-mode;
         select(i) => { root.viz-select(i); }
@@ -717,6 +752,9 @@ export component AppWindow inherits Window {
         chapter-times: root.chapter-times;
         viz-modes: root.viz-modes; viz-mode: root.viz-mode;
         viz-select(i) => { root.viz-select(i); }
+        lyrics-enabled: root.lyrics-enabled; karaoke-open: root.karaoke-open; lyrics-source: root.lyrics-source;
+        lyrics-offset: root.lyrics-offset-label; lyrics-can-save: root.lyrics-can-save; lyrics-manual: root.lyrics-manual;
+        lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         open-settings(c) => { root.settings-category = c; root.settings-open = true; root.settings-refresh(c, "", false); }
         queue: root.queue; playlists: root.playlists;
         queue-play(i) => { root.queue-play(i); }
@@ -788,7 +826,7 @@ export component AppWindow inherits Window {
             Text { text: root.resume-text; color: #D1D1D1; font-size: 16px; vertical-alignment: center; }
             HorizontalLayout {
                 spacing: 10px; padding-top: 10px; padding-bottom: 10px;
-                Rectangle {
+                if root.resume-offer != "" && root.resume-offer == root.resume-text: Rectangle {
                     width: so.preferred-width + 20px; border-radius: Theme.radius-lg; background: Theme.accent-bg;
                     so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
                     TouchArea { mouse-cursor: pointer; clicked => { root.start-over(); } }
@@ -1096,6 +1134,14 @@ export component AppWindow inherits Window {
         primary(i) => { root.plugin-command(root.md-owner, "primary", i); }
         secondary(i) => { root.plugin-command(root.md-owner, "secondary", i); }
         close => { root.md-open = false; root.plugin-command(root.md-owner, "close", ""); fs.focus(); }
+    }
+
+    // ---------- Find Lyrics (Lyrics plugin) ----------
+    if root.ls-open: LyricsSearchDialog {
+        width: root.width; height: root.height;
+        results: root.ls-results; status: root.ls-status; preview: root.ls-preview; busy: root.ls-busy;
+        artist <=> root.ls-artist; title <=> root.ls-title; selected <=> root.ls-selected;
+        cmd(n, a) => { root.plugin-command("lyrics", n, a); if (n == "search-close") { fs.focus(); } }
     }
 
     // ---------- Auto-tagger review ----------

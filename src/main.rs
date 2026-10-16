@@ -405,6 +405,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             _ if !ctrl && (s == "n" || s == "N") => p.playlist_step(!shift),
+            // Lyrics: L karaoke view, Ctrl+L search, [ ] timing offset (Shift: 0.5 s).
+            _ if s == "l" || s == "L" => {
+                let cmd = if ctrl { "search-open" } else { "karaoke" };
+                crate::plugins::command(plugins::lyrics::ID, cmd, &[]);
+            }
+            _ if !ctrl && matches!(s, "[" | "]" | "{" | "}") => {
+                let big = shift || s == "{" || s == "}";
+                let d = if big { 0.5 } else { 0.1 };
+                let d = if s == "[" || s == "{" { -d } else { d };
+                crate::plugins::command(plugins::lyrics::ID, "offset", &[d.to_string()]);
+            }
             _ if !ctrl && (s == "r" || s == "R") => {
                 if let Some(a) = weak.upgrade() {
                     a.invoke_toggle_record();
@@ -437,6 +448,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else if a.window().is_fullscreen() {
                         a.window().set_fullscreen(false);
                         a.set_fullscreen(false);
+                    } else if a.get_ls_open() {
+                        crate::plugins::command(plugins::lyrics::ID, "search-close", &[]);
+                    } else if a.get_karaoke_open() {
+                        a.set_karaoke_open(false);
                     } else if a.get_customize_open() {
                         a.invoke_customize_done(false);
                     } else if a.get_subs_open() {
@@ -987,9 +1002,9 @@ fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
         }
         if t > 5.0 {
             let s = t as i64;
-            a.set_resume_text(
-                format!("Resumed from {}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60).into(),
-            );
+            let msg = format!("Resumed from {}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60);
+            a.set_resume_offer(msg.as_str().into());
+            a.set_resume_text(msg.into());
             let w = a.as_weak();
             slint::Timer::single_shot(Duration::from_secs(8), move || {
                 if let Some(a) = w.upgrade() {

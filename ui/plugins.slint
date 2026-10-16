@@ -695,3 +695,322 @@ export component TagReviewDialog inherits Rectangle {
         }
     }
 }
+
+// ---------- Lyrics: full-screen karaoke view and manual search (src/plugins/lyrics.rs) ----------
+// A word of the current line (enhanced LRC): `progress` 0..1 drives the accent wipe.
+export struct KWord { text: string, gap: bool, row: int, progress: float }
+export struct LyricsHit { title: string, artist: string, album: string, duration: string, synced: bool, close: bool }
+
+// Rounded pill button of the karaoke header.
+component KPill inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 34px; width: (root.has-icon ? 23px : 0px) + kt.preferred-width + 30px; border-radius: 17px;
+    background: root.primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent) : (ta.has-hover ? #FFFFFF22 : #FFFFFF12);
+    border-width: 1px; border-color: root.primary ? transparent : #FFFFFF1A;
+    opacity: root.enabled ? 1 : 0.4;
+    animate background { duration: 120ms; }
+    if root.has-icon: Icon { x: 15px; y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: root.icon; tint: root.primary ? Theme.bg-b2 : #FFFFFFCC; }
+    kt := Text { x: root.has-icon ? 38px : 15px; width: self.preferred-width; height: parent.height; text: root.text; color: root.primary ? Theme.bg-b2 : #FFFFFFE0; font-size: 13px; font-weight: 600; vertical-alignment: center; }
+    ta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Full-screen karaoke: the current line large and centred in the accent colour (with a
+// word-by-word wipe for enhanced LRC), past lines dimmed above, upcoming lines below;
+// the list glides as lines change. Header: track, source, timing offset, search, save.
+export component KaraokeView inherits Rectangle {
+    in property <[string]> lines;
+    in property <int> index: -1;
+    in property <bool> plain;
+    in property <[KWord]> words;
+    in property <int> rows;
+    in property <string> title;
+    in property <string> artist;
+    in property <string> source;
+    in property <string> offset;
+    in property <bool> can-save;
+    in property <bool> manual;
+    in property <length> big: 48px;
+    callback cmd(string, string);
+    property <length> small: root.big * 0.55;
+    property <length> pitch: root.small * 1.85;
+    property <length> line-h: root.big * 1.28;
+    property <length> cur-h: root.line-h * (root.rows > 0 ? root.rows : 2) + 12px;
+    property <length> side: max(40px, root.width * 0.08);
+    background: #0A0A0A;
+    clip: true;
+    TouchArea { }   // swallow clicks on the backdrop
+    // Soft accent glow behind the current line.
+    Rectangle {
+        y: root.height * 0.18; height: root.height * 0.64;
+        background: @radial-gradient(circle, Theme.accent.with-alpha(0.13) 0%, Theme.accent.with-alpha(0.04) 45%, transparent 75%);
+    }
+
+    area := Rectangle {
+        y: 112px; height: root.height - 112px - 120px;
+        clip: true;
+        property <length> mid: self.height / 2;
+        if !root.plain: Rectangle {
+            for l[i] in root.lines: Text {
+                property <int> d: i - root.index;
+                property <bool> cur: i == root.index;
+                visible: abs(self.d) <= 8;
+                x: root.side; width: area.width - 2 * root.side;
+                height: self.cur ? root.cur-h : root.pitch;
+                y: self.cur ? area.mid - root.cur-h / 2
+                    : self.d < 0 ? area.mid - root.cur-h / 2 + self.d * root.pitch
+                    : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
+                animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
+                text: l == "" ? "♪" : l;
+                font-size: self.cur ? root.big : root.small;
+                animate font-size { duration: 320ms; easing: ease-out; }
+                font-weight: self.cur ? 800 : 600;
+                wrap: word-wrap; overflow: elide;
+                horizontal-alignment: center; vertical-alignment: center;
+                color: self.cur ? Theme.accent : #FFFFFF;
+                opacity: self.cur ? (root.rows > 0 ? 0 : 1) : max(0.07, (self.d < 0 ? 0.30 : 0.58) - (abs(self.d) - 1) * 0.085);
+                animate opacity, color { duration: 260ms; }
+            }
+            // Word-level wipe of the current line (enhanced LRC).
+            if root.rows > 0 && root.index >= 0: VerticalLayout {
+                x: root.side; width: area.width - 2 * root.side;
+                y: area.mid - root.cur-h / 2; height: root.cur-h;
+                alignment: center;
+                for r in root.rows: HorizontalLayout {
+                    alignment: center; height: root.line-h;
+                    for w in root.words: Rectangle {
+                        property <bool> on: w.row == r;
+                        visible: self.on;
+                        width: self.on ? base.preferred-width + (w.gap ? root.big * 0.27 : 0px) : 0px;
+                        base := Text {
+                            x: 0; y: 0; width: self.preferred-width; height: root.line-h;
+                            text: w.text; font-size: root.big; font-weight: 800;
+                            color: #FFFFFF; opacity: 0.4; vertical-alignment: center;
+                        }
+                        Rectangle {
+                            x: 0; y: 0; height: root.line-h; clip: true;
+                            width: base.preferred-width * w.progress;
+                            animate width { duration: 110ms; easing: linear; }
+                            Text {
+                                x: 0; y: 0; width: base.preferred-width; height: root.line-h;
+                                text: w.text; font-size: root.big; font-weight: 800;
+                                color: Theme.accent; vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Plain lyrics: the whole text, scroll with the wheel or by dragging.
+        if root.plain: Flickable {
+            x: root.side; width: area.width - 2 * root.side;
+            content-height: pcol.preferred-height;
+            pcol := VerticalLayout {
+                padding-top: 24px; padding-bottom: 48px; spacing: 4px;
+                for l in root.lines: Text {
+                    text: l; wrap: word-wrap; horizontal-alignment: center;
+                    font-size: root.small * 1.05; font-weight: 600; color: l == "" ? transparent : #FFFFFF; opacity: 0.86;
+                    min-height: root.small * 0.9;
+                }
+            }
+        }
+        // Fade the list out towards the top and bottom.
+        if !root.plain: Rectangle { y: 0; height: 90px; background: @linear-gradient(180deg, #0A0A0A 0%, #0A0A0A00 100%); }
+        if !root.plain: Rectangle { y: parent.height - 90px; height: 90px; background: @linear-gradient(180deg, #0A0A0A00 0%, #0A0A0A 100%); }
+        // No lyrics yet.
+        if root.lines.length == 0: VerticalLayout {
+            alignment: center; spacing: 14px;
+            HorizontalLayout { alignment: center;
+                Rectangle { width: 76px; height: 76px; border-radius: 38px; background: Theme.accent.with-alpha(0.14);
+                    Icon { width: 34px; height: 34px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; } } }
+            Text { text: root.source == "Searching LRCLIB…" ? "Looking for lyrics…" : "No lyrics for this track"; color: #FFFFFF; font-size: 24px; font-weight: 700; horizontal-alignment: center; }
+            Text { text: "Search LRCLIB by artist and title, or put a .lrc file next to the song."; color: Theme.fg-a2; font-size: 14px; horizontal-alignment: center; }
+            HorizontalLayout { alignment: center; padding-top: 6px;
+                KPill { primary: true; text: "Search lyrics…"; has-icon: true; icon: @image-url("../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
+        }
+    }
+
+    // Header: track on the left, actions on the right.
+    Rectangle {
+        y: 40px; height: 72px;
+        background: @linear-gradient(180deg, #0A0A0A 0%, #0A0A0A00 100%);
+        HorizontalLayout {
+            padding-left: root.side; padding-right: 20px; spacing: 10px;
+            VerticalLayout {
+                alignment: center; horizontal-stretch: 1; spacing: 2px;
+                Text { text: root.title == "" ? "Lyrics" : root.title; color: #FFFFFF; font-size: 20px; font-weight: 700; overflow: elide; }
+                HorizontalLayout { spacing: 8px; alignment: start;
+                    if root.artist != "": Text { text: root.artist; color: Theme.fg-a2; font-size: 14px; overflow: elide; vertical-alignment: center; }
+                    if root.artist != "": Text { text: "·"; color: Theme.fg-a3; font-size: 14px; vertical-alignment: center; }
+                    Text { text: root.source; color: Theme.accent; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                }
+            }
+            // Timing offset stepper.
+            VerticalLayout { alignment: center;
+                Rectangle {
+                    height: 34px; width: orow.preferred-width; border-radius: 17px; background: #FFFFFF12;
+                    border-width: 1px; border-color: #FFFFFF1A;
+                    orow := HorizontalLayout {
+                        Rectangle { width: 40px; border-radius: 17px; background: m.has-hover ? #FFFFFF22 : transparent;
+                            Text { text: "−"; color: #FFFFFF; font-size: 17px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            m := TouchArea { mouse-cursor: pointer; clicked => { root.cmd("offset", "-0.1"); } } }
+                        Rectangle { width: 76px;
+                            Text { text: root.offset; color: root.offset == "0.0 s" ? #FFFFFFB0 : Theme.accent; font-family: "DM Mono"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { mouse-cursor: pointer; double-clicked => { root.cmd("offset", "reset"); } } }
+                        Rectangle { width: 40px; border-radius: 17px; background: p.has-hover ? #FFFFFF22 : transparent;
+                            Text { text: "+"; color: #FFFFFF; font-size: 17px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            p := TouchArea { mouse-cursor: pointer; clicked => { root.cmd("offset", "0.1"); } } }
+                    }
+                }
+            }
+            VerticalLayout { alignment: center;
+                KPill { text: "Search"; has-icon: true; icon: @image-url("../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
+            if root.manual: VerticalLayout { alignment: center;
+                KPill { text: "Reset pick"; has-icon: true; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.cmd("forget", ""); } } }
+            if root.can-save: VerticalLayout { alignment: center;
+                KPill { text: "Save .lrc"; has-icon: true; icon: @image-url("../assets/icons/save.svg"); clicked => { root.cmd("save-lrc", ""); } } }
+            if root.can-save: VerticalLayout { alignment: center;
+                KPill { text: "Embed"; clicked => { root.cmd("embed", ""); } } }
+            VerticalLayout { alignment: center;
+                Rectangle { width: 34px; height: 34px; border-radius: 17px; background: xa.has-hover ? #FFFFFF22 : #FFFFFF12;
+                    Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); tint: #FFFFFF; }
+                    xa := TouchArea { mouse-cursor: pointer; clicked => { root.cmd("karaoke", "off"); } } } }
+        }
+    }
+    // Shortcut hint above the player controls.
+    Text {
+        y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
+        text: "L  close   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   Ctrl L  search";
+        color: #FFFFFF55; font-size: 12px;
+    }
+}
+
+component HitRow inherits Rectangle {
+    in property <LyricsHit> hit;
+    in property <bool> selected;
+    callback clicked();
+    callback activated();
+    height: 52px; border-radius: 8px;
+    background: root.selected ? Theme.accent.with-alpha(0.16) : ta.has-hover ? Theme.bg-a1 : transparent;
+    border-width: 1px; border-color: root.selected ? Theme.accent.with-alpha(0.6) : transparent;
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; spacing: 12px;
+        VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 2px;
+            Text { text: root.hit.title; color: Theme.fg-1; font-size: 14px; font-weight: 600; overflow: elide; }
+            Text { text: root.hit.artist + (root.hit.album != "" ? "  ·  " + root.hit.album : ""); color: Theme.fg-a2; font-size: 12px; overflow: elide; }
+        }
+        if root.hit.duration != "": Text {
+            text: root.hit.duration; vertical-alignment: center; font-family: "DM Mono"; font-size: 13px;
+            color: root.hit.close ? Theme.accent : Theme.fg-a2;
+        }
+        VerticalLayout { alignment: center;
+            Rectangle {
+                width: 64px; height: 22px; border-radius: 11px;
+                background: root.hit.synced ? Theme.accent.with-alpha(0.22) : Theme.bg-a1;
+                Text { text: root.hit.synced ? "Synced" : "Plain"; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center;
+                    color: root.hit.synced ? Theme.accent-bright : Theme.fg-a2; }
+            }
+        }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
+// Find Lyrics: edit artist and title, search LRCLIB, pick a result (synced first, the
+// duration in accent when it matches the playing file within 3 s) with a preview.
+export component LyricsSearchDialog inherits Rectangle {
+    in property <[LyricsHit]> results;
+    in property <string> status;
+    in property <string> preview;
+    in property <bool> busy;
+    in-out property <string> artist;
+    in-out property <string> title;
+    in-out property <int> selected: -1;
+    callback cmd(string, string);
+    property <bool> ok: root.selected >= 0 && root.selected < root.results.length && !root.busy;
+    background: #000000A0;
+    TouchArea { clicked => { root.cmd("search-close", ""); } }
+    Rectangle {
+        width: min(940px, root.width - 32px); height: min(660px, root.height - 32px);
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
+        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
+        drop-shadow-blur: 24px; drop-shadow-color: #00000080;
+        clip: true;
+        TouchArea { }
+        VerticalLayout {
+            Rectangle {
+                height: 44px; background: Theme.bg-b1;
+                HorizontalLayout {
+                    padding-left: 16px; padding-right: 8px; spacing: 8px;
+                    Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; }
+                    Text { horizontal-stretch: 1; text: "Find Lyrics"; color: Theme.fg-1; font-size: 14px; font-weight: 600; vertical-alignment: center; }
+                    Text { text: "LRCLIB"; color: Theme.fg-a3; font-size: 12px; vertical-alignment: center; }
+                    VerticalLayout { alignment: center;
+                        Rectangle { width: 30px; height: 30px; border-radius: Theme.radius; background: cx.has-hover ? Theme.bg-a1 : transparent;
+                            Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); }
+                            cx := TouchArea { mouse-cursor: pointer; clicked => { root.cmd("search-close", ""); } } } }
+                }
+            }
+            HorizontalLayout {
+                padding: 12px; spacing: 8px;
+                VerticalLayout { horizontal-stretch: 2; spacing: 4px;
+                    Text { text: "Artist"; color: Theme.fg-a3; font-size: 11px; }
+                    TextField { height: 36px; text <=> root.artist; placeholder: "Artist (optional)"; accepted => { root.selected = -1; root.cmd("search", ""); } } }
+                VerticalLayout { horizontal-stretch: 3; spacing: 4px;
+                    Text { text: "Title"; color: Theme.fg-a3; font-size: 11px; }
+                    TextField { height: 36px; text <=> root.title; placeholder: "Song title"; accepted => { root.selected = -1; root.cmd("search", ""); } } }
+                VerticalLayout { alignment: end;
+                    Rectangle {
+                        width: 104px; height: 36px; border-radius: 6px; background: sa.has-hover ? Theme.accent-bright : Theme.accent; opacity: root.busy ? 0.5 : 1;
+                        HorizontalLayout { alignment: center; spacing: 6px;
+                            Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: @image-url("../assets/icons/search.svg"); tint: Theme.bg-b2; }
+                            Text { text: root.busy ? "Searching" : "Search"; color: Theme.bg-b2; font-weight: 600; font-size: 13px; vertical-alignment: center; } }
+                        sa := TouchArea { enabled: !root.busy; mouse-cursor: pointer; clicked => { root.selected = -1; root.cmd("search", ""); } }
+                    }
+                }
+            }
+            HorizontalLayout {
+                vertical-stretch: 1; padding-left: 12px; padding-right: 12px; spacing: 12px;
+                Rectangle {
+                    horizontal-stretch: 3;
+                    ScrollView {
+                        VerticalLayout { spacing: 2px; alignment: start;
+                            for h[i] in root.results: HitRow {
+                                hit: h; selected: i == root.selected;
+                                clicked => { root.selected = i; root.cmd("search-select", i); }
+                                activated => { root.selected = i; root.cmd("search-use", i); }
+                            }
+                        }
+                    }
+                    if root.results.length == 0: Text {
+                        width: parent.width - 32px; x: 16px; horizontal-alignment: center; vertical-alignment: center; wrap: word-wrap;
+                        text: root.status; color: Theme.fg-a2; font-size: 13px;
+                    }
+                }
+                Rectangle {
+                    horizontal-stretch: 2; border-radius: 8px; background: Theme.bg-b1; border-width: 1px; border-color: Theme.bg-a1;
+                    ScrollView {
+                        VerticalLayout { padding: 14px; alignment: start;
+                            Text { text: root.preview == "" ? "Select a result to preview its lyrics." : root.preview; wrap: word-wrap;
+                                color: root.preview == "" ? Theme.fg-a3 : Theme.fg-2; font-size: 13px; }
+                        }
+                    }
+                }
+            }
+            HorizontalLayout {
+                padding: 12px; padding-left: 16px; spacing: 8px;
+                Text { horizontal-stretch: 1; text: root.results.length > 0 ? root.status : ""; color: Theme.fg-a2; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                FlatButton { text: "Cancel"; clicked => { root.cmd("search-close", ""); } }
+                FlatButton { text: "Use plain text"; enabled: root.ok; clicked => { root.cmd("search-plain", root.selected); } }
+                Rectangle {
+                    width: 120px; height: 32px; border-radius: 6px; background: Theme.accent; opacity: root.ok ? 1 : 0.5;
+                    Text { text: "Use lyrics"; color: Theme.bg-b2; font-weight: 600; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { enabled: root.ok; mouse-cursor: pointer; clicked => { root.cmd("search-use", root.selected); } }
+                }
+            }
+        }
+    }
+}

@@ -790,8 +790,7 @@ fn write_sylt(path: &Path, lrc: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Text of the SYLT frame of an MP3 as (ms, line), for tests and the preview.
-#[cfg(test)]
+/// Text of the SYLT frame of an MP3 as (ms, line) (Lyrics plugin, tests).
 pub fn read_sylt(path: &Path) -> Vec<(u32, String)> {
     use lofty::config::ParseOptions;
     use lofty::id3::v2::{Frame, FrameFlags, FrameId, SynchronizedTextFrame};

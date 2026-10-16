@@ -309,6 +309,14 @@ export component SidePanel inherits Rectangle {
     in property <[string]> viz-modes: ["Disabled"];
     in property <int> viz-mode;
     callback viz-select(int);
+    // Lyrics plugin: karaoke toggle, timing offset, search and save (cmd → plugin-command).
+    in property <bool> lyrics-enabled;
+    in property <bool> karaoke-open;
+    in property <string> lyrics-source;
+    in property <string> lyrics-offset;
+    in property <bool> lyrics-can-save;
+    in property <bool> lyrics-manual;
+    callback lyrics(string, string);
     // Settings-window category to open (see settings.rs CATEGORIES).
     callback open-settings(int);
 
@@ -415,6 +423,29 @@ export component SidePanel inherits Rectangle {
                                 selected(i, o) => { root.sleep(i == 0 ? 0 : i == 1 ? 15 : i == 2 ? 30 : i == 3 ? 60 : -1); } } }
                         Line { label: "A-B Loop"; hint: root.ab-state;
                             Button { width: 110px; text: "Set A / B"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } } }
+                    }
+                    if root.lyrics-enabled: Group { title: "Lyrics";
+                        Line { label: "Karaoke View"; hint: "Full-screen lyrics · L";
+                            Toggle { on: root.karaoke-open; toggled => { root.lyrics("karaoke", root.karaoke-open ? "off" : "on"); } } }
+                        Line { label: "Timing Offset"; hint: "Saved per track · [ ] ±0.1 s, Shift ±0.5 s";
+                            HorizontalLayout { spacing: 4px;
+                                for d in [-0.5, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: oa.has-hover ? Field.raised : Field.fill;
+                                    Text { text: d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    oa := TouchArea { mouse-cursor: pointer; clicked => { root.lyrics("offset", d); } } }
+                                Rectangle { width: 64px; height: 26px; border-radius: 5px; background: Field.fill;
+                                    Text { text: root.lyrics-offset; font-family: "DM Mono"; font-size: 12px; color: root.lyrics-offset == "0.0 s" ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
+                                    TouchArea { mouse-cursor: pointer; double-clicked => { root.lyrics("offset", "reset"); } } }
+                                for d in [0.1, 0.5]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: ob.has-hover ? Field.raised : Field.fill;
+                                    Text { text: "+" + d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    ob := TouchArea { mouse-cursor: pointer; clicked => { root.lyrics("offset", d); } } }
+                            } }
+                        Line { label: "Source"; hint: root.lyrics-source;
+                            HorizontalLayout { spacing: 6px;
+                                if root.lyrics-manual: Button { width: 86px; text: "Reset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.lyrics("forget", ""); } }
+                                Button { width: 110px; text: "Search…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.lyrics("search-open", ""); } } } }
+                        if root.lyrics-can-save: HorizontalLayout { spacing: 8px;
+                            Button { horizontal-stretch: 1; text: "Save as .lrc"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.lyrics("save-lrc", ""); } }
+                            Button { horizontal-stretch: 1; text: "Embed in tags"; icon: @image-url("../assets/icons/music.svg"); clicked => { root.lyrics("embed", ""); } } }
                     }
                     AdvancedLink { clicked => { root.open-settings(4); } }
                 }

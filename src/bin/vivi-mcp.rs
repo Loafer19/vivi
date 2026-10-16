@@ -134,7 +134,7 @@ fn tools() -> Vec<(&'static str, &'static str, Value, &'static str)> {
         ("list_plugins", "Installed plugins (id, name, version, kind, enabled). Read-only.", none.clone(), "plugins"),
         ("plugin_info", "Details of one plugin: description, version, author, settings (keys and titles, no values). Read-only.",
             json!({ "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }), "plugin_info"),
-        ("get_lyrics", "Lyrics shown for the current track (from the Lyrics plugin: lines, synced flag, current line index). Empty when none are loaded.", none.clone(), "lyrics"),
+        ("get_lyrics", "Lyrics shown for the current track (from the Lyrics plugin: lines, synced flag, current line index, source, timing offset in seconds, whether the karaoke view is open). Empty when none are loaded.", none.clone(), "lyrics"),
     ]
 }
 
