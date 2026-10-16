@@ -1,0 +1,5 @@
+{"responseHeader": {"status": 0}, "response": {"numFound": 40, "start": 0, "docs": [
+  {"identifier": "night_sessions", "downloads": 1234},
+  {"identifier": "other_item"},
+  {"downloads": 5}
+]}}

@@ -1,0 +1,21 @@
+{"headers": {"status": "success", "code": 0, "error_message": "", "results_count": 3},
+ "results": [
+  {"id": "1532771", "name": "That&#039;s Life", "duration": 187, "artist_id": "7123", "artist_name": "Yellow Faces",
+   "album_name": "Season One", "album_id": "104336", "releasedate": "2018-03-02",
+   "license_ccurl": "http://creativecommons.org/licenses/by-sa/3.0/", "position": 1,
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=1532771&format=mp31",
+   "audiodownload": "https://prod-1.storage.jamendo.com/download/track/1532771/mp32/", "audiodownload_allowed": true,
+   "image": "https://usercontent.jamendo.com?type=album&id=104336&width=300&trackid=1532771",
+   "shareurl": "https://www.jamendo.com/track/1532771",
+   "musicinfo": {"vocalinstrumental": "vocal", "tags": {"genres": ["rock", "pop"], "instruments": ["guitar"], "vartags": ["happy", "energetic"]}}},
+  {"id": "2", "name": "Ambient Chill", "duration": 67, "artist_id": "9", "artist_name": "Fasharill", "album_name": "Calm", "album_id": "5",
+   "releasedate": "2021-01-01", "license_ccurl": "http://creativecommons.org/licenses/by-nc-nd/3.0/",
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=2&format=mp31", "audiodownload": "https://x/2", "audiodownload_allowed": false,
+   "image": "", "shareurl": "https://www.jamendo.com/track/2",
+   "musicinfo": {"tags": {"genres": ["ambient"], "instruments": [], "vartags": []}}},
+  {"id": "3", "name": "Lofi Piano Night", "duration": 183, "artist_id": "10", "artist_name": "AbsoluteSound", "album_name": "", "album_id": "",
+   "releasedate": "2023-05-01", "license_ccurl": "http://creativecommons.org/licenses/by/3.0/",
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=3&format=mp31", "audiodownload": "https://x/3", "audiodownload_allowed": true,
+   "image": "https://usercontent.jamendo.com?type=album&id=6&width=300", "shareurl": "https://www.jamendo.com/track/3"},
+  {"id": "4", "name": "No stream", "audio": "", "artist_name": "X"}
+ ]}

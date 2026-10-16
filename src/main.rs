@@ -763,6 +763,21 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             let p = player.clone();
             slint::Timer::single_shot(Duration::from_millis(2000), move || p.set_volume(v));
         }
+        // `VIVI_PLUGIN_CMDS="free-music open|free-music chip Jazz"`: plugin commands,
+        // one every 4 s (screenshots of plugin dialogs).
+        if let Ok(cmds) = std::env::var("VIVI_PLUGIN_CMDS") {
+            app.set_onboarding_open(false);
+            for (i, c) in cmds.split('|').enumerate() {
+                let parts: Vec<String> = c.split_whitespace().map(String::from).collect();
+                if parts.len() < 2 {
+                    continue;
+                }
+                let at = Duration::from_millis(2500 + 4000 * i as u64);
+                slint::Timer::single_shot(at, move || {
+                    plugins::command(&parts[0], &parts[1], &parts[2..]);
+                });
+            }
+        }
         if let Ok(m) = std::env::var("VIVI_MINI") {
             let weak = app.as_weak();
             slint::Timer::single_shot(Duration::from_millis(2500), move || {

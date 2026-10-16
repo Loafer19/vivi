@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog, QrDialog } from "dialogs.slint"
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
@@ -319,6 +319,10 @@ export component AppWindow inherits Window {
     in property <[string]> md-chips;
     in property <string> md-chip;
     in property <[string]> md-actions;
+    in property <[FmRow]> md-tracks;    // Free Music rows
+    in property <[MdFilter]> md-filters;
+    in property <string> md-copy;
+    in property <bool> md-has-more;
     // Network stream loading overlay (core, see loading.rs).
     in property <bool> loading-show;
     in property <bool> loading-buffering;
@@ -1077,8 +1081,14 @@ export component AppWindow inherits Window {
         detail: root.md-detail; placeholder: root.md-placeholder; search-label: root.md-search-label;
         primary-text: root.md-primary; secondary-text: root.md-secondary; sources: root.md-sources;
         source <=> root.md-source; query <=> root.md-query;
-        chips: root.md-owner == "network-streams" ? root.md-chips : []; chip: root.md-chip;
-        actions: root.md-owner == "network-streams" ? root.md-actions : [];
+        chips: root.md-owner == "network-streams" || root.md-owner == "free-music" ? root.md-chips : []; chip: root.md-chip;
+        actions: root.md-owner == "network-streams" || root.md-owner == "free-music" ? root.md-actions : [];
+        rich: root.md-owner == "free-music"; tracks: root.md-owner == "free-music" ? root.md-tracks : [];
+        filters: root.md-owner == "free-music" ? root.md-filters : []; copy-text: root.md-copy;
+        has-more: root.md-owner == "free-music" && root.md-has-more;
+        filter(n, v) => { root.plugin-command(root.md-owner, "filter", n + "\u{1f}" + v); }
+        more => { root.plugin-command(root.md-owner, "more", ""); }
+        edited => { if root.md-owner == "free-music" { root.plugin-command(root.md-owner, "edited", ""); } }
         chip-clicked(c) => { root.plugin-command(root.md-owner, "chip", c); }
         action(n, i) => { root.plugin-command(root.md-owner, "act:" + n, i); }
         search => { root.plugin-command(root.md-owner, "search", ""); }

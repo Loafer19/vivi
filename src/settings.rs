@@ -959,7 +959,7 @@ fn browse(r: &mut Rows) {
     );
 }
 
-fn open_url(u: &str) {
+pub(crate) fn open_url(u: &str) {
     #[cfg(target_os = "windows")]
     let r = std::process::Command::new("explorer").arg(u).spawn();
     #[cfg(target_os = "macos")]

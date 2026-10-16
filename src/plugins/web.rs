@@ -14,8 +14,13 @@ pub fn user_agent() -> String {
 }
 
 pub fn agent() -> ureq::Agent {
+    agent_with_timeout(30)
+}
+
+/// Agent whose whole request (connect + body) gives up after `secs`.
+pub fn agent_with_timeout(secs: u64) -> ureq::Agent {
     ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(30)))
+        .timeout_global(Some(Duration::from_secs(secs)))
         .user_agent(user_agent())
         .http_status_as_error(false)
         .build()
@@ -42,7 +47,19 @@ pub fn get_json(
     query: &[(&str, &str)],
     what: &str,
 ) -> Result<serde_json::Value, String> {
-    let mut req = agent().get(url).header("Accept", "application/json");
+    get_json_timeout(url, query, what, 30)
+}
+
+/// [`get_json`] with its own overall timeout in seconds.
+pub fn get_json_timeout(
+    url: &str,
+    query: &[(&str, &str)],
+    what: &str,
+    secs: u64,
+) -> Result<serde_json::Value, String> {
+    let mut req = agent_with_timeout(secs)
+        .get(url)
+        .header("Accept", "application/json");
     for (k, v) in query {
         req = req.query(*k, *v);
     }

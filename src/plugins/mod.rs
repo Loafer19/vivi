@@ -160,9 +160,22 @@ pub struct Ctx<'a> {
     id: &'a str,
     manifest: &'a Manifest,
     cfg: &'a Rc<RefCell<Config>>,
+    scripts: &'a [scripts::Script],
 }
 
 impl Ctx<'_> {
+    /// mpv script name of an enabled downloadable plugin (package) `id`, for
+    /// `script-message-to` (e.g. `offline-downloads` → `offline_downloads`).
+    pub fn package_script(&self, id: &str) -> Option<String> {
+        let s = self
+            .scripts
+            .iter()
+            .find(|s| s.manifest.id == id && s.manifest.origin == Origin::Package)?;
+        is_enabled(&self.cfg.borrow(), &s.manifest)
+            .then(|| s.path.file_stem())
+            .flatten()
+            .map(|n| n.to_string_lossy().replace('-', "_"))
+    }
     /// A setting value (or the manifest default).
     pub fn get(&self, key: &str) -> String {
         setting_value(&self.cfg.borrow(), self.manifest, key)
@@ -275,6 +288,7 @@ macro_rules! ctx {
             id: &$e.manifest.id,
             manifest: &$e.manifest,
             cfg: &$reg.cfg,
+            scripts: &$reg.scripts,
         }
     };
 }

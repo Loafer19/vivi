@@ -252,6 +252,66 @@ export component SubtitleDialog inherits Rectangle {
     }
 }
 
+// Free Music result row (src/plugins/free_music.rs): cover, title, artist · album,
+// source badge, licence chip (green when commercial use is allowed), duration.
+export struct FmRow { title: string, sub: string, badge: string, lic: string, free: bool, dur: string, cover: image, has-cover: bool, dl: bool, selected: bool }
+// A dropdown filter of the shared music dialog (Free Music: mood, licence, length, sort).
+export struct MdFilter { name: string, options: [string], value: string }
+
+component TrackRow inherits Rectangle {
+    in property <FmRow> fm;
+    callback clicked();
+    callback activated();
+    callback play();
+    callback queue();
+    callback download();
+    height: 52px; border-radius: 6px;
+    background: fm.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
+    HorizontalLayout {
+        padding-left: 6px; padding-right: 10px; spacing: 10px;
+        Rectangle {
+            y: 6px; width: 40px; height: 40px; border-radius: 4px; clip: true;
+            background: Theme.accent.with-alpha(0.15);
+            if root.fm.has-cover: Image { width: parent.width; height: parent.height; source: root.fm.cover; image-fit: cover; }
+            if !root.fm.has-cover: Icon { x: 10px; y: 10px; width: 20px; height: 20px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1; alignment: center; spacing: 2px;
+            Text { text: root.fm.title; color: fm.selected ? Theme.accent-bright : Theme.fg-1; font-size: 13px; font-weight: 600; overflow: elide; }
+            Text { text: root.fm.sub; color: Theme.fg-a2; font-size: 12px; overflow: elide; }
+        }
+        VerticalLayout { alignment: center;
+            Rectangle {
+                width: bt.preferred-width + 12px; height: 18px; border-radius: 9px;
+                background: root.fm.badge == "Jamendo" ? #2A6FDB40 : root.fm.badge == "FMA" ? #B03A9A40 : #8A8A8A30;
+                bt := Text { text: root.fm.badge; color: Theme.fg-2; font-size: 10px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+        VerticalLayout { alignment: center;
+            Rectangle {
+                width: max(64px, lt.preferred-width + 12px); height: 18px; border-radius: 9px;
+                border-width: 1px; border-color: root.fm.free ? #3FAE5A : Theme.divider;
+                background: root.fm.free ? #3FAE5A26 : transparent;
+                lt := Text { text: root.fm.lic; color: root.fm.free ? #7FD18F : Theme.fg-a2; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+        Text { width: 40px; text: root.fm.dur; color: Theme.fg-a3; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; }
+        for b[k] in [
+            { icon: @image-url("../assets/icons/play.svg"), tip: "Play", on: true },
+            { icon: @image-url("../assets/icons/queue.svg"), tip: "Add to queue", on: true },
+            { icon: @image-url("../assets/icons/arrow-down.svg"), tip: "Download", on: root.fm.dl },
+        ]: Rectangle {
+            y: 12px; width: 28px; height: 28px; border-radius: 14px;
+            opacity: (ta.has-hover || root.fm.selected) ? (b.on ? 1 : 0.3) : (k == 2 && b.on ? 0.45 : 0);
+            background: bta.has-hover && b.on ? Theme.accent.with-alpha(0.25) : transparent;
+            Icon { x: 6px; y: 6px; width: 16px; height: 16px; source: b.icon; tint: bta.has-hover ? Theme.accent-bright : Theme.fg-a2; }
+            bta := TouchArea { enabled: b.on; mouse-cursor: pointer;
+                clicked => { if k == 0 { root.play(); } else if k == 1 { root.queue(); } else { root.download(); } } }
+        }
+    }
+    ta := TouchArea { z: -1; mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
 // Shared dialog of the music plugins (Auto-tagger, Free Music): optional source
 // dropdown, query + search button, result list, a detail pane (tag diff or licence),
 // status line and two actions. The owner plugin id routes the callbacks.
@@ -272,7 +332,15 @@ export component MusicDialog inherits Rectangle {
     in property <[string]> chips;   // optional filter chips (Network Streams groups / categories)
     in property <string> chip;
     in property <[string]> actions; // optional extra footer buttons
+    in property <[FmRow]> tracks;     // Free Music rows (replace `results` rendering when set)
+    in property <bool> rich;          // render `tracks` (Free Music)
+    in property <[MdFilter]> filters; // optional dropdown filters under the chips
+    in property <string> copy-text;   // text the "Copy credit" action puts on the clipboard
+    in property <bool> has-more;      // scrolling to the end asks for more
     callback chip-clicked(string);
+    callback filter(string, string);
+    callback more();
+    callback edited();
     callback action(string, int);
     callback search();
     callback select(int);
@@ -283,7 +351,7 @@ export component MusicDialog inherits Rectangle {
     background: #000000A0;
     TouchArea { clicked => { root.close(); } }
     Rectangle {
-        width: min(900px, root.width - 32px); height: min(640px, root.height - 32px);
+        width: min(root.rich ? 1060px : 900px, root.width - 32px); height: min(root.rich ? 720px : 640px, root.height - 32px);
         x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
         background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
         clip: true;
@@ -313,6 +381,7 @@ export component MusicDialog inherits Rectangle {
                         x: 28px; width: parent.width - 30px; height: parent.height; background: transparent;
                         text <=> root.query; placeholder: root.placeholder;
                         accepted => { root.selected = -1; root.search(); }
+                        edited => { root.edited(); }
                     }
                 }
                 FlatButton { height: 36px; text: root.busy ? "…" : root.search-label; enabled: !root.busy; clicked => { root.selected = -1; root.search(); } }
@@ -330,11 +399,39 @@ export component MusicDialog inherits Rectangle {
                     }
                 }
             }
+            if root.filters.length > 0: HorizontalLayout {
+                padding-left: 12px; padding-right: 12px; padding-bottom: 8px; spacing: 8px;
+                for f in root.filters: Dropdown {
+                    horizontal-stretch: 1; height: 32px; options: f.options; value: f.value;
+                    selected(i, o) => { root.selected = -1; root.filter(f.name, o); }
+                }
+            }
             HorizontalLayout {
                 vertical-stretch: 1; padding-left: 12px; padding-right: 12px; spacing: 12px;
                 Rectangle {
-                    horizontal-stretch: 3;
-                    ScrollView {
+                    horizontal-stretch: root.rich ? 5 : 3;
+                    if root.rich: sv := ScrollView {
+                        changed content-y => {
+                            if root.has-more && self.content-height > self.visible-height
+                                && -self.content-y > self.content-height - self.visible-height - 160px { root.more(); }
+                        }
+                        VerticalLayout {
+                            spacing: 2px; alignment: start;
+                            for r[i] in root.tracks: TrackRow {
+                                fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                clicked => { root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                                play => { root.selected = i; root.select(i); root.primary(i); }
+                                queue => { root.action("Queue", i); }
+                                download => { root.selected = i; root.select(i); root.secondary(i); }
+                            }
+                            if root.has-more: Rectangle { height: 40px;
+                                Text { text: "Load more"; color: Theme.accent; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                TouchArea { mouse-cursor: pointer; clicked => { root.more(); } }
+                            }
+                        }
+                    }
+                    if !root.rich: ScrollView {
                         VerticalLayout {
                             spacing: 2px; alignment: start;
                             for r[i] in root.results: SubRow {
@@ -348,7 +445,7 @@ export component MusicDialog inherits Rectangle {
                     }
                 }
                 Rectangle {
-                    horizontal-stretch: 2; border-radius: 8px; background: Theme.bg-a3;
+                    horizontal-stretch: root.rich ? 2 : 2; max-width: root.rich ? 300px : 2000px; border-radius: 8px; background: Theme.bg-a3;
                     ScrollView {
                         VerticalLayout { padding: 12px; alignment: start;
                             Text { text: root.detail == "" ? "Select a result to see the details." : root.detail; wrap: word-wrap; color: root.detail == "" ? Theme.fg-a3 : Theme.fg-1; font-size: 12px; }
@@ -356,18 +453,23 @@ export component MusicDialog inherits Rectangle {
                     }
                 }
             }
+            copier := TextInput { height: 0px; visible: false; text: root.copy-text; read-only: true; }
+            if root.rich: Text { x: 12px; width: parent.width - 24px; height: 18px; text: root.status; color: Theme.fg-a2; font-size: 12px; overflow: elide; }
             HorizontalLayout {
-                padding: 12px; spacing: 8px;
-                Text { horizontal-stretch: 1; text: root.status; color: Theme.fg-a2; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
+                padding: 12px; padding-top: root.rich ? 6px : 12px; spacing: 8px;
+                if !root.rich: Text { horizontal-stretch: 1; text: root.status; color: Theme.fg-a2; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
+                if root.rich: Rectangle { horizontal-stretch: 1; }
                 FlatButton { text: "Close"; clicked => { root.close(); } }
-                for act in root.actions: FlatButton { text: act; enabled: !root.busy; clicked => { root.action(act, root.selected); } }
-                FlatButton { text: root.secondary-text; enabled: !root.busy && (root.secondary-text == "Choose file…" || ((root.selected >= 0 || root.secondary-text == "Write all") && root.results.length > 0)); clicked => { root.secondary(root.selected); } }
+                for act in root.actions: FlatButton { text: act; enabled: !root.busy || root.rich; clicked => {
+                    if act == "Copy credit" { copier.select-all(); copier.copy(); copier.clear-selection(); }
+                    root.action(act, root.selected); } }
+                FlatButton { text: root.secondary-text; enabled: (!root.busy || root.rich) && root.secondary-text != "Preview only" && (root.secondary-text == "Choose file…" || ((root.selected >= 0 || root.secondary-text == "Write all" || (root.rich && root.detail != "")) && root.results.length > 0)); clicked => { root.secondary(root.selected); } }
                 Rectangle {
                     width: max(96px, pt.preferred-width + 24px); height: 32px; border-radius: 6px;
-                    opacity: root.selected >= 0 && !root.busy ? 1 : 0.5;
+                    opacity: (root.selected >= 0 || (root.rich && root.detail != "")) && (!root.busy || root.rich) ? 1 : 0.5;
                     background: Theme.accent;
                     pt := Text { text: root.primary-text; color: Theme.bg-b2; font-weight: 600; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
-                    TouchArea { enabled: root.selected >= 0 && !root.busy; mouse-cursor: pointer; clicked => { root.primary(root.selected); } }
+                    TouchArea { enabled: (root.selected >= 0 || (root.rich && root.detail != "")) && (!root.busy || root.rich); mouse-cursor: pointer; clicked => { root.primary(root.selected); } }
                 }
             }
         }

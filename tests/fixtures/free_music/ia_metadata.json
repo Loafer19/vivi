@@ -1,0 +1,12 @@
+{"metadata": {"identifier": "night_sessions", "creator": "Some Netlabel Artist", "title": "Night Sessions",
+  "date": "2012-12-30T00:00:00Z", "licenseurl": "http://creativecommons.org/licenses/by/4.0/",
+  "collection": ["freemusicarchive", "audio_music"], "subject": ["Electronic; ambient", "netlabel"]},
+ "files": [
+  {"name": "cover.jpg", "format": "JPEG"},
+  {"name": "night_sessions_thumb.jpg", "format": "Thumbnail"},
+  {"name": "01 Opening.flac", "format": "Flac", "length": "245.1"},
+  {"name": "disc 1/02 Night Drive.mp3", "format": "VBR MP3", "title": "Night Drive", "track": "2/3", "length": "4:10"},
+  {"name": "01 Opening.mp3", "format": "VBR MP3", "track": "1", "length": "245.2", "genre": "Other"},
+  {"name": "01 Opening_64kb.mp3", "format": "64Kbps MP3", "length": "245.2"},
+  {"name": "03 Full mix.mp3", "format": "VBR MP3", "track": "3", "length": "3600"}
+ ]}
