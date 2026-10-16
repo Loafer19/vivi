@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-17
+
+Highlights: compact single-row control bar, waveform seekbar and seekbar ranges (chapters, A-B loop, plugin ranges such as Cut & Export In/Out); Subtitle Search rework with hash matching, previews and per-file offsets; Free Music rework (Jamendo, Internet Archive, FMA); full-screen karaoke lyrics; merged, ranked Auto-tagger results; more MCP tools.
 
 ### Added
 - New compact single-row control bar is the default: prev / play / next (optional −10 s / +10 s buttons), elapsed time, full-width seekbar, total time, volume and toolbar items. The previous two-row bar stays available as Settings → Interface → Control bar layout → Classic.
