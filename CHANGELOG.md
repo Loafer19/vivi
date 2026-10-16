@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Customize Player** rework: every bottom-bar element is a movable item — previous, play, next, ±10 s, elapsed / total time, the seekbar, flexible spaces, volume and all buttons (no fixed centre). Pick the **progress bar style** in the dialog: Compact inline, Classic (full width on top), Waveform (audio files) or Plain thin; the bar under the dialog is a live preview. Profiles: Minimal (Plain), Default (compact reference layout), Power (Waveform, all controls). The separate *Control bar layout*, *Skip buttons* and *Waveform seekbar* settings are gone; existing choices are migrated into the item list and style on load.
+
 ### Fixed
 - Compact control bar matches the reference density: 36 px row, all buttons on one vertical centre (no per-icon offsets), smaller equal-size buttons, near-black seek track with a dim orange played fill and a slim bright handle, times next to the bar, smaller volume wedge. Title bar buttons are centred in the 40 px strip.
 - Compact seek track uses the reference colours (track #090909, played #371F06, accent handle, bar #181818): rounded track with the fill and handle inset 1.5 px so a thin dark border stays all round; times in the secondary grey.

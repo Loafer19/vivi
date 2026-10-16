@@ -52,12 +52,15 @@ pub struct Interface {
     pub onboarded: bool,
     /// Miniplayer geometry `[x, y, width, height]` (height without the queue view).
     pub mini_window: Option<[i32; 4]>,
-    /// Bottom bar layout: "Compact" (single row) | "Classic" (seekbar above buttons).
-    pub bar_layout: String,
-    /// Show -10s / +10s buttons beside play in the compact bar.
-    pub skip_buttons: bool,
-    /// Draw an audio waveform on the seekbar for audio files.
-    pub waveform: bool,
+    /// Progress bar style: "Compact" | "Classic" | "Waveform" | "Plain" (see `BAR_STYLES`).
+    pub bar_style: String,
+    /// 0.11.0 settings, read once and folded into `toolbar` / `bar_style` by `migrate`.
+    #[serde(skip_serializing)]
+    pub bar_layout: Option<String>,
+    #[serde(skip_serializing)]
+    pub skip_buttons: Option<bool>,
+    #[serde(skip_serializing)]
+    pub waveform: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -314,9 +317,10 @@ impl Default for Interface {
             toolbar: profile_toolbar("Default").unwrap_or_default(),
             onboarded: false,
             mini_window: None,
-            bar_layout: "Compact".into(),
-            skip_buttons: true,
-            waveform: true,
+            bar_style: "Compact".into(),
+            bar_layout: None,
+            skip_buttons: None,
+            waveform: None,
         }
     }
 }
@@ -385,13 +389,22 @@ impl Config {
     pub fn load() -> Self {
         let p = path();
         match std::fs::read_to_string(&p) {
-            Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
-                eprintln!("vivi: invalid {}: {e}; using defaults", p.display());
-                let _ = std::fs::copy(&p, p.with_extension("toml.bak"));
-                Self::default()
-            }),
+            Ok(s) => toml::from_str::<Self>(&s)
+                .map(Self::migrated)
+                .unwrap_or_else(|e| {
+                    eprintln!("vivi: invalid {}: {e}; using defaults", p.display());
+                    let _ = std::fs::copy(&p, p.with_extension("toml.bak"));
+                    Self::default()
+                }),
             Err(_) => Self::default(),
         }
+    }
+
+    /// Fold older bottom-bar settings into the item list and bar style.
+    fn migrated(mut self) -> Self {
+        let i = &mut self.interface;
+        migrate_toolbar(i);
+        self
     }
 
     pub fn save(&self) -> std::io::Result<()> {
@@ -471,7 +484,16 @@ mod tests {
 }
 
 /// Every item that can be placed in the bottom bar.
-pub const TOOL_ITEMS: [&str; 16] = [
+pub const TOOL_ITEMS: [&str; 23] = [
+    "prev",
+    "back10",
+    "play",
+    "fwd10",
+    "next",
+    "time",
+    "seek",
+    "duration",
+    "spacer",
     "queue",
     "subtitles",
     "audio",
@@ -480,8 +502,6 @@ pub const TOOL_ITEMS: [&str; 16] = [
     "speed",
     "chapters",
     "bookmark",
-    "back10",
-    "fwd10",
     "stop",
     "snapshot",
     "repeat",
@@ -490,36 +510,53 @@ pub const TOOL_ITEMS: [&str; 16] = [
     "fullscreen",
 ];
 
+/// Items that never fold into the "⋯" menu on narrow windows.
+pub const CORE_ITEMS: [&str; 7] = ["prev", "play", "next", "time", "seek", "duration", "spacer"];
+
+pub const BAR_STYLES: [&str; 4] = ["Compact", "Classic", "Waveform", "Plain"];
+
 pub const PROFILES: [&str; 3] = ["Minimal", "Default", "Power"];
 
 /// Built-in toolbar layouts.
 pub fn profile_toolbar(name: &str) -> Option<Vec<String>> {
     let v: &[&str] = match name {
-        "Minimal" => &["|", "volume", "fullscreen"],
+        "Minimal" => &["play", "time", "seek", "duration", "volume", "fullscreen"],
+        // The compact reference layout.
         "Default" => &[
-            "queue",
-            "|",
-            "subtitles",
-            "audio",
+            "prev",
+            "play",
+            "next",
+            "time",
+            "seek",
+            "duration",
             "volume",
-            "video",
+            "audio",
+            "subtitles",
+            "settings",
+            "queue",
             "fullscreen",
         ],
         "Power" => &[
             "queue",
+            "prev",
+            "back10",
+            "play",
+            "fwd10",
+            "next",
+            "time",
+            "seek",
+            "duration",
             "chapters",
             "bookmark",
-            "back10",
-            "fwd10",
-            "|",
+            "snapshot",
             "repeat",
             "shuffle",
-            "snapshot",
+            "speed",
             "subtitles",
             "audio",
-            "volume",
-            "speed",
             "video",
+            "volume",
+            "settings",
             "fullscreen",
         ],
         _ => return None,
@@ -527,19 +564,72 @@ pub fn profile_toolbar(name: &str) -> Option<Vec<String>> {
     Some(v.iter().map(|s| s.to_string()).collect())
 }
 
-/// Drop unknown/duplicate ids and make sure exactly one `|` exists.
+/// Bar style that goes with a built-in profile.
+pub fn profile_style(name: &str) -> &'static str {
+    match name {
+        "Minimal" => "Plain",
+        "Power" => "Waveform",
+        _ => "Compact",
+    }
+}
+
+/// Known items in order, no duplicates (except spacers).
 pub fn sanitize_toolbar(v: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for s in v {
-        let ok = s == "|" || TOOL_ITEMS.contains(&s.as_str());
-        if ok && !out.contains(s) {
+        let ok = TOOL_ITEMS.contains(&s.as_str());
+        if ok && (s == "spacer" || !out.contains(s)) {
             out.push(s.clone());
         }
     }
-    if !out.iter().any(|s| s == "|") {
-        out.insert(0, "|".into());
-    }
     out
+}
+
+/// 0.11.0 and older: `|` stood for the fixed centre transport, and the bar layout,
+/// skip buttons and waveform were separate settings.
+pub fn migrate_toolbar(i: &mut Interface) {
+    if i.toolbar.iter().any(|s| s == "|") {
+        let skip = i.skip_buttons.unwrap_or(true);
+        let had = |id: &str| i.toolbar.iter().any(|s| s == id);
+        let (b10, f10) = (skip || had("back10"), skip || had("fwd10"));
+        let mut core: Vec<String> = vec!["prev".into()];
+        if b10 {
+            core.push("back10".into());
+        }
+        core.push("play".into());
+        if f10 {
+            core.push("fwd10".into());
+        }
+        core.extend(["next", "time", "seek", "duration"].map(String::from));
+        let mut t: Vec<String> = Vec::new();
+        for s in &i.toolbar {
+            if s == "|" {
+                t.extend(core.iter().cloned());
+            } else if !(s == "back10" || s == "fwd10") {
+                t.push(s.clone());
+            }
+        }
+        i.toolbar = sanitize_toolbar(&t);
+        if i.profile != "Custom" {
+            if let Some(p) = profile_toolbar(&i.profile) {
+                i.toolbar = p;
+            }
+        }
+    }
+    if let Some(l) = i.bar_layout.take() {
+        i.bar_style = if l == "Classic" {
+            "Classic".into()
+        } else if i.waveform == Some(false) {
+            "Compact".into()
+        } else {
+            "Waveform".into()
+        };
+    }
+    i.skip_buttons = None;
+    i.waveform = None;
+    if !BAR_STYLES.contains(&i.bar_style.as_str()) {
+        i.bar_style = "Compact".into();
+    }
 }
 
 #[cfg(test)]
@@ -552,9 +642,32 @@ mod toolbar_tests {
             assert_eq!(sanitize_toolbar(&t), t, "{p}");
         }
         let bad = vec!["nope".to_string(), "volume".into(), "volume".into()];
+        assert_eq!(sanitize_toolbar(&bad), vec!["volume".to_string()]);
+    }
+    #[test]
+    fn migrates_old_bar() {
+        let mut i = Interface {
+            profile: "Custom".into(),
+            toolbar: ["queue", "|", "volume"].map(String::from).to_vec(),
+            bar_layout: Some("Classic".into()),
+            skip_buttons: Some(false),
+            ..Default::default()
+        };
+        migrate_toolbar(&mut i);
         assert_eq!(
-            sanitize_toolbar(&bad),
-            vec!["|".to_string(), "volume".into()]
+            i.toolbar,
+            ["queue", "prev", "play", "next", "time", "seek", "duration", "volume"]
+                .map(String::from)
+                .to_vec()
         );
+        assert_eq!(i.bar_style, "Classic");
+        let mut d = Interface {
+            toolbar: vec!["|".into()],
+            bar_layout: Some("Compact".into()),
+            ..Default::default()
+        };
+        migrate_toolbar(&mut d);
+        assert_eq!(d.toolbar, profile_toolbar("Default").unwrap());
+        assert_eq!(d.bar_style, "Waveform");
     }
 }

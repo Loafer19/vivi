@@ -159,7 +159,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             peaks::start(
                                 &a,
                                 &player.get("path").unwrap_or_default(),
-                                cfg.borrow().interface.waveform && viz::audio_only(&player),
+                                cfg.borrow().interface.bar_style == "Waveform"
+                                    && viz::audio_only(&player),
                             );
                             a.set_range_a(-1.0);
                             a.set_range_b(-1.0);

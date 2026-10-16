@@ -3,6 +3,12 @@ import { Theme, Icon } from "theme.slint";
 
 export global Tools {
     public pure function icon(id: string) -> image {
+        if id == "prev" { return @image-url("../assets/icons/previous.svg"); }
+        if id == "play" { return @image-url("../assets/icons/play.svg"); }
+        if id == "next" { return @image-url("../assets/icons/next.svg"); }
+        if id == "time" || id == "duration" { return @image-url("../assets/icons/recent.svg"); }
+        if id == "seek" { return @image-url("../assets/icons/playback.svg"); }
+        if id == "spacer" { return @image-url("../assets/icons/divider.svg"); }
         if id == "queue" { return @image-url("../assets/icons/queue.svg"); }
         if id == "subtitles" { return @image-url("../assets/icons/subtitles.svg"); }
         if id == "audio" { return @image-url("../assets/icons/audio.svg"); }
@@ -22,6 +28,13 @@ export global Tools {
         return @image-url("../assets/icons/more.svg");
     }
     public pure function label(id: string) -> string {
+        if id == "prev" { return "Previous"; }
+        if id == "play" { return "Play / pause"; }
+        if id == "next" { return "Next"; }
+        if id == "time" { return "Elapsed time"; }
+        if id == "duration" { return "Total time"; }
+        if id == "seek" { return "Seekbar"; }
+        if id == "spacer" { return "Flexible space"; }
         if id == "queue" { return "Queue"; }
         if id == "subtitles" { return "Subtitles"; }
         if id == "audio" { return "Audio"; }
@@ -97,14 +110,15 @@ component Zone inherits Rectangle {
     callback move(int, int);
     callback remove(int);
     min-height: 90px; border-radius: Theme.radius-lg; background: Theme.bg-b1;
+    preferred-width: row.preferred-width + 20px;
     Text { x: 12px; y: 6px; text: root.title; color: Theme.fg-a1; font-size: 11px; }
     if root.items.length == 0: Text { text: "Empty"; color: Theme.fg-a3; }
-    HorizontalLayout {
+    row := HorizontalLayout {
         x: 10px; y: 22px; height: 62px; spacing: 6px; alignment: start;
         for id[i] in root.items: Placed {
             id: id;
-            first: root.lock-first && i == 0;
-            last: root.lock-last && i == root.items.length - 1;
+            first: i == 0;
+            last: i == root.items.length - 1;
             move(d) => { root.move(root.offset + i, d); }
             remove() => { root.remove(root.offset + i); }
         }
@@ -112,8 +126,10 @@ component Zone inherits Rectangle {
 }
 
 export component CustomizeDialog inherits Rectangle {
-    in property <[string]> left;
-    in property <[string]> right;
+    in property <[string]> items;
+    in property <[string]> styles;
+    in property <string> bar-style;
+    callback pick-style(string);
     in property <[string]> available;
     in property <[string]> profiles;
     in property <string> profile;
@@ -136,7 +152,7 @@ export component CustomizeDialog inherits Rectangle {
             padding: 22px; spacing: 14px;
             Text { text: "Customize Player"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
             Text {
-                text: "Use ‹ › to re-order items in the bottom bar and × to remove them. Click an item below to add it. Items left of “Play controls” sit on the left side of the bar.";
+                text: "Every element is movable: use ‹ › to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it. The bar under this dialog is a live preview.";
                 color: Theme.fg-a1; wrap: word-wrap;
             }
             HorizontalLayout {
@@ -153,20 +169,25 @@ export component CustomizeDialog inherits Rectangle {
                     ct := Text { text: "Custom"; color: Theme.bg-b2; vertical-alignment: center; horizontal-alignment: center; }
                 }
             }
+            HorizontalLayout {
+                spacing: 8px; alignment: start;
+                Text { text: "Progress bar"; color: Theme.fg-2; vertical-alignment: center; }
+                for st in root.styles: Rectangle {
+                    height: 30px; width: stt.preferred-width + 22px; border-radius: Theme.radius-lg;
+                    background: st == root.bar-style ? Theme.accent : (sta.has-hover ? Theme.divider : Theme.bg-a1);
+                    stt := Text {
+                        text: st == "Compact" ? "Compact inline" : st == "Classic" ? "Classic (full width on top)" : st == "Waveform" ? "Waveform (audio)" : "Plain thin";
+                        color: st == root.bar-style ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
+                    }
+                    sta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-style(st); } }
+                }
+            }
             Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }
-            VerticalLayout {
-                spacing: 6px;
-                Zone {
-                    title: "LEFT SIDE"; items: root.left; offset: 0; lock-first: true;
-                    move(i, d) => { root.move(i, d); }
-                    remove(i) => { root.remove(i); }
-                }
-                Rectangle {
-                    height: 30px; border-radius: Theme.radius-lg; background: Theme.accent-bg;
-                    Text { text: "⏮  ▶  ⏭   Play controls (fixed in the center)"; color: Theme.accent-bright; horizontal-alignment: center; vertical-alignment: center; }
-                }
-                Zone {
-                    title: "RIGHT SIDE"; items: root.right; offset: root.left.length + 1; lock-last: true;
+            Flickable {
+                height: 92px; content-width: max(self.width, zone.preferred-width);
+                zone := Zone {
+                    width: max(parent.width, self.preferred-width);
+                    title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
                     move(i, d) => { root.move(i, d); }
                     remove(i) => { root.remove(i); }
                 }

@@ -262,9 +262,6 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
     r.cat("Interface")
         .header("Playback Controls")
         .choice("interface.profile", "Toolbar profile", "Which buttons appear in the bottom bar. Minimal, Default and Power are built in; Custom is your own layout.", &c.interface.profile, &["Minimal", "Default", "Power", "Custom"])
-        .choice("interface.bar_layout", "Control bar layout", "Compact puts transport, seekbar and buttons on one row; Classic keeps the seekbar above the buttons.", &c.interface.bar_layout, &["Compact", "Classic"])
-        .toggle("interface.skip_buttons", "Skip buttons", "Show −10 s / +10 s buttons beside play in the compact bar.", c.interface.skip_buttons)
-        .toggle("interface.waveform", "Waveform seekbar", "For audio files, draw the waveform on the seekbar (decoded once, cached in ~/.cache/vivi/peaks).", c.interface.waveform)
         .action("interface.customize", "Customize player", "Choose, order and remove bottom-bar buttons.", "Customize…")
         .slider("interface.autohide", "Hide controls after", "Seconds without mouse movement before bars and cursor hide during playback.", c.interface.autohide_secs as f64, (1.0, 10.0, 1.0), &["1 s", "5 s", "10 s"])
         .header("Window")
@@ -1290,19 +1287,43 @@ fn strings(v: impl IntoIterator<Item = impl Into<SharedString>>) -> ModelRc<Shar
 /// Push the configured bottom-bar layout to the UI.
 pub fn apply_toolbar(a: &AppWindow, c: &Config) {
     let t = config::sanitize_toolbar(&c.interface.toolbar);
-    let mid = t.iter().position(|s| s == "|").unwrap_or(0);
-    a.set_bar_left(strings(t[..mid].iter().cloned()));
-    a.set_bar_right(strings(t[mid + 1..].iter().cloned()));
+    // Cumulative width (in ~32 px slots) of the items that may fold into "⋯"; -1 = always shown.
+    let mut used = 0;
+    let cum: Vec<i32> = t
+        .iter()
+        .map(|id| {
+            if config::CORE_ITEMS.contains(&id.as_str()) {
+                -1
+            } else {
+                used += if id == "volume" { 3 } else { 1 };
+                used
+            }
+        })
+        .collect();
+    a.set_bar_items(strings(t.iter().cloned()));
+    a.set_bar_cum(ModelRc::new(VecModel::from(cum)));
+    a.set_bar_slots(used);
+    a.set_bar_style(c.interface.bar_style.clone().into());
+    a.set_bar_styles(strings(config::BAR_STYLES));
     a.set_profile(c.interface.profile.clone().into());
     a.set_customize_available(strings(
         config::TOOL_ITEMS
             .iter()
-            .filter(|i| !t.iter().any(|s| s == *i))
+            .filter(|i| **i == "spacer" || !t.iter().any(|s| s == *i))
             .copied(),
     ));
     a.set_volume_max(c.audio.volume_max as f32);
-    a.set_bar_classic(c.interface.bar_layout == "Classic");
-    a.set_bar_skip(c.interface.skip_buttons);
+}
+
+/// Name of the built-in profile matching the bar, else "Custom".
+pub fn profile_of(i: &config::Interface) -> String {
+    config::PROFILES
+        .iter()
+        .find(|p| {
+            config::profile_toolbar(p).as_ref() == Some(&i.toolbar)
+                && config::profile_style(p) == i.bar_style
+        })
+        .map_or("Custom".into(), |p| p.to_string())
 }
 
 /// Mirror mpv's current values into the side-panel sliders.
@@ -1370,11 +1391,8 @@ fn customize(
             let mut c = cfg.borrow_mut();
             let mut t = config::sanitize_toolbar(&c.interface.toolbar);
             f(&mut t);
-            c.interface.profile = config::PROFILES
-                .iter()
-                .find(|p| config::profile_toolbar(p).as_ref() == Some(&t))
-                .map_or("Custom".into(), |p| p.to_string());
             c.interface.toolbar = t;
+            c.interface.profile = profile_of(&c.interface);
             apply_toolbar(&a, &c);
         }
     };
@@ -1391,6 +1409,7 @@ fn customize(
             if let Some(t) = config::profile_toolbar(&p) {
                 let mut c = cfg.borrow_mut();
                 c.interface.toolbar = t;
+                c.interface.bar_style = config::profile_style(&p).into();
                 c.interface.profile = p.to_string();
             }
             apply_toolbar(&a, &cfg.borrow());
@@ -1411,10 +1430,21 @@ fn customize(
         let edit = edit.clone();
         app.on_customize_remove(move |i| {
             edit(&|t| {
-                if t.get(i as usize).is_some_and(|s| s != "|") {
+                if (i as usize) < t.len() {
                     t.remove(i as usize);
                 }
             })
+        });
+    }
+    {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        app.on_customize_style(move |st| {
+            let Some(a) = w.upgrade() else { return };
+            let mut c = cfg.borrow_mut();
+            c.interface.bar_style = st.to_string();
+            c.interface.profile = profile_of(&c.interface);
+            apply_toolbar(&a, &c);
         });
     }
     app.on_customize_add(move |id| edit(&|t| t.push(id.to_string())));
@@ -1656,6 +1686,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     "interface.profile" => {
                         if let Some(t) = config::profile_toolbar(v) {
                             c.interface.toolbar = t;
+                            c.interface.bar_style = config::profile_style(v).into();
                         }
                         c.interface.profile = v.into();
                     }
@@ -1671,9 +1702,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         a.set_onboarding_open(true);
                         return;
                     }
-                    "interface.bar_layout" => c.interface.bar_layout = v.into(),
-                    "interface.waveform" => c.interface.waveform = v == "true",
-                    "interface.skip_buttons" => c.interface.skip_buttons = v == "true",
                     "interface.autohide" => c.interface.autohide_secs = num as u32,
                     "playback.resume" => c.playback.resume = v == "true",
                     "playback.speed" => c.playback.speed = (num * 100.0).round() / 100.0,
