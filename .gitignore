@@ -5,3 +5,5 @@
 *.fig
 /_site
 /dist
+!docs/site/video/*.mp4
+!docs/site/video/*.webm
