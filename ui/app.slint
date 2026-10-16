@@ -9,7 +9,7 @@ import { SettingsDialog, SettingRow } from "settings.slint";
 import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem } from "library.slint";
-import { NetworkStreamDialog, NewPlaylistDialog } from "dialogs.slint";
+import { NetworkStreamDialog, NewPlaylistDialog, QrDialog } from "dialogs.slint";
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
@@ -432,6 +432,12 @@ export component AppWindow inherits Window {
     // Library
     in-out property <bool> library-open;
     in-out property <bool> network-open;
+    // QR dialog of a plugin (vivi-qr).
+    in-out property <bool> qr-open;
+    in property <string> qr-title;
+    in property <image> qr-code;
+    in property <string> qr-text;
+    in property <string> qr-caption;
     in property <[string]> net-history;
     in-out property <string> net-error;
     in-out property <string> net-urls;
@@ -1038,6 +1044,13 @@ export component AppWindow inherits Window {
         changed(id, v) => { root.setting-changed(id, v); }
         refresh(c, q, adv) => { root.settings-refresh(c, q, adv); }
         close() => { root.settings-open = false; fs.focus(); }
+    }
+
+    // ---------- Plugin QR code (above Settings, which opens it) ----------
+    if root.qr-open: QrDialog {
+        width: root.width; height: root.height;
+        title: root.qr-title; code: root.qr-code; text: root.qr-text; caption: root.qr-caption;
+        close => { root.qr-open = false; }
     }
 
     // ---------- Add Subtitles (Subtitle Search plugin) ----------

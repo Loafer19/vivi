@@ -223,3 +223,28 @@ export component NewPlaylistDialog inherits Rectangle {
         }
     }
 }
+
+// QR code a plugin asks to show (`script-message vivi-qr <title> <text> [caption]`),
+// e.g. Remote Control's pairing link for phones.
+export component QrDialog inherits Rectangle {
+    in property <string> title;
+    in property <image> code;
+    in property <string> text;
+    in property <string> caption;
+    callback close();
+    DialogFrame {
+        title: root.title; dialog-width: 380px;
+        close => { root.close(); }
+        VerticalLayout {
+            padding: 20px; spacing: 12px; alignment: start;
+            HorizontalLayout { alignment: center;
+                Rectangle { width: 264px; height: 264px; background: #FFFFFF; border-radius: 8px;
+                    Image { width: 240px; height: 240px; source: root.code; image-rendering: pixelated; }
+                }
+            }
+            Text { text: root.text; color: Theme.fg-1; font-size: 12px; horizontal-alignment: center; wrap: char-wrap; }
+            if root.caption != "": Text { text: root.caption; color: Theme.fg-a3; font-size: 12px; horizontal-alignment: center; wrap: word-wrap; }
+            HorizontalLayout { alignment: end; DialogButton { text: "Done"; primary: true; clicked => { root.close(); } } }
+        }
+    }
+}

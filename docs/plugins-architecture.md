@@ -184,6 +184,8 @@ Script messages Vivi handles for packages:
 | `vivi-tagger-acoustid <path> <json>` | open the auto-tagger review for `<path>` with AcoustID ids and a rename pattern (0.9.2) |
 | `vivi-setting <id> <key> <value>` | saves one of the package's declared settings (e.g. a generated PIN) and applies it as script-opt |
 | `vivi-pick-folder <id> <key>` | folder dialog; the result is saved as that setting and sent back as `script-message-to <script> folder-picked <path>` |
+| `vivi-qr <title> <text> [caption]` | dialog with `text` as a QR code (e.g. a pairing link), shown above Settings (0.10.1+) |
+| `vivi-fullscreen [toggle\|on\|off]` | switches Vivi's window fullscreen (0.10.1+) |
 
 `action` settings may set `label` (button text, default "Run"); `size_note` adds a note to
 the size in Browse (e.g. the YouTube plugin's own yt-dlp download).

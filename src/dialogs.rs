@@ -248,8 +248,70 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     }
 }
 
+/// QR code of `text` as an image (black modules on white, 1 px per module; the dialog
+/// scales it up with pixelated rendering). `None` when the text is too long for a QR code.
+pub fn qr_image(text: &str) -> Option<slint::Image> {
+    let (w, dark) = qr_modules(text)?;
+    let mut buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(w as u32, w as u32);
+    for (px, d) in buf.make_mut_slice().iter_mut().zip(dark) {
+        let v = if d { 0 } else { 255 };
+        *px = slint::Rgba8Pixel {
+            r: v,
+            g: v,
+            b: v,
+            a: 255,
+        };
+    }
+    Some(slint::Image::from_rgba8(buf))
+}
+
+/// Modules of the QR code (width, row-major dark flags), error correction level M.
+pub fn qr_modules(text: &str) -> Option<(usize, Vec<bool>)> {
+    if text.is_empty() || text.len() > 1024 {
+        return None;
+    }
+    let c =
+        qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::M).ok()?;
+    let dark = c
+        .to_colors()
+        .into_iter()
+        .map(|m| m == qrcode::Color::Dark)
+        .collect();
+    Some((c.width(), dark))
+}
+
+/// `script-message vivi-qr <title> <text> [caption]` from a plugin: show `text` as a QR
+/// code (e.g. Remote Control's pairing link) above everything else, Settings included.
+pub fn show_qr(a: &AppWindow, title: &str, text: &str, caption: &str) {
+    let Some(img) = qr_image(text.trim()) else {
+        eprintln!("vivi: vivi-qr text is empty or too long");
+        return;
+    };
+    let title = if title.trim().is_empty() {
+        "QR code"
+    } else {
+        title.trim()
+    };
+    a.set_qr_title(title.into());
+    a.set_qr_code(img);
+    a.set_qr_text(text.trim().into());
+    a.set_qr_caption(caption.trim().into());
+    a.set_qr_open(true);
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn qr_codes() {
+        let (w, m) = super::qr_modules("http://192.168.1.5:8765/#pin=123456").unwrap();
+        assert_eq!(m.len(), w * w);
+        assert!(w >= 21 && (w - 17) % 4 == 0, "QR sizes are 17 + 4·version");
+        // Finder pattern: the top-left module is dark, the one inside its ring light.
+        assert!(m[0] && !m[w + 1]);
+        assert!(super::qr_modules("").is_none());
+        assert!(super::qr_modules(&"x".repeat(2000)).is_none());
+    }
+
     use super::parse_urls;
 
     #[test]
