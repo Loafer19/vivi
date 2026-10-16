@@ -238,6 +238,10 @@ pub trait Plugin {
     fn setting_changed(&mut self, _cx: &Ctx, _key: &str) {}
     /// A UI callback or an [`SettingKind::Action`] button addressed to this plugin.
     fn command(&mut self, _cx: &Ctx, _name: &str, _args: &[String]) {}
+    /// A value the app asks for (e.g. the control socket), downcast by the caller.
+    fn query(&mut self, _cx: &Ctx, _name: &str) -> Option<Box<dyn std::any::Any>> {
+        None
+    }
 }
 
 /// All compiled-in plugins, in Settings order.
@@ -530,6 +534,10 @@ pub fn client_message(args: &[String]) {
     match args {
         [m, id, key, value] if m == "vivi-setting" => return store_setting(id, key, value),
         [m, id, key] if m == "vivi-pick-folder" => return pick_folder(id, key),
+        // Subtitle Auto-Sync 1.2+: offset keys and sync results, saved per file by Vivi.
+        [m, v] if m == "vivi-sub-offset" => {
+            return command(subtitles::ID, "offset", std::slice::from_ref(v))
+        }
         [m, path, json] if m == "vivi-tagger-acoustid" => return tagger_acoustid(path, json),
         [m, title, text, rest @ ..] if m == "vivi-qr" => {
             let caption = rest.first().map(String::as_str).unwrap_or("");
@@ -693,6 +701,21 @@ pub fn command(id: &str, name: &str, args: &[String]) {
             e.plugin.command(&ctx!(r, a, e), name, args);
         }
     });
+}
+
+/// Ask an enabled plugin for a value (see [`Plugin::query`]).
+pub fn query<T: 'static>(id: &str, name: &str) -> Option<T> {
+    with(|r| {
+        let a = r.app.upgrade()?;
+        let e = r
+            .entries
+            .iter_mut()
+            .find(|e| e.active && e.manifest.id == id)?;
+        e.plugin.query(&ctx!(r, a, e), name)
+    })
+    .flatten()
+    .and_then(|b| b.downcast::<T>().ok())
+    .map(|b| *b)
 }
 
 /// Settings row id of a plugin's enable toggle / setting.

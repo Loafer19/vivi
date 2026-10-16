@@ -129,17 +129,37 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                         Ok(req) => {
                             let cmd = req["cmd"].as_str().unwrap_or("").to_string();
                             let args = req.get("args").cloned().unwrap_or(json!({}));
+                            // Ask the UI thread (5 s timeout).
+                            let ui = |cmd: &str, args: Value| {
+                                let (rtx, rrx) = mpsc::channel();
+                                if tx.send((cmd.to_string(), args, rtx)).is_err() {
+                                    return Err("vivi is closing".to_string());
+                                }
+                                rrx.recv_timeout(std::time::Duration::from_secs(5))
+                                    .unwrap_or_else(|_| Err("vivi did not answer".into()))
+                            };
                             if cmd == "search" {
                                 search(&args)
                             } else if cmd == "search_streams" {
                                 search_streams(&args)
+                            } else if cmd.starts_with("__") {
+                                // Internal UI-thread requests (they carry the API key).
+                                Err(format!("unknown command {cmd:?}"))
+                            } else if cmd == "search_subtitles" {
+                                // Network on this thread; the key and file come from the UI.
+                                ui("__subs_ctx", json!({}))
+                                    .and_then(|c| crate::plugins::subtitles::mcp_search(&c, &args))
+                            } else if cmd == "load_subtitle" {
+                                ui("__subs_ctx", json!({}))
+                                    .and_then(|c| crate::plugins::subtitles::mcp_download(&c, &args))
+                                    .and_then(|(p, id, left)| {
+                                        let path = p.to_string_lossy().into_owned();
+                                        let lang = args["language"].as_str().unwrap_or("");
+                                        ui("__subs_load", json!({ "path": path, "file_id": id, "language": lang }))?;
+                                        Ok(json!({ "loaded": true, "file_id": id, "downloads_left": left }))
+                                    })
                             } else {
-                                let (rtx, rrx) = mpsc::channel();
-                                if tx.send((cmd, args, rtx)).is_err() {
-                                    break;
-                                }
-                                rrx.recv_timeout(std::time::Duration::from_secs(5))
-                                    .unwrap_or_else(|_| Err("vivi did not answer".into()))
+                                ui(&cmd, args)
                             }
                         }
                     };
@@ -202,6 +222,7 @@ fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
         "speed": num("speed").unwrap_or(1.0),
         "subtitles": p.get("sub-visibility").as_deref() == Some("yes"),
         "subtitle_track": p.get("sid").unwrap_or_default(),
+        "subtitle_offset": p.get("sub-delay").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0),
         "playlist_pos": num("playlist-pos").unwrap_or(-1.0) as i64,
         "playlist_count": num("playlist-count").unwrap_or(0.0) as i64,
         "eq_preset": if eq_on { fx.get_preset().to_string() } else { "Off".into() },
@@ -480,6 +501,52 @@ fn handle(
                 "current_line": a.get_lyrics_index(), "lines": lines,
                 "source": a.get_lyrics_source().as_str(), "offset_seconds": a.get_lyrics_offset(),
                 "karaoke": a.get_karaoke_open() }),
+            )
+        }
+        "__subs_ctx" => {
+            crate::plugins::query::<Value>(crate::plugins::subtitles::ID, "mcp-context")
+                .ok_or_else(|| "the Subtitle Search plugin is turned off".to_string())
+        }
+        "__subs_load" => {
+            let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
+            let id = args["file_id"].as_i64().unwrap_or(0).to_string();
+            crate::plugins::command(
+                crate::plugins::subtitles::ID,
+                "load-file",
+                &[s("path"), id, s("language")],
+            );
+            ok()
+        }
+        "sub_offset" => {
+            let arg = if args["reset"].as_bool() == Some(true) {
+                "reset".to_string()
+            } else if let Some(v) = args["seconds"].as_f64() {
+                format!("set:{v}")
+            } else if let Some(d) = args["delta"].as_f64() {
+                d.to_string()
+            } else {
+                return Err("give \"seconds\", \"delta\" or \"reset\": true".into());
+            };
+            let id = crate::plugins::subtitles::ID;
+            if !a.get_subs_plugin() {
+                return Err("the Subtitle Search plugin is turned off".into());
+            }
+            crate::plugins::command(id, "offset", &[arg]);
+            let o = crate::plugins::query::<f64>(id, "offset").unwrap_or(0.0);
+            Ok(
+                json!({ "offset_seconds": o, "saved_for_file": !p.get("path").unwrap_or_default().is_empty() }),
+            )
+        }
+        "sub_sync" => {
+            if !a.get_subs_plugin() {
+                return Err("the Subtitle Search plugin is turned off".into());
+            }
+            if !a.get_subs_sync() {
+                return Err("install and enable the Subtitle Auto-Sync plugin (subtitle-sync) to align subtitles to the audio".into());
+            }
+            crate::plugins::command(crate::plugins::subtitles::ID, "sync", &[]);
+            Ok(
+                json!({ "started": true, "note": "alignment runs in the background; the synced copy is loaded when done" }),
             )
         }
         "" => Err("missing \"cmd\"".into()),

@@ -98,6 +98,10 @@ the socket path it will use.</p>
 <tr><td><code>list_plugins</code></td><td>–</td><td>Plugins: <code>id</code>, <code>name</code>, <code>version</code>, <code>kind</code>, <code>enabled</code> (read-only)</td></tr>
 <tr><td><code>plugin_info</code></td><td><code>id</code></td><td>Description, author, version and setting keys/titles (no values)</td></tr>
 <tr><td><code>get_lyrics</code></td><td>–</td><td>Lines shown by the Lyrics plugin, <code>synced</code>, <code>current_line</code></td></tr>
+<tr><td><code>search_subtitles</code></td><td><code>query</code>, <code>languages</code>, <code>limit</code></td><td>OpenSubtitles results for the playing file: exact hash matches first, then by name or IMDb id</td></tr>
+<tr><td><code>load_subtitle</code></td><td><code>file_id</code>, <code>language</code></td><td>Download and show a result; remembered for the file</td></tr>
+<tr><td><code>set_subtitle_offset</code></td><td><code>seconds</code> / <code>delta</code> / <code>reset</code></td><td>Subtitle timing, saved per file</td></tr>
+<tr><td><code>sync_subtitles</code></td><td>–</td><td>Align subtitles to the audio (Subtitle Auto-Sync plugin)</td></tr>
 </tbody>
 </table>
 <p>IPTV and radio: <code>open</code> also plays URLs, but <code>open_network_stream</code> validates the URL, can queue instead of

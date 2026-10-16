@@ -32,7 +32,7 @@ const ACCENTS: [&str; 9] = [
     "#8C8C8C",
 ];
 
-pub const SHORTCUTS: [(&str, &str); 16] = [
+pub const SHORTCUTS: [(&str, &str); 17] = [
     ("Play / pause", "Space  K"),
     ("Seek (short skip)", "←  →"),
     ("Seek (long skip)", "Shift ← →"),
@@ -46,6 +46,7 @@ pub const SHORTCUTS: [(&str, &str); 16] = [
     ("Karaoke lyrics view", "L"),
     ("Find lyrics", "Ctrl L"),
     ("Lyrics timing offset", "[  ]  (Shift ±0.5 s)"),
+    ("Subtitle offset (per file)", "Z  X  (Shift ±1 s)"),
     ("Previous / next in queue", "Buttons"),
     ("Drop files", "Open or enqueue"),
     ("Side panel", "Panel button"),

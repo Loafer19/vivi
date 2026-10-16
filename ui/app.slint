@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog, QrDialog } from "dialogs.slint"
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, KaraokeView, LyricsSearchDialog, KWord, LyricsHit } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, KaraokeView, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
@@ -307,7 +307,16 @@ export component AppWindow inherits Window {
     in property <bool> ls-busy;
     in property <bool> subs-plugin;
     in-out property <bool> subs-open;
-    in property <[Item]> subs-results;
+    in property <[SubHit]> subs-hits;
+    in property <[Item]> subs-langs;
+    in property <int> subs-selected: -1;
+    in property <string> subs-details;
+    in property <string> subs-preview;
+    in property <bool> subs-save-next;
+    // Per-file subtitle offset label, pick and whether Subtitle Auto-Sync is installed.
+    in property <string> subs-offset: "0.0 s";
+    in property <bool> subs-has-pick;
+    in property <bool> subs-sync;
     in property <string> subs-status;
     in property <bool> subs-busy;
     in-out property <string> subs-query;
@@ -743,7 +752,7 @@ export component AppWindow inherits Window {
         ab-state: root.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
         set-prop(n, v) => { root.set-prop(n, v); }
         run(c) => { root.run(c); }
-        load-sub() => { root.add-subs(); }
+        load-sub() => { root.load-sub(); }
         sleep(m) => { root.sleep(m); }
         bookmarks: root.bookmarks;
         seek-to(k) => { root.seek(k.to-float()); }
@@ -755,6 +764,9 @@ export component AppWindow inherits Window {
         lyrics-enabled: root.lyrics-enabled; karaoke-open: root.karaoke-open; lyrics-source: root.lyrics-source;
         lyrics-offset: root.lyrics-offset-label; lyrics-can-save: root.lyrics-can-save; lyrics-manual: root.lyrics-manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
+        subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-sync: root.subs-sync;
+        subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
+        find-subs() => { root.add-subs(); }
         open-settings(c) => { root.settings-category = c; root.settings-open = true; root.settings-refresh(c, "", false); }
         queue: root.queue; playlists: root.playlists;
         queue-play(i) => { root.queue-play(i); }
@@ -1098,17 +1110,13 @@ export component AppWindow inherits Window {
     // ---------- Add Subtitles (Subtitle Search plugin) ----------
     if root.subs-open: SubtitleDialog {
         width: root.width; height: root.height;
-        results: root.subs-results; status: root.subs-status; busy: root.subs-busy;
+        hits: root.subs-hits; langs: root.subs-langs; selected: root.subs-selected;
+        details: root.subs-details; preview: root.subs-preview; save-next: root.subs-save-next;
+        status: root.subs-status; busy: root.subs-busy;
         query <=> root.subs-query; lang <=> root.subs-lang;
         local: root.subs-local; folder: root.subs-folder;
         target <=> root.subs-target; source <=> root.subs-source;
-        search => { root.plugin-command("subtitle-search", "search", ""); }
-        select(i) => { root.plugin-command("subtitle-search", "select", i); }
-        done(i) => { root.plugin-command("subtitle-search", "download", i); }
-        mode => { root.plugin-command("subtitle-search", "mode", ""); }
-        toggle(i) => { root.plugin-command("subtitle-search", "toggle", i); }
-        browse => { root.plugin-command("subtitle-search", "browse", ""); }
-        save-local => { root.plugin-command("subtitle-search", "save-local", ""); }
+        cmd(n, a) => { root.plugin-command("subtitle-search", n, a); }
         close => { root.subs-open = false; fs.focus(); }
     }
 

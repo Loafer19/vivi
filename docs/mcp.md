@@ -92,6 +92,10 @@ explicitly: `"env": { "VIVI_SOCKET": "/run/user/1000/vivi.sock" }`.
 | `list_plugins` | – | Plugins: `id`, `name`, `version`, `kind`, `enabled` (read-only) |
 | `plugin_info` | `id` | Description, author, version and setting keys/titles (no values) |
 | `get_lyrics` | – | Lines shown by the Lyrics plugin, `synced`, `current_line`, `source`, `offset_seconds`, `karaoke` |
+| `search_subtitles` | `query` (title, episode or IMDb id `tt…`), `languages` (`en,uk`), `limit` | OpenSubtitles results for the playing file: hash matches first (`hash_match`), then by name/IMDb; `file_id`, `language`, `downloads`, `rating`, `hearing_impaired`, `fps`, `trusted`, `machine_translated`. Needs the API key in the Subtitle Search plugin |
+| `load_subtitle` | `file_id`, `language` | Download (one from the daily quota; cached copies are free) and show it; saved next to the video when that setting is on; remembered for the file |
+| `set_subtitle_offset` | `seconds` *or* `delta` *or* `reset` | Subtitle timing (positive = later), saved per file; returns `offset_seconds` |
+| `sync_subtitles` | – | Align the current external subtitle to the audio with the Subtitle Auto-Sync plugin (background) |
 
 IPTV / radio: `open` also plays URLs, but `open_network_stream` validates the URL, can
 queue instead of replacing, and shows a station name. A whole `.m3u` playlist URL can be
@@ -115,6 +119,8 @@ Resources: `vivi://status` and `vivi://playlist` (JSON).
 
 ## Limitations
 
+- The OpenSubtitles API key never leaves Vivi: `search_subtitles` / `load_subtitle` run
+  inside Vivi's socket thread and return results only.
 - Linux and macOS only (Unix socket); on Windows `vivi-mcp` reports that it is unsupported.
 - stdio transport only; no HTTP/SSE server yet.
 - The setting takes effect after a restart; one Vivi instance owns the socket.

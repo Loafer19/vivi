@@ -416,6 +416,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let d = if s == "[" || s == "{" { -d } else { d };
                 crate::plugins::command(plugins::lyrics::ID, "offset", &[d.to_string()]);
             }
+            // Subtitles: z / x offset −0.1 / +0.1 s (Shift: 1 s), saved per file.
+            _ if !ctrl && matches!(s, "z" | "x" | "Z" | "X") => {
+                let big = shift || s == "Z" || s == "X";
+                let d = if big { 1.0 } else { 0.1 };
+                let d = if s.eq_ignore_ascii_case("z") { -d } else { d };
+                crate::plugins::command(plugins::subtitles::ID, "offset", &[d.to_string()]);
+            }
             _ if !ctrl && (s == "r" || s == "R") => {
                 if let Some(a) = weak.upgrade() {
                     a.invoke_toggle_record();
@@ -651,6 +658,13 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     let weak = app.as_weak();
     app.on_set_prop(move |name, value| {
         p.set(&name, &value);
+        if name == "sub-delay" {
+            crate::plugins::command(
+                plugins::subtitles::ID,
+                "offset-changed",
+                &[value.to_string()],
+            );
+        }
         if log {
             eprintln!("set {name}={value} -> {:?}", p.get(&name));
         }

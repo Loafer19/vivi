@@ -19,7 +19,7 @@ Status: implemented in v0.9.0. Code: `src/plugins/packages.rs`,
 | Music Visualizer | Core feature; renders through the Rust FFT/`viz` pipeline and Slint, 60 fps. |
 | Skip Intro & Credits | Draws a Slint button over the video; needs the Rust UI. |
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
-| Subtitle Search | Lives inside the Add Subtitles dialog (Slint), with a results list. |
+| Subtitle Search | Lives inside the Add Subtitles dialog (Slint): results with badges, details and preview; per-file offset (`z` / `x`, side panel) in `subtitle-offsets.json`, picks in `subtitle-picks.json`; `script-message vivi-sub-offset <delta\|set:v\|reset>` lets the Subtitle Auto-Sync package hand over its offset keys. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
 | Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
 | Free Music | Shared music dialog in rich mode (`FmRow` rows with covers, badges and licence chips, `MdFilter` dropdowns, infinite scroll); Jamendo + Internet Archive searched in parallel and merged; download queue writes tags with lofty. |

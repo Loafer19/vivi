@@ -134,6 +134,21 @@ fn tools() -> Vec<(&'static str, &'static str, Value, &'static str)> {
         ("list_plugins", "Installed plugins (id, name, version, kind, enabled). Read-only.", none.clone(), "plugins"),
         ("plugin_info", "Details of one plugin: description, version, author, settings (keys and titles, no values). Read-only.",
             json!({ "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }), "plugin_info"),
+        ("search_subtitles", "Search OpenSubtitles for the playing file: by its file hash first (exact matches, hash_match=true), then by name or IMDb id. Returns file_id, language, downloads, rating, hearing_impaired, fps, trusted, machine_translated. Needs the API key in Settings → Extensions → Subtitle Search.",
+            json!({ "type": "object", "properties": {
+                "query": { "type": "string", "description": "Title, episode or IMDb id (tt0133093); default: from the file name" },
+                "languages": { "type": "string", "description": "Comma-separated codes, e.g. \"en,uk\"; default: the plugin setting" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 100 } } }), "search_subtitles"),
+        ("load_subtitle", "Download a subtitle found with search_subtitles and show it (saved next to the video when that setting is on; remembered for this file). Uses one OpenSubtitles download.",
+            json!({ "type": "object", "required": ["file_id"], "properties": {
+                "file_id": { "type": "integer" },
+                "language": { "type": "string", "description": "Language code from the result (names the saved file)" } } }), "load_subtitle"),
+        ("set_subtitle_offset", "Shift subtitles in time for the playing file (positive = later); saved per file and restored when it plays again.",
+            json!({ "type": "object", "properties": {
+                "seconds": { "type": "number", "description": "Absolute offset in seconds" },
+                "delta": { "type": "number", "description": "Change relative to the current offset" },
+                "reset": { "type": "boolean" } } }), "sub_offset"),
+        ("sync_subtitles", "Align the current external subtitle to the audio with the Subtitle Auto-Sync plugin (alass / ffsubsync), in the background.", none.clone(), "sub_sync"),
         ("get_lyrics", "Lyrics shown for the current track (from the Lyrics plugin: lines, synced flag, current line index, source, timing offset in seconds, whether the karaoke view is open). Empty when none are loaded.", none.clone(), "lyrics"),
     ]
 }

@@ -106,6 +106,10 @@ fn mcp_client_lists_tools_plays_and_reads_status() {
         "list_plugins",
         "plugin_info",
         "get_lyrics",
+        "search_subtitles",
+        "load_subtitle",
+        "set_subtitle_offset",
+        "sync_subtitles",
     ] {
         assert!(names.contains(&n), "missing tool {n}");
     }

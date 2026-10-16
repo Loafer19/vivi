@@ -317,6 +317,13 @@ export component SidePanel inherits Rectangle {
     in property <bool> lyrics-can-save;
     in property <bool> lyrics-manual;
     callback lyrics(string, string);
+    // Subtitle Search plugin: per-file offset, Auto-sync, remembered pick (cmd → plugin-command).
+    in property <bool> subs-enabled;
+    in property <string> subs-offset: "0.0 s";
+    in property <bool> subs-has-pick;
+    in property <bool> subs-sync;
+    callback subs(string, string);
+    callback find-subs();
     // Settings-window category to open (see settings.rs CATEGORIES).
     callback open-settings(int);
 
@@ -530,7 +537,31 @@ export component SidePanel inherits Rectangle {
                             pick(it) => { root.set-prop("sid", it.key); }
                         }
                         OptionList { items: root.sub-tracks; empty-text: "No subtitle tracks"; pick(it) => { root.set-prop("sid", it.key); } }
-                        Button { text: "Add subtitle file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
+                        HorizontalLayout { spacing: 8px;
+                            Button { horizontal-stretch: 1; text: "Add file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
+                            if root.subs-enabled: Button { horizontal-stretch: 1; text: "Find online…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.find-subs(); } }
+                        }
+                        if root.subs-has-pick: Line { label: "Remembered Pick"; hint: "Loaded again when this file plays";
+                            Button { width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }
+                    }
+                    if root.subs-enabled: Group { title: "Offset";
+                        Line { label: "Offset"; hint: "Saved per file";
+                            HorizontalLayout { spacing: 4px;
+                                for d in [-1, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: soa.has-hover ? Field.raised : Field.fill;
+                                    Text { text: d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    soa := TouchArea { mouse-cursor: pointer; clicked => { root.subs("offset", d); } } }
+                                Rectangle { width: 64px; height: 26px; border-radius: 5px; background: Field.fill;
+                                    Text { text: root.subs-offset; font-family: "DM Mono"; font-size: 12px; color: root.subs-offset == "0.0 s" ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
+                                    TouchArea { mouse-cursor: pointer; double-clicked => { root.subs("offset", "reset"); } } }
+                                for d in [0.1, 1]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: sob.has-hover ? Field.raised : Field.fill;
+                                    Text { text: "+" + d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    sob := TouchArea { mouse-cursor: pointer; clicked => { root.subs("offset", d); } } }
+                            } }
+                        Text { text: "Z / X ±0.1 s, Shift ±1 s · Lyrics keep [ ]"; color: Theme.fg-a3; font-size: 11px; }
+                        HorizontalLayout { spacing: 8px;
+                            Button { horizontal-stretch: 1; text: "Reset offset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.subs("offset", "reset"); } }
+                            Button { horizontal-stretch: 1; text: root.subs-sync ? "Auto-sync to audio" : "Auto-sync (plugin)"; icon: @image-url("../assets/icons/waveform-twotone.svg"); clicked => { root.subs("sync", ""); } }
+                        }
                     }
                     Group { title: "Synchronization";
                         SliderRow { label: "Delay"; unit: " s"; decimals: 2; minimum: -10; maximum: 10; step: 0.05;
