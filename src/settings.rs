@@ -261,6 +261,8 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
     r.cat("Interface")
         .header("Playback Controls")
         .choice("interface.profile", "Toolbar profile", "Which buttons appear in the bottom bar. Minimal, Default and Power are built in; Custom is your own layout.", &c.interface.profile, &["Minimal", "Default", "Power", "Custom"])
+        .choice("interface.bar_layout", "Control bar layout", "Compact puts transport, seekbar and buttons on one row; Classic keeps the seekbar above the buttons.", &c.interface.bar_layout, &["Compact", "Classic"])
+        .toggle("interface.skip_buttons", "Skip buttons", "Show −10 s / +10 s buttons beside play in the compact bar.", c.interface.skip_buttons)
         .action("interface.customize", "Customize player", "Choose, order and remove bottom-bar buttons.", "Customize…")
         .slider("interface.autohide", "Hide controls after", "Seconds without mouse movement before bars and cursor hide during playback.", c.interface.autohide_secs as f64, (1.0, 10.0, 1.0), &["1 s", "5 s", "10 s"])
         .header("Window")
@@ -1297,6 +1299,8 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
             .copied(),
     ));
     a.set_volume_max(c.audio.volume_max as f32);
+    a.set_bar_classic(c.interface.bar_layout == "Classic");
+    a.set_bar_skip(c.interface.skip_buttons);
 }
 
 /// Mirror mpv's current values into the side-panel sliders.
@@ -1665,6 +1669,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         a.set_onboarding_open(true);
                         return;
                     }
+                    "interface.bar_layout" => c.interface.bar_layout = v.into(),
+                    "interface.skip_buttons" => c.interface.skip_buttons = v == "true",
                     "interface.autohide" => c.interface.autohide_secs = num as u32,
                     "playback.resume" => c.playback.resume = v == "true",
                     "playback.speed" => c.playback.speed = (num * 100.0).round() / 100.0,

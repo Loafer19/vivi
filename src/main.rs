@@ -627,6 +627,9 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
             .map(|(_, s)| slint::SharedString::from(hms(*s)))
             .collect::<Vec<_>>(),
     )));
+    a.set_chapter_starts(slint::ModelRc::new(slint::VecModel::from(
+        chs.iter().map(|(_, s)| *s as f32).collect::<Vec<_>>(),
+    )));
     a.set_chapters(items(
         chs.into_iter()
             .enumerate()
@@ -700,8 +703,34 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                 eprintln!("ab-loop {st}");
             }
             a.set_ab_state(st.into());
+            let f = |k| ab(k).and_then(|v| v.parse::<f32>().ok()).unwrap_or(-1.0);
+            a.set_ab_a(f("ab-loop-a"));
+            a.set_ab_b(f("ab-loop-b"));
         }
     });
+    {
+        let (p, w) = (player.clone(), app.as_weak());
+        app.on_ab_set(move |x, y| {
+            let v = |t: f32| {
+                if t < 0.0 {
+                    "no".to_string()
+                } else {
+                    format!("{t:.3}")
+                }
+            };
+            p.set("ab-loop-a", &v(x));
+            p.set("ab-loop-b", &v(y));
+            if let Some(a) = w.upgrade() {
+                a.set_ab_a(x);
+                a.set_ab_b(y);
+                a.set_ab_state(if x >= 0.0 && y >= 0.0 {
+                    format!("Looping {x:.2}s → {y:.2}s").into()
+                } else {
+                    "Off".into()
+                });
+            }
+        });
+    }
     let p = player.clone();
     app.on_load_sub(move || {
         if let Some(f) = rfd::FileDialog::new()

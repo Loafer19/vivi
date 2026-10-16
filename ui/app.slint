@@ -51,26 +51,65 @@ component SeekBar inherits Rectangle {
     in property <float> position;
     in property <float> duration;
     in property <[image]> frames; // evenly spaced preview frames (may be empty / partial)
+    in property <[float]> chapters; // chapter start times (s) → segment gaps on the track
+    in property <[float]> peaks; // audio waveform peaks 0..1 (empty = plain bar)
+    in property <float> ab-a: -1; // A-B loop / range bounds in seconds (-1 = unset)
+    in property <float> ab-b: -1;
+    in property <length> track-h: 8px;
     callback seek(float);
+    callback ab-set(float, float);
     pure callback fmt(float) -> string;
     height: 18px;
     property <float> frac: duration > 0 ? clamp(position / duration, 0, 1) : 0;
     property <float> hover-frac: clamp(ta.mouse-x / self.width, 0, 1);
+    property <bool> wave: root.peaks.length > 0;
+    property <float> ra: root.duration > 0 && root.ab-a >= 0 ? clamp(root.ab-a / root.duration, 0, 1) : -1;
+    property <float> rb: root.duration > 0 && root.ab-b >= 0 ? clamp(root.ab-b / root.duration, 0, 1) : (root.ra >= 0 ? root.frac : -1);
     track := Rectangle {
         y: (parent.height - self.height) / 2;
-        height: ta.has-hover ? 10px : 8px;
+        height: root.wave ? root.height : (ta.has-hover ? root.track-h + 2px : root.track-h);
         border-radius: 2px;
-        background: Theme.bg-a1;
-        if ta.has-hover: Rectangle {
+        background: root.wave ? transparent : Theme.bg-a1;
+        if ta.has-hover && !root.wave: Rectangle {
             x: 0; height: parent.height; border-radius: 2px;
             width: parent.width * root.hover-frac;
             background: Theme.divider;
         }
-        Rectangle {
+        if !root.wave: Rectangle {
             x: 0; height: parent.height; border-radius: 2px;
             width: parent.width * (ta.pressed ? root.hover-frac : root.frac);
             background: ta.has-hover ? Theme.accent-bright : Theme.accent;
         }
+        // Waveform: one bar per peak, the played part in the accent colour.
+        for v[i] in root.peaks: Rectangle {
+            x: parent.width * i / root.peaks.length;
+            width: max(1px, parent.width / root.peaks.length - 1px);
+            height: max(2px, parent.height * clamp(v, 0, 1));
+            y: (parent.height - self.height) / 2;
+            border-radius: 1px;
+            background: (i + 0.5) / root.peaks.length <= (ta.pressed ? root.hover-frac : root.frac) ? Theme.accent
+                : ta.has-hover && (i + 0.5) / root.peaks.length <= root.hover-frac ? Theme.fg-a2 : Theme.fg-a3;
+        }
+        // Chapter boundaries cut the track into segments.
+        for c in root.chapters: Rectangle {
+            visible: root.duration > 0 && c > 0.5 && c < root.duration - 0.5;
+            x: parent.width * c / max(root.duration, 1) - 1px; width: 2px;
+            height: parent.height; background: Theme.bar.with-alpha(1);
+        }
+        // A-B range overlay
+        if root.ra >= 0 && root.rb >= 0: Rectangle {
+            x: parent.width * min(root.ra, root.rb); width: parent.width * abs(root.rb - root.ra);
+            height: parent.height; border-radius: 2px;
+            background: Theme.accent.with-alpha(0.28);
+            border-width: 1px; border-color: Theme.accent-bright;
+        }
+    }
+    // Playhead handle (compact style)
+    if root.duration > 0 && !root.wave: Rectangle {
+        width: 4px; height: root.track-h + 8px; border-radius: 2px;
+        x: root.width * (ta.pressed ? root.hover-frac : root.frac) - 2px; y: (root.height - self.height) / 2;
+        background: Theme.accent-bright;
+        visible: root.track-h > 8px || ta.has-hover;
     }
     // Hover frame preview (#10)
     if ta.has-hover && root.duration > 0 && root.frames.length > 0: Rectangle {
@@ -103,6 +142,31 @@ component SeekBar inherits Rectangle {
         pointer-event(e) => {
             if (e.kind == PointerEventKind.up && root.duration > 0) {
                 root.seek(root.hover-frac * root.duration);
+            }
+        }
+    }
+    // Draggable A/B edge handles
+    if root.ra >= 0 && root.ab-b >= 0: Rectangle {
+        x: root.width * root.ra - 5px; width: 10px; height: root.height + 6px; y: -3px;
+        Rectangle { x: 3px; width: 4px; border-radius: 2px; background: ha.has-hover || ha.pressed ? #ffffff : Theme.accent-bright; }
+        ha := TouchArea {
+            mouse-cursor: ew-resize;
+            moved => {
+                if (self.pressed) {
+                    root.ab-set(clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration, root.ab-b);
+                }
+            }
+        }
+    }
+    if root.ab-a >= 0 && root.ab-b >= 0: Rectangle {
+        x: root.width * root.rb - 5px; width: 10px; height: root.height + 6px; y: -3px;
+        Rectangle { x: 3px; width: 4px; border-radius: 2px; background: hb.has-hover || hb.pressed ? #ffffff : Theme.accent-bright; }
+        hb := TouchArea {
+            mouse-cursor: ew-resize;
+            moved => {
+                if (self.pressed) {
+                    root.ab-set(root.ab-a, clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration);
+                }
             }
         }
     }
@@ -455,9 +519,13 @@ export component AppWindow inherits Window {
     }
     // Responsive bottom bar: how many items fit on each side of the play controls.
     // Items are ~40px wide; the left side also holds the time display. The rest go to "⋯".
-    property <int> bar-left-n: min(root.bar-left.length, max(0, floor((root.width / 2 - 260px) / 40px)));
-    property <int> bar-right-n: min(root.bar-right.length, max(0, floor((root.width / 2 - 170px - (root.bar-has-volume ? 110px : 0px)) / 40px)));
-    property <bool> bar-has-volume: root.width >= 900px;
+    property <int> bar-left-n: root.bar-classic ? min(root.bar-left.length, max(0, floor((root.width / 2 - 260px) / 40px)))
+        : min(root.bar-left.length, max(0, root.compact-budget - root.bar-right.length));
+    property <int> bar-right-n: root.bar-classic ? min(root.bar-right.length, max(0, floor((root.width / 2 - 170px - (root.bar-has-volume ? 110px : 0px)) / 40px)))
+        : min(root.bar-right.length, root.compact-budget);
+    // Compact: transport + times + a 220px seekbar minimum, the rest holds ~40px items.
+    property <int> compact-budget: max(0, floor((root.width - 40px - (root.bar-skip ? 230px : 150px) - 150px - 220px - (root.bar-has-volume ? 100px : 0px) - 40px) / 40px));
+    property <bool> bar-has-volume: root.width >= (root.bar-classic ? 900px : 820px);
     property <int> bar-hidden: root.bar-left.length - root.bar-left-n + root.bar-right.length - root.bar-right-n;
     function bar-active(id: string) -> bool {
         return (id == "queue" && root.panel-open && root.panel-tab == 4)
@@ -602,6 +670,14 @@ export component AppWindow inherits Window {
     callback save-preset();
     callback add-bookmark();
     in property <string> ab-state: "Off";
+    in property <float> ab-a: -1;
+    in property <float> ab-b: -1;
+    callback ab-set(float, float);
+    in property <[float]> chapter-starts;
+    in property <[float]> wave-peaks;
+    in property <bool> bar-classic: false;
+    in property <bool> bar-skip: true;
+    out property <length> bar-h: root.bar-classic ? 72px : 56px;
     in property <string> sleep-state: "";
     in property <string> hwdec: "auto-safe";
     callback set-prop(string, string);
@@ -668,7 +744,7 @@ export component AppWindow inherits Window {
     // ---------- Lyrics overlay (Lyrics plugin) ----------
     if root.has-media && root.lyrics-lines.length > 0 && !root.library-open && !root.mini && !root.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
-        y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - 72px - self.height - 60px;
+        y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: root.lyrics-lines; index: root.lyrics-index; size: root.lyrics-size * 1px; plain: root.lyrics-plain;
         backdrop: !(root.viz-audio && root.viz-mode > 0);
     }
@@ -691,7 +767,7 @@ export component AppWindow inherits Window {
         sidebar: self.docked;
         x: 0; y: 40px;
         width: self.docked ? min(427px, root.width) : root.width;
-        height: root.height - 40px - (self.docked ? 72px : 0px);
+        height: root.height - 40px - (self.docked ? root.bar-h : 0px);
         items: root.lib-items; continue-items: root.lib-continue; recent-items: root.lib-recent; pinned-items: root.lib-pinned;
         listen-items: root.lib-listen; folder-items: root.lib-folders; list-items: root.lib-lists; artist-items: root.lib-artists;
         nav: root.lib-nav; crumb-keys: root.lib-crumb-keys; crumb-labels: root.lib-crumb-labels;
@@ -747,7 +823,7 @@ export component AppWindow inherits Window {
         width: root.width < 800px ? root.width : 400px;
         x: root.width - self.width;
         y: 40px;
-        height: root.height - 40px - 72px;
+        height: root.height - 40px - root.bar-h;
         tab <=> root.panel-tab;
         sub-tracks: root.sub-tracks; audio-tracks: root.audio-tracks;
         audio-devices: root.audio-devices; chapters: root.chapters; chapter-thumbs: root.chapter-thumbs; chapter-has-thumb: root.chapter-has-thumb;
@@ -823,7 +899,7 @@ export component AppWindow inherits Window {
     if root.stream-error != "": Rectangle {
         width: min(se.preferred-width + 40px, root.width - 32px); height: 48px;
         x: (root.width - self.width) / 2;
-        y: root.height - 72px - self.height - 16px;
+        y: root.height - root.bar-h - self.height - 16px;
         border-radius: 16px; background: Theme.bar;
         se := Text { text: root.stream-error; color: #FF8A80; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; overflow: elide; }
         TouchArea { clicked => { root.stream-error = ""; } }
@@ -833,7 +909,7 @@ export component AppWindow inherits Window {
     if root.has-media && root.resume-text != "": Rectangle {
         width: toast.preferred-width; height: 52px;
         x: (root.width - self.width) / 2;
-        y: root.height - 72px - self.height - 16px;
+        y: root.height - root.bar-h - self.height - 16px;
         border-radius: 16px;
         background: Theme.bar;
         toast := HorizontalLayout {
@@ -858,14 +934,14 @@ export component AppWindow inherits Window {
     // ---------- Skip intro / credits (Skip Intro plugin) ----------
     if root.has-media && root.skip-label != "" && !root.mini: SkipButton {
         x: root.width - self.width - 24px;
-        y: root.height - (root.show-ui ? 72px : 0px) - self.height - 24px;
+        y: root.height - (root.show-ui ? root.bar-h : 0px) - self.height - 24px;
         text: root.skip-label;
         clicked => { root.plugin-command("skip-intro", "skip", ""); fs.focus(); }
         dismiss => { root.plugin-command("skip-intro", "dismiss", ""); fs.focus(); }
     }
 
     // ---------- Controls ----------
-    if !root.mini && root.has-media && root.show-ui: Rectangle {
+    if !root.mini && root.has-media && root.show-ui && root.bar-classic: Rectangle {
         y: root.height - self.height;
         height: 72px;
         background: Theme.bar;
@@ -877,6 +953,8 @@ export component AppWindow inherits Window {
                 position: root.position; duration: root.duration;
                 frames: root.preview-frames;
                 fmt(t) => { root.fmt(t) }
+                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b;
+                ab-set(x, y) => { root.ab-set(x, y); }
                 seek(t) => { root.seek(t); fs.focus(); }
             }
             // Side clusters are clipped so time labels / icons cannot paint over the
@@ -926,6 +1004,78 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // ---------- Compact control bar (default): one row, seekbar in the middle ----------
+    if !root.mini && root.has-media && root.show-ui && !root.bar-classic: Rectangle {
+        y: root.height - self.height;
+        height: root.bar-h;
+        background: Theme.bar;
+        TouchArea { }
+        Rectangle { y: 0; height: 1px; background: Theme.divider.with-alpha(0.5); }
+        HorizontalLayout {
+            padding-left: 16px; padding-right: 12px; spacing: 4px; alignment: stretch;
+            for id[i] in root.bar-left: BarItem {
+                id: id; shown: i < root.bar-left-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                y: 6px;
+                act(x) => { root.bar-act(x); fs.focus(); }
+                volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+            }
+            HorizontalLayout {
+                spacing: 2px; alignment: center;
+                IconButton { y: 12px; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
+                if root.bar-skip: IconButton { y: 12px; tip: "Back 10 s"; icon: @image-url("../assets/icons/backward-10-sec.svg"); clicked => { root.seek(max(0, root.position - 10)); fs.focus(); } }
+                IconButton { y: 10px; primary: true; tip: root.playing ? "Pause" : "Play"; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
+                if root.bar-skip: IconButton { y: 12px; tip: "Forward 10 s"; icon: @image-url("../assets/icons/forward-10-sec.svg"); clicked => { root.seek(min(root.duration, root.position + 10)); fs.focus(); } }
+                IconButton { y: 12px; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
+            }
+            Rectangle { width: 10px; }
+            Text {
+                text: root.ab-a >= 0 && root.ab-b >= 0 ? "*" + fmt(root.ab-a) : fmt(root.position);
+                color: root.ab-a >= 0 && root.ab-b >= 0 ? Theme.accent-bright : Theme.fg-1;
+                font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; min-width: 64px; horizontal-alignment: right;
+            }
+            // A nudge: ‹ − (only while a range is set)
+            if root.ab-a >= 0 && root.ab-b >= 0: Text {
+                text: "‹"; color: na.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: 18px; vertical-alignment: center; width: 14px; horizontal-alignment: center;
+                na := TouchArea { mouse-cursor: pointer; clicked => { root.ab-set(max(0, root.ab-a - 0.5), root.ab-b); } }
+            }
+            Rectangle { width: 8px; }
+            SeekBar {
+                horizontal-stretch: 1;
+                y: (root.bar-h - self.height) / 2;
+                height: root.wave-peaks.length > 0 ? 30px : 20px;
+                track-h: 6px;
+                position: root.position; duration: root.duration;
+                frames: root.preview-frames; peaks: root.wave-peaks;
+                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b;
+                ab-set(x, y) => { root.ab-set(x, y); }
+                fmt(t) => { root.fmt(t) }
+                seek(t) => { root.seek(t); fs.focus(); }
+            }
+            Rectangle { width: 8px; }
+            if root.ab-a >= 0 && root.ab-b >= 0: Text {
+                text: "›"; color: nb.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: 18px; vertical-alignment: center; width: 14px; horizontal-alignment: center;
+                nb := TouchArea { mouse-cursor: pointer; clicked => { root.ab-set(root.ab-a, min(root.duration, root.ab-b + 0.5)); } }
+            }
+            Text {
+                text: root.ab-a >= 0 && root.ab-b >= 0 ? "*" + fmt(root.ab-b) : fmt(root.duration);
+                color: root.ab-a >= 0 && root.ab-b >= 0 ? Theme.accent-bright : Theme.fg-a1;
+                font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; min-width: 64px;
+            }
+            if root.ab-a >= 0 && root.ab-b >= 0: IconButton { y: 12px; tip: "Clear A-B range"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.ab-set(-1, -1); fs.focus(); } }
+            Rectangle { width: 6px; }
+            for id[i] in root.bar-right: BarItem {
+                id: id; shown: i < root.bar-right-n; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                y: 6px;
+                act(x) => { root.bar-act(x); fs.focus(); }
+                volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+            }
+            if root.bar-hidden > 0: IconButton {
+                y: 12px; icon: @image-url("../assets/icons/more.svg"); tip: "More";
+                clicked => { overflow.show(); }
             }
         }
     }
@@ -1055,7 +1205,7 @@ export component AppWindow inherits Window {
 
 
     overflow := PopupWindow {
-        x: root.width - 220px; y: root.height - 72px - self.height - 6px;
+        x: root.width - 220px; y: root.height - root.bar-h - self.height - 6px;
         width: 210px;
         Rectangle {
             background: Theme.bg-a4; border-radius: Theme.radius-lg; border-width: 1px; border-color: Theme.bg-a1;

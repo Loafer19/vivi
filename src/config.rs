@@ -52,6 +52,10 @@ pub struct Interface {
     pub onboarded: bool,
     /// Miniplayer geometry `[x, y, width, height]` (height without the queue view).
     pub mini_window: Option<[i32; 4]>,
+    /// Bottom bar layout: "Compact" (single row) | "Classic" (seekbar above buttons).
+    pub bar_layout: String,
+    /// Show -10s / +10s buttons beside play in the compact bar.
+    pub skip_buttons: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -308,6 +312,8 @@ impl Default for Interface {
             toolbar: profile_toolbar("Default").unwrap_or_default(),
             onboarded: false,
             mini_window: None,
+            bar_layout: "Compact".into(),
+            skip_buttons: true,
         }
     }
 }
