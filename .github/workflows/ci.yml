@@ -19,6 +19,7 @@ jobs:
       - run: cargo build --release
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
   flatpak-sources:
     # Fails when packaging/flatpak/cargo-sources.json no longer matches Cargo.lock.
     runs-on: ubuntu-24.04

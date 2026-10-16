@@ -37,6 +37,7 @@ jobs:
       - run: cargo build --release
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
           PKG_CONFIG_PATH: ${{ github.workspace }}/deps/lib/pkgconfig
           LIBRARY_PATH: ${{ github.workspace }}/deps/lib
       - name: Tarball
@@ -89,6 +90,7 @@ jobs:
       - run: cargo build --release
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
       - name: Zip
         shell: pwsh
         run: |
@@ -112,6 +114,7 @@ jobs:
       - run: cargo build --release
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
           LIBRARY_PATH: /opt/homebrew/lib
       - name: Vivi.app
         run: |
@@ -155,14 +158,19 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v7
-      # Inject the public Jamendo client id into the build env at CI time only (not committed).
-      - name: Jamendo client id for the Flatpak build
+      # Inject the public Jamendo client id and AcoustID application key into the build env at CI time only (not committed).
+      - name: Jamendo client id and AcoustID key for the Flatpak build
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
         run: |
-          [ -n "$VIVI_JAMENDO_CLIENT_ID" ] || exit 0
-          sed -i "s|^\( *\)CARGO_HOME: /run/build/vivi/cargo$|&\n\1VIVI_JAMENDO_CLIENT_ID: '$VIVI_JAMENDO_CLIENT_ID'|" packaging/flatpak/io.github.loafer19.vivi.yml
-          grep -n VIVI_JAMENDO_CLIENT_ID packaging/flatpak/io.github.loafer19.vivi.yml
+          M=packaging/flatpak/io.github.loafer19.vivi.yml
+          for k in VIVI_JAMENDO_CLIENT_ID VIVI_ACOUSTID_KEY; do
+            v="${!k}"
+            [ -n "$v" ] || continue
+            sed -i "s|^\( *\)CARGO_HOME: /run/build/vivi/cargo$|&\n\1$k: '$v'|" "$M"
+            grep -c "$k" "$M"
+          done
       - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
         with:
           bundle: vivi.flatpak

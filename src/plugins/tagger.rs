@@ -1323,20 +1323,39 @@ struct Row {
     note: String,
 }
 
+/// Outcome of one file in the after-apply summary.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileResult {
+    /// Path before the apply (backups are keyed by it).
+    pub orig: PathBuf,
+    /// Path now (differs when renamed).
+    pub path: PathBuf,
+    /// "tagged", "renamed", "skipped", "failed" or "undone".
+    pub status: &'static str,
+    pub detail: String,
+    pub changes: Vec<String>,
+    /// Written, so Undo can restore it.
+    pub written: bool,
+}
+
+/// Summary headline counts: (tagged, renamed, skipped, failed).
+pub fn result_counts(v: &[FileResult]) -> (usize, usize, usize, usize) {
+    let n = |s: &str| v.iter().filter(|r| r.status == s).count();
+    (
+        n("tagged") + n("renamed"),
+        n("renamed"),
+        n("skipped"),
+        n("failed"),
+    )
+}
+
 enum Msg {
     Status(String),
     Rows(Vec<Row>, String),
     Row(Box<Row>),
     Done(String),
     Reviews(Vec<Review>),
-    Applied {
-        files: usize,
-        fields: usize,
-        covers: usize,
-        lines: Vec<String>,
-        paths: Vec<PathBuf>,
-        renamed: Vec<(PathBuf, PathBuf)>,
-    },
+    Applied(Vec<FileResult>),
 }
 
 #[derive(Default)]
@@ -1348,8 +1367,8 @@ pub struct AutoTagger {
     reviews: Vec<Review>,
     /// Backup folder of the last apply and the files it changed (Undo).
     session: Option<(PathBuf, Vec<PathBuf>)>,
-    /// Files the last apply renamed: (old, new).
-    renamed: Vec<(PathBuf, PathBuf)>,
+    /// Per-file results of the last apply (summary, per-file Undo).
+    results: Vec<FileResult>,
 }
 
 fn cover_cache() -> PathBuf {
@@ -1373,7 +1392,8 @@ fn slint_image(data: &[u8]) -> slint::Image {
 }
 
 impl AutoTagger {
-    /// A key from the plugin settings, else from the environment (never logged).
+    /// A key from the plugin settings, else the environment, else (AcoustID) the build-time
+    /// default (never logged).
     fn secret(cx: &Ctx, key: &str, env: &[&str]) -> String {
         let v = cx.get(key);
         if !v.trim().is_empty() {
@@ -1381,6 +1401,13 @@ impl AutoTagger {
         }
         env.iter()
             .find_map(|e| std::env::var(e).ok().filter(|v| !v.trim().is_empty()))
+            .or_else(|| {
+                // AcoustID application key baked in at build time (CI variable, like the
+                // Jamendo client id); an application key, not a user secret.
+                (key == "acoustid-key")
+                    .then(|| option_env!("VIVI_ACOUSTID_KEY").map(String::from))
+                    .flatten()
+            })
             .unwrap_or_default()
     }
 
@@ -1674,16 +1701,11 @@ impl AutoTagger {
     }
 
     fn apply_reviews(&mut self, cx: &Ctx) {
-        let todo: Vec<Review> = self
-            .reviews
-            .iter()
-            .filter(|r| r.on && r.changes() > 0)
-            .cloned()
-            .collect();
-        if todo.is_empty() {
+        if !self.reviews.iter().any(|r| r.on && r.changes() > 0) {
             cx.app.set_tr_status("Nothing selected to change".into());
             return;
         }
+        let all = self.reviews.clone();
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis())
@@ -1696,96 +1718,126 @@ impl AutoTagger {
         let dir = session.clone();
         self.session = Some((session, Vec::new()));
         std::thread::spawn(move || {
-            let (mut files, mut fields, mut covers) = (0, 0, 0);
-            let (mut lines, mut paths, mut renamed) = (Vec::new(), Vec::new(), Vec::new());
-            for r in &todo {
-                let name = r
+            let total = all.len();
+            let results = all
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let _ = tx.send(Msg::Status(format!("Writing tags {}/{total}…", i + 1)));
+                    apply_one(r, &backup_dir(), &dir)
+                })
+                .collect();
+            let _ = tx.send(Msg::Applied(results));
+        });
+    }
+
+    /// Show the summary of [`Self::results`].
+    fn render_summary(&self, cx: &Ctx) {
+        use crate::TagResult;
+        let (tagged, renamed, skipped, failed) = result_counts(&self.results);
+        let undone = self.results.iter().filter(|r| r.status == "undone").count();
+        let plural = |n: usize, w: &str| format!("{n} {w}{}", if n == 1 { "" } else { "s" });
+        let head = if tagged == 0 && undone > 0 {
+            "Changes undone".to_string()
+        } else if tagged == 0 {
+            "Nothing was written".to_string()
+        } else {
+            format!("{} tagged", plural(tagged, "file"))
+        };
+        let mut sub = Vec::new();
+        if renamed > 0 {
+            sub.push(format!("{renamed} renamed"));
+        }
+        if skipped > 0 {
+            sub.push(format!("{skipped} skipped"));
+        }
+        if failed > 0 {
+            sub.push(format!("{failed} failed"));
+        }
+        if undone > 0 {
+            sub.push(format!("{undone} undone"));
+        }
+        cx.app.set_tr_summary(head.as_str().into());
+        cx.app.set_tr_summary_sub(sub.join(" · ").into());
+        cx.app.set_tr_summary_ok(failed == 0 && tagged > 0);
+        let items: Vec<TagResult> = self
+            .results
+            .iter()
+            .map(|r| TagResult {
+                name: r
                     .path
                     .file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
-                    .into_owned();
-                match apply_review(r, &backup_dir(), &dir) {
-                    Ok((n, c)) => {
-                        files += 1;
-                        fields += n;
-                        covers += usize::from(c);
-                        if n > 0 || c {
-                            paths.push(r.path.clone());
-                        }
-                        lines.push(format!(
-                            "✓ {name}: {n} field{}{}",
-                            if n == 1 { "" } else { "s" },
-                            if c {
-                                if r.old_cover.is_some() {
-                                    " + cover replaced"
-                                } else {
-                                    " + cover embedded"
-                                }
-                            } else {
-                                ""
-                            }
-                        ));
-                        for ((f, o, nv), on) in
-                            review_fields(&r.old, &r.cand.tags).iter().zip(&r.fields)
-                        {
-                            if *on {
-                                let o = if o.is_empty() { "—" } else { o.as_str() };
-                                lines.push(format!("      {f}:  {o}  →  {nv}"));
-                            }
-                        }
-                        if let (true, Some(n)) = (r.rename_on, &r.rename) {
-                            match rename_file(&r.path, n) {
-                                Ok(to) => {
-                                    lines.push(format!("      File name:  {name}  →  {n}"));
-                                    renamed.push((r.path.clone(), to));
-                                }
-                                Err(e) => lines.push(format!("      File name not changed: {e}")),
-                            }
-                        }
-                    }
-                    Err(e) => lines.push(format!("✗ {name}: {e}")),
-                }
-            }
-            let _ = tx.send(Msg::Applied {
-                files,
-                fields,
-                covers,
-                lines,
-                paths,
-                renamed,
-            });
-        });
+                    .as_ref()
+                    .into(),
+                status: r.status.into(),
+                detail: r.detail.as_str().into(),
+                changes: ModelRc::new(VecModel::from(
+                    r.changes
+                        .iter()
+                        .map(|c| slint::SharedString::from(c.as_str()))
+                        .collect::<Vec<_>>(),
+                )),
+                can_undo: r.written && r.status != "undone",
+            })
+            .collect();
+        cx.app.set_tr_results(ModelRc::new(VecModel::from(items)));
+        cx.app.set_tr_can_undo(
+            self.results
+                .iter()
+                .any(|r| r.written && r.status != "undone"),
+        );
     }
 
-    fn undo(&mut self, cx: &Ctx) {
-        let Some((dir, paths)) = self.session.take() else {
-            return;
+    /// Restore one file of the last apply (name first, then tags and cover).
+    fn undo_one(&mut self, i: usize) -> Result<(), String> {
+        let Some((dir, _)) = &self.session else {
+            return Err("Nothing to undo".into());
         };
-        let (mut ok, mut errs) = (0, Vec::new());
-        // Rename back first: the backups are keyed by the original path.
-        for (old, new) in std::mem::take(&mut self.renamed) {
-            if let Err(e) = std::fs::rename(&new, &old) {
-                errs.push(format!("{}: {e}", new.display()));
+        let Some(r) = self.results.get_mut(i) else {
+            return Err("No such file".into());
+        };
+        if !r.written || r.status == "undone" {
+            return Ok(());
+        }
+        if r.path != r.orig {
+            if r.orig.exists() {
+                return Err(format!("{} exists again", r.orig.display()));
+            }
+            std::fs::rename(&r.path, &r.orig).map_err(|e| e.to_string())?;
+            r.path = r.orig.clone();
+        }
+        restore(dir, &r.orig)?;
+        r.status = "undone";
+        r.detail = "Previous tags, cover and name restored".into();
+        Ok(())
+    }
+
+    fn undo(&mut self, cx: &Ctx, which: Option<usize>) {
+        let idx: Vec<usize> = match which {
+            Some(i) => vec![i],
+            None => (0..self.results.len()).collect(),
+        };
+        let errs: Vec<String> = idx
+            .into_iter()
+            .filter_map(|i| self.undo_one(i).err())
+            .collect();
+        let left = self
+            .results
+            .iter()
+            .any(|r| r.written && r.status != "undone");
+        if !left {
+            if let Some((dir, _)) = self.session.take() {
+                let _ = std::fs::remove_dir_all(dir);
             }
         }
-        for p in &paths {
-            match restore(&dir, p) {
-                Ok(()) => ok += 1,
-                Err(e) => errs.push(format!("{}: {e}", p.display())),
-            }
-        }
-        let _ = std::fs::remove_dir_all(&dir);
         let s = if errs.is_empty() {
-            format!(
-                "Undone: previous tags and covers restored for {ok} file{}",
-                if ok == 1 { "" } else { "s" }
-            )
+            "Previous tags, covers and file names restored".to_string()
         } else {
-            format!("Restored {ok}; failed: {}", errs.join("; "))
+            format!("Undo failed: {}", errs.join("; "))
         };
-        cx.app.set_tr_can_undo(false);
-        cx.app.set_tr_summary("Changes undone".into());
+        self.render_summary(cx);
         cx.app.set_tr_status(s.as_str().into());
         cx.toast(&s);
     }
@@ -1894,6 +1946,74 @@ impl AutoTagger {
             self.rx = None;
         }
     }
+}
+
+/// Apply one review and describe the outcome for the summary.
+pub fn apply_one(r: &Review, originals: &Path, session: &Path) -> FileResult {
+    let mut out = FileResult {
+        orig: r.path.clone(),
+        path: r.path.clone(),
+        status: "skipped",
+        detail: String::new(),
+        changes: Vec::new(),
+        written: false,
+    };
+    if !r.on {
+        out.detail = "Unticked in the review".into();
+        return out;
+    }
+    if r.changes() == 0 {
+        out.detail = "Nothing to change: tags already match".into();
+        return out;
+    }
+    let (n, c) = match apply_review(r, originals, session) {
+        Ok(v) => v,
+        Err(e) => {
+            out.status = "failed";
+            out.detail = format!("Tags not written: {e}");
+            return out;
+        }
+    };
+    out.written = n > 0 || c;
+    for ((f, o, nv), on) in review_fields(&r.old, &r.cand.tags).iter().zip(&r.fields) {
+        if *on {
+            let (o, nv) = if *f == "Lyrics" {
+                (lyrics_summary(o), lyrics_summary(nv))
+            } else {
+                (o.clone(), nv.clone())
+            };
+            let o = if o.is_empty() { "—".to_string() } else { o };
+            out.changes.push(format!("{f}:  {o}  →  {nv}"));
+        }
+    }
+    if c {
+        out.changes.push(if r.old_cover.is_some() {
+            "Cover:  replaced".into()
+        } else {
+            "Cover:  embedded".into()
+        });
+    }
+    out.status = if out.written { "tagged" } else { "skipped" };
+    out.detail = format!(
+        "{n} field{}{}",
+        if n == 1 { "" } else { "s" },
+        if c { " + cover" } else { "" }
+    );
+    if let (true, Some(name)) = (r.rename_on, &r.rename) {
+        match rename_file(&r.path, name) {
+            Ok(to) => {
+                out.changes.push(format!(
+                    "File name:  {}  →  {name}",
+                    r.path.file_name().unwrap_or_default().to_string_lossy()
+                ));
+                out.path = to;
+                out.status = "renamed";
+                out.written = true;
+            }
+            Err(e) => out.detail += &format!(" · not renamed: {e}"),
+        }
+    }
+    out
 }
 
 /// Rows for AcoustID recording ids (score ≥ 50, best three) with rename proposals.
@@ -2155,7 +2275,15 @@ impl Plugin for AutoTagger {
                 self.render_review(cx);
                 self.apply_reviews(cx);
             }
-            "undo" => self.undo(cx),
+            "undo" => self.undo(cx, None),
+            "undo-file" => self.undo(cx, idx()),
+            "open-folder" => {
+                if let Some(r) = idx().and_then(|i| self.results.get(i)) {
+                    if let Some(d) = r.path.parent() {
+                        let _ = std::process::Command::new("xdg-open").arg(d).spawn();
+                    }
+                }
+            }
             "review-close" => {
                 cx.app.set_tr_open(false);
                 self.reviews.clear();
@@ -2232,40 +2360,30 @@ impl Plugin for AutoTagger {
                     }
                     return;
                 }
-                Msg::Applied {
-                    files,
-                    fields,
-                    covers,
-                    lines,
-                    paths,
-                    renamed,
-                } => {
+                Msg::Applied(results) => {
                     self.rx = None;
-                    self.renamed = renamed;
-                    if let Some(s) = &mut self.session {
-                        s.1 = paths;
+                    if let Some(sess) = &mut self.session {
+                        sess.1 = results
+                            .iter()
+                            .filter(|r| r.written)
+                            .map(|r| r.orig.clone())
+                            .collect();
                     }
-                    let sum = format!(
-                        "{files} file{} updated · {fields} field{} changed{}",
-                        if files == 1 { "" } else { "s" },
-                        if fields == 1 { "" } else { "s" },
-                        if covers > 0 {
-                            format!(" · {covers} cover{}", if covers == 1 { "" } else { "s" })
+                    self.results = results;
+                    cx.app.set_tr_busy(false);
+                    self.render_summary(cx);
+                    cx.app.set_tr_status(
+                        "Backups kept in ~/.local/share/vivi/tag-backups · Undo restores tags, covers and names".into(),
+                    );
+                    let (t, _, _, f) = result_counts(&self.results);
+                    cx.toast(&format!(
+                        "Auto-tagger: {t} tagged{}",
+                        if f > 0 {
+                            format!(", {f} failed")
                         } else {
                             String::new()
                         }
-                    );
-                    cx.app.set_tr_busy(false);
-                    cx.app.set_tr_summary(sum.as_str().into());
-                    let lines: Vec<slint::SharedString> =
-                        lines.into_iter().map(Into::into).collect();
-                    cx.app
-                        .set_tr_summary_lines(ModelRc::new(VecModel::from(lines)));
-                    cx.app.set_tr_can_undo(files > 0);
-                    cx.app.set_tr_status(
-                        "Previous tags and covers are backed up; Undo restores them.".into(),
-                    );
-                    cx.toast(&sum);
+                    ));
                     return;
                 }
             }
@@ -2445,6 +2563,31 @@ mod tests {
         assert_eq!(std::fs::read(&to).unwrap(), b"a");
         assert_eq!(std::fs::read(d.join("Taken.mp3")).unwrap(), b"b");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn summary_results_skip_fail_and_count() {
+        let c = cand("T", "A", "Al", "r1", 90);
+        let mut r = Review::new(
+            PathBuf::from("/nonexistent/x.mp3"),
+            Tags::default(),
+            c,
+            Vec::new(),
+            true,
+        );
+        r.on = false;
+        let tmp = std::env::temp_dir().join(format!("vivi-sum-{}", std::process::id()));
+        assert_eq!(apply_one(&r, &tmp, &tmp).status, "skipped");
+        r.on = true;
+        let f = apply_one(&r, &tmp, &tmp);
+        assert_eq!(f.status, "failed");
+        assert!(f.detail.starts_with("Tags not written"), "{}", f.detail);
+        let ok = FileResult {
+            status: "renamed",
+            written: true,
+            ..f.clone()
+        };
+        assert_eq!(result_counts(&[f, ok]), (1, 1, 0, 1));
     }
 
     #[test]

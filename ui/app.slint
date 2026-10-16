@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog, QrDialog } from "dialogs.slint"
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, KaraokeView, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
 export { MenuItem } from "menu.slint";
 export { Item, SettingRow, Theme, LibItem, FxState }
 
@@ -340,7 +340,9 @@ export component AppWindow inherits Window {
     in property <string> tr-status;
     in property <bool> tr-busy;
     in property <string> tr-summary;
-    in property <[string]> tr-summary-lines;
+    in property <string> tr-summary-sub;
+    in property <bool> tr-summary-ok;
+    in property <[TagResult]> tr-results;
     in property <bool> tr-can-undo;
     in property <string> md-placeholder;
     in property <string> md-search-label;
@@ -1157,7 +1159,7 @@ export component AppWindow inherits Window {
     if root.tr-open: TagReviewDialog {
         width: root.width; height: root.height;
         files: root.tr-files; status: root.tr-status; busy: root.tr-busy;
-        summary: root.tr-summary; summary-lines: root.tr-summary-lines; can-undo: root.tr-can-undo;
+        summary: root.tr-summary; summary-sub: root.tr-summary-sub; summary-ok: root.tr-summary-ok; results: root.tr-results; can-undo: root.tr-can-undo;
         cmd(n, a) => { root.plugin-command("auto-tagger", n, a); if (n == "review-close") { fs.focus(); } }
     }
 
