@@ -620,6 +620,26 @@ pub struct Pick {
     pub language: String,
 }
 
+/// Side-panel line for a remembered pick.
+pub fn pick_label(p: &Pick, video: Option<&Path>) -> String {
+    let next = video
+        .and_then(Path::parent)
+        .is_some_and(|d| Path::new(&p.path).parent() == Some(d));
+    let lang = if p.language.is_empty() {
+        String::new()
+    } else {
+        format!("{} · ", lang_name(&p.language))
+    };
+    format!(
+        "{lang}{}",
+        if next {
+            "saved next to the video"
+        } else {
+            "in the cache"
+        }
+    )
+}
+
 pub fn load_picks(file: &Path) -> HashMap<String, Pick> {
     std::fs::read_to_string(file)
         .ok()
@@ -1014,6 +1034,14 @@ impl SubtitleSearch {
         }
         cx.player.get("path").filter(|p| !p.is_empty())
     }
+    /// "English · saved next to the video" (the pick loads again next time).
+    fn show_pick(cx: &Ctx, pick: Option<&Pick>, video: Option<&Path>) {
+        cx.app.set_subs_pick_label(
+            pick.map(|p| pick_label(p, video))
+                .unwrap_or_default()
+                .into(),
+        );
+    }
     fn show_offset(cx: &Ctx, o: f64) {
         cx.app.set_subs_offset(offset_label(o).into());
         cx.app.set_pv_sub_delay(o as f32);
@@ -1104,6 +1132,7 @@ impl SubtitleSearch {
             save_pick(&picks_file(), k, Some(p.clone()));
             self.pick = Some(p);
             cx.app.set_subs_has_pick(true);
+            Self::show_pick(cx, self.pick.as_ref(), cx.local_path().as_deref());
         }
         Self::status(cx, "", false);
         cx.app.set_subs_open(false);
@@ -1455,6 +1484,7 @@ impl Plugin for SubtitleSearch {
             .and_then(|k| load_picks(&picks_file()).remove(k))
             .filter(|p| Path::new(&p.path).is_file());
         cx.app.set_subs_has_pick(self.pick.is_some());
+        Self::show_pick(cx, self.pick.as_ref(), cx.local_path().as_deref());
         let loaded = Self::loaded_subs(cx);
         let mut want: Vec<PathBuf> = Vec::new();
         if let Some(p) = &self.pick {
@@ -1705,6 +1735,20 @@ mod tests {
         save_pick(&f, "/m/a.mkv", None);
         assert!(load_picks(&f).is_empty());
         let _ = std::fs::remove_file(&f);
+    }
+
+    #[test]
+    fn pick_labels() {
+        let p = Pick {
+            file_id: 1,
+            path: "/m/a.en.srt".into(),
+            language: "en".into(),
+        };
+        assert_eq!(
+            pick_label(&p, Some(Path::new("/m/a.mkv"))),
+            "English · saved next to the video"
+        );
+        assert!(pick_label(&p, Some(Path::new("/x/a.mkv"))).contains("in the cache"));
     }
 
     #[test]

@@ -316,6 +316,7 @@ export component AppWindow inherits Window {
     // Per-file subtitle offset label, pick and whether Subtitle Auto-Sync is installed.
     in property <string> subs-offset: "0.0 s";
     in property <bool> subs-has-pick;
+    in property <string> subs-pick-label;
     in property <bool> subs-sync;
     in property <string> subs-status;
     in property <bool> subs-busy;
@@ -764,7 +765,7 @@ export component AppWindow inherits Window {
         lyrics-enabled: root.lyrics-enabled; karaoke-open: root.karaoke-open; lyrics-source: root.lyrics-source;
         lyrics-offset: root.lyrics-offset-label; lyrics-can-save: root.lyrics-can-save; lyrics-manual: root.lyrics-manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
-        subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-sync: root.subs-sync;
+        subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-pick-label: root.subs-pick-label; subs-sync: root.subs-sync;
         subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
         find-subs() => { root.add-subs(); }
         open-settings(c) => { root.settings-category = c; root.settings-open = true; root.settings-refresh(c, "", false); }

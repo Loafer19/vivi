@@ -321,6 +321,7 @@ export component SidePanel inherits Rectangle {
     in property <bool> subs-enabled;
     in property <string> subs-offset: "0.0 s";
     in property <bool> subs-has-pick;
+    in property <string> subs-pick-label;
     in property <bool> subs-sync;
     callback subs(string, string);
     callback find-subs();
@@ -541,7 +542,7 @@ export component SidePanel inherits Rectangle {
                             Button { horizontal-stretch: 1; text: "Add file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
                             if root.subs-enabled: Button { horizontal-stretch: 1; text: "Find online…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.find-subs(); } }
                         }
-                        if root.subs-has-pick: Line { label: "Remembered Pick"; hint: "Loaded again when this file plays";
+                        if root.subs-has-pick: Line { label: "OpenSubtitles Pick"; hint: root.subs-pick-label;
                             Button { width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }
                     }
                     if root.subs-enabled: Group { title: "Offset";
