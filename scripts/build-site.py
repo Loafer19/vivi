@@ -31,7 +31,6 @@ PAGES = {
     "index.html": ("Vivi is a fast, lightweight desktop media player for Linux written in Rust on top of mpv: "
                    "plugins, music visualizer, synced lyrics, library and a clean dark UI.", "1.0"),
     "plugins.html": ("All Vivi plugins: built-in and downloadable extensions for music, video, subtitles and streaming.", "0.8"),
-    "plugin-dev.html": ("Write a Vivi plugin: mpv Lua and JavaScript scripts, manifest.toml, settings, packaging and publishing.", "0.6"),
     "ai-agents.html": ("Control the Vivi media player from AI agents with the vivi-mcp Model Context Protocol server.", "0.5"),
     "architecture.html": ("How Vivi distributes plugins: packages, catalog, checksums, permissions, updates and rollback.", "0.4"),
 }

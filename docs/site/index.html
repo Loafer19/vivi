@@ -13,62 +13,71 @@
 </head>
 <body>
 <header class="nav"><div class="in">
-  <a class="brand" href="index.html"><img src="img/vivi.svg" alt="">Vivi</a>
+  <a class="brand" href="./" aria-label="Vivi home"><img src="img/vivi.svg" alt="">Vivi</a>
   <nav>
-    <a href="index.html" class="on">Home</a>
     <a href="https://plugins.viviplayer.app/"><i data-lucide="puzzle"></i>Plugins</a>
-    <a href="plugin-dev.html"><i data-lucide="code-xml"></i><span class="wide">Write a plugin</span><span class="narrow">Develop</span></a>
-    <a href="ai-agents.html"><i data-lucide="bot"></i>AI agents</a>
+    <a href="ai-agents.html"><i data-lucide="bot"></i><span class="wide">AI agents</span><span class="narrow">MCP</span></a>
     <a href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
+    <a class="dl" href="https://github.com/Loafer19/vivi/releases/latest"><i data-lucide="download"></i>Download</a>
   </nav>
 </div></header>
 <main>
 <section class="hero">
-  <img class="logo" src="img/vivi.svg" alt="Vivi logo">
   <h1>A media player that <span>gets out of the way</span></h1>
-  <p>Vivi is a fast, lightweight desktop player written in Rust on top of mpv, with a clean
-  interface by default and deep customization when you want it.</p>
-  <a class="btn primary" href="https://github.com/Loafer19/vivi/releases"><i data-lucide="download"></i>Download</a>
-  <a class="btn ghost" href="https://plugins.viviplayer.app/"><i data-lucide="puzzle"></i>Browse plugins</a>
+  <p>Vivi is a fast, lightweight desktop player for Linux, written in Rust on top of mpv.
+  Clean by default, deeply customizable when you want it.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/Loafer19/vivi/releases/latest"><i data-lucide="download"></i>Download</a>
+    <a class="btn ghost" href="#install"><i data-lucide="terminal"></i>One-line install</a>
+    <a class="btn ghost" href="https://plugins.viviplayer.app/"><i data-lucide="puzzle"></i>Browse plugins</a>
+  </div>
+  <p class="meta">Free and open source · MIT · Linux, Windows, macOS</p>
 </section>
-<img class="shot" src="img/player.png" alt="Vivi playing Sintel" width="1280" height="720">
+<div class="demo">
+  <video class="shot" autoplay muted loop playsinline preload="none" poster="video/vivi-demo.jpg" width="1280" height="720"
+    aria-label="Vivi in action: video playback, music visualizer with lyrics, library, settings, plugins, miniplayer and network streams">
+    <source src="video/vivi-demo.webm" type="video/webm">
+    <source src="video/vivi-demo.mp4" type="video/mp4">
+    <img src="video/vivi-demo.jpg" alt="Vivi playing a film" width="1280" height="720">
+  </video>
+</div>
 
-<h2>Features</h2>
+<h2 id="features">Everything you need, nothing in the way</h2>
 <p class="lead">Everything mpv plays, in a dark UI based on the Figma “VLC Redesign”.</p>
 <div class="grid">
-  <div class="card"><div class="ic"><i data-lucide="play"></i></div><h3>Plays everything</h3><p>libmpv with hardware decoding, Wayland and X11, subtitles, chapters, A-B loop, speed and filters.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="library"></i></div><h3>Library</h3><p>Continue Watching, music by artists and albums, folders, playlists, network streams and thumbnails.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="audio-waveform"></i></div><h3>Music visualizer</h3><p>Spectrum, scope, waveform, radial, particles and pitch visuals for audio files.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="puzzle"></i></div><h3>Plugins</h3><p>Skip intros, karaoke lyrics, subtitle search, plus any mpv Lua or JavaScript script.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="play"></i></div><h3>Plays everything</h3><p>libmpv with hardware decoding on Wayland and X11, subtitles, chapters, A-B loop, speed and filters.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="library"></i></div><h3>Library</h3><p>Continue Watching, music by artist and album, folders, playlists, network streams and thumbnails.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="audio-waveform"></i></div><h3>Music visualizer</h3><p>Spectrum, scope, waveform, radial, particle and pitch visuals, with synced lyrics on top.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="puzzle"></i></div><h3>Plugins</h3><p>Skip intros, karaoke lyrics, subtitle search and more in one click, plus any mpv Lua or JavaScript script.</p></div>
   <div class="card"><div class="ic"><i data-lucide="history"></i></div><h3>Remembers</h3><p>Resume positions, per-show presets for delays and track languages, recent files.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="monitor-smartphone"></i></div><h3>Everywhere</h3><p>AppImage, Arch packages, Windows and macOS builds; MPRIS media keys on Linux; responsive down to 480 px.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="bot"></i></div><h3>AI agents</h3><p>Optional <a href="ai-agents.html">MCP server</a> lets Claude, Cursor and others control playback over a private local socket.</p></div>
 </div>
 
-<h2>Screenshots</h2>
+<h2 id="screenshots">Screenshots</h2>
 <p class="lead">Captured from the release build. Click to open full size.</p>
 <div class="gallery">
-  <figure><a href="img/library-home.png"><img class="shot" src="img/library-home.png" alt="Library home" loading="lazy"></a><figcaption>Library</figcaption></figure>
-  <figure><a href="img/panel-subtitles.png"><img class="shot" src="img/panel-subtitles.png" alt="Side panel" loading="lazy"></a><figcaption>Side panel</figcaption></figure>
-  <figure><a href="img/settings.png"><img class="shot" src="img/settings.png" alt="Settings" loading="lazy"></a><figcaption>Settings</figcaption></figure>
-  <figure><a href="img/menu-main.png"><img class="shot" src="img/menu-main.png" alt="Main menu" loading="lazy"></a><figcaption>Menus</figcaption></figure>
-  <figure><a href="img/visualizer.png"><img class="shot" src="img/visualizer.png" alt="Music visualizer" loading="lazy"></a><figcaption>Visualizer</figcaption></figure>
-  <figure><a href="img/miniplayer.png"><img class="shot" src="img/miniplayer.png" alt="Miniplayer" loading="lazy"></a><figcaption>Miniplayer</figcaption></figure>
-  <figure><a href="img/panel-audio.png"><img class="shot" src="img/panel-audio.png" alt="Equalizer" loading="lazy"></a><figcaption>Equalizer</figcaption></figure>
-  <figure><a href="img/network.png"><img class="shot" src="img/network.png" alt="Open Network Stream" loading="lazy"></a><figcaption>Network streams</figcaption></figure>
+  <figure><a href="img/library-home.png"><img class="shot" src="img/library-home.webp" alt="Vivi library home with Continue Watching" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Library</figcaption></figure>
+  <figure><a href="img/panel-subtitles.png"><img class="shot" src="img/panel-subtitles.webp" alt="Side panel with subtitle settings" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Side panel</figcaption></figure>
+  <figure><a href="img/settings.png"><img class="shot" src="img/settings.webp" alt="Settings window" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Settings</figcaption></figure>
+  <figure><a href="img/menu-main.png"><img class="shot" src="img/menu-main.webp" alt="Main menu" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Menus</figcaption></figure>
+  <figure><a href="img/visualizer.png"><img class="shot" src="img/visualizer.webp" alt="Music visualizer" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Visualizer</figcaption></figure>
+  <figure><a href="img/miniplayer.png"><img class="shot" src="img/miniplayer.webp" alt="Miniplayer" loading="lazy" decoding="async" width="391" height="339"></a><figcaption>Miniplayer</figcaption></figure>
+  <figure><a href="img/panel-audio.png"><img class="shot" src="img/panel-audio.webp" alt="Equalizer" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Equalizer</figcaption></figure>
+  <figure><a href="img/network.png"><img class="shot" src="img/network.webp" alt="Open Network Stream dialog" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Network streams</figcaption></figure>
 </div>
 
-<h2>Plugins</h2>
-<p class="lead">Turn them on and off in Settings → Extensions. <a href="plugins.html">See the catalog <i data-lucide="arrow-right"></i></a></p>
+<h2 id="plugins">Plugins</h2>
+<p class="lead">Install and toggle them in Settings → Extensions. <a href="https://plugins.viviplayer.app/">Browse the marketplace <i data-lucide="arrow-right"></i></a> or <a href="https://plugins.viviplayer.app/dev/">write your own</a>.</p>
 <div class="gallery">
-  <figure><a href="img/extensions.png"><img class="shot" src="img/extensions.png" alt="Extensions settings" loading="lazy"></a><figcaption>Extensions</figcaption></figure>
-  <figure><a href="img/lyrics.png"><img class="shot" src="img/lyrics.png" alt="Lyrics overlay over the visualizer" loading="lazy"></a><figcaption>Lyrics</figcaption></figure>
-  <figure><a href="img/skip-intro.png"><img class="shot" src="img/skip-intro.png" alt="Skip intro button" loading="lazy"></a><figcaption>Skip Intro</figcaption></figure>
-  <figure><a href="img/add-subtitles.png"><img class="shot" src="img/add-subtitles.png" alt="Add Subtitles dialog" loading="lazy"></a><figcaption>Subtitle Search</figcaption></figure>
+  <figure><a href="img/extensions.png"><img class="shot" src="img/extensions.webp" alt="Settings → Extensions" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Extensions</figcaption></figure>
+  <figure><a href="img/lyrics.png"><img class="shot" src="img/lyrics.webp" alt="Synced lyrics over the visualizer" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Lyrics</figcaption></figure>
+  <figure><a href="img/skip-intro.png"><img class="shot" src="img/skip-intro.webp" alt="Skip Intro button" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Skip Intro</figcaption></figure>
+  <figure><a href="img/add-subtitles.png"><img class="shot" src="img/add-subtitles.webp" alt="Add Subtitles dialog" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Subtitle Search</figcaption></figure>
 </div>
 
-<h2>Install</h2>
-<pre><code># Linux (x86_64): latest release, checksums verified
-curl -fsSL https://viviplayer.app/install.sh | sh
+<h2 id="install">Install</h2>
+<p class="lead">Linux (x86_64): downloads the latest release and verifies checksums.</p>
+<pre><code>curl -fsSL https://viviplayer.app/install.sh | sh
 
 # uninstall (settings and library stay)
 curl -fsSL https://viviplayer.app/install.sh | sh -s -- --uninstall</code></pre>
@@ -77,13 +86,13 @@ curl -fsSL https://viviplayer.app/install.sh | sh -s -- --uninstall</code></pre>
 git clone https://github.com/Loafer19/vivi &amp;&amp; cd vivi
 sudo pacman -S --needed mpv sqlite rust
 cargo build --release &amp;&amp; ./target/release/vivi</code></pre>
-<p class="lead">Prebuilt AppImage, tarball, Windows and macOS builds are on the <a href="https://github.com/Loafer19/vivi/releases">releases page</a>.</p>
-<p class="note">Work in progress: not every frame of the Figma design is ported yet (equalizer and filter panels, network stream and new playlist dialogs, miniplayer queue variant). Progress is tracked in the <a href="https://github.com/Loafer19/vivi/milestones">milestones</a>.</p>
+<p class="lead">AppImage, tarball, Windows and macOS builds are on the <a href="https://github.com/Loafer19/vivi/releases">releases page</a>.</p>
+<p class="note">Work in progress: not every frame of the Figma design is ported yet. Progress is tracked in the <a href="https://github.com/Loafer19/vivi/milestones">milestones</a>.</p>
 </main>
 <footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC) ·
-screenshots show <a href="https://durian.blender.org">Sintel</a> (© Blender Foundation, CC BY 3.0) and
+screenshots and demo video show <a href="https://durian.blender.org">Sintel</a> (© Blender Foundation, CC BY 3.0) and
 “Local Forecast – Elevator” by <a href="https://incompetech.com">Kevin MacLeod</a> (CC BY 4.0)</footer>
 </body>
 </html>
