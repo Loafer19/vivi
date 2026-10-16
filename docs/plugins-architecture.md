@@ -1,6 +1,6 @@
 # Plugin distribution: how plugins are downloaded and updated
 
-Status: implemented in v0.9.0. Code: `src/plugins/packages.rs`,
+Status: implemented in v0.9.0. Developer-facing guide: <https://plugins.viviplayer.app/dev/> (source `docs/dev/*.md` in vivi-plugins); this file keeps the core design notes. Code: `src/plugins/packages.rs`,
 `scripts/package-plugins.py` and `.github/workflows/plugins.yml` in
 [Loafer19/vivi-plugins](https://github.com/Loafer19/vivi-plugins) (packages, helpers, catalog, marketplace and all plugin/helper releases live there).
 

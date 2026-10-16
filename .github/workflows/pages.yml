@@ -1,14 +1,11 @@
 name: Docs site
-# Builds docs/site (+ plugin catalog downloaded from Loafer19/vivi-plugins) and deploys it to
-# GitHub Pages. The daily schedule refreshes the plugin list on plugins.html.
+# Builds docs/site and deploys it to GitHub Pages (mirror of viviplayer.app).
 # Pages must be enabled in Settings → Pages with "GitHub Actions" as the source; for a
 # private repository that needs a paid plan (or a public repository).
 on:
   push:
     branches: [master]
     paths: ["docs/site/**", "scripts/build-site.py", "docs/screenshots/**", "packaging/aur/vivi-bin/**", ".github/workflows/pages.yml"]
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Build the docs site into _site/ (or the directory given as the first argument).
 
-Copies docs/site/, adds the logo and screenshots, and renders plugins.html (the plugin
-catalog) from the plugin catalog into docs/site/plugins.template.html. The catalog lives in
-https://github.com/Loafer19/vivi-plugins (plugins/index.json); it is downloaded at build time
-(or read from $VIVI_PLUGINS_INDEX, a local file). The catalog itself is served by
-plugins.viviplayer.app and the vivi-plugins GitHub Pages, not by this site.
+Copies docs/site/ and adds the logo and screenshots. The plugin catalog, marketplace and plugin
+developer docs live on plugins.viviplayer.app (built from https://github.com/Loafer19/vivi-plugins),
+not on this site.
 Icons are Lucide (https://lucide.dev, ISC license) SVGs kept in docs/site/icons/; every
 <i data-lucide="name"></i> placeholder is replaced by the inline SVG, so the site needs no JavaScript.
 Standard library only, so it runs as-is in GitHub Actions.
@@ -14,9 +12,7 @@ import html
 import re
 import json
 import shutil
-import os
 import sys
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,15 +20,12 @@ OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "_site"
 ICON_DIR = ROOT / "docs/site/icons"
 SITE = "https://viviplayer.app"
 MARKET = "https://plugins.viviplayer.app"
-INDEX_URL = "https://raw.githubusercontent.com/Loafer19/vivi-plugins/master/plugins/index.json"
 # Per page: (description, sitemap priority). Canonical URLs always point at viviplayer.app,
 # also on the GitHub Pages mirror (loafer19.github.io/vivi), so search engines index one copy.
 PAGES = {
     "index.html": ("Vivi is a fast, lightweight desktop media player for Linux written in Rust on top of mpv: "
                    "plugins, music visualizer, synced lyrics, library and a clean dark UI.", "1.0"),
-    "plugins.html": ("All Vivi plugins: built-in and downloadable extensions for music, video, subtitles and streaming.", "0.8"),
     "ai-agents.html": ("Control the Vivi media player from Claude, Cursor, Claude Code and other AI agents with the vivi-mcp MCP server: example prompts, setup and all 30 tools.", "0.5"),
-    "architecture.html": ("How Vivi distributes plugins: packages, catalog, checksums, permissions, updates and rollback.", "0.4"),
 }
 JSONLD = {
     "@context": "https://schema.org",
@@ -111,56 +104,10 @@ def inline_icons(text: str) -> str:
     return re.sub(r'<i data-lucide="([a-z0-9-]+)"></i>', lambda m: icon(m.group(1)), text)
 
 
-PERM_TEXT = {"network": "Internet access", "filesystem": "Files outside its folder", "subprocess": "Runs programs"}
-KIND_TAG = {"script": ("script", "mpv script"), "package": ("package", "downloadable"), "builtin": ("", "built-in")}
-
-
-def card(p: dict) -> str:
-    e = html.escape
-    settings = "".join(
-        f"<li><code>{e(s['key'])}</code> {e(s['title'])} <span class=meta>({e(s['type'])})</span></li>"
-        for s in p.get("settings", [])
-    )
-    kind = p.get("kind", "builtin")
-    src = p.get("source")
-    link = (
-        f' · <a href="https://github.com/Loafer19/vivi-plugins/tree/master/{e(src)}">source</a>' if src else ""
-    )
-    cls, label = KIND_TAG.get(kind, KIND_TAG["builtin"])
-    extra = ""
-    if kind == "package":
-        perms = p.get("permissions", [])
-        ptxt = ", ".join(PERM_TEXT.get(x, x) for x in perms) or "No special permissions"
-        extra = f"""<div class=install><span class="tag install">{icon('download')}Install in Vivi</span>
-  <span class=meta>Settings → Extensions → Browse · {e(f"{p.get('size', 0) / 1024:.0f}")} KB ·
-  <a href="{e(p['url'])}">zip</a> · needs Vivi {e(p.get('min_vivi', ''))}+</span></div>
-  <div class=perms>{icon('shield-check')}{e(ptxt)}</div>"""
-    return f"""<div class="card plugin" id="{e(p['id'])}">
-  <div class=top><div class=icon>{icon(p.get('lucide', 'puzzle'))}</div>
-    <div><h3>{e(p['name'])}</h3>
-    <div class=meta>{e(p['id'])} · v{e(p.get('version', ''))} · {e(p.get('author', ''))}{link}</div></div></div>
-  <p>{e(p['description'])}</p>
-  <div><span class="tag {cls}">{label}</span>
-  {'' if p.get('default_enabled', True) else '<span class=tag>off by default</span>'}</div>
-  {extra}
-  {f'<ul>{settings}</ul>' if settings else ''}
-</div>"""
-
-
-def catalog() -> str:
-    local = os.environ.get("VIVI_PLUGINS_INDEX")
-    if local:
-        return Path(local).read_text()
-    with urllib.request.urlopen(INDEX_URL, timeout=30) as r:
-        return r.read().decode()
-
-
 def main() -> None:
-    raw = catalog()
-    idx = json.loads(raw)
     if OUT.exists():
         shutil.rmtree(OUT)
-    shutil.copytree(ROOT / "docs/site", OUT, ignore=shutil.ignore_patterns("*.template.html", "icons"))
+    shutil.copytree(ROOT / "docs/site", OUT, ignore=shutil.ignore_patterns("icons"))
     (OUT / "LICENSE-lucide.txt").write_text((ICON_DIR / "LICENSE").read_text())
     img = OUT / "img"
     img.mkdir(exist_ok=True)
@@ -170,9 +117,6 @@ def main() -> None:
     # install.sh builds this on Arch (kept at the latest release by the release workflow).
     (OUT / "vivi-bin").mkdir(exist_ok=True)
     shutil.copy(ROOT / "packaging/aur/vivi-bin/PKGBUILD", OUT / "vivi-bin/PKGBUILD")
-    tpl = (ROOT / "docs/site/plugins.template.html").read_text()
-    cards = "\n".join(card(p) for p in idx["plugins"])
-    (OUT / "plugins.html").write_text(tpl.replace("<!--PLUGINS-->", cards).replace("<!--COUNT-->", str(len(idx["plugins"]))))
     for page in OUT.glob("*.html"):
         page.write_text(seo(page.name, inline_icons(page.read_text())))
     sitemap(OUT)
@@ -184,7 +128,7 @@ def main() -> None:
     ]
     if missing:
         sys.exit(f"broken local links: {missing}")
-    print(f"site built in {OUT} ({len(idx['plugins'])} plugins)")
+    print(f"site built in {OUT}")
 
 
 if __name__ == "__main__":
