@@ -91,7 +91,7 @@ explicitly: `"env": { "VIVI_SOCKET": "/run/user/1000/vivi.sock" }`.
 | `search_streams` | `query`, `kind` (`radio`/`tv`), `limit` | Search radio-browser.info, iptv-org TV, your Network Streams favorites and playlists; returns `url`s for `open_network_stream` (needs network; may take a few seconds) |
 | `list_plugins` | – | Plugins: `id`, `name`, `version`, `kind`, `enabled` (read-only) |
 | `plugin_info` | `id` | Description, author, version and setting keys/titles (no values) |
-| `get_lyrics` | – | Lines shown by the Lyrics plugin, `synced`, `current_line` |
+| `get_lyrics` | – | Lines shown by the Lyrics plugin, `synced`, `current_line`, `source`, `offset_seconds`, `karaoke` |
 
 IPTV / radio: `open` also plays URLs, but `open_network_stream` validates the URL, can
 queue instead of replacing, and shows a station name. A whole `.m3u` playlist URL can be
