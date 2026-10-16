@@ -17,6 +17,8 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo build --release
+        env:
+          VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
   flatpak-sources:
     # Fails when packaging/flatpak/cargo-sources.json no longer matches Cargo.lock.
     runs-on: ubuntu-24.04

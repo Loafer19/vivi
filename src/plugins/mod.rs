@@ -897,6 +897,22 @@ mod tests {
     /// Alt combos Vivi forwards and expect their `vivi-toast` messages.
     #[test]
     fn packaged_scripts_answer_forwarded_alt_keys() {
+        // Packaged plugins live in Loafer19/vivi-plugins; point VIVI_PLUGINS_DIR at a
+        // checkout of it to run this test. Skip when the scripts are not available.
+        let root = std::env::var_os("VIVI_PLUGINS_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins"));
+        let ids = ["night-mode", "ab-loop"];
+        if !ids
+            .iter()
+            .all(|id| root.join(id).join(format!("{id}.lua")).is_file())
+        {
+            eprintln!(
+                "skipping: packaged plugin scripts not found in {}",
+                root.display()
+            );
+            return;
+        }
         use libmpv2::events::{Event, EventContext};
         let mpv = libmpv2::Mpv::with_initializer(|i| {
             i.set_property("vo", "null")?;
@@ -908,7 +924,6 @@ mod tests {
         })
         .expect("libmpv");
         let mut ev = EventContext::new(mpv.ctx);
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins");
         for (id, key, want) in [
             ("night-mode", "Alt+n", "Night mode"),
             ("ab-loop", "Alt+c", "A-B loop cleared"),
