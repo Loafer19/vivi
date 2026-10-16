@@ -4,6 +4,7 @@
 
 ### Fixed
 - Compact control bar matches the reference density: 36 px row, all buttons on one vertical centre (no per-icon offsets), smaller equal-size buttons, near-black seek track with a dim orange played fill and a slim bright handle, times next to the bar, smaller volume wedge. Title bar buttons are centred in the 40 px strip.
+- Compact seek track uses the reference colours (track #090909, played #371F06, accent handle, bar #181818): rounded track with the fill and handle inset 1.5 px so a thin dark border stays all round; times in the secondary grey.
 
 ## [0.11.0] - 2026-10-17
 

@@ -75,20 +75,20 @@ component SeekBar inherits Rectangle {
     track := Rectangle {
         y: (parent.height - self.height) / 2;
         height: root.wave || root.boxed ? root.height : (ta.has-hover ? root.track-h + 2px : root.track-h);
-        border-radius: root.boxed ? 3px : 2px;
-        background: root.wave ? transparent : root.boxed ? #060606 : Theme.bg-a1;
-        border-width: root.boxed && !root.wave ? 1px : 0;
-        border-color: #1e1e1e;
+        border-radius: root.boxed ? 4px : 2px;
+        background: root.wave ? transparent : root.boxed ? #090909 : Theme.bg-a1;
         clip: root.boxed;
         if ta.has-hover && !root.wave: Rectangle {
-            x: 0; height: parent.height; border-radius: 2px;
-            width: parent.width * root.hover-frac;
+            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
+            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
+            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * root.hover-frac);
             background: root.boxed ? #ffffff0d : Theme.divider;
         }
         if !root.wave: Rectangle {
-            x: 0; height: parent.height; border-radius: 2px;
-            width: parent.width * (ta.pressed ? root.hover-frac : root.frac);
-            background: root.boxed ? (ta.has-hover ? #5a3410 : #43270b) : (ta.has-hover ? Theme.accent-bright : Theme.accent);
+            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
+            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
+            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * (ta.pressed ? root.hover-frac : root.frac));
+            background: root.boxed ? (ta.has-hover ? #4a2a08 : #371F06) : (ta.has-hover ? Theme.accent-bright : Theme.accent);
         }
         // Waveform: one bar per peak, the played part in the accent colour.
         for v[i] in root.peaks: Rectangle {
@@ -127,8 +127,8 @@ component SeekBar inherits Rectangle {
     }
     // Playhead handle (compact style)
     if root.duration > 0 && !root.wave: Rectangle {
-        width: root.boxed ? 5px : 4px; height: root.boxed ? root.height - 4px : root.track-h + 8px; border-radius: 2px;
-        x: clamp(root.width * (ta.pressed ? root.hover-frac : root.frac) - self.width / 2, 2px, root.width - self.width - 2px); y: (root.height - self.height) / 2;
+        width: root.boxed ? 5px : 4px; height: root.boxed ? root.height - 3px : root.track-h + 8px; border-radius: root.boxed ? 2.5px : 2px;
+        x: clamp(1.5px + (root.width - 3px) * (ta.pressed ? root.hover-frac : root.frac) - self.width, 1.5px, root.width - self.width - 1.5px); y: (root.height - self.height) / 2;
         background: Theme.accent;
         visible: root.boxed || root.track-h > 8px || ta.has-hover;
     }
@@ -1041,9 +1041,9 @@ export component AppWindow inherits Window {
     if !root.mini && root.has-media && root.show-ui && !root.bar-classic: Rectangle {
         y: root.height - self.height;
         height: root.bar-h;
-        background: Theme.bar;
+        background: Theme.dark ? #181818F2 : Theme.bar;
         TouchArea { }
-        Rectangle { y: 0; height: 1px; background: Theme.divider.with-alpha(0.5); }
+        Rectangle { y: 0; height: 1px; background: Theme.dark ? #212121 : Theme.divider; }
         HorizontalLayout {
             padding-left: 10px; padding-right: 8px; padding-top: 4px; padding-bottom: 4px; spacing: 2px; alignment: stretch;
             for id[i] in root.bar-left: BarItem {
@@ -1063,8 +1063,8 @@ export component AppWindow inherits Window {
             Rectangle { width: 12px; }
             Text {
                 text: root.ab-a >= 0 && root.ab-b >= 0 ? "*" + fmt(root.ab-a) : fmt(root.position);
-                color: root.ab-a >= 0 && root.ab-b >= 0 ? Theme.accent-bright : Theme.fg-1;
-                font-family: "DM Mono"; font-size: 12px; vertical-alignment: center;
+                color: root.ab-a >= 0 && root.ab-b >= 0 ? Theme.accent-bright : Theme.fg-a2;
+                font-size: 12px; vertical-alignment: center;
             }
             // A nudge: ‹ − (only while a range is set)
             if root.ab-a >= 0 && root.ab-b >= 0: Text {
@@ -1090,8 +1090,8 @@ export component AppWindow inherits Window {
             }
             Text {
                 text: root.ab-a >= 0 && root.ab-b >= 0 ? "*" + fmt(root.ab-b) : fmt(root.duration);
-                color: root.ab-a >= 0 && root.ab-b >= 0 ? Theme.accent-bright : Theme.fg-a1;
-                font-family: "DM Mono"; font-size: 12px; vertical-alignment: center;
+                color: root.ab-a >= 0 && root.ab-b >= 0 ? Theme.accent-bright : Theme.fg-a2;
+                font-size: 12px; vertical-alignment: center;
             }
             if root.ab-a >= 0 && root.ab-b >= 0: IconButton { compact: true; tip: "Clear A-B range"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.ab-set(-1, -1); fs.focus(); } }
             Rectangle { width: 10px; }
