@@ -70,6 +70,23 @@ export global Tools {
     }
 }
 
+// Edge fades over a horizontally scrolling row: shown on the side that has more
+// content, in the colour of the surface underneath.
+component EdgeFades inherits Rectangle {
+    in property <length> viewport-x;
+    in property <length> viewport-width;
+    in property <brush> base;
+    property <length> w: 36px;
+    if root.viewport-x < -1px: Rectangle {
+        x: 0; width: root.w; height: root.height;
+        background: @linear-gradient(90deg, root.base 0%, transparent 100%);
+    }
+    if root.viewport-x > root.width - root.viewport-width + 1px: Rectangle {
+        x: root.width - root.w; width: root.w; height: root.height;
+        background: @linear-gradient(270deg, root.base 0%, transparent 100%);
+    }
+}
+
 component Glyph inherits Rectangle {
     in property <string> text;
     in property <bool> enabled: true;
@@ -189,21 +206,28 @@ export component CustomizeDialog inherits Modal {
             }
         }
         Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }
-        Flickable {
-            height: 104px; content-width: max(self.width, zone.preferred-width);
-            zone := Zone {
-                width: max(parent.width, self.preferred-width);
-                title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
-                move(i, d) => { root.move(i, d); }
-                remove(i) => { root.remove(i); }
+        Rectangle {
+            height: 104px;
+            bar-fl := Flickable {
+                content-width: max(self.width, zone.preferred-width);
+                zone := Zone {
+                    width: max(parent.width, self.preferred-width);
+                    title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
+                    move(i, d) => { root.move(i, d); }
+                    remove(i) => { root.remove(i); }
+                }
             }
+            EdgeFades { viewport-x: bar-fl.content-x; viewport-width: bar-fl.content-width; base: Theme.bg-b1; }
         }
         Text { text: "Available items"; color: Theme.fg-1; font-weight: 600; }
         Rectangle {
             height: 76px; border-radius: Metrics.radius-md;
             border-width: 1px; border-color: Theme.divider;
             if root.available.length == 0: Text { text: "Every item is already in the player."; color: Theme.fg-a3; }
-            HorizontalLayout {
+            av-fl := Flickable {
+                x: 1px; width: parent.width - 2px;
+                content-width: max(self.width, av-row.preferred-width + 20px);
+                av-row := HorizontalLayout {
                 x: 10px; y: 10px; height: 56px; spacing: 6px; alignment: start;
                 for id in root.available: Rectangle {
                     height: 56px; width: 76px; border-radius: Metrics.radius-md;
@@ -221,6 +245,11 @@ export component CustomizeDialog inherits Modal {
                         tl := Text { text: "Add " + Tools.label(id); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
                     }
                 }
+                }
+            }
+            EdgeFades {
+                x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px;
+                viewport-x: av-fl.content-x; viewport-width: av-fl.content-width; base: Theme.bg-a4;
             }
         }
         HorizontalLayout {
