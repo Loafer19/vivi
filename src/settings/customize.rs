@@ -48,8 +48,10 @@ pub(crate) fn customize(
         app.global::<crate::Customize>().on_move(move |i, d| {
             edit(&|t| {
                 let (i, j) = (i as usize, i as usize as i64 + d as i64);
+                // Move item i to position j (a neighbour swap for d = ±1, a drag otherwise).
                 if j >= 0 && (j as usize) < t.len() && i < t.len() {
-                    t.swap(i, j as usize);
+                    let it = t.remove(i);
+                    t.insert(j as usize, it);
                 }
             })
         });

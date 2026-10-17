@@ -102,12 +102,31 @@ component Placed inherits Rectangle {
     in property <string> id;
     in property <bool> first;
     in property <bool> last;
+    in property <int> index;
+    in property <int> count;
     callback move(int);
     callback remove();
+    // Tile pitch in the row (width + spacing), for drag-to-reorder.
+    property <length> pitch: 82px;
+    property <length> dx: hov.pressed ? hov.mouse-x - hov.pressed-x : 0;
+    property <int> steps: clamp(round(root.dx / root.pitch), -root.index, root.count - 1 - root.index);
     width: 76px; height: 74px;
+    z: hov.pressed ? 10 : 0;
     border-radius: Metrics.radius-md; background: Theme.bg-a1;
-    border-width: 1px; border-color: hov.has-hover ? Theme.accent : Theme.divider;
-    hov := TouchArea { }
+    border-width: 1px; border-color: hov.has-hover || hov.pressed ? Theme.accent : Theme.divider;
+    // Drag shows an accent insertion marker where the tile will land.
+    hov := TouchArea {
+        mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.up && e.button == PointerEventButton.left && root.steps != 0) {
+                root.move(root.steps);
+            }
+        }
+    }
+    if hov.pressed && root.steps != 0: Rectangle {
+        x: root.steps * root.pitch + (root.steps > 0 ? root.width + 2px : -4px); y: 4px;
+        width: 2px; height: root.height - 8px; background: Theme.accent;
+    }
     Icon { y: 7px; source: Tools.icon(root.id); width: 20px; height: 20px; tint: Theme.fg-1; }
     Text {
         x: 4px; y: 30px; width: parent.width - 8px; height: 16px;
@@ -145,6 +164,7 @@ component Zone inherits Rectangle {
             id: id;
             first: i == 0;
             last: i == root.items.length - 1;
+            index: i; count: root.items.length;
             move(d) => { root.move(root.offset + i, d); }
             remove() => { root.remove(root.offset + i); }
         }
@@ -175,7 +195,7 @@ export component CustomizeDialog inherits Modal {
         padding: 22px; spacing: 14px;
         Text { text: "Customize Player"; color: Theme.fg-1; font-size: Metrics.font-xl; font-weight: 600; }
         Text {
-            text: "Every element is movable: use ‹ › to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it. The bar under this dialog is a live preview.";
+            text: "Every element is movable: drag a tile (or use ‹ ›) to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it. The bar under this dialog is a live preview.";
             color: Theme.fg-a1; wrap: word-wrap;
         }
         HorizontalLayout {
@@ -209,6 +229,7 @@ export component CustomizeDialog inherits Modal {
         Rectangle {
             height: 104px;
             bar-fl := Flickable {
+                interactive: false;
                 content-width: max(self.width, zone.preferred-width);
                 zone := Zone {
                     width: max(parent.width, self.preferred-width);
