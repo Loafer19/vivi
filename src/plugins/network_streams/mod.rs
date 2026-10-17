@@ -185,7 +185,7 @@ pub fn display_name(n: &str) -> String {
 // ---------- plugin ----------
 
 #[derive(Default)]
-pub struct Streams {
+pub struct NetworkStreams {
     list: Vec<Stream>,
     /// Source index the current list came from.
     mode: usize,
@@ -221,7 +221,7 @@ pub struct Streams {
     selected: Option<usize>,
 }
 
-impl Streams {
+impl NetworkStreams {
     fn ui(cx: &Ctx, status: &str, busy: bool) {
         cx.app
             .global::<crate::MusicDialogState>()
@@ -576,7 +576,7 @@ fn prune_logos(max: u64) {
     }
 }
 
-impl Streams {
+impl NetworkStreams {
     /// Fill the now-playing card while an audio-only network stream plays.
     fn now_playing(&mut self, cx: &Ctx) {
         let a = cx.app;
@@ -644,7 +644,7 @@ impl Streams {
     }
 }
 
-impl Plugin for Streams {
+impl Plugin for NetworkStreams {
     fn manifest(&self) -> Manifest {
         Manifest::builtin(
             ID,

@@ -61,7 +61,7 @@ fn search_streams(args: &Value) -> Result<Value, String> {
     }
     let limit = args["limit"].as_u64().unwrap_or(25).clamp(1, 200) as usize;
     let kind = args["kind"].as_str().unwrap_or("");
-    let v = crate::plugins::streams::search_all(q)?;
+    let v = crate::plugins::network_streams::search_all(q)?;
     let items: Vec<Value> = v
         .into_iter()
         .filter(|s| match kind {
@@ -71,7 +71,7 @@ fn search_streams(args: &Value) -> Result<Value, String> {
         })
         .take(limit)
         .map(|s| {
-            json!({ "name": crate::plugins::streams::display_name(&s.name), "url": s.url,
+            json!({ "name": crate::plugins::network_streams::display_name(&s.name), "url": s.url,
                 "group": s.group, "country": s.country, "codec": s.codec, "bitrate": s.bitrate,
                 "logo": s.logo, "source": s.source, "tvg_id": s.tvg_id })
         })
@@ -147,11 +147,12 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                                 Err(format!("unknown command {cmd:?}"))
                             } else if cmd == "search_subtitles" {
                                 // Network on this thread; the key and file come from the UI.
-                                ui("__subs_ctx", json!({}))
-                                    .and_then(|c| crate::plugins::subtitles::mcp_search(&c, &args))
+                                ui("__subs_ctx", json!({})).and_then(|c| {
+                                    crate::plugins::subtitle_search::mcp_search(&c, &args)
+                                })
                             } else if cmd == "load_subtitle" {
                                 ui("__subs_ctx", json!({}))
-                                    .and_then(|c| crate::plugins::subtitles::mcp_download(&c, &args))
+                                    .and_then(|c| crate::plugins::subtitle_search::mcp_download(&c, &args))
                                     .and_then(|(p, id, left)| {
                                         let path = p.to_string_lossy().into_owned();
                                         let lang = args["language"].as_str().unwrap_or("");
@@ -509,14 +510,14 @@ fn handle(
             )
         }
         "__subs_ctx" => {
-            crate::plugins::query::<Value>(crate::plugins::subtitles::ID, "mcp-context")
+            crate::plugins::query::<Value>(crate::plugins::subtitle_search::ID, "mcp-context")
                 .ok_or_else(|| "the Subtitle Search plugin is turned off".to_string())
         }
         "__subs_load" => {
             let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
             let id = args["file_id"].as_i64().unwrap_or(0).to_string();
             crate::plugins::command(
-                crate::plugins::subtitles::ID,
+                crate::plugins::subtitle_search::ID,
                 "load-file",
                 &[s("path"), id, s("language")],
             );
@@ -532,7 +533,7 @@ fn handle(
             } else {
                 return Err("give \"seconds\", \"delta\" or \"reset\": true".into());
             };
-            let id = crate::plugins::subtitles::ID;
+            let id = crate::plugins::subtitle_search::ID;
             if !a.global::<crate::Subtitles>().get_plugin() {
                 return Err("the Subtitle Search plugin is turned off".into());
             }
@@ -549,7 +550,7 @@ fn handle(
             if !a.global::<crate::Subtitles>().get_sync() {
                 return Err("install and enable the Subtitle Auto-Sync plugin (subtitle-sync) to align subtitles to the audio".into());
             }
-            crate::plugins::command(crate::plugins::subtitles::ID, "sync", &[]);
+            crate::plugins::command(crate::plugins::subtitle_search::ID, "sync", &[]);
             Ok(
                 json!({ "started": true, "note": "alignment runs in the background; the synced copy is loaded when done" }),
             )

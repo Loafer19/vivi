@@ -11,8 +11,8 @@
 //!   (genre / style), cover.
 //! * **LRCLIB** (shared with the Lyrics plugin): synced lyrics (LRC) to embed.
 
+use super::auto_tagger::{Alt, Candidate};
 use super::lyrics;
-use super::tagger::{Alt, Candidate};
 use super::web;
 
 /// Which sources to ask (from the Auto-tagger settings).
@@ -195,7 +195,7 @@ pub fn merge(c: &mut Candidate, f: &Found, src: &'static str) {
         if v.is_empty() {
             continue;
         }
-        let Some(dst) = super::tagger::field_mut(&mut c.tags, field) else {
+        let Some(dst) = super::auto_tagger::field_mut(&mut c.tags, field) else {
             continue;
         };
         if dst.trim().is_empty() {
@@ -334,7 +334,7 @@ pub fn enrich(c: &mut Candidate, o: &Opts, duration: f64) -> Vec<String> {
         };
         note(lyrics::fetch_lrclib(&t).map(|l| {
             if let Some(l) = l {
-                let synced = !super::tagger::lrc_lines(&l).is_empty();
+                let synced = !super::auto_tagger::lrc_lines(&l).is_empty();
                 c.tags.lyrics = l;
                 c.sources.push((
                     "Lyrics",
@@ -366,7 +366,7 @@ pub fn source_of(c: &Candidate, field: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::tagger::Tags;
+    use crate::plugins::auto_tagger::Tags;
     use serde_json::json;
 
     fn cand() -> Candidate {

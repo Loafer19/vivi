@@ -5,7 +5,7 @@
 //! reverse declaration order (later elements draw on top), so Esc always closes what
 //! is visibly in front.
 
-use crate::plugins::{self, lyrics, tagger};
+use crate::plugins::{self, auto_tagger, lyrics};
 use crate::AppWindow;
 use slint::ComponentHandle;
 
@@ -26,7 +26,7 @@ pub fn close(a: &AppWindow, o: Overlay) {
         Overlay::Onboarding => a.global::<crate::Settings>().invoke_onboarding_done(),
         Overlay::Customize => a.global::<crate::Customize>().invoke_done(false),
         Overlay::TagReview => {
-            plugins::command(tagger::ID, "review-close", &[]);
+            plugins::command(auto_tagger::ID, "review-close", &[]);
             a.global::<crate::Overlays>().set_tr_open(false);
         }
         Overlay::LyricsSearch => {

@@ -37,7 +37,7 @@ pub fn name_for(url: &str, title: &str) -> String {
         .rsplit('/')
         .find(|p| !p.is_empty())
         .unwrap_or(url);
-    crate::plugins::streams::display_name(tail)
+    crate::plugins::network_streams::display_name(tail)
 }
 
 pub fn is_network(path: &str) -> bool {

@@ -353,12 +353,12 @@ impl Lyrics {
             cx.toast("No lyrics to embed");
             return;
         };
-        let _ = super::tagger::backup(&super::tagger::backup_dir(), &p);
-        let tags = super::tagger::Tags {
+        let _ = super::auto_tagger::backup(&super::auto_tagger::backup_dir(), &p);
+        let tags = super::auto_tagger::Tags {
             lyrics: text,
             ..Default::default()
         };
-        match super::tagger::write_tags(&p, &tags, None) {
+        match super::auto_tagger::write_tags(&p, &tags, None) {
             Ok(()) => {
                 self.baked(cx);
                 cx.toast("Lyrics embedded in the file's tags");
@@ -1100,11 +1100,11 @@ mod tests {
         let p = d.join("song.mp3");
         std::fs::copy(mp3, &p).unwrap();
         let lrc = "[00:01.00]First\n[00:02.50]Second";
-        let tags = crate::plugins::tagger::Tags {
+        let tags = crate::plugins::auto_tagger::Tags {
             lyrics: lrc.into(),
             ..Default::default()
         };
-        crate::plugins::tagger::write_tags(&p, &tags, None).unwrap();
+        crate::plugins::auto_tagger::write_tags(&p, &tags, None).unwrap();
         let e = embedded(&p).unwrap();
         assert_eq!(Lrc::parse(&e).texts(), ["First", "Second"]);
         let _ = std::fs::remove_dir_all(&d);

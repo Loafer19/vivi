@@ -689,7 +689,7 @@ pub fn download(t: &Track, dir: &Path, progress: &AtomicU32) -> Result<PathBuf, 
                     .then(|| web::get_bytes(&t.cover, 10 * 1024 * 1024).ok().flatten())
                     .flatten()
             });
-        tagger::write_tags(&tmp, &tags_for(t), cover.as_deref())?;
+        auto_tagger::write_tags(&tmp, &tags_for(t), cover.as_deref())?;
         std::fs::rename(&tmp, &out).map_err(|e| e.to_string())
     })();
     if let Err(e) = res {

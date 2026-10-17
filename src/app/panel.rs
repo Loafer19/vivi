@@ -104,7 +104,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             p.set(&name, &value);
             if name == "sub-delay" {
                 crate::plugins::command(
-                    plugins::subtitles::ID,
+                    plugins::subtitle_search::ID,
                     "offset-changed",
                     &[value.to_string()],
                 );

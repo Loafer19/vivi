@@ -55,7 +55,7 @@ pub fn choose(found: &[Found]) -> Option<&Found> {
 /// Lyrics embedded in the file's tags: LRC (or plain) text from USLT / LYRICS / ©lyr,
 /// else an MP3's SYLT frame converted to LRC.
 pub fn embedded(path: &Path) -> Option<String> {
-    let text = crate::plugins::tagger::read_tags(path)
+    let text = crate::plugins::auto_tagger::read_tags(path)
         .map(|(t, _)| t.lyrics)
         .unwrap_or_default();
     if is_synced(&text) {
@@ -65,7 +65,7 @@ pub fn embedded(path: &Path) -> Option<String> {
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("mp3"));
     if is_mp3 {
-        let sylt = crate::plugins::tagger::read_sylt(path);
+        let sylt = crate::plugins::auto_tagger::read_sylt(path);
         if !sylt.is_empty() {
             return Some(
                 sylt.iter()

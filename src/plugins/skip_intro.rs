@@ -7,6 +7,8 @@ use super::{Ctx, Manifest, Plugin, SettingSpec};
 use crate::config::show_key;
 use slint::ComponentHandle;
 
+pub const ID: &str = "skip-intro";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Part {
     Intro,
@@ -173,7 +175,7 @@ impl SkipIntro {
 impl Plugin for SkipIntro {
     fn manifest(&self) -> Manifest {
         Manifest::builtin(
-            "skip-intro",
+            ID,
             "Skip Intro & Credits",
             "Shows a Skip button during intros and credits found in chapter names or set per show.",
             "skip",

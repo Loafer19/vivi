@@ -19,16 +19,16 @@
 //!
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
+pub mod auto_tagger;
 pub mod epg;
 pub mod free_music;
 pub mod lyrics;
+pub mod network_streams;
 pub mod packages;
 pub mod protocol;
 pub mod scripts;
 pub mod skip_intro;
-pub mod streams;
-pub mod subtitles;
-pub mod tagger;
+pub mod subtitle_search;
 pub mod tagsources;
 pub mod web;
 
@@ -251,10 +251,10 @@ pub fn builtin() -> Vec<Box<dyn Plugin>> {
         Box::new(crate::viz::VizPlugin),
         Box::new(skip_intro::SkipIntro::default()),
         Box::new(lyrics::Lyrics::default()),
-        Box::new(subtitles::SubtitleSearch::default()),
-        Box::new(tagger::AutoTagger::default()),
+        Box::new(subtitle_search::SubtitleSearch::default()),
+        Box::new(auto_tagger::AutoTagger::default()),
         Box::new(free_music::FreeMusic::default()),
-        Box::new(streams::Streams::default()),
+        Box::new(network_streams::NetworkStreams::default()),
     ]
 }
 
@@ -538,7 +538,7 @@ pub fn client_message(args: &[String]) {
         Some(M::Setting { id, key, value }) => store_setting(id, key, value),
         Some(M::PickFolder { id, key }) => pick_folder(id, key),
         // Subtitle Auto-Sync 1.2+: offset keys and sync results, saved per file by Vivi.
-        Some(M::SubOffset(v)) => command(subtitles::ID, "offset", &[v.to_string()]),
+        Some(M::SubOffset(v)) => command(subtitle_search::ID, "offset", &[v.to_string()]),
         Some(M::TaggerAcoustid { path, json }) => tagger_acoustid(path, json),
         Some(M::Qr {
             title,
@@ -568,12 +568,12 @@ fn tagger_acoustid(path: &str, json: &str) {
     let on = with(|r| {
         r.entries
             .iter()
-            .any(|e| e.active && e.manifest.id == tagger::ID)
+            .any(|e| e.active && e.manifest.id == auto_tagger::ID)
     })
     .unwrap_or(false);
     if on {
         command(
-            tagger::ID,
+            auto_tagger::ID,
             "acoustid",
             &[path.to_string(), json.to_string()],
         );

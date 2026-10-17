@@ -8,7 +8,7 @@
 //! tags and in a `<file>.licence.txt`), through a built-in queue or the Offline
 //! Downloads plugin.
 
-use super::tagger::{self, Tags};
+use super::auto_tagger::{self, Tags};
 use super::web;
 use super::{Ctx, Manifest, Plugin, SettingSpec};
 use slint::ComponentHandle;
@@ -177,7 +177,7 @@ fn jamendo_key(cx: &Ctx) -> String {
 /// Cached list thumbnail (`free-music-covers/<hash>.jpg|png`); `None` when missing.
 fn fetch_cover(url: &str) -> Option<PathBuf> {
     let dir = crate::store::cache_dir().join("free-music-covers");
-    let base = dir.join(super::streams::hash_name(url));
+    let base = dir.join(super::network_streams::hash_name(url));
     for ext in ["jpg", "png"] {
         let p = base.with_extension(ext);
         if p.is_file() {
@@ -1412,7 +1412,7 @@ mod tests {
             })
             .unwrap();
         let p = download(small, &dir, &AtomicU32::new(0)).unwrap();
-        let (tags, dur) = tagger::read_tags(&p).unwrap();
+        let (tags, dur) = auto_tagger::read_tags(&p).unwrap();
         assert_eq!(tags.title, small.title);
         assert!(
             tags.copyright.contains(&small.license_url),

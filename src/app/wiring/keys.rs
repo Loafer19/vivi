@@ -73,7 +73,7 @@ pub(crate) fn wire(
                 let big = shift || s == "Z" || s == "X";
                 let d = if big { 1.0 } else { 0.1 };
                 let d = if s.eq_ignore_ascii_case("z") { -d } else { d };
-                crate::plugins::command(plugins::subtitles::ID, "offset", &[d.to_string()]);
+                crate::plugins::command(plugins::subtitle_search::ID, "offset", &[d.to_string()]);
             }
             A::Visualizer => {
                 let n = a.global::<crate::Viz>().get_modes().row_count() as i32;
