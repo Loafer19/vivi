@@ -37,10 +37,10 @@ pub(crate) fn toggle_ui_hidden(a: &AppWindow) {
 
 pub(crate) fn recent_items() -> slint::ModelRc<Item> {
     items(
-        store::recent()
+        store::recent_entries()
             .into_iter()
             .take(8)
-            .map(|p| (p.clone(), store::display_name(&p), false)),
+            .map(|e| (e.target.clone(), e.display_title(), false)),
     )
 }
 
@@ -49,8 +49,21 @@ pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
     if let Some(path) = p.get("path") {
         let abs = std::fs::canonicalize(&path)
             .map(|x| x.to_string_lossy().into_owned())
-            .unwrap_or(path);
-        store::push_recent(&abs);
+            .unwrap_or_else(|_| path.clone());
+        let mut e = store::take_recent_hint(&path)
+            .map(|mut h| {
+                h.target = abs.clone();
+                h
+            })
+            .unwrap_or_else(|| store::RecentEntry::new(&abs));
+        // URLs: mpv's media-title is the page / ICY title when there is one.
+        if e.title.is_empty() && store::url_host(&abs).is_some() {
+            let t = p.get("media-title").unwrap_or_default();
+            if !t.trim().is_empty() && t != store::display_name(&abs) && t != abs {
+                e.title = t;
+            }
+        }
+        store::push_recent_entry(e);
         a.global::<crate::Library>()
             .set_recent_files(recent_items());
     }
@@ -144,8 +157,12 @@ pub(crate) fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) 
         }
     });
     let p = player.clone();
-    app.global::<crate::Panel>()
-        .on_playlist_load(move |path| p.open(&path));
+    app.global::<crate::Panel>().on_playlist_load(move |path| {
+        let mut e = store::RecentEntry::new(&path);
+        e.kind = store::RecentKind::Playlist;
+        store::push_recent_entry(e);
+        p.open(&path)
+    });
     let weak = app.as_weak();
     app.global::<crate::Panel>()
         .on_playlist_delete(move |path| {

@@ -648,6 +648,12 @@ impl FreeMusic {
 
     fn play(&mut self, cx: &Ctx, t: &Track, queue: bool) {
         crate::loading::set_name(&t.stream, &format!("{} — {}", t.artist, t.title));
+        crate::store::recent_hint(crate::store::RecentEntry {
+            target: t.stream.clone(),
+            kind: crate::store::RecentKind::Music,
+            title: t.title.clone(),
+            sub: t.artist.clone(),
+        });
         if queue {
             cx.player.enqueue(&t.stream);
             cx.toast(&format!("Added {} — {} to the queue", t.artist, t.title));
@@ -686,6 +692,12 @@ impl FreeMusic {
             }
             if seen.insert(t.key()) {
                 crate::loading::set_name(&t.stream, &format!("{} — {}", t.artist, t.title));
+                crate::store::recent_hint(crate::store::RecentEntry {
+                    target: t.stream.clone(),
+                    kind: crate::store::RecentKind::Music,
+                    title: t.title.clone(),
+                    sub: t.artist.clone(),
+                });
                 cx.player.enqueue(&t.stream);
                 n += 1;
             }

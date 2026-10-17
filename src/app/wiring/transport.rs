@@ -109,6 +109,9 @@ pub(crate) fn wire(
             else {
                 return;
             };
+            let mut e = crate::store::RecentEntry::new(&d.to_string_lossy());
+            e.kind = crate::store::RecentKind::Folder;
+            crate::store::push_recent_entry(e);
             let mut files: Vec<String> = walk_media(&d);
             files.sort();
             for (i, f) in files.iter().enumerate() {

@@ -88,6 +88,64 @@ impl Lib {
         }
     }
 
+    /// A Recent entry: library files keep their thumbnail and details; folders, playlists,
+    /// streams and web videos get their title, a host / folder line and a type icon.
+    /// The subtitle starts with the type label ("Stream · radio.example").
+    fn recent_item(&mut self, e: &store::RecentEntry, cfg: &Config) -> LibItem {
+        use store::RecentKind as K;
+        let label = e.kind.label();
+        match e.kind {
+            K::Video | K::Audio if Path::new(&e.target).is_file() => {
+                let m = self.find(&e.target);
+                let mut it = self.item(&m, cfg);
+                it.subtitle = format!("{label} · {}", it.subtitle).into();
+                it
+            }
+            K::Folder => {
+                let mut it = Self::group(
+                    format!("video:{}", e.target),
+                    &e.display_title(),
+                    format!("{label} · {}", e.display_sub()),
+                    "folder",
+                    cfg.library.pinned.contains(&e.target),
+                );
+                it.icon = "folder".into();
+                it
+            }
+            K::Playlist => {
+                let mut it = Self::group(
+                    e.target.clone(),
+                    &e.display_title(),
+                    format!("{label} · {}", e.display_sub()),
+                    "playlist",
+                    false,
+                );
+                it.icon = "playlist".into();
+                it
+            }
+            _ => {
+                let kind = if matches!(e.kind, K::Music | K::Audio) {
+                    "audio"
+                } else {
+                    "video"
+                };
+                let mut it = Self::group(
+                    e.target.clone(),
+                    &e.display_title(),
+                    format!("{label} · {}", e.display_sub()),
+                    kind,
+                    false,
+                );
+                it.icon = match e.kind {
+                    K::Music | K::Audio => "songs",
+                    _ => "streaming",
+                }
+                .into();
+                it
+            }
+        }
+    }
+
     fn group(key: String, title: &str, sub: String, kind: &str, pinned: bool) -> LibItem {
         LibItem {
             key: key.into(),
@@ -225,11 +283,8 @@ impl Lib {
             }
             "recent" => {
                 crumbs.push(("recent".into(), "Recent".into()));
-                for p in store::recent() {
-                    if p.contains("://") || Path::new(&p).exists() {
-                        let m = self.find(&p);
-                        out.push(self.item(&m, cfg));
-                    }
+                for e in store::recent_entries() {
+                    out.push(self.recent_item(&e, cfg));
                 }
             }
             "music" => {

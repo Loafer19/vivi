@@ -455,6 +455,12 @@ impl NetworkStreams {
     /// Play `s`: 0 = now, 1 = add to queue, 2 = now in the mini player.
     fn play(&mut self, cx: &Ctx, s: &Stream, how: u8) {
         crate::loading::set_name(&s.url, &display_name(&s.name));
+        crate::store::recent_hint(crate::store::RecentEntry {
+            target: s.url.clone(),
+            kind: crate::store::RecentKind::Stream,
+            title: display_name(&s.name),
+            sub: s.group.clone(),
+        });
         if how == 1 {
             cx.player.enqueue(&s.url);
             cx.toast(&format!("Added {} to the queue", display_name(&s.name)));
