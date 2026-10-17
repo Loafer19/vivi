@@ -1004,16 +1004,18 @@ fn debug_ui(app: &AppWindow) {
     }
     if var("VIVI_NETWORK").is_some() {
         if let Some(u) = var("VIVI_NET_URLS") {
-            app.set_net_urls(u.replace('|', "\n").into());
+            app.global::<crate::Dialogs>()
+                .set_net_urls(u.replace('|', "\n").into());
         }
         if let Some(n) = var("VIVI_NET_NAME") {
-            app.set_net_name(n.into());
+            app.global::<crate::Dialogs>().set_net_name(n.into());
         }
         app.global::<crate::Overlays>().set_network_open(true);
     }
     if let Some(n) = var("VIVI_NEW_PLAYLIST") {
-        app.set_np_name(n.into());
-        app.global::<crate::Overlays>().set_np_open(true);
+        app.global::<crate::Dialogs>()
+            .set_new_playlist_name(n.into());
+        app.global::<crate::Overlays>().set_new_playlist_open(true);
     }
     if var("VIVI_LIBRARY").is_some() {
         app.global::<crate::Overlays>().set_library_open(true);
@@ -1027,11 +1029,13 @@ fn debug_ui(app: &AppWindow) {
             let f: Vec<&str> = m.splitn(4, ';').collect();
             let num = |i: usize| f.get(i).and_then(|v| v.parse().ok()).unwrap_or(100.0);
             let ctx = f.get(3).copied().unwrap_or("").replace('|', "\n");
-            a.invoke_menu_request(f[0].into(), num(1), num(2), ctx.into());
+            a.global::<crate::Menus>()
+                .invoke_menu_request(f[0].into(), num(1), num(2), ctx.into());
             if let Some((id, y)) = sub.as_deref().and_then(|s| s.split_once(';')) {
-                a.set_sub_y(y.parse().unwrap_or(0.0));
-                a.set_sub_open(id.into());
-                a.invoke_menu_sub(id.into());
+                a.global::<crate::Menus>()
+                    .set_sub_y(y.parse().unwrap_or(0.0));
+                a.global::<crate::Menus>().set_sub_open(id.into());
+                a.global::<crate::Menus>().invoke_menu_sub(id.into());
             }
         });
     }

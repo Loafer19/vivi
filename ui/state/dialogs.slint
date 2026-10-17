@@ -1,0 +1,25 @@
+// Small dialogs: Open Network Stream, New Playlist, QR code and Properties & Metadata.
+export global Dialogs {
+    in-out property <string> qr-title;
+    in-out property <image> qr-code;
+    in-out property <string> qr-text;
+    in-out property <string> qr-caption;
+    in-out property <[string]> net-history;
+    in-out property <string> net-error;
+    in-out property <string> net-urls;
+    in-out property <string> net-name;
+    in-out property <[string]> new-playlist-files;
+    in-out property <image> new-playlist-cover;
+    in-out property <bool> new-playlist-has-cover;
+    in-out property <string> new-playlist-error;
+    in-out property <string> new-playlist-name;
+    in-out property <string> info-title;
+    in-out property <[string]> info-keys;
+    in-out property <[string]> info-values;
+    callback network-submit(string, string);
+    callback new-playlist-pick-cover();
+    callback new-playlist-pick-files();
+    callback new-playlist-remove(int);
+    callback new-playlist-save(string);
+    callback new-playlist-close();
+}

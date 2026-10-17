@@ -384,8 +384,10 @@ struct Ctx {
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     let items = Rc::new(VecModel::<MenuItem>::default());
     let subs = Rc::new(VecModel::<MenuItem>::default());
-    app.set_menu_items(ModelRc::from(items.clone()));
-    app.set_sub_items(ModelRc::from(subs.clone()));
+    app.global::<crate::Menus>()
+        .set_menu_items(ModelRc::from(items.clone()));
+    app.global::<crate::Menus>()
+        .set_sub_items(ModelRc::from(subs.clone()));
     let ctx = Rc::new(RefCell::new(Ctx::default()));
 
     {
@@ -398,64 +400,66 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             cfg.clone(),
         );
         // ctx for "lib": "<key>\n<kind>\n<pinned>\n<watched>\n<progress>"
-        app.on_menu_request(move |kind, x, y, c| {
-            let Some(a) = w.upgrade() else { return };
-            let c = c.to_string();
-            let v = match kind.as_str() {
-                "main" => main_menu(&a, &p),
-                "lib" => {
-                    let f: Vec<&str> = c.split('\n').collect();
-                    let g = |i: usize| f.get(i).copied().unwrap_or("");
-                    *ctx.borrow_mut() = Ctx {
-                        key: g(0).into(),
-                        kind: g(1).into(),
-                    };
-                    lib_menu(g(1), g(2) == "1", g(3) == "1", g(4) == "1")
+        app.global::<crate::Menus>()
+            .on_menu_request(move |kind, x, y, c| {
+                let Some(a) = w.upgrade() else { return };
+                let c = c.to_string();
+                let v = match kind.as_str() {
+                    "main" => main_menu(&a, &p),
+                    "lib" => {
+                        let f: Vec<&str> = c.split('\n').collect();
+                        let g = |i: usize| f.get(i).copied().unwrap_or("");
+                        *ctx.borrow_mut() = Ctx {
+                            key: g(0).into(),
+                            kind: g(1).into(),
+                        };
+                        lib_menu(g(1), g(2) == "1", g(3) == "1", g(4) == "1")
+                    }
+                    "sort" => {
+                        let cur = cfg.borrow().library.sort.clone();
+                        SORTS
+                            .iter()
+                            .map(|(k, l)| check(&format!("sort:{k}"), l, sort_key(&cur) == *k))
+                            .collect()
+                    }
+                    "view" => {
+                        let grid = cfg.borrow().library.view != "list";
+                        vec![
+                            MenuItem {
+                                checked: grid,
+                                ..row("view:grid", "Grid View", "grid-view", "")
+                            },
+                            MenuItem {
+                                checked: !grid,
+                                ..row("view:list", "List View", "list-view", "")
+                            },
+                        ]
+                    }
+                    _ => Vec::new(),
+                };
+                if v.is_empty() {
+                    return;
                 }
-                "sort" => {
-                    let cur = cfg.borrow().library.sort.clone();
-                    SORTS
-                        .iter()
-                        .map(|(k, l)| check(&format!("sort:{k}"), l, sort_key(&cur) == *k))
-                        .collect()
-                }
-                "view" => {
-                    let grid = cfg.borrow().library.view != "list";
-                    vec![
-                        MenuItem {
-                            checked: grid,
-                            ..row("view:grid", "Grid View", "grid-view", "")
-                        },
-                        MenuItem {
-                            checked: !grid,
-                            ..row("view:list", "List View", "list-view", "")
-                        },
-                    ]
-                }
-                _ => Vec::new(),
-            };
-            if v.is_empty() {
-                return;
-            }
-            items.set_vec(v);
-            subs.set_vec(Vec::new());
-            a.set_menu_width(if kind == "main" { 292.0 } else { 265.0 });
-            a.set_menu_x(x);
-            a.set_menu_y(y);
-            a.set_sub_open("".into());
-            a.set_menu_kind(kind);
-        });
+                items.set_vec(v);
+                subs.set_vec(Vec::new());
+                a.global::<crate::Menus>()
+                    .set_menu_width(if kind == "main" { 292.0 } else { 265.0 });
+                a.global::<crate::Menus>().set_menu_x(x);
+                a.global::<crate::Menus>().set_menu_y(y);
+                a.global::<crate::Menus>().set_sub_open("".into());
+                a.global::<crate::Menus>().set_menu_kind(kind);
+            });
     }
     {
         let (w, p, subs) = (app.as_weak(), player.clone(), subs.clone());
-        app.on_menu_sub(move |id| {
+        app.global::<crate::Menus>().on_menu_sub(move |id| {
             let Some(a) = w.upgrade() else { return };
             subs.set_vec(submenu(&a, &p, &id));
         });
     }
     {
         let (w, p, ctx) = (app.as_weak(), player.clone(), ctx.clone());
-        app.on_menu_activate(move |id| {
+        app.global::<crate::Menus>().on_menu_activate(move |id| {
             let Some(a) = w.upgrade() else { return };
             let id = id.to_string();
             // Rows that only open a submenu do nothing on click.
@@ -473,8 +477,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             {
                 return;
             }
-            a.set_menu_kind("".into());
-            a.set_sub_open("".into());
+            a.global::<crate::Menus>().set_menu_kind("".into());
+            a.global::<crate::Menus>().set_sub_open("".into());
             activate(&a, &p, &ctx.borrow(), &id);
         });
     }

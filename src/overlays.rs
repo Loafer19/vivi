@@ -18,8 +18,8 @@ pub fn close(a: &AppWindow, o: Overlay) {
     match o {
         Overlay::None => {}
         Overlay::Menu => {
-            a.set_menu_kind("".into());
-            a.set_sub_open("".into());
+            a.global::<crate::Menus>().set_menu_kind("".into());
+            a.global::<crate::Menus>().set_sub_open("".into());
         }
         Overlay::Shortcuts => a.global::<crate::Overlays>().set_shortcuts_open(false),
         Overlay::Info => a.global::<crate::Overlays>().set_info_open(false),
@@ -40,10 +40,10 @@ pub fn close(a: &AppWindow, o: Overlay) {
         Overlay::Subtitles => a.global::<crate::Overlays>().set_subs_open(false),
         Overlay::Qr => a.global::<crate::Overlays>().set_qr_open(false),
         Overlay::Settings => a.global::<crate::Overlays>().set_settings_open(false),
-        Overlay::NewPlaylist => a.invoke_np_close(),
+        Overlay::NewPlaylist => a.global::<crate::Dialogs>().invoke_new_playlist_close(),
         Overlay::Network => {
             a.global::<crate::Overlays>().set_network_open(false);
-            a.set_net_error("".into());
+            a.global::<crate::Dialogs>().set_net_error("".into());
         }
         Overlay::SidePanel => a.global::<crate::Overlays>().set_panel_open(false),
         Overlay::Library => a.global::<crate::Overlays>().set_library_open(false),

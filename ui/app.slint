@@ -20,9 +20,11 @@ import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/t
 import { Overlays } from "state/overlays.slint";
 import { Playback } from "state/playback.slint";
 import { Panel } from "state/panel.slint";
+import { Dialogs } from "state/dialogs.slint";
+import { Menus } from "state/menus.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -430,7 +432,7 @@ export component AppWindow inherits Window {
     // Side panel
     // The overlay Esc closes (top-most open one); same conditions as each overlay's `if` below.
     out property <Overlay> top-overlay:
-        root.menu-kind != "" ? Overlay.menu
+        Menus.menu-kind != "" ? Overlay.menu
         : Overlays.shortcuts-open ? Overlay.shortcuts
         : Overlays.info-open ? Overlay.info
         : Overlays.onboarding-open ? Overlay.onboarding
@@ -441,7 +443,7 @@ export component AppWindow inherits Window {
         : Overlays.subs-open ? Overlay.subtitles
         : Overlays.qr-open ? Overlay.qr
         : Overlays.settings-open ? Overlay.settings
-        : Overlays.np-open ? Overlay.new-playlist
+        : Overlays.new-playlist-open ? Overlay.new-playlist
         : Overlays.network-open ? Overlay.network
         : Overlays.panel-open && Playback.has-media && !root.mini ? Overlay.side-panel
         : Overlays.library-open && Playback.has-media ? Overlay.library
@@ -509,25 +511,6 @@ export component AppWindow inherits Window {
 
     // Library
     // QR dialog of a plugin (vivi-qr).
-    in property <string> qr-title;
-    in property <image> qr-code;
-    in property <string> qr-text;
-    in property <string> qr-caption;
-    in property <[string]> net-history;
-    in-out property <string> net-error;
-    in-out property <string> net-urls;
-    in-out property <string> net-name;
-    callback network-submit(string, string);
-    in property <[string]> np-files;
-    in property <image> np-cover;
-    in property <bool> np-has-cover;
-    in property <string> np-error;
-    in-out property <string> np-name;
-    callback np-pick-cover();
-    callback np-pick-files();
-    callback np-remove(int);
-    callback np-save(string);
-    callback np-close();
     in property <[LibItem]> lib-items;
     in property <[LibItem]> lib-continue;
     in property <[LibItem]> lib-recent;
@@ -541,9 +524,6 @@ export component AppWindow inherits Window {
     // Library as the full home screen (vs. the 427 px sidebar while playing).
     in-out property <bool> lib-full;
     // Properties & Metadata dialog
-    in property <string> info-title;
-    in property <[string]> info-keys;
-    in property <[string]> info-values;
     // "Hide UI" from the main menu (Ctrl+\): bars stay hidden until toggled back.
     in-out property <bool> ui-hidden;
     callback stop();
@@ -563,17 +543,6 @@ export component AppWindow inherits Window {
     in-out property <string> lib-query;
     // Menus (built in src/menus.rs): main right-click menu, library context menus,
     // sort and view options. menu-kind "" = closed.
-    in-out property <string> menu-kind;
-    in property <[MenuItem]> menu-items;
-    in property <[MenuItem]> sub-items;
-    in-out property <string> sub-open;
-    in-out property <length> menu-x;
-    in-out property <length> menu-y;
-    in property <length> menu-width: 265px;
-    in-out property <length> sub-y;
-    callback menu-request(string, length, length, string); // kind, x, y, context
-    callback menu-activate(string);
-    callback menu-sub(string); // ask for the submenu of a row ("" closes it)
     // Miniplayer: compact always-on-top window (391x339, 391x690 with the queue).
     in-out property <bool> mini;
     in-out property <bool> mini-queue;
@@ -681,7 +650,7 @@ export component AppWindow inherits Window {
         double-clicked => { root.toggle-fullscreen(); }
         pointer-event(e) => {
             if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && Playback.has-media) {
-                root.menu-request("main", self.mouse-x, self.mouse-y, "");
+                Menus.menu-request("main", self.mouse-x, self.mouse-y, "");
             }
         }
     }
@@ -740,7 +709,7 @@ export component AppWindow inherits Window {
         history(f) => { root.lib-query = ""; root.lib-history(f); }
         search(q) => { root.lib-search(q); }
         open(k, kind) => { root.lib-open(k, kind); }
-        menu-request(kind, x, y, c) => { root.menu-request(kind, x, y, c); }
+        menu-request(kind, x, y, c) => { Menus.menu-request(kind, x, y, c); }
         open-file() => { root.open-file(); }
         open-network() => { Overlays.network-open = true; }
         clear-recent() => { root.clear-recent(); }
@@ -1129,22 +1098,22 @@ export component AppWindow inherits Window {
     // ---------- Network stream ----------
     if Overlays.network-open: NetworkStreamDialog {
         width: root.width; height: root.height;
-        ytdlp: root.ytdlp; history: root.net-history; error: root.net-error;
-        urls <=> root.net-urls; name <=> root.net-name;
-        submit(u, n) => { root.network-submit(u, n); }
-        close() => { Overlays.network-open = false; root.net-error = ""; fs.focus(); }
+        ytdlp: root.ytdlp; history: Dialogs.net-history; error: Dialogs.net-error;
+        urls <=> Dialogs.net-urls; name <=> Dialogs.net-name;
+        submit(u, n) => { Dialogs.network-submit(u, n); }
+        close() => { Overlays.network-open = false; Dialogs.net-error = ""; fs.focus(); }
     }
 
     // ---------- New playlist ----------
-    if Overlays.np-open: NewPlaylistDialog {
+    if Overlays.new-playlist-open: NewPlaylistDialog {
         width: root.width; height: root.height;
-        files: root.np-files; cover: root.np-cover; has-cover: root.np-has-cover; error: root.np-error;
-        name <=> root.np-name;
-        pick-cover => { root.np-pick-cover(); }
-        pick-files => { root.np-pick-files(); }
-        remove-file(i) => { root.np-remove(i); }
-        save(n) => { root.np-save(n); }
-        close => { root.np-close(); fs.focus(); }
+        files: Dialogs.new-playlist-files; cover: Dialogs.new-playlist-cover; has-cover: Dialogs.new-playlist-has-cover; error: Dialogs.new-playlist-error;
+        name <=> Dialogs.new-playlist-name;
+        pick-cover => { Dialogs.new-playlist-pick-cover(); }
+        pick-files => { Dialogs.new-playlist-pick-files(); }
+        remove-file(i) => { Dialogs.new-playlist-remove(i); }
+        save(n) => { Dialogs.new-playlist-save(n); }
+        close => { Dialogs.new-playlist-close(); fs.focus(); }
     }
 
     // ---------- Settings dialog ----------
@@ -1164,7 +1133,7 @@ export component AppWindow inherits Window {
     // ---------- Plugin QR code (above Settings, which opens it) ----------
     if Overlays.qr-open: QrDialog {
         width: root.width; height: root.height;
-        title: root.qr-title; code: root.qr-code; text: root.qr-text; caption: root.qr-caption;
+        title: Dialogs.qr-title; code: Dialogs.qr-code; text: Dialogs.qr-text; caption: Dialogs.qr-caption;
         close => { Overlays.qr-open = false; }
     }
 
@@ -1258,12 +1227,12 @@ export component AppWindow inherits Window {
         dismissed => { Overlays.info-open = false; }
         icol := VerticalLayout {
             padding: 20px; spacing: 10px;
-            Text { text: root.info-title; color: Theme.fg-1; font-size: Metrics.font-lg; overflow: elide; }
+            Text { text: Dialogs.info-title; color: Theme.fg-1; font-size: Metrics.font-lg; overflow: elide; }
             Rectangle { height: 1px; background: Theme.bg-a1; }
-            for k[i] in root.info-keys: HorizontalLayout {
+            for k[i] in Dialogs.info-keys: HorizontalLayout {
                 spacing: 10px;
                 Text { text: k; color: Theme.fg-a3; font-size: Metrics.font-base; width: 110px; }
-                Text { text: root.info-values[i]; color: Theme.fg-a2; font-size: Metrics.font-base; wrap: word-wrap; horizontal-stretch: 1; }
+                Text { text: Dialogs.info-values[i]; color: Theme.fg-a2; font-size: Metrics.font-base; wrap: word-wrap; horizontal-stretch: 1; }
             }
             HorizontalLayout {
                 alignment: end;
@@ -1283,32 +1252,32 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Menus (topmost) ----------
-    if root.menu-kind != "": TouchArea {
-        clicked => { root.menu-kind = ""; root.sub-open = ""; }
+    if Menus.menu-kind != "": TouchArea {
+        clicked => { Menus.menu-kind = ""; Menus.sub-open = ""; }
         pointer-event(e) => {
-            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { root.menu-kind = ""; root.sub-open = ""; }
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { Menus.menu-kind = ""; Menus.sub-open = ""; }
         }
     }
-    if root.menu-kind != "": main-menu := MenuPanel {
-        width: root.menu-width;
-        x: max(4px, min(root.menu-x, root.width - self.width - 4px));
-        y: max(4px, min(root.menu-y, root.height - self.height - 4px));
-        items: root.menu-items;
-        open-sub: root.sub-open;
-        activated(id) => { root.menu-activate(id); }
+    if Menus.menu-kind != "": main-menu := MenuPanel {
+        width: Menus.menu-width;
+        x: max(4px, min(Menus.menu-x, root.width - self.width - 4px));
+        y: max(4px, min(Menus.menu-y, root.height - self.height - 4px));
+        items: Menus.menu-items;
+        open-sub: Menus.sub-open;
+        activated(id) => { Menus.menu-activate(id); }
         row-hovered(id, y) => {
-            root.sub-y = self.y + y - 4px;
-            root.sub-open = id;
-            root.menu-sub(id);
+            Menus.sub-y = self.y + y - 4px;
+            Menus.sub-open = id;
+            Menus.menu-sub(id);
         }
     }
-    if root.menu-kind != "" && root.sub-open != "" && root.sub-items.length > 0: MenuPanel {
-        property <length> right-x: root.menu-x + root.menu-width - 4px;
+    if Menus.menu-kind != "" && Menus.sub-open != "" && Menus.sub-items.length > 0: MenuPanel {
+        property <length> right-x: Menus.menu-x + Menus.menu-width - 4px;
         width: 265px;
-        x: self.right-x + self.width > root.width ? max(4px, root.menu-x - self.width + 4px) : self.right-x;
-        y: max(4px, min(root.sub-y, root.height - self.height - 4px));
-        items: root.sub-items;
-        activated(id) => { root.menu-activate(id); }
+        x: self.right-x + self.width > root.width ? max(4px, Menus.menu-x - self.width + 4px) : self.right-x;
+        y: max(4px, min(Menus.sub-y, root.height - self.height - 4px));
+        items: Menus.sub-items;
+        activated(id) => { Menus.menu-activate(id); }
     }
     } // keys
 }

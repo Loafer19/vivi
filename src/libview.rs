@@ -934,9 +934,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 "resync" => a.invoke_lib_rescan(),
                 "info" => {
                     let (title, rows) = info(&lib.borrow(), &key, &kind);
-                    a.set_info_title(title.into());
-                    a.set_info_keys(strings(rows.iter().map(|r| r.0.to_string())));
-                    a.set_info_values(strings(rows.into_iter().map(|r| r.1)));
+                    a.global::<crate::Dialogs>().set_info_title(title.into());
+                    a.global::<crate::Dialogs>()
+                        .set_info_keys(strings(rows.iter().map(|r| r.0.to_string())));
+                    a.global::<crate::Dialogs>()
+                        .set_info_values(strings(rows.into_iter().map(|r| r.1)));
                     a.global::<crate::Overlays>().set_info_open(true);
                 }
                 _ => {}
@@ -1024,7 +1026,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         app.on_lib_create_playlist(move || {
             // Figma "New Playlist" dialog (src/dialogs.rs saves it).
             if let Some(a) = w.upgrade() {
-                a.global::<crate::Overlays>().set_np_open(true);
+                a.global::<crate::Overlays>().set_new_playlist_open(true);
             }
         });
     }

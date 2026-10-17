@@ -1,0 +1,15 @@
+// Context and main menus: which menu is open, its rows, the open submenu and placement.
+import { MenuItem } from "../menu.slint";
+export global Menus {
+    in-out property <string> menu-kind;
+    in-out property <[MenuItem]> menu-items;
+    in-out property <[MenuItem]> sub-items;
+    in-out property <string> sub-open;
+    in-out property <length> menu-x;
+    in-out property <length> menu-y;
+    in-out property <length> menu-width: 265px;
+    in-out property <length> sub-y;
+    callback menu-request(string, length, length, string); // kind, x, y, context
+    callback menu-activate(string);
+    callback menu-sub(string); // ask for the submenu of a row ("" closes it)
+}
