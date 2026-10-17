@@ -1613,10 +1613,12 @@ impl AutoTagger {
                 }
             })
             .collect();
-        cx.app.set_tr_files(ModelRc::new(VecModel::from(files)));
+        cx.app
+            .global::<crate::TagReview>()
+            .set_files(ModelRc::new(VecModel::from(files)));
         let on: Vec<&Review> = self.reviews.iter().filter(|r| r.on).collect();
         let n: usize = on.iter().map(|r| r.changes()).sum();
-        cx.app.set_tr_status(
+        cx.app.global::<crate::TagReview>().set_status(
             format!(
                 "{} of {} files selected · {n} changes · ⇄ switches to another source's value · 🔍 enlarges a cover",
                 on.len(),
@@ -1716,7 +1718,9 @@ impl AutoTagger {
 
     fn apply_reviews(&mut self, cx: &Ctx) {
         if !self.reviews.iter().any(|r| r.on && r.changes() > 0) {
-            cx.app.set_tr_status("Nothing selected to change".into());
+            cx.app
+                .global::<crate::TagReview>()
+                .set_status("Nothing selected to change".into());
             return;
         }
         let all = self.reviews.clone();
@@ -1727,8 +1731,10 @@ impl AutoTagger {
         let session = backup_dir().join(format!("session-{stamp}"));
         let (tx, rx) = channel();
         self.rx = Some(rx);
-        cx.app.set_tr_busy(true);
-        cx.app.set_tr_status("Writing tags…".into());
+        cx.app.global::<crate::TagReview>().set_busy(true);
+        cx.app
+            .global::<crate::TagReview>()
+            .set_status("Writing tags…".into());
         let dir = session.clone();
         self.session = Some((session, Vec::new()));
         std::thread::spawn(move || {
@@ -1771,9 +1777,15 @@ impl AutoTagger {
         if undone > 0 {
             sub.push(format!("{undone} undone"));
         }
-        cx.app.set_tr_summary(head.as_str().into());
-        cx.app.set_tr_summary_sub(sub.join(" · ").into());
-        cx.app.set_tr_summary_ok(failed == 0 && tagged > 0);
+        cx.app
+            .global::<crate::TagReview>()
+            .set_summary(head.as_str().into());
+        cx.app
+            .global::<crate::TagReview>()
+            .set_summary_sub(sub.join(" · ").into());
+        cx.app
+            .global::<crate::TagReview>()
+            .set_summary_ok(failed == 0 && tagged > 0);
         let items: Vec<TagResult> = self
             .results
             .iter()
@@ -1796,8 +1808,10 @@ impl AutoTagger {
                 can_undo: r.written && r.status != "undone",
             })
             .collect();
-        cx.app.set_tr_results(ModelRc::new(VecModel::from(items)));
-        cx.app.set_tr_can_undo(
+        cx.app
+            .global::<crate::TagReview>()
+            .set_results(ModelRc::new(VecModel::from(items)));
+        cx.app.global::<crate::TagReview>().set_can_undo(
             self.results
                 .iter()
                 .any(|r| r.written && r.status != "undone"),
@@ -1852,7 +1866,9 @@ impl AutoTagger {
             format!("Undo failed: {}", errs.join("; "))
         };
         self.render_summary(cx);
-        cx.app.set_tr_status(s.as_str().into());
+        cx.app
+            .global::<crate::TagReview>()
+            .set_status(s.as_str().into());
         cx.toast(&s);
     }
 
@@ -2320,7 +2336,9 @@ impl Plugin for AutoTagger {
             "review-close" => {
                 cx.app.global::<crate::Overlays>().set_tr_open(false);
                 self.reviews.clear();
-                cx.app.set_tr_files(ModelRc::default());
+                cx.app
+                    .global::<crate::TagReview>()
+                    .set_files(ModelRc::default());
                 // Thumbnails are only needed while the dialog is open.
                 let _ = std::fs::remove_dir_all(cover_cache());
             }
@@ -2339,7 +2357,7 @@ impl Plugin for AutoTagger {
                     cx.app
                         .global::<crate::MusicDialogState>()
                         .set_status(s.as_str().into());
-                    cx.app.set_tr_status(s.into());
+                    cx.app.global::<crate::TagReview>().set_status(s.into());
                 }
                 Msg::Row(r) => {
                     self.rows.push(*r);
@@ -2388,9 +2406,9 @@ impl Plugin for AutoTagger {
                     self.reviews = v;
                     self.rx = None;
                     Self::ui(cx, "", false);
-                    cx.app.set_tr_summary("".into());
-                    cx.app.set_tr_busy(false);
-                    cx.app.set_tr_can_undo(false);
+                    cx.app.global::<crate::TagReview>().set_summary("".into());
+                    cx.app.global::<crate::TagReview>().set_busy(false);
+                    cx.app.global::<crate::TagReview>().set_can_undo(false);
                     self.render_review(cx);
                     cx.app.global::<crate::Overlays>().set_md_open(false);
                     cx.app.global::<crate::Overlays>().set_tr_open(true);
@@ -2409,9 +2427,9 @@ impl Plugin for AutoTagger {
                             .collect();
                     }
                     self.results = results;
-                    cx.app.set_tr_busy(false);
+                    cx.app.global::<crate::TagReview>().set_busy(false);
                     self.render_summary(cx);
-                    cx.app.set_tr_status(
+                    cx.app.global::<crate::TagReview>().set_status(
                         "Backups kept in ~/.local/share/vivi/tag-backups · Undo restores tags, covers and names".into(),
                     );
                     let (t, _, _, f) = result_counts(&self.results);

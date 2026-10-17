@@ -44,8 +44,8 @@ search as `search-*`) and `Subtitles` (Add Subtitles dialog, sync / pick state).
 `MusicDialogState` is shared by Auto-tagger, Free Music and Network Streams: the
 plugin that opens it sets `owner` (its id, for routing `plugin-command`) and `caps`,
 an `MdCaps { logos, chips, rich }` saying which parts of the dialog it uses, so the
-UI never compares plugin ids. The tag review and now-playing card are moving to the
-same pattern. Plugin
+UI never compares plugin ids. `TagReview` holds the review dialog's files and
+results; the now-playing card is next. Plugin
 code writes them with `cx.app.global::<crate::Lyrics>().set_lines(...)`, and
 `ui/app.slint` binds the plugin's dialog properties to that global, so a new field
 touches the global, the dialog, one binding and the plugin. User actions still reach the plugin through

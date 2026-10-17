@@ -1,0 +1,12 @@
+// Auto-tagger review dialog: per-file proposed tags (TagStatus), progress, the result summary and undo.
+import { TagFile, TagResult } from "../plugins.slint";
+export global TagReview {
+    in-out property <[TagFile]> files;
+    in-out property <string> status;
+    in-out property <bool> busy;
+    in-out property <string> summary;
+    in-out property <string> summary-sub;
+    in-out property <bool> summary-ok;
+    in-out property <[TagResult]> results;
+    in-out property <bool> can-undo;
+}
