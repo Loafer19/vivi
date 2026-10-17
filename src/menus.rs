@@ -111,6 +111,7 @@ fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
         div(sub("more", "More Settings", "more-settings")),
         sub("playlist", "Playlist", "playlist"),
         sub("open", "Open Media", "open-media"),
+        sub("recent", "Open Recent", "recent"),
         row("quit", "Quit", "quit-vlc", &keymap::hint(A::Quit)),
     ]
 }
@@ -255,6 +256,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
             row("open-network", "Open Network Stream", "streaming", ""),
             row("library", "Library", "recent", ""),
         ],
+        "recent" => recent_menu(),
         "lib:addpl" => {
             let mut v: Vec<MenuItem> = store::playlists()
                 .into_iter()
@@ -278,6 +280,48 @@ fn aspect_eq(cur: &str, k: &str) -> bool {
     let (a, b) = k.split_once(':').unwrap_or((k, "1"));
     let want = a.parse::<f64>().unwrap_or(0.0) / b.parse::<f64>().unwrap_or(1.0);
     cur.parse::<f64>().is_ok_and(|c| (c - want).abs() < 0.01)
+}
+
+/// "Open Recent": the newest entries with their type on the right, then Clear.
+fn recent_menu() -> Vec<MenuItem> {
+    let mut v: Vec<MenuItem> = store::recent_entries()
+        .into_iter()
+        .take(10)
+        .map(|e| {
+            row(
+                &format!("recent:{}", e.target),
+                &e.display_title(),
+                e.kind.menu_icon(),
+                e.kind.label(),
+            )
+        })
+        .collect();
+    if v.is_empty() {
+        v.push(row("recent-none", "Nothing yet", "recent", ""));
+    } else {
+        v.push(div(row("recent-clear", "Clear Recent", "remove", "")));
+    }
+    v
+}
+
+/// Context menu rows for a library item; Recent entries add "Remove from Recent".
+fn lib_menu_for(
+    kind: &str,
+    pinned: bool,
+    watched: bool,
+    progress: bool,
+    recent: bool,
+) -> Vec<MenuItem> {
+    let mut v = lib_menu(kind, pinned, watched, progress);
+    if recent {
+        v.push(div(row(
+            "lib:forget-recent",
+            "Remove from Recent",
+            "remove",
+            "",
+        )));
+    }
+    v
 }
 
 /// Context menu rows for a library item kind.
@@ -406,6 +450,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                 let c = c.to_string();
                 let v = match kind.as_str() {
                     "main" => main_menu(&a, &p),
+                    "recent" => recent_menu(),
                     "lib" => {
                         let f: Vec<&str> = c.split('\n').collect();
                         let g = |i: usize| f.get(i).copied().unwrap_or("");
@@ -413,7 +458,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                             key: g(0).into(),
                             kind: g(1).into(),
                         };
-                        lib_menu(g(1), g(2) == "1", g(3) == "1", g(4) == "1")
+                        lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1")
                     }
                     "sort" => {
                         let cur = cfg.borrow().library.sort.clone();
@@ -493,6 +538,8 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             arg.into(),
         ),
         "sort" => a.global::<crate::Library>().invoke_set_sort(arg.into()),
+        "recent" => a.global::<crate::Library>().invoke_open_recent(arg.into()),
+        "recent-clear" => a.global::<crate::Library>().invoke_clear_recent(),
         "view" => a.global::<crate::Library>().invoke_set_grid(arg == "grid"),
         "speed" => p.set("speed", arg),
         "aspect" => p.set("video-aspect-override", arg),

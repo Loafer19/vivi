@@ -460,6 +460,7 @@ impl NetworkStreams {
             kind: crate::store::RecentKind::Stream,
             title: display_name(&s.name),
             sub: s.group.clone(),
+            image: s.logo.clone(),
         });
         if how == 1 {
             cx.player.enqueue(&s.url);
@@ -513,6 +514,14 @@ fn known_station(url: &str) -> Option<Stream> {
         .into_iter()
         .chain(load_list("recent.json"))
         .find(|s| s.url == url)
+}
+
+/// Station logo already in the cache (no download).
+pub(crate) fn cached_logo(url: &str) -> Option<PathBuf> {
+    let p = crate::store::cache_dir()
+        .join("stream-logos")
+        .join(hash_name(url));
+    p.is_file().then_some(p)
 }
 
 /// Download a station logo into the cache (once); `None` when it cannot be fetched.

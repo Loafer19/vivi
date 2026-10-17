@@ -82,6 +82,17 @@ impl RecentKind {
             Self::Music => "Free Music",
         }
     }
+    /// Icon name in the context-menu icon set.
+    pub fn menu_icon(self) -> &'static str {
+        match self {
+            Self::Video => "video",
+            Self::Audio | Self::Music => "audio",
+            Self::Folder => "folder",
+            Self::Playlist => "playlist",
+            Self::Stream => "streaming",
+            Self::Web => "stream",
+        }
+    }
     /// Type of a target when the opener did not say: folders, playlist files, yt-dlp
     /// sites, other URLs (streams / radio), then audio or video by extension.
     pub fn infer(target: &str) -> Self {
@@ -143,6 +154,9 @@ pub struct RecentEntry {
     /// Secondary line when known (artist, station tags); empty = folder / host.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub sub: String,
+    /// Picture when known: station logo or cover URL, or a local image path.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub image: String,
 }
 
 impl RecentEntry {
@@ -152,6 +166,7 @@ impl RecentEntry {
             kind: RecentKind::infer(target),
             title: String::new(),
             sub: String::new(),
+            image: String::new(),
         }
     }
     /// Title to show: the known one, else the file / folder name, else the URL's last
@@ -257,6 +272,9 @@ fn push_into(list: &mut Vec<RecentEntry>, mut e: RecentEntry) {
         if e.sub.is_empty() {
             e.sub = old.sub;
         }
+        if e.image.is_empty() {
+            e.image = old.image;
+        }
     }
     list.insert(0, e);
     list.truncate(MAX_RECENT);
@@ -286,6 +304,13 @@ pub fn take_recent_hint(target: &str) -> Option<RecentEntry> {
 pub fn push_recent_entry(e: RecentEntry) {
     let mut list = recent_entries();
     push_into(&mut list, e);
+    let _ = write_recent(&list);
+}
+
+/// Drop one entry.
+pub fn remove_recent(target: &str) {
+    let mut list = recent_entries();
+    list.retain(|e| e.target != target);
     let _ = write_recent(&list);
 }
 

@@ -92,8 +92,28 @@ impl Lib {
     /// streams and web videos get their title, a host / folder line and a type icon.
     /// The subtitle starts with the type label ("Stream · radio.example").
     fn recent_item(&mut self, e: &store::RecentEntry, cfg: &Config) -> LibItem {
-        use store::RecentKind as K;
         let label = e.kind.label();
+        let mut it = self.recent_item_inner(e, cfg, label);
+        it.badge = label.into();
+        it.recent_key = e.target.clone().into();
+        // Station logo / cover / thumbnail when the opener knew one and it is cached.
+        if !it.has_thumb && !e.image.is_empty() {
+            let img = if Path::new(&e.image).is_file() {
+                Some(std::path::PathBuf::from(&e.image))
+            } else {
+                crate::plugins::network_streams::cached_logo(&e.image)
+                    .or_else(|| crate::plugins::free_music::cached_cover(&e.image))
+            };
+            if let Some(i) = img.and_then(|p| slint::Image::load_from_path(&p).ok()) {
+                it.thumb = i;
+                it.has_thumb = true;
+            }
+        }
+        it
+    }
+
+    fn recent_item_inner(&mut self, e: &store::RecentEntry, cfg: &Config, label: &str) -> LibItem {
+        use store::RecentKind as K;
         match e.kind {
             K::Video | K::Audio if Path::new(&e.target).is_file() => {
                 let m = self.find(&e.target);
@@ -883,6 +903,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     }
                     "forget" => {
                         store::forget_position(&path);
+                        render();
+                    }
+                    "forget-recent" => {
+                        store::remove_recent(&path);
+                        a.global::<crate::Library>()
+                            .set_recent_files(crate::app::session::recent_items());
                         render();
                     }
                     "watched" => {

@@ -175,6 +175,17 @@ fn jamendo_key(cx: &Ctx) -> String {
 }
 
 /// Cached list thumbnail (`free-music-covers/<hash>.jpg|png`); `None` when missing.
+/// Cover already in the cache (no download).
+pub(crate) fn cached_cover(url: &str) -> Option<PathBuf> {
+    let base = crate::store::cache_dir()
+        .join("free-music-covers")
+        .join(super::network_streams::hash_name(url));
+    ["jpg", "png"]
+        .iter()
+        .map(|e| base.with_extension(e))
+        .find(|p| p.is_file())
+}
+
 fn fetch_cover(url: &str) -> Option<PathBuf> {
     let dir = crate::store::cache_dir().join("free-music-covers");
     let base = dir.join(super::network_streams::hash_name(url));
@@ -653,6 +664,7 @@ impl FreeMusic {
             kind: crate::store::RecentKind::Music,
             title: t.title.clone(),
             sub: t.artist.clone(),
+            image: t.cover.clone(),
         });
         if queue {
             cx.player.enqueue(&t.stream);
@@ -697,6 +709,7 @@ impl FreeMusic {
                     kind: crate::store::RecentKind::Music,
                     title: t.title.clone(),
                     sub: t.artist.clone(),
+                    image: t.cover.clone(),
                 });
                 cx.player.enqueue(&t.stream);
                 n += 1;

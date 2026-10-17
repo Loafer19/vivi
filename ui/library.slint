@@ -26,6 +26,19 @@ export struct LibItem {
     watched: bool,
     // Icon name for rows without a thumbnail ("add", "songs", "album", …); "" = by kind.
     icon: string,
+    // Recent entries: type label ("Stream", "Folder", …) and the target to remove.
+    badge: string,
+    recent-key: string,
+}
+
+// Small type label of a Recent entry.
+component TypeBadge inherits Rectangle {
+    in property <string> text;
+    in property <brush> bg: Theme.bg-a3;
+    in property <brush> fg: Theme.fg-a2;
+    width: bt.preferred-width + 12px; height: 18px; border-radius: self.height / 2;
+    background: root.bg;
+    bt := Text { text: root.text; color: root.fg; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
 }
 
 
@@ -38,6 +51,7 @@ component Tile inherits Rectangle {
     in property <bool> grid: true;
     callback open();
     callback menu(length, length);
+    callback forget();
     border-radius: Metrics.radius-md;
     background: ta.has-hover ? Theme.bg-a1 : transparent;
     property <length> tw: grid ? self.width - 12px : 96px;
@@ -51,6 +65,17 @@ component Tile inherits Rectangle {
         if root.it.progress > 0: Rectangle {
             y: parent.height - 4px; height: 4px; background: Theme.media-track;
             Rectangle { x: 0; width: parent.width * root.it.progress; background: Theme.accent; }
+        }
+        if root.grid && root.it.badge != "": TypeBadge { x: parent.width - self.width - 6px; y: parent.height - self.height - 6px; text: root.it.badge; bg: Theme.media-chip; fg: Theme.on-media; }
+        Rectangle {
+            visible: root.it.recent-key != "" && (ta.has-hover || xta.has-hover);
+            x: parent.width - self.width - 6px; y: 6px; width: 24px; height: 24px; border-radius: self.height / 2;
+            background: xta.has-hover ? Theme.media-chip.darker(0.5) : Theme.media-chip;
+            Icon { source: @image-url("../assets/icons/close.svg"); width: 14px; height: 14px; tint: Theme.on-media; }
+            xta := TouchArea {
+                accessible-role: button; accessible-label: "Remove from Recent: " + root.it.title;
+                mouse-cursor: pointer; clicked => { root.forget(); }
+            }
         }
         if root.it.pinned: Rectangle {
             x: 6px; y: 6px; width: 22px; height: 22px; border-radius: self.height / 2; background: Theme.media-chip;
@@ -85,6 +110,7 @@ component Grid inherits Rectangle {
     in property <int> max-rows: 0; // 0 = unlimited
     callback open(LibItem);
     callback menu(LibItem, length, length);
+    callback forget(LibItem);
     // Grid columns follow the width; very narrow widths fall back to the list view.
     property <bool> g: grid && self.width >= 400px;
     property <int> cols: g ? max(1, floor(self.width / 210px)) : 1;
@@ -99,6 +125,7 @@ component Grid inherits Rectangle {
         it: it; grid: root.g;
         open => { root.open(it); }
         menu(x, y) => { root.menu(it, x, y); }
+        forget => { root.forget(it); }
     }
 }
 
@@ -108,12 +135,17 @@ component LibRow inherits ListRow {
     in property <bool> dim; // Home sections draw rows in the dimmer #6B6B6B
     callback open();
     callback menu(length, length);
+    callback forget();
     label: root.it.title;
     row-height: 32px; radius: 0; hover-bg: transparent;
     clicked => { root.open(); }
     right-clicked(x, y) => { if (root.it.kind != "action") { root.menu(x, y); } }
     property <bool> media: (it.kind == "video" || it.kind == "audio") && it.icon == "";
-    property <bool> hover: root.row-hovered || more-ta.has-hover;
+    property <bool> hover: root.row-hovered || more-ta.has-hover || x-ta.has-hover;
+    property <bool> can-forget: root.it.recent-key != "";
+    // Room on the right: "⋯" (34px), × (28px) and the type badge.
+    property <length> tail: (root.hover && root.it.kind != "action" ? 34px : 0px) + (root.hover && root.can-forget ? 28px : 0px);
+    property <length> badge-w: root.it.badge != "" ? badge.width + 8px : 0px;
     if root.media || root.it.has-thumb: Rectangle {
         x: 0; width: 32px; height: 32px; border-radius: Metrics.radius-xs; clip: true;
         background: Theme.field-raised;
@@ -131,7 +163,7 @@ component LibRow inherits ListRow {
         tint: Theme.fg-a2;
     }
     Text {
-        x: 42px; width: root.width - 42px - (root.hover && root.it.kind != "action" ? 34px : 0px);
+        x: 42px; width: root.width - 42px - root.tail - root.badge-w;
         height: root.height;
         text: root.it.title; font-size: Metrics.font-base; overflow: elide; vertical-alignment: center;
         color: root.it.watched || root.dim ? Theme.fg-a3 : Theme.fg-a2; // hover only adds "⋯" (Figma)
@@ -139,6 +171,24 @@ component LibRow inherits ListRow {
     if root.hover && root.it.kind != "action": Icon {
         x: root.width - 24px; y: 4px; source: @image-url("../assets/icons/more.svg");
         tint: more-ta.has-hover ? Theme.fg-1 : Theme.fg-a2;
+    }
+    badge := TypeBadge {
+        visible: root.it.badge != "";
+        x: root.width - root.tail - self.width - 4px; y: (root.height - self.height) / 2;
+        text: root.it.badge;
+    }
+    Icon {
+        visible: root.hover && root.can-forget;
+        x: root.width - 54px; y: 6px; width: 20px; height: 20px;
+        source: @image-url("../assets/icons/close.svg");
+        tint: x-ta.has-hover ? Theme.fg-1 : Theme.fg-a2;
+    }
+    x-ta := TouchArea {
+        enabled: root.can-forget;
+        x: root.width - 60px; width: 28px;
+        accessible-role: button; accessible-label: "Remove from Recent: " + root.it.title;
+        mouse-cursor: pointer;
+        clicked => { root.forget(); }
     }
     more-ta := TouchArea {
         x: root.width - 28px; width: 28px;
@@ -154,6 +204,7 @@ component Rows inherits VerticalLayout {
     in property <bool> dim;
     callback open(LibItem);
     callback menu(LibItem, length, length);
+    callback forget(LibItem);
     spacing: 10px;
     for it[i] in root.items: LibRow {
         dim: root.dim;
@@ -162,6 +213,7 @@ component Rows inherits VerticalLayout {
         it: it;
         open => { root.open(it); }
         menu(x, y) => { root.menu(it, x, y); }
+        forget => { root.forget(it); }
     }
 }
 
@@ -175,6 +227,7 @@ component Shelf inherits VerticalLayout {
     callback action();
     callback open(LibItem);
     callback menu(LibItem, length, length);
+    callback forget(LibItem);
     spacing: 20px;
     HorizontalLayout {
         height: 24px; spacing: 4px;
@@ -188,7 +241,7 @@ component Shelf inherits VerticalLayout {
         Icon { source: @image-url("../assets/icons/chevron-right.svg"); tint: cta.has-hover ? Theme.fg-1 : Theme.fg-a1;
             cta := TouchArea { accessible-role: button; accessible-label: "Show all: " + root.title; mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
     }
-    Rows { items: root.items; max: root.max; dim: true; open(it) => { root.open(it); } menu(it, x, y) => { root.menu(it, x, y); } }
+    Rows { items: root.items; max: root.max; dim: true; open(it) => { root.open(it); } menu(it, x, y) => { root.menu(it, x, y); } forget(it) => { root.forget(it); } }
 }
 
 component RailButton inherits Rectangle {
@@ -249,6 +302,8 @@ export component LibraryView inherits Rectangle {
     callback open-network();
     callback add-folders();
     callback clear-recent();
+    // Remove one Recent entry (hover ×).
+    callback forget-recent(LibItem);
     callback popout();
     in-out property <string> query;
     property <bool> searching: query != "";
@@ -257,7 +312,7 @@ export component LibraryView inherits Rectangle {
     property <int> rows-max: root.sidebar ? 3 : 6;
 
     function ctx-of(it: LibItem) -> string {
-        return it.key + "\n" + it.kind + "\n" + (it.pinned ? "1" : "0") + "\n" + (it.watched ? "1" : "0") + "\n" + (it.progress > 0 && !it.watched ? "1" : "0");
+        return it.key + "\n" + it.kind + "\n" + (it.pinned ? "1" : "0") + "\n" + (it.watched ? "1" : "0") + "\n" + (it.progress > 0 && !it.watched ? "1" : "0") + "\n" + (it.recent-key != "" ? "1" : "0");
     }
     function item-menu(it: LibItem, x: length, y: length) {
         root.menu-request("lib", x, y, root.ctx-of(it));
@@ -375,15 +430,15 @@ export component LibraryView inherits Rectangle {
                         if root.items.length > 0: Shelf { title: "Recently Added"; items: root.items; max: root.rows-max;
                             title-clicked => { root.navigate("video"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                         if root.recent-items.length > 0: Shelf { title: "Recently Played"; items: root.recent-items; max: root.rows-max; action-text: "Clear";
-                            title-clicked => { root.navigate("recent"); } action => { root.clear-recent(); }
+                            title-clicked => { root.navigate("recent"); } action => { root.clear-recent(); } forget(it) => { root.forget-recent(it); }
                             open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                     }
                     if (root.nav != "home" || root.query != "") && !root.show-grid: Rows {
-                        items: root.items;
+                        items: root.items; forget(it) => { root.forget-recent(it); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
                     if (root.nav != "home" || root.query != "") && root.show-grid: Grid {
-                        items: root.items; grid: true;
+                        items: root.items; grid: true; forget(it) => { root.forget-recent(it); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
                     if (root.nav != "home" || root.query != "") && root.items.length == 0: Text {

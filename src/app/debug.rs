@@ -103,7 +103,7 @@ pub(crate) fn debug_ui(app: &AppWindow) {
     if var("VIVI_LIBRARY").is_some() {
         app.global::<crate::Overlays>().set_library_open(true);
     }
-    // VIVI_MENU="kind;x;y;ctx" (ctx lines joined by '|'), VIVI_SUB="row-id;y": open a menu.
+    // VIVI_MENU="kind;x;y;ctx" (ctx lines joined by '|' or '~'), VIVI_SUB="row-id;y": open a menu.
     if let Some(m) = var("VIVI_MENU") {
         let sub = var("VIVI_SUB");
         let w = app.as_weak();
@@ -111,7 +111,7 @@ pub(crate) fn debug_ui(app: &AppWindow) {
             let Some(a) = w.upgrade() else { return };
             let f: Vec<&str> = m.splitn(4, ';').collect();
             let num = |i: usize| f.get(i).and_then(|v| v.parse().ok()).unwrap_or(100.0);
-            let ctx = f.get(3).copied().unwrap_or("").replace('|', "\n");
+            let ctx = f.get(3).copied().unwrap_or("").replace(['|', '~'], "\n");
             a.global::<crate::Menus>()
                 .invoke_menu_request(f[0].into(), num(1), num(2), ctx.into());
             if let Some((id, y)) = sub.as_deref().and_then(|s| s.split_once(';')) {
