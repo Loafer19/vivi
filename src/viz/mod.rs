@@ -68,8 +68,9 @@ impl crate::plugins::Plugin for VizPlugin {
     }
     fn enable(&mut self, cx: &crate::plugins::Ctx) {
         ENABLED.with(|e| e.set(true));
-        cx.app
-            .set_viz_audio(cx.app.get_has_media() && audio_only(cx.player));
+        cx.app.set_viz_audio(
+            cx.app.global::<crate::Playback>().get_has_media() && audio_only(cx.player),
+        );
     }
     fn disable(&mut self, cx: &crate::plugins::Ctx) {
         ENABLED.with(|e| e.set(false));
@@ -222,9 +223,14 @@ impl Viz {
             self.path = None;
             return;
         }
-        let drawing = self.audio_only && self.mode > 0 && a.get_has_media();
+        let drawing =
+            self.audio_only && self.mode > 0 && a.global::<crate::Playback>().get_has_media();
         if drawing || self.tick.is_multiple_of(8) {
-            let path = a.get_has_media().then(|| p.get("path")).flatten();
+            let path = a
+                .global::<crate::Playback>()
+                .get_has_media()
+                .then(|| p.get("path"))
+                .flatten();
             let tc: i64 = p.mpv.get_property("track-list/count").unwrap_or(0);
             if path != self.path || tc != self.track_count {
                 if path != self.path {
@@ -237,7 +243,8 @@ impl Viz {
                 a.set_viz_audio(self.audio_only);
             }
         }
-        let active = self.audio_only && self.mode > 0 && a.get_has_media();
+        let active =
+            self.audio_only && self.mode > 0 && a.global::<crate::Playback>().get_has_media();
         if !active {
             self.remove_tap(p);
             return;

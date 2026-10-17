@@ -1516,7 +1516,7 @@ impl Plugin for Lyrics {
     fn enable(&mut self, cx: &Ctx) {
         cx.app.set_lyrics_enabled(true);
         self.apply_size(cx);
-        if cx.app.get_has_media() {
+        if cx.app.global::<crate::Playback>().get_has_media() {
             self.load(cx);
         }
     }
@@ -1554,7 +1554,7 @@ impl Plugin for Lyrics {
                 };
                 cx.app
                     .global::<crate::Overlays>()
-                    .set_karaoke_open(on && cx.app.get_has_media());
+                    .set_karaoke_open(on && cx.app.global::<crate::Playback>().get_has_media());
                 self.word_line = None;
             }
             "offset" => match arg {

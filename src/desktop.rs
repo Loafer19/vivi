@@ -48,7 +48,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     Cmd::Next => p.playlist_step(true),
                     Cmd::Previous => p.playlist_step(false),
                     Cmd::Seek(d) => {
-                        let t = (a.get_position() as f64 + d).max(0.0);
+                        let t = (a.global::<crate::Playback>().get_position() as f64 + d).max(0.0);
                         p.seek_abs(t);
                         seeked = Some(t);
                     }
@@ -85,11 +85,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
             }
             let n: i64 = p.mpv.get_property("playlist-count").unwrap_or(0);
             let i: i64 = p.mpv.get_property("playlist-pos").unwrap_or(-1);
-            let pos = a.get_position() as f64;
+            let pos = a.global::<crate::Playback>().get_position() as f64;
             let st = State {
-                playing: a.get_playing(),
-                has_media: a.get_has_media(),
-                title: a.get_media_title().to_string(),
+                playing: a.global::<crate::Playback>().get_playing(),
+                has_media: a.global::<crate::Playback>().get_has_media(),
+                title: a.global::<crate::Playback>().get_media_title().to_string(),
                 artist: p.get("metadata/by-key/artist").unwrap_or_default(),
                 album: p.get("metadata/by-key/album").unwrap_or_default(),
                 url: if path.contains("://") {
@@ -100,9 +100,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     format!("file://{path}")
                 },
                 art_url: art.borrow().1.clone(),
-                length: a.get_duration() as f64,
+                length: a.global::<crate::Playback>().get_duration() as f64,
                 position: pos,
-                volume: a.get_volume() as f64,
+                volume: a.global::<crate::Playback>().get_volume() as f64,
                 rate: p.get("speed").and_then(|s| s.parse().ok()).unwrap_or(1.0),
                 can_next: i + 1 < n,
                 can_prev: i > 0,

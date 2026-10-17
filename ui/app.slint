@@ -18,9 +18,10 @@ import { Modal } from "core/modal.slint";
 import { IconButton, PrimaryButton, ButtonSize } from "core/buttons.slint";
 import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
 import { Overlays } from "state/overlays.slint";
+import { Playback } from "state/playback.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -293,24 +294,17 @@ component OverflowRow inherits Rectangle {
 
 export component AppWindow inherits Window {
     icon: @image-url("../packaging/vivi.svg");
-    title: root.has-media ? root.media-title + " — Vivi" : "Vivi";
+    title: Playback.has-media ? Playback.media-title + " — Vivi" : "Vivi";
     preferred-width: 1280px;
     preferred-height: 720px;
     // Main window minimum; the miniplayer goes down to 280x160.
     min-width: root.mini ? 280px : 480px;
     min-height: root.mini ? 160px : 320px;
     // Transparent only while playing (mpv underlay shows through); opaque otherwise.
-    background: root.has-media ? transparent : Theme.bg-b1;
+    background: Playback.has-media ? transparent : Theme.bg-b1;
     default-font-family: "Inter";
     default-font-size: Metrics.font-base;
 
-    in property <string> media-title: "";
-    in property <bool> playing: false;
-    in property <float> position: 0;
-    in property <float> duration: 0;
-    in-out property <float> volume: 100;
-    in property <bool> muted: false;
-    in property <bool> has-media: false;
     in property <bool> fullscreen: false;
     // Driven from Rust: false after ~2s of mouse inactivity during playback.
     in property <bool> controls-visible: true;
@@ -450,9 +444,9 @@ export component AppWindow inherits Window {
         : Overlays.settings-open ? Overlay.settings
         : Overlays.np-open ? Overlay.new-playlist
         : Overlays.network-open ? Overlay.network
-        : Overlays.panel-open && root.has-media && !root.mini ? Overlay.side-panel
-        : Overlays.library-open && root.has-media ? Overlay.library
-        : Overlays.karaoke-open && root.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
+        : Overlays.panel-open && Playback.has-media && !root.mini ? Overlay.side-panel
+        : Overlays.library-open && Playback.has-media ? Overlay.library
+        : Overlays.karaoke-open && Playback.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
         : Overlay.none;
     in property <[Item]> sub-tracks;
     in property <[Item]> audio-tracks;
@@ -509,9 +503,6 @@ export component AppWindow inherits Window {
     pure function is-core(id: string) -> bool {
         return id == "prev" || id == "play" || id == "next" || id == "time" || id == "seek" || id == "duration" || id == "spacer" || id == "back10" || id == "fwd10";
     }
-    in property <bool> repeat-on;
-    in property <bool> shuffle-on;
-    in property <float> volume-max: 150;
     in property <[string]> customize-available;
     in property <[string]> profiles;
     in property <string> profile;
@@ -546,7 +537,7 @@ export component AppWindow inherits Window {
             || (id == "video" && Overlays.panel-open && root.panel-tab == PanelTab.video)
             || (id == "speed" && Overlays.panel-open && root.panel-tab == PanelTab.playback)
             || (id == "chapters" && Overlays.panel-open && root.panel-tab == PanelTab.chapters)
-            || (id == "repeat" && root.repeat-on) || (id == "shuffle" && root.shuffle-on)
+            || (id == "repeat" && Playback.repeat-on) || (id == "shuffle" && Playback.shuffle-on)
             || (id == "settings" && Overlays.settings-open);
     }
 
@@ -605,7 +596,6 @@ export component AppWindow inherits Window {
     in property <bool> ytdlp;
     in-out property <string> lib-query;
     in property <[Item]> panel-lib;
-    in property <[image]> preview-frames;
     // Menus (built in src/menus.rs): main right-click menu, library context menus,
     // sort and view options. menu-kind "" = closed.
     in-out property <string> menu-kind;
@@ -677,17 +667,8 @@ export component AppWindow inherits Window {
     callback settings-refresh(int, string, bool);
     callback save-preset();
     callback add-bookmark();
-    in property <string> ab-state: "Off";
-    in property <float> ab-a: -1;
-    in property <float> ab-b: -1;
     callback ab-set(float, float);
-    in property <[float]> chapter-starts;
-    in property <[float]> wave-peaks;
-    in property <string> wave-path;
     // Plugin range on the seekbar (`script-message vivi-range <a> <b> [label]`), e.g. Cut & Export In/Out.
-    in property <float> range-a: -1;
-    in property <float> range-b: -1;
-    in property <string> range-label;
     property <BarMetrics> bar: Bars.metrics(root.bar-style);
     property <bool> bar-classic: root.bar.classic;
     out property <length> bar-h: root.bar.height;
@@ -709,7 +690,7 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: (!root.has-media || root.controls-visible || Overlays.panel-open || Overlays.settings-open || Overlays.customize-open) && !(root.ui-hidden && root.has-media);
+    property <bool> show-ui: (!Playback.has-media || root.controls-visible || Overlays.panel-open || Overlays.settings-open || Overlays.customize-open) && !(root.ui-hidden && Playback.has-media);
 
     // Rust moves focus back to the player after Esc closed an overlay.
     public function focus-main() { fs.focus(); }
@@ -741,22 +722,22 @@ export component AppWindow inherits Window {
         mouse-cursor: root.show-ui ? MouseCursor.default : MouseCursor.none;
         changed mouse-x => { root.activity(); }
         changed mouse-y => { root.activity(); }
-        clicked => { fs.focus(); if (root.has-media) { root.toggle-play(); } }
+        clicked => { fs.focus(); if (Playback.has-media) { root.toggle-play(); } }
         double-clicked => { root.toggle-fullscreen(); }
         pointer-event(e) => {
-            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && root.has-media) {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && Playback.has-media) {
                 root.menu-request("main", self.mouse-x, self.mouse-y, "");
             }
         }
     }
 
     // ---------- Music visualizer (audio-only media) ----------
-    if root.has-media && root.viz-audio && root.viz-mode > 0: VizView {
+    if Playback.has-media && root.viz-audio && root.viz-mode > 0: VizView {
         frame: root.viz-frame; note: root.viz-note;
     }
 
     // ---------- Now playing card (audio-only network streams) ----------
-    if root.has-media && root.np-show && !root.mini: NowPlayingCard {
+    if Playback.has-media && root.np-show && !root.mini: NowPlayingCard {
         // Centred in the space right of the docked library while that is shown.
         property <length> left: Overlays.library-open && !root.lib-full && root.show-ui ? min(427px, root.width) : 0px;
         x: self.left + (root.width - self.left - self.width) / 2;
@@ -767,7 +748,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
-    if root.has-media && root.lyrics-lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
+    if Playback.has-media && root.lyrics-lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
         y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: root.lyrics-lines; index: root.lyrics-index; size: root.lyrics-size * 1px; plain: root.lyrics-plain;
@@ -775,7 +756,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
-    if root.has-media && Overlays.karaoke-open && !Overlays.library-open && !root.mini: KaraokeView {
+    if Playback.has-media && Overlays.karaoke-open && !Overlays.library-open && !root.mini: KaraokeView {
         width: root.width; height: root.height;
         lines: root.lyrics-lines; index: root.lyrics-index; plain: root.lyrics-plain;
         words: root.lyrics-words; rows: root.lyrics-rows; big: root.karaoke-big;
@@ -786,8 +767,8 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
-    if !root.has-media || Overlays.library-open: LibraryView {
-        property <bool> docked: root.has-media && !root.lib-full;
+    if !Playback.has-media || Overlays.library-open: LibraryView {
+        property <bool> docked: Playback.has-media && !root.lib-full;
         // The docked library hides with the other controls during playback.
         visible: !self.docked || root.show-ui;
         sidebar: self.docked;
@@ -797,7 +778,7 @@ export component AppWindow inherits Window {
         items: root.lib-items; continue-items: root.lib-continue; recent-items: root.lib-recent; pinned-items: root.lib-pinned;
         listen-items: root.lib-listen; folder-items: root.lib-folders; list-items: root.lib-lists; artist-items: root.lib-artists;
         nav: root.lib-nav; crumb-keys: root.lib-crumb-keys; crumb-labels: root.lib-crumb-labels;
-        sort: root.lib-sort; grid: root.lib-grid; count: root.lib-count; scanning: root.lib-scanning; has-media: root.has-media;
+        sort: root.lib-sort; grid: root.lib-grid; count: root.lib-count; scanning: root.lib-scanning; has-media: Playback.has-media;
         can-back: root.lib-can-back; can-forward: root.lib-can-forward;
         query <=> root.lib-query;
         navigate(k) => { root.lib-query = ""; root.lib-navigate(k); }
@@ -809,7 +790,7 @@ export component AppWindow inherits Window {
         open-network() => { Overlays.network-open = true; }
         clear-recent() => { root.clear-recent(); }
         popout() => {
-            if (root.has-media) { root.lib-full = !root.lib-full; } else { root.open-file(); }
+            if (Playback.has-media) { root.lib-full = !root.lib-full; } else { root.open-file(); }
         }
     }
 
@@ -819,31 +800,31 @@ export component AppWindow inherits Window {
     top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
     if !root.mini && (root.show-ui || top-ta.has-hover): Rectangle {
         y: 0; height: 40px;
-        background: root.has-media ? Theme.bar : Theme.bg-a4;
+        background: Playback.has-media ? Theme.bar : Theme.bg-a4;
         HorizontalLayout {
             padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
             IconButton { icon: @image-url("../assets/icons/open.svg"); tip: "Open file"; clicked => { root.open-file(); } }
-            if root.has-media: IconButton { icon: @image-url("../assets/icons/home.svg"); active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
+            if Playback.has-media: IconButton { icon: @image-url("../assets/icons/home.svg"); active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
             Text {
                 horizontal-stretch: 1;
-                text: root.has-media ? root.media-title : "Vivi Media Player";
+                text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
                 color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
                 overflow: elide;
             }
-            if root.has-media: IconButton { icon: @image-url("../assets/icons/pip.svg"); tip: "Miniplayer (P)"; clicked => { root.toggle-mini(); } }
+            if Playback.has-media: IconButton { icon: @image-url("../assets/icons/pip.svg"); tip: "Miniplayer (P)"; clicked => { root.toggle-mini(); } }
             IconButton { icon: @image-url("../assets/icons/settings.svg"); active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; root.settings-refresh(root.settings-category, "", false); } }
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
     }
 
-    if !root.mini && root.has-media && root.viz-audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
+    if !root.mini && Playback.has-media && root.viz-audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
         x: 12px; y: 50px;
         modes: root.viz-modes; mode: root.viz-mode;
         select(i) => { root.viz-select(i); }
     }
 
     // ---------- Side panel ----------
-    if !root.mini && root.has-media && Overlays.panel-open: SidePanel {
+    if !root.mini && Playback.has-media && Overlays.panel-open: SidePanel {
         // Overlays the video; full width on narrow windows.
         scroll-y <=> root.panel-scroll;
         width: root.width < 800px ? root.width : 400px;
@@ -854,7 +835,7 @@ export component AppWindow inherits Window {
         sub-tracks: root.sub-tracks; audio-tracks: root.audio-tracks;
         audio-devices: root.audio-devices; chapters: root.chapters; chapter-thumbs: root.chapter-thumbs; chapter-has-thumb: root.chapter-has-thumb;
         chapters-refresh => { root.chapters-refresh(); }
-        ab-state: root.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
+        ab-state: Playback.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
         set-prop(n, v) => { root.set-prop(n, v); }
         run(c) => { root.run(c); }
         load-sub() => { root.load-sub(); }
@@ -933,7 +914,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Resume toast ----------
-    if root.has-media && root.resume-text != "": Rectangle {
+    if Playback.has-media && root.resume-text != "": Rectangle {
         width: toast.preferred-width; height: 52px;
         x: (root.width - self.width) / 2;
         y: root.height - root.bar-h - self.height - 16px;
@@ -959,7 +940,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Skip intro / credits (Skip Intro plugin) ----------
-    if root.has-media && root.skip-label != "" && !root.mini: SkipButton {
+    if Playback.has-media && root.skip-label != "" && !root.mini: SkipButton {
         x: root.width - self.width - 24px;
         y: root.height - (root.show-ui ? root.bar-h : 0px) - self.height - 24px;
         text: root.skip-label;
@@ -971,7 +952,7 @@ export component AppWindow inherits Window {
     // ---------- Bottom bar: every element is a movable item (Customize Player) ----------
     // Compact / Waveform / Plain: one row with the seekbar inline where "seek" sits.
     // Classic: the seekbar spans a row on top and "seek" becomes a flexible gap.
-    if !root.mini && root.has-media && root.show-ui: Rectangle {
+    if !root.mini && Playback.has-media && root.show-ui: Rectangle {
         y: root.height - self.height;
         height: root.bar-h;
         background: Theme.bar-dark;
@@ -982,9 +963,9 @@ export component AppWindow inherits Window {
             padding-top: root.bar.pad-top; padding-bottom: root.bar.pad-bottom;
             spacing: 2px;
             if root.bar-classic: SeekBar {
-                position: root.position; duration: root.duration;
-                frames: root.preview-frames;
-                chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b; range-a: root.range-a; range-b: root.range-b; range-label: root.range-label;
+                position: Playback.position; duration: Playback.duration;
+                frames: Playback.preview-frames;
+                chapters: Playback.chapter-starts; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
                 ab-set(x, y) => { root.ab-set(x, y); }
                 fmt(t) => { root.fmt(t) }
                 seek(t) => { root.seek(t); fs.focus(); }
@@ -993,34 +974,34 @@ export component AppWindow inherits Window {
                 spacing: root.bar.gap;
                 for id[i] in root.bar-items: HorizontalLayout {
                     property <bool> on: i >= root.bar-cum.length || root.bar-cum[i] < 0 || root.bar-cum[i] <= root.bar-fit;
-                    property <bool> ab: root.ab-a >= 0 && root.ab-b >= 0;
+                    property <bool> ab: Playback.ab-a >= 0 && Playback.ab-b >= 0;
                     horizontal-stretch: id == "seek" || id == "spacer" ? 1 : 0;
                     spacing: 2px;
                     if id == "prev": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
-                    if id == "play": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; primary: true; tip: root.playing ? "Pause" : "Play"; icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
+                    if id == "play": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; primary: true; tip: Playback.playing ? "Pause" : "Play"; icon: Playback.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { root.toggle-play(); fs.focus(); } }
                     if id == "next": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
-                    if on && id == "back10": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Back 10 s"; icon: @image-url("../assets/icons/backward-10-sec.svg"); clicked => { root.seek(max(0, root.position - 10)); fs.focus(); } }
-                    if on && id == "fwd10": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Forward 10 s"; icon: @image-url("../assets/icons/forward-10-sec.svg"); clicked => { root.seek(min(root.duration, root.position + 10)); fs.focus(); } }
+                    if on && id == "back10": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Back 10 s"; icon: @image-url("../assets/icons/backward-10-sec.svg"); clicked => { root.seek(max(0, Playback.position - 10)); fs.focus(); } }
+                    if on && id == "fwd10": IconButton { size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Forward 10 s"; icon: @image-url("../assets/icons/forward-10-sec.svg"); clicked => { root.seek(min(Playback.duration, Playback.position + 10)); fs.focus(); } }
                     if id == "time": HorizontalLayout {
                         padding-left: 8px; padding-right: 6px; spacing: 4px;
                         Text {
-                            text: ab ? "*" + fmt(root.ab-a) : fmt(root.position);
+                            text: ab ? "*" + fmt(Playback.ab-a) : fmt(Playback.position);
                             color: ab ? Theme.accent-bright : (root.bar-classic ? Theme.fg-1 : Theme.fg-a2);
                             font-size: Metrics.font-sm; vertical-alignment: center;
                         }
                         if ab: Text {
                             text: "‹"; color: na.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
-                            na := TouchArea { mouse-cursor: pointer; clicked => { root.ab-set(max(0, root.ab-a - 0.5), root.ab-b); } }
+                            na := TouchArea { mouse-cursor: pointer; clicked => { root.ab-set(max(0, Playback.ab-a - 0.5), Playback.ab-b); } }
                         }
                     }
                     if id == "duration": HorizontalLayout {
                         padding-left: 6px; padding-right: 6px; spacing: 4px;
                         if ab: Text {
                             text: "›"; color: nb.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
-                            nb := TouchArea { mouse-cursor: pointer; clicked => { root.ab-set(root.ab-a, min(root.duration, root.ab-b + 0.5)); } }
+                            nb := TouchArea { mouse-cursor: pointer; clicked => { root.ab-set(Playback.ab-a, min(Playback.duration, Playback.ab-b + 0.5)); } }
                         }
                         Text {
-                            text: ab ? "*" + fmt(root.ab-b) : fmt(root.duration);
+                            text: ab ? "*" + fmt(Playback.ab-b) : fmt(Playback.duration);
                             color: ab ? Theme.accent-bright : Theme.fg-a2;
                             font-size: Metrics.font-sm; vertical-alignment: center;
                         }
@@ -1028,21 +1009,21 @@ export component AppWindow inherits Window {
                     }
                     if id == "seek" && !root.bar-classic: SeekBar {
                         horizontal-stretch: 1;
-                        height: root.wave-peaks.length > 0 ? 24px : 18px;
+                        height: Playback.wave-peaks.length > 0 ? 24px : 18px;
                         boxed: root.bar.boxed;
                         track-h: 4px;
-                        position: root.position; duration: root.duration;
-                        frames: root.preview-frames; peaks: root.wave-peaks;
-                        chapters: root.chapter-starts; ab-a: root.ab-a; ab-b: root.ab-b; range-a: root.range-a; range-b: root.range-b; range-label: root.range-label;
+                        position: Playback.position; duration: Playback.duration;
+                        frames: Playback.preview-frames; peaks: Playback.wave-peaks;
+                        chapters: Playback.chapter-starts; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
                         ab-set(x, y) => { root.ab-set(x, y); }
                         fmt(t) => { root.fmt(t) }
                         seek(t) => { root.seek(t); fs.focus(); }
                     }
                     if id == "spacer" || (id == "seek" && root.bar-classic): Rectangle { horizontal-stretch: 1; }
                     if on && !root.is-core(id): BarItem {
-                        id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); muted: root.muted; volume: root.volume; volume-max: root.volume-max; fullscreen: root.fullscreen;
+                        id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;
                         act(x) => { root.bar-act(x); fs.focus(); }
-                        volume-changed(v) => { root.volume = v; root.volume-changed(v); }
+                        volume-changed(v) => { Playback.volume = v; root.volume-changed(v); }
                     }
                 }
                 if root.bar-slots > root.bar-fit: IconButton {
@@ -1055,24 +1036,24 @@ export component AppWindow inherits Window {
 
     // ---------- Miniplayer (Figma "Miniplayer" variants) ----------
     // Tiny: video only; hovering shows play/pause and the way back.
-    if root.mini && root.mini-tiny && root.has-media && root.show-ui: Rectangle {
+    if root.mini && root.mini-tiny && Playback.has-media && root.show-ui: Rectangle {
         width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
         background: Theme.scrim-soft;
         IconButton { x: 6px; y: 6px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { root.toggle-mini(); } }
         IconButton {
             x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            primary: true; tip: root.playing ? "Pause" : "Play";
-            icon: root.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg");
+            primary: true; tip: Playback.playing ? "Pause" : "Play";
+            icon: Playback.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg");
             clicked => { root.toggle-play(); fs.focus(); }
         }
         Rectangle {
             y: parent.height - 4px; height: 4px; x: 0;
-            width: root.duration > 0 ? parent.width * root.position / root.duration : 0;
+            width: Playback.duration > 0 ? parent.width * Playback.position / Playback.duration : 0;
             background: Theme.accent;
         }
     }
     // Compact: × / ⧉ in the corners, transport in the middle, progress along the bottom edge.
-    if root.mini && !root.mini-tiny && root.has-media && root.show-ui: Rectangle {
+    if root.mini && !root.mini-tiny && Playback.has-media && root.show-ui: Rectangle {
         width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
         background: Theme.scrim-soft;
         IconButton { x: 8px; y: 8px; icon: @image-url("../assets/icons/close.svg"); tip: "Stop and close the miniplayer"; clicked => { root.stop(); root.toggle-mini(); } }
@@ -1081,20 +1062,20 @@ export component AppWindow inherits Window {
             x: (parent.width - self.preferred-width) / 2; y: (parent.height - 40px) / 2; width: self.preferred-width; height: 40px;
             spacing: 18px; alignment: center;
             IconButton { y: 4px; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { root.prev(); } }
-            IconButton { y: 2px; primary: true; tip: root.playing ? "Pause" : (root.duration > 0 && root.position >= root.duration - 0.5 ? "Replay" : "Play"); icon: root.playing ? @image-url("../assets/icons/pause.svg") : (root.duration > 0 && root.position >= root.duration - 0.5 ? @image-url("../assets/icons/replay.svg") : @image-url("../assets/icons/play.svg")); clicked => { root.toggle-play(); fs.focus(); } }
+            IconButton { y: 2px; primary: true; tip: Playback.playing ? "Pause" : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? "Replay" : "Play"); icon: Playback.playing ? @image-url("../assets/icons/pause.svg") : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? @image-url("../assets/icons/replay.svg") : @image-url("../assets/icons/play.svg")); clicked => { root.toggle-play(); fs.focus(); } }
             IconButton { y: 4px; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { root.next(); } }
         }
         Rectangle {
             x: 10px; width: parent.width - 20px; y: parent.height - 18px; height: 14px;
             Rectangle { y: 5px; height: 4px; border-radius: self.height / 2; background: Theme.on-media-dim; }
-            Rectangle { x: 0; y: 5px; height: 4px; border-radius: self.height / 2; width: root.duration > 0 ? parent.width * root.position / root.duration : 0; background: Theme.accent.mix(Theme.video-bg, 70%); }
+            Rectangle { x: 0; y: 5px; height: 4px; border-radius: self.height / 2; width: Playback.duration > 0 ? parent.width * Playback.position / Playback.duration : 0; background: Theme.accent.mix(Theme.video-bg, 70%); }
             Rectangle {
-                x: (root.duration > 0 ? parent.width * root.position / root.duration : 0) - 5px; y: 2px;
+                x: (Playback.duration > 0 ? parent.width * Playback.position / Playback.duration : 0) - 5px; y: 2px;
                 width: 10px; height: 10px; border-radius: self.height / 2; background: Theme.accent;
             }
             TouchArea {
                 mouse-cursor: pointer;
-                clicked => { if (root.duration > 0) { root.seek(clamp(self.mouse-x / self.width, 0, 1) * root.duration); } }
+                clicked => { if (Playback.duration > 0) { root.seek(clamp(self.mouse-x / self.width, 0, 1) * Playback.duration); } }
             }
         }
     }
@@ -1105,7 +1086,7 @@ export component AppWindow inherits Window {
         TouchArea { }
         VerticalLayout {
             padding-left: 12px; padding-right: 8px; padding-top: 7px; padding-bottom: 5px; spacing: 2px;
-            Text { text: root.media-title; color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
+            Text { text: Playback.media-title; color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
             HorizontalLayout {
                 spacing: 6px;
                 Icon { y: 4px; width: 14px; height: 14px; source: @image-url("../assets/icons/folder.svg"); tint: Theme.fg-a3; }

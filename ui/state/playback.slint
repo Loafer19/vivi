@@ -1,0 +1,24 @@
+// Transport state of the current media: title, play/pause, time, volume,
+// repeat/shuffle, A-B loop and seekbar extras (chapters, waveform, range).
+export global Playback {
+    in-out property <string> media-title: "";
+    in-out property <bool> playing: false;
+    in-out property <float> position: 0;
+    in-out property <float> duration: 0;
+    in-out property <float> volume: 100;
+    in-out property <bool> muted: false;
+    in-out property <bool> has-media: false;
+    in-out property <float> volume-max: 150;
+    in-out property <bool> repeat-on;
+    in-out property <bool> shuffle-on;
+    in-out property <string> ab-state: "Off";
+    in-out property <float> ab-a: -1;
+    in-out property <float> ab-b: -1;
+    in-out property <float> range-a: -1;
+    in-out property <float> range-b: -1;
+    in-out property <string> range-label;
+    in-out property <[float]> chapter-starts;
+    in-out property <[float]> wave-peaks;
+    in-out property <string> wave-path;
+    in-out property <[image]> preview-frames;
+}

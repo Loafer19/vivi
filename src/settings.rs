@@ -1300,7 +1300,8 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
             .filter(|i| **i == "spacer" || !t.iter().any(|s| s == *i))
             .copied(),
     ));
-    a.set_volume_max(c.audio.volume_max as f32);
+    a.global::<crate::Playback>()
+        .set_volume_max(c.audio.volume_max as f32);
 }
 
 /// Name of the built-in profile matching the bar, else "Custom".
@@ -1346,18 +1347,18 @@ fn bar_action(a: &AppWindow, p: &Player, id: &str) {
             a.set_resume_text("Snapshot saved".into());
         }
         "repeat" => {
-            let on = !a.get_repeat_on();
+            let on = !a.global::<crate::Playback>().get_repeat_on();
             p.set("loop-file", if on { "inf" } else { "no" });
-            a.set_repeat_on(on);
+            a.global::<crate::Playback>().set_repeat_on(on);
         }
         "shuffle" => {
-            let on = !a.get_shuffle_on();
+            let on = !a.global::<crate::Playback>().get_shuffle_on();
             p.run(if on {
                 "playlist-shuffle"
             } else {
                 "playlist-unshuffle"
             });
-            a.set_shuffle_on(on);
+            a.global::<crate::Playback>().set_shuffle_on(on);
         }
         _ => {}
     }

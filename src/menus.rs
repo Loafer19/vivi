@@ -141,8 +141,16 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 "Loop File",
                 p.get("loop-file").is_some_and(|s| s != "no"),
             )));
-            v.push(check("repeat", "Repeat Queue", a.get_repeat_on()));
-            v.push(check("shuffle", "Shuffle", a.get_shuffle_on()));
+            v.push(check(
+                "repeat",
+                "Repeat Queue",
+                a.global::<crate::Playback>().get_repeat_on(),
+            ));
+            v.push(check(
+                "shuffle",
+                "Shuffle",
+                a.global::<crate::Playback>().get_shuffle_on(),
+            ));
             v.push(div(row("panel:3", "Speed & Chapters…", "speed", "")));
             v
         }

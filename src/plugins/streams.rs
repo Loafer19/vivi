@@ -1301,7 +1301,9 @@ impl Streams {
     fn now_playing(&mut self, cx: &Ctx) {
         let a = cx.app;
         let path = cx.player.get("path").unwrap_or_default();
-        let show = a.get_has_media() && a.get_viz_audio() && path.contains("://");
+        let show = a.global::<crate::Playback>().get_has_media()
+            && a.get_viz_audio()
+            && path.contains("://");
         if !show {
             if a.get_np_show() {
                 a.set_np_show(false);

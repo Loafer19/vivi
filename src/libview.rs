@@ -771,7 +771,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         p.enqueue(&r);
                     }
                     // The docked sidebar stays next to the video; the full view closes.
-                    if a.get_lib_full() || !a.get_has_media() {
+                    if a.get_lib_full() || !a.global::<crate::Playback>().get_has_media() {
                         a.global::<crate::Overlays>().set_library_open(false);
                     }
                     a.set_lib_full(false);
@@ -791,7 +791,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             match action.as_str() {
                 "play" => a.invoke_lib_open(key, kind),
                 "enqueue" => {
-                    if a.get_has_media() {
+                    if a.global::<crate::Playback>().get_has_media() {
                         p.enqueue(&path);
                     } else {
                         p.open(&path);
@@ -912,7 +912,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     {
                         for (i, f) in files.iter().enumerate() {
                             let f = f.to_string_lossy();
-                            if i == 0 && !a.get_has_media() {
+                            if i == 0 && !a.global::<crate::Playback>().get_has_media() {
                                 p.open(&f);
                             } else {
                                 p.enqueue(&f);

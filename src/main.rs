@@ -134,15 +134,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if log {
                                 eprintln!("time-pos {t:.2}");
                             }
-                            a.set_position(t as f32)
+                            a.global::<crate::Playback>().set_position(t as f32)
                         }
-                        PlayerEvent::Duration(d) => a.set_duration(d as f32),
-                        PlayerEvent::Pause(p) => a.set_playing(!p),
-                        PlayerEvent::Volume(v) => a.set_volume(v as f32),
-                        PlayerEvent::Mute(m) => a.set_muted(m),
-                        PlayerEvent::Title(t) => a.set_media_title(t.into()),
+                        PlayerEvent::Duration(d) => {
+                            a.global::<crate::Playback>().set_duration(d as f32)
+                        }
+                        PlayerEvent::Pause(p) => a.global::<crate::Playback>().set_playing(!p),
+                        PlayerEvent::Volume(v) => {
+                            a.global::<crate::Playback>().set_volume(v as f32)
+                        }
+                        PlayerEvent::Mute(m) => a.global::<crate::Playback>().set_muted(m),
+                        PlayerEvent::Title(t) => {
+                            a.global::<crate::Playback>().set_media_title(t.into())
+                        }
                         PlayerEvent::FileLoaded => {
-                            a.set_has_media(true);
+                            a.global::<crate::Playback>().set_has_media(true);
                             refresh_lists(&a, &player, log);
                             on_file_loaded(&a, &player, log);
                             libview::flush_pending(&player);
@@ -162,11 +168,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             peaks::start(
                                 &a,
                                 &player.get("path").unwrap_or_default(),
-                                cfg.borrow().interface.bar_style == "Waveform"
-                                    && viz::audio_only(&player),
+                                a.get_bar_style() == BarStyle::Waveform && viz::audio_only(&player),
                             );
-                            a.set_range_a(-1.0);
-                            a.set_range_b(-1.0);
+                            a.global::<crate::Playback>().set_range_a(-1.0);
+                            a.global::<crate::Playback>().set_range_b(-1.0);
                             let c = cfg.borrow();
                             let key = settings::apply_preset(&player, &c, log);
                             settings::sync_panel(&a, &player);
@@ -225,9 +230,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             .and_then(|v| v.parse::<f32>().ok())
                                             .unwrap_or(-1.0)
                                     };
-                                    a.set_range_a(t(1));
-                                    a.set_range_b(t(2));
-                                    a.set_range_label(
+                                    a.global::<crate::Playback>().set_range_a(t(1));
+                                    a.global::<crate::Playback>().set_range_b(t(2));
+                                    a.global::<crate::Playback>().set_range_label(
                                         args.get(3).cloned().unwrap_or_default().into(),
                                     );
                                 }
@@ -427,7 +432,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             A::VolumeDown => p.add_volume(-vstep),
             A::Fullscreen => toggle_fs(),
             A::Miniplayer => {
-                if a.get_has_media() {
+                if a.global::<crate::Playback>().get_has_media() {
                     a.invoke_toggle_mini();
                 }
             }
@@ -453,7 +458,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             A::Visualizer => {
                 let n = a.get_viz_modes().row_count() as i32;
-                if !(a.get_has_media() && a.get_viz_audio()) || n == 0 {
+                if !(a.global::<crate::Playback>().get_has_media() && a.get_viz_audio()) || n == 0 {
                     forward_key(&p, s, ctrl, alt);
                     return false;
                 }
@@ -509,7 +514,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     > Duration::from_secs(
                         settings::AUTOHIDE_SECS.load(std::sync::atomic::Ordering::Relaxed) as u64,
                     );
-                let want = !(idle && a.get_playing() && a.get_has_media());
+                let want = !(idle
+                    && a.global::<crate::Playback>().get_playing()
+                    && a.global::<crate::Playback>().get_has_media());
                 if a.get_controls_visible() != want {
                     a.set_controls_visible(want);
                 }
@@ -642,9 +649,10 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
             .map(|(_, s)| slint::SharedString::from(hms(*s)))
             .collect::<Vec<_>>(),
     )));
-    a.set_chapter_starts(slint::ModelRc::new(slint::VecModel::from(
-        chs.iter().map(|(_, s)| *s as f32).collect::<Vec<_>>(),
-    )));
+    a.global::<crate::Playback>()
+        .set_chapter_starts(slint::ModelRc::new(slint::VecModel::from(
+            chs.iter().map(|(_, s)| *s as f32).collect::<Vec<_>>(),
+        )));
     a.set_chapters(items(
         chs.into_iter()
             .enumerate()
@@ -717,10 +725,10 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             if log {
                 eprintln!("ab-loop {st}");
             }
-            a.set_ab_state(st.into());
+            a.global::<crate::Playback>().set_ab_state(st.into());
             let f = |k| ab(k).and_then(|v| v.parse::<f32>().ok()).unwrap_or(-1.0);
-            a.set_ab_a(f("ab-loop-a"));
-            a.set_ab_b(f("ab-loop-b"));
+            a.global::<crate::Playback>().set_ab_a(f("ab-loop-a"));
+            a.global::<crate::Playback>().set_ab_b(f("ab-loop-b"));
         }
     });
     {
@@ -736,13 +744,14 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             p.set("ab-loop-a", &v(x));
             p.set("ab-loop-b", &v(y));
             if let Some(a) = w.upgrade() {
-                a.set_ab_a(x);
-                a.set_ab_b(y);
-                a.set_ab_state(if x >= 0.0 && y >= 0.0 {
-                    format!("Looping {x:.2}s → {y:.2}s").into()
-                } else {
-                    "Off".into()
-                });
+                a.global::<crate::Playback>().set_ab_a(x);
+                a.global::<crate::Playback>().set_ab_b(y);
+                a.global::<crate::Playback>()
+                    .set_ab_state(if x >= 0.0 && y >= 0.0 {
+                        format!("Looping {x:.2}s → {y:.2}s").into()
+                    } else {
+                        "Off".into()
+                    });
             }
         });
     }

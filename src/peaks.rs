@@ -121,8 +121,9 @@ fn load_or_compute(path: &Path) -> Option<Vec<f32>> {
 
 /// Clear the waveform, then (if `on` and `path` is a local file) fill it in the background.
 pub fn start(app: &AppWindow, path: &str, on: bool) {
-    app.set_wave_peaks(ModelRc::default());
-    app.set_wave_path(path.into());
+    app.global::<crate::Playback>()
+        .set_wave_peaks(ModelRc::default());
+    app.global::<crate::Playback>().set_wave_path(path.into());
     let p = PathBuf::from(path);
     if !on || !p.is_file() {
         return;
@@ -132,8 +133,9 @@ pub fn start(app: &AppWindow, path: &str, on: bool) {
     std::thread::spawn(move || {
         let Some(v) = load_or_compute(&p) else { return };
         let _ = weak.upgrade_in_event_loop(move |a| {
-            if a.get_wave_path() == want.as_str() {
-                a.set_wave_peaks(ModelRc::new(VecModel::from(v)));
+            if a.global::<crate::Playback>().get_wave_path() == want.as_str() {
+                a.global::<crate::Playback>()
+                    .set_wave_peaks(ModelRc::new(VecModel::from(v)));
             }
         });
     });

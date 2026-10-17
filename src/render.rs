@@ -144,7 +144,11 @@ pub fn attach(
                 }
             }
             RenderingState::BeforeRendering => {
-                if let (Some(rc), Some(a)) = (&ctx, weak.upgrade().filter(|a| a.get_has_media())) {
+                if let (Some(rc), Some(a)) = (
+                    &ctx,
+                    weak.upgrade()
+                        .filter(|a| a.global::<crate::Playback>().get_has_media()),
+                ) {
                     let size = a.window().size();
                     if let Some(g) = &gl {
                         g.apply();

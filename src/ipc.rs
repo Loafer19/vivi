@@ -212,7 +212,7 @@ fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
         "has_media": !path.is_empty(),
         "playing": !path.is_empty() && p.get("pause").as_deref() == Some("no"),
         "path": path,
-        "title": a.get_media_title().to_string(),
+        "title": a.global::<crate::Playback>().get_media_title().to_string(),
         "artist": p.get("metadata/by-key/artist").unwrap_or_default(),
         "album": p.get("metadata/by-key/album").unwrap_or_default(),
         "position": num("time-pos").unwrap_or(0.0),

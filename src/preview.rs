@@ -66,7 +66,8 @@ pub fn load_cached(app: &AppWindow, path: &str) -> bool {
         .iter()
         .filter_map(|f| Image::load_from_path(f).ok())
         .collect();
-    app.set_preview_frames(ModelRc::new(VecModel::from(imgs)));
+    app.global::<crate::Playback>()
+        .set_preview_frames(ModelRc::new(VecModel::from(imgs)));
     true
 }
 
@@ -74,7 +75,8 @@ pub fn load_cached(app: &AppWindow, path: &str) -> bool {
 pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
     let gen = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let model: Rc<VecModel<Image>> = Rc::new(VecModel::default());
-    app.set_preview_frames(ModelRc::from(model.clone()));
+    app.global::<crate::Playback>()
+        .set_preview_frames(ModelRc::from(model.clone()));
     let p = Path::new(path);
     if !enabled || duration <= 1.0 || !p.is_file() || crate::library::kind_of(p) != Some("video") {
         return;
@@ -123,7 +125,8 @@ pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
                                         .find_map(|x| p.get(x).cloned().flatten())
                                 })
                                 .collect();
-                            a.set_preview_frames(ModelRc::new(VecModel::from(filled)));
+                            a.global::<crate::Playback>()
+                                .set_preview_frames(ModelRc::new(VecModel::from(filled)));
                         }
                     });
                 });
