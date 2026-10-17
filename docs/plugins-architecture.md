@@ -32,6 +32,29 @@ downloadable package (`plugins/scrobbler`). Scripts cannot draw Slint widgets, s
 would mean either a worse UI (mpv OSD text) or a declarative-UI host API, which is the
 WASM step below. They stay built in until that exists.
 
+### Source layout of the built-in plugins
+
+Each built-in plugin is `src/plugins/<module>/` (or one file when small) whose module,
+struct and manifest ID agree. `mod.rs` holds the plugin itself (state, UI updates,
+`Plugin` impl, tests); the rest is plain logic with no Slint:
+
+| Module (ID) | Files |
+| --- | --- |
+| `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply |
+| `free_music` (`free-music`) | `catalog.rs` track / licence / query model · `api.rs` Internet Archive + Jamendo clients, downloader |
+| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded / cache / LRCLIB, offsets · `radio.rs` stream-title lookups |
+| `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists |
+| `subtitle_search` (`subtitle-search`) | `api.rs` OpenSubtitles hash, search, download · `files.rs` offsets, picks, folder pairing |
+| `skip_intro`, `epg`, `tagsources` | single files |
+
+Wire formats live in `plugins/protocol.rs`: `PluginCommand` for the UI's
+`plugin-command(id, name, args)` callback (arguments packed with U+001F, see `split_args`
+/ `join`) and `ScriptMessage`, the one enum of every `script-message vivi-*` a package can
+send (`vivi-toast`, `vivi-setting`, `vivi-pick-folder`, `vivi-range`, `vivi-fullscreen`,
+`vivi-qr`, `vivi-sub-offset`, `vivi-tagger-acoustid`, `vivi-preview-frames`,
+`vivi-chapter-thumbs`). A new message is a variant plus a `parse` arm and a test.
+Background lookups return through `util::Task<T>`.
+
 Built-in plugins hand the UI typed state rather than display strings: the tag review
 sends a `TagStatus` per file (tagged / renamed / skipped / failed / undone), lyrics a
 `LyricsState` (found / searching / missing) and numeric offsets. Shared enums live in
