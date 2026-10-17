@@ -82,7 +82,8 @@ section[id]{scroll-margin-top:120px}
   <nav>
     <a href="https://plugins.viviplayer.app/"><i data-lucide="puzzle"></i>Plugins</a>
     <a href="ai-agents.html" class="on"><i data-lucide="bot"></i><span class="wide">AI agents</span><span class="narrow">MCP</span></a>
-    <a href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
+    <a href="compare.html"><i data-lucide="scale"></i>Compare</a>
+    <a class="hide-xs" href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
     <a class="dl" href="https://github.com/Loafer19/vivi/releases/latest"><i data-lucide="download"></i>Download</a>
   </nav>
 </div></header>
@@ -292,7 +293,7 @@ const links=[...document.querySelectorAll('.pnav a')],secs=links.map(a=>document
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id))}}),{rootMargin:'-40% 0px -55% 0px'});secs.forEach(s=>s&&io.observe(s));
 })();
 </script>
-<footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
+<footer><a href="compare.html">Compare players</a> · <a href="https://plugins.viviplayer.app/">Plugins</a><br>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC)</footer>
 </body>
 </html>

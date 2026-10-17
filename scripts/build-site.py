@@ -26,6 +26,7 @@ PAGES = {
     "index.html": ("Vivi is a fast, lightweight desktop media player for Linux written in Rust on top of mpv: "
                    "plugins, music visualizer, synced lyrics, library and a clean dark UI.", "1.0"),
     "ai-agents.html": ("Control the Vivi media player from Claude, Cursor, Claude Code and other AI agents with the vivi-mcp MCP server: example prompts, setup and all 30 tools.", "0.5"),
+    "compare.html": ("How the Vivi media player compares with mpv, VLC, MPC-HC, IINA, Celluloid and foobar2000: features, measured size, start time and memory, licenses and platforms.", "0.6"),
 }
 JSONLD = {
     "@context": "https://schema.org",
