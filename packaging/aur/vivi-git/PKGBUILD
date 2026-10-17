@@ -1,7 +1,7 @@
 # Maintainer: Loafer19 <https://github.com/Loafer19>
 # Builds the latest master from source.
 pkgname=vivi-git
-pkgver=0.11.0.r0.g5d6b8b5
+pkgver=0.11.1.r0.gaa613ef
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI) - development version"
 arch=('x86_64' 'aarch64')
