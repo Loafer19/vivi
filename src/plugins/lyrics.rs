@@ -21,6 +21,7 @@
 //! changed, shifted by a manual offset.
 
 use super::{Ctx, Manifest, Plugin, SettingSpec};
+use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -1106,7 +1107,7 @@ impl Lyrics {
         cx.app.set_ls_selected(-1);
         self.search.results.clear();
         self.search_results(cx);
-        cx.app.set_ls_open(true);
+        cx.app.global::<crate::Overlays>().set_ls_open(true);
         if !cx.app.get_ls_title().is_empty() {
             self.search_run(cx);
         } else {
@@ -1228,7 +1229,7 @@ impl Lyrics {
             let _ = std::fs::create_dir_all(d);
         }
         let _ = std::fs::write(&file, &f.text);
-        cx.app.set_ls_open(false);
+        cx.app.global::<crate::Overlays>().set_ls_open(false);
         if let Some(r) = self.radio.as_mut() {
             r.mem.remove(&r.key);
         }
@@ -1264,7 +1265,7 @@ impl Lyrics {
         let cols = cx.app.get_karaoke_cols();
         let i = self
             .index
-            .filter(|_| cx.app.get_karaoke_open() && l.has_words());
+            .filter(|_| cx.app.global::<crate::Overlays>().get_karaoke_open() && l.has_words());
         let Some(i) = i else {
             if self.word_line.take().is_some() {
                 self.words = None;
@@ -1521,8 +1522,8 @@ impl Plugin for Lyrics {
     }
     fn disable(&mut self, cx: &Ctx) {
         cx.app.set_lyrics_enabled(false);
-        cx.app.set_karaoke_open(false);
-        cx.app.set_ls_open(false);
+        cx.app.global::<crate::Overlays>().set_karaoke_open(false);
+        cx.app.global::<crate::Overlays>().set_ls_open(false);
         self.rx = None;
         self.show(cx, None);
     }
@@ -1549,9 +1550,11 @@ impl Plugin for Lyrics {
                 let on = match arg {
                     "on" => true,
                     "off" => false,
-                    _ => !cx.app.get_karaoke_open(),
+                    _ => !cx.app.global::<crate::Overlays>().get_karaoke_open(),
                 };
-                cx.app.set_karaoke_open(on && cx.app.get_has_media());
+                cx.app
+                    .global::<crate::Overlays>()
+                    .set_karaoke_open(on && cx.app.get_has_media());
                 self.word_line = None;
             }
             "offset" => match arg {
@@ -1577,7 +1580,7 @@ impl Plugin for Lyrics {
             "search-close" => {
                 self.search.rx = None;
                 cx.app.set_ls_busy(false);
-                cx.app.set_ls_open(false);
+                cx.app.global::<crate::Overlays>().set_ls_open(false);
             }
             "forget" => {
                 let _ = std::fs::remove_file(manual_file(&self.key));

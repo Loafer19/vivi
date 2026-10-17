@@ -1390,9 +1390,9 @@ fn customize(
         let backup = backup.clone();
         app.on_customize_profile(move |p| {
             let Some(a) = w.upgrade() else { return };
-            if !a.get_customize_open() {
+            if !a.global::<crate::Overlays>().get_customize_open() {
                 *backup.borrow_mut() = Some(cfg.borrow().interface.clone());
-                a.set_customize_open(true);
+                a.global::<crate::Overlays>().set_customize_open(true);
             }
             if let Some(t) = config::profile_toolbar(&p) {
                 let mut c = cfg.borrow_mut();
@@ -1442,7 +1442,7 @@ fn customize(
         let p = player.clone();
         app.on_customize_done(move |keep| {
             let Some(a) = w.upgrade() else { return };
-            a.set_customize_open(false);
+            a.global::<crate::Overlays>().set_customize_open(false);
             let old = backup.borrow_mut().take();
             if keep {
                 save();
@@ -1475,7 +1475,8 @@ fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'sta
     ]);
     app.set_onboarding_actions(strings(keys.iter().map(|k| k.0)));
     app.set_onboarding_keys(strings(keys.iter().map(|k| k.1)));
-    app.set_onboarding_open(!cfg.borrow().interface.onboarded);
+    app.global::<crate::Overlays>()
+        .set_onboarding_open(!cfg.borrow().interface.onboarded);
     // The `?` overlay lists the whole keymap.
     let all: Vec<_> = crate::keymap::rows().collect();
     app.set_shortcut_actions(strings(all.iter().map(|k| k.0)));
@@ -1484,7 +1485,7 @@ fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'sta
     let cfg = cfg.clone();
     app.on_onboarding_done(move || {
         if let Some(a) = w.upgrade() {
-            a.set_onboarding_open(false);
+            a.global::<crate::Overlays>().set_onboarding_open(false);
         }
         cfg.borrow_mut().interface.onboarded = true;
         save();
@@ -1686,14 +1687,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     }
                     "interface.customize" => {
                         drop(c);
-                        a.set_settings_open(false);
+                        a.global::<crate::Overlays>().set_settings_open(false);
                         a.invoke_customize_profile("".into());
                         return;
                     }
                     "interface.onboarding" => {
-                        a.set_settings_open(false);
+                        a.global::<crate::Overlays>().set_settings_open(false);
                         a.set_onboarding_step(0);
-                        a.set_onboarding_open(true);
+                        a.global::<crate::Overlays>().set_onboarding_open(true);
                         return;
                     }
                     "interface.autohide" => c.interface.autohide_secs = num as u32,

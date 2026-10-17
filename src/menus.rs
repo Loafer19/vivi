@@ -532,10 +532,10 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                 }
             }
             "mini" => a.invoke_toggle_mini(),
-            "customize" => a.set_customize_open(true),
-            "shortcuts" => a.set_shortcuts_open(true),
+            "customize" => a.global::<crate::Overlays>().set_customize_open(true),
+            "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "settings" => {
-                a.set_settings_open(true);
+                a.global::<crate::Overlays>().set_settings_open(true);
                 a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
             }
             "shuffle-now" => p.run("playlist-shuffle"),
@@ -547,8 +547,8 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "clear-queue" => a.invoke_queue_clear(),
             "open-file" => a.invoke_open_file(),
             "open-folder" => a.invoke_open_folder(),
-            "open-network" => a.set_network_open(true),
-            "library" => a.set_library_open(true),
+            "open-network" => a.global::<crate::Overlays>().set_network_open(true),
+            "library" => a.global::<crate::Overlays>().set_library_open(true),
             _ => {}
         },
     }

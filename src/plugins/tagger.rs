@@ -31,6 +31,7 @@ use lofty::config::WriteOptions;
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::prelude::*;
 use lofty::tag::{ItemKey, Tag};
+use slint::ComponentHandle;
 use slint::{ModelRc, VecModel};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1442,7 +1443,7 @@ impl AutoTagger {
         )));
         a.set_md_query(target.into());
         a.set_md_detail("".into());
-        a.set_md_open(true);
+        a.global::<crate::Overlays>().set_md_open(true);
         self.rows.clear();
         self.show_rows(cx, None);
         self.start(cx);
@@ -1856,7 +1857,7 @@ impl AutoTagger {
         self.cancel.store(true, Ordering::Relaxed);
         self.cancel = Arc::new(AtomicBool::new(false));
         let a = cx.app;
-        a.set_settings_open(false);
+        a.global::<crate::Overlays>().set_settings_open(false);
         a.set_md_owner(ID.into());
         a.set_md_title("Auto-tagger".into());
         a.set_md_placeholder("File or folder to tag".into());
@@ -1868,7 +1869,7 @@ impl AutoTagger {
         )));
         a.set_md_query(path.as_str().into());
         a.set_md_detail("".into());
-        a.set_md_open(true);
+        a.global::<crate::Overlays>().set_md_open(true);
         self.batch = false;
         self.rows.clear();
         self.show_rows(cx, None);
@@ -2170,7 +2171,7 @@ impl Plugin for AutoTagger {
         self.cancel.store(true, Ordering::Relaxed);
         self.rx = None;
         if cx.app.get_md_owner() == ID {
-            cx.app.set_md_open(false);
+            cx.app.global::<crate::Overlays>().set_md_open(false);
         }
     }
     fn command(&mut self, cx: &Ctx, name: &str, args: &[String]) {
@@ -2181,7 +2182,7 @@ impl Plugin for AutoTagger {
                     .local_path()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                cx.app.set_settings_open(false);
+                cx.app.global::<crate::Overlays>().set_settings_open(false);
                 self.open(cx, p);
             }
             "batch" => {
@@ -2200,7 +2201,7 @@ impl Plugin for AutoTagger {
                     Some(r) => crate::store::home().join(r).to_string_lossy().into_owned(),
                     None => f,
                 };
-                cx.app.set_settings_open(false);
+                cx.app.global::<crate::Overlays>().set_settings_open(false);
                 self.open(cx, f);
             }
             "restore" => match cx.local_path() {
@@ -2285,7 +2286,7 @@ impl Plugin for AutoTagger {
                 }
             }
             "review-close" => {
-                cx.app.set_tr_open(false);
+                cx.app.global::<crate::Overlays>().set_tr_open(false);
                 self.reviews.clear();
                 cx.app.set_tr_files(ModelRc::default());
                 // Thumbnails are only needed while the dialog is open.
@@ -2353,8 +2354,8 @@ impl Plugin for AutoTagger {
                     cx.app.set_tr_busy(false);
                     cx.app.set_tr_can_undo(false);
                     self.render_review(cx);
-                    cx.app.set_md_open(false);
-                    cx.app.set_tr_open(true);
+                    cx.app.global::<crate::Overlays>().set_md_open(false);
+                    cx.app.global::<crate::Overlays>().set_tr_open(true);
                     if std::env::var("VIVI_TAGREVIEW").as_deref() == Ok("apply") {
                         self.apply_reviews(cx);
                     }

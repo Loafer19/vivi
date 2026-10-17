@@ -21,35 +21,35 @@ pub fn close(a: &AppWindow, o: Overlay) {
             a.set_menu_kind("".into());
             a.set_sub_open("".into());
         }
-        Overlay::Shortcuts => a.set_shortcuts_open(false),
-        Overlay::Info => a.set_info_open(false),
+        Overlay::Shortcuts => a.global::<crate::Overlays>().set_shortcuts_open(false),
+        Overlay::Info => a.global::<crate::Overlays>().set_info_open(false),
         Overlay::Onboarding => a.invoke_onboarding_done(),
         Overlay::Customize => a.invoke_customize_done(false),
         Overlay::TagReview => {
             plugins::command(tagger::ID, "review-close", &[]);
-            a.set_tr_open(false);
+            a.global::<crate::Overlays>().set_tr_open(false);
         }
         Overlay::LyricsSearch => {
             plugins::command(lyrics::ID, "search-close", &[]);
-            a.set_ls_open(false);
+            a.global::<crate::Overlays>().set_ls_open(false);
         }
         Overlay::MusicDialog => {
-            a.set_md_open(false);
+            a.global::<crate::Overlays>().set_md_open(false);
             plugins::command(&a.get_md_owner(), "close", &[]);
         }
-        Overlay::Subtitles => a.set_subs_open(false),
-        Overlay::Qr => a.set_qr_open(false),
-        Overlay::Settings => a.set_settings_open(false),
+        Overlay::Subtitles => a.global::<crate::Overlays>().set_subs_open(false),
+        Overlay::Qr => a.global::<crate::Overlays>().set_qr_open(false),
+        Overlay::Settings => a.global::<crate::Overlays>().set_settings_open(false),
         Overlay::NewPlaylist => a.invoke_np_close(),
         Overlay::Network => {
-            a.set_network_open(false);
+            a.global::<crate::Overlays>().set_network_open(false);
             a.set_net_error("".into());
         }
-        Overlay::SidePanel => a.set_panel_open(false),
-        Overlay::Library => a.set_library_open(false),
+        Overlay::SidePanel => a.global::<crate::Overlays>().set_panel_open(false),
+        Overlay::Library => a.global::<crate::Overlays>().set_library_open(false),
         Overlay::Karaoke => {
             plugins::command(lyrics::ID, "karaoke", &["off".into()]);
-            a.set_karaoke_open(false);
+            a.global::<crate::Overlays>().set_karaoke_open(false);
         }
     }
 }

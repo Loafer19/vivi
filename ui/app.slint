@@ -17,9 +17,10 @@ import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, N
 import { Modal } from "core/modal.slint";
 import { IconButton, PrimaryButton, ButtonSize } from "core/buttons.slint";
 import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
+import { Overlays } from "state/overlays.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -343,7 +344,6 @@ export component AppWindow inherits Window {
     in property <float> lyrics-size: 22;
     // Full-screen karaoke view and manual search (Lyrics plugin).
     in property <bool> lyrics-enabled;
-    in-out property <bool> karaoke-open;
     in property <[KWord]> lyrics-words;
     in property <int> lyrics-rows;
     in property <string> lyrics-source;
@@ -357,7 +357,6 @@ export component AppWindow inherits Window {
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
     // Characters per karaoke row, for wrapping the word-timed current line.
     out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
-    in-out property <bool> ls-open;
     in-out property <string> ls-artist;
     in-out property <string> ls-title;
     in-out property <int> ls-selected: -1;
@@ -366,7 +365,6 @@ export component AppWindow inherits Window {
     in property <string> ls-preview;
     in property <bool> ls-busy;
     in property <bool> subs-plugin;
-    in-out property <bool> subs-open;
     in property <[SubHit]> subs-hits;
     in property <[Item]> subs-langs;
     in property <int> subs-selected: -1;
@@ -387,7 +385,6 @@ export component AppWindow inherits Window {
     in-out property <int> subs-target;
     in-out property <int> subs-source;
     // Shared dialog of the music plugins (Auto-tagger, Free Music); md-owner = plugin id.
-    in-out property <bool> md-open;
     in property <string> md-owner;
     in property <string> md-title;
     in property <[Item]> md-results;
@@ -395,7 +392,6 @@ export component AppWindow inherits Window {
     in property <string> md-status;
     in property <bool> md-busy;
     in property <string> md-detail;
-    in-out property <bool> tr-open;
     in property <[TagFile]> tr-files;
     in property <string> tr-status;
     in property <bool> tr-busy;
@@ -432,32 +428,31 @@ export component AppWindow inherits Window {
     in property <bool> np-has-logo;
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
-        if (root.subs-plugin) { root.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
+        if (root.subs-plugin) { Overlays.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
         else { root.load-sub(); }
     }
 
     // Side panel
-    in-out property <bool> panel-open: false;
     in-out property <length> panel-scroll;
     in-out property <PanelTab> panel-tab: PanelTab.subtitles;
     // The overlay Esc closes (top-most open one); same conditions as each overlay's `if` below.
     out property <Overlay> top-overlay:
         root.menu-kind != "" ? Overlay.menu
-        : root.shortcuts-open ? Overlay.shortcuts
-        : root.info-open ? Overlay.info
-        : root.onboarding-open ? Overlay.onboarding
-        : root.customize-open ? Overlay.customize
-        : root.tr-open ? Overlay.tag-review
-        : root.ls-open ? Overlay.lyrics-search
-        : root.md-open ? Overlay.music-dialog
-        : root.subs-open ? Overlay.subtitles
-        : root.qr-open ? Overlay.qr
-        : root.settings-open ? Overlay.settings
-        : root.np-open ? Overlay.new-playlist
-        : root.network-open ? Overlay.network
-        : root.panel-open && root.has-media && !root.mini ? Overlay.side-panel
-        : root.library-open && root.has-media ? Overlay.library
-        : root.karaoke-open && root.has-media && !root.mini && !root.library-open ? Overlay.karaoke
+        : Overlays.shortcuts-open ? Overlay.shortcuts
+        : Overlays.info-open ? Overlay.info
+        : Overlays.onboarding-open ? Overlay.onboarding
+        : Overlays.customize-open ? Overlay.customize
+        : Overlays.tr-open ? Overlay.tag-review
+        : Overlays.ls-open ? Overlay.lyrics-search
+        : Overlays.md-open ? Overlay.music-dialog
+        : Overlays.subs-open ? Overlay.subtitles
+        : Overlays.qr-open ? Overlay.qr
+        : Overlays.settings-open ? Overlay.settings
+        : Overlays.np-open ? Overlay.new-playlist
+        : Overlays.network-open ? Overlay.network
+        : Overlays.panel-open && root.has-media && !root.mini ? Overlay.side-panel
+        : Overlays.library-open && root.has-media ? Overlay.library
+        : Overlays.karaoke-open && root.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
         : Overlay.none;
     in property <[Item]> sub-tracks;
     in property <[Item]> audio-tracks;
@@ -517,7 +512,6 @@ export component AppWindow inherits Window {
     in property <bool> repeat-on;
     in property <bool> shuffle-on;
     in property <float> volume-max: 150;
-    in-out property <bool> customize-open;
     in property <[string]> customize-available;
     in property <[string]> profiles;
     in property <string> profile;
@@ -537,7 +531,7 @@ export component AppWindow inherits Window {
         else if (id == "mute") { root.toggle-mute(); }
         else if (id == "fullscreen") { root.toggle-fullscreen(); }
         else if (id == "bookmark") { root.add-bookmark(); }
-        else if (id == "settings") { root.settings-open = true; root.settings-refresh(root.settings-category, "", false); }
+        else if (id == "settings") { Overlays.settings-open = true; root.settings-refresh(root.settings-category, "", false); }
         else { root.bar-action(id); }
     }
     // Responsive bottom bar: how many items fit on each side of the play controls.
@@ -546,21 +540,18 @@ export component AppWindow inherits Window {
     property <int> bar-fit: max(0, floor((root.width - root.bar.reserve) / root.bar.slot));
     property <bool> bar-has-volume: root.width >= root.bar.volume-min-window;
     function bar-active(id: string) -> bool {
-        return (id == "queue" && root.panel-open && root.panel-tab == PanelTab.queue)
-            || (id == "subtitles" && root.panel-open && root.panel-tab == PanelTab.subtitles)
-            || (id == "audio" && root.panel-open && root.panel-tab == PanelTab.audio)
-            || (id == "video" && root.panel-open && root.panel-tab == PanelTab.video)
-            || (id == "speed" && root.panel-open && root.panel-tab == PanelTab.playback)
-            || (id == "chapters" && root.panel-open && root.panel-tab == PanelTab.chapters)
+        return (id == "queue" && Overlays.panel-open && root.panel-tab == PanelTab.queue)
+            || (id == "subtitles" && Overlays.panel-open && root.panel-tab == PanelTab.subtitles)
+            || (id == "audio" && Overlays.panel-open && root.panel-tab == PanelTab.audio)
+            || (id == "video" && Overlays.panel-open && root.panel-tab == PanelTab.video)
+            || (id == "speed" && Overlays.panel-open && root.panel-tab == PanelTab.playback)
+            || (id == "chapters" && Overlays.panel-open && root.panel-tab == PanelTab.chapters)
             || (id == "repeat" && root.repeat-on) || (id == "shuffle" && root.shuffle-on)
-            || (id == "settings" && root.settings-open);
+            || (id == "settings" && Overlays.settings-open);
     }
 
     // Library
-    in-out property <bool> library-open;
-    in-out property <bool> network-open;
     // QR dialog of a plugin (vivi-qr).
-    in-out property <bool> qr-open;
     in property <string> qr-title;
     in property <image> qr-code;
     in property <string> qr-text;
@@ -570,7 +561,6 @@ export component AppWindow inherits Window {
     in-out property <string> net-urls;
     in-out property <string> net-name;
     callback network-submit(string, string);
-    in-out property <bool> np-open;
     in property <[string]> np-files;
     in property <image> np-cover;
     in property <bool> np-has-cover;
@@ -594,7 +584,6 @@ export component AppWindow inherits Window {
     // Library as the full home screen (vs. the 427 px sidebar while playing).
     in-out property <bool> lib-full;
     // Properties & Metadata dialog
-    in-out property <bool> info-open;
     in property <string> info-title;
     in property <[string]> info-keys;
     in property <[string]> info-values;
@@ -665,7 +654,6 @@ export component AppWindow inherits Window {
     callback panel-lib-search(string);
 
     // Onboarding
-    in-out property <bool> onboarding-open;
     in-out property <int> onboarding-step;
     in property <[string]> accent-names;
     in property <[color]> accent-colors;
@@ -675,9 +663,7 @@ export component AppWindow inherits Window {
     callback onboarding-done();
 
     // Settings
-    in-out property <bool> settings-open: false;
     // "?" overlay; rows come from the keymap (src/keymap.rs).
-    in-out property <bool> shortcuts-open;
     in property <[string]> shortcut-actions;
     in property <[string]> shortcut-keys;
     in property <[string]> settings-categories;
@@ -712,8 +698,8 @@ export component AppWindow inherits Window {
     callback load-sub();
     callback sleep(int);
     function open-panel(t: PanelTab) {
-        if (root.panel-open && root.panel-tab == t) { root.panel-open = false; }
-        else { root.panel-tab = t; root.panel-open = true; }
+        if (Overlays.panel-open && root.panel-tab == t) { Overlays.panel-open = false; }
+        else { root.panel-tab = t; Overlays.panel-open = true; }
     }
 
     pure function fmt(t: float) -> string {
@@ -723,7 +709,7 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: (!root.has-media || root.controls-visible || root.panel-open || root.settings-open || root.customize-open) && !(root.ui-hidden && root.has-media);
+    property <bool> show-ui: (!root.has-media || root.controls-visible || Overlays.panel-open || Overlays.settings-open || Overlays.customize-open) && !(root.ui-hidden && root.has-media);
 
     // Rust moves focus back to the player after Esc closed an overlay.
     public function focus-main() { fs.focus(); }
@@ -772,7 +758,7 @@ export component AppWindow inherits Window {
     // ---------- Now playing card (audio-only network streams) ----------
     if root.has-media && root.np-show && !root.mini: NowPlayingCard {
         // Centred in the space right of the docked library while that is shown.
-        property <length> left: root.library-open && !root.lib-full && root.show-ui ? min(427px, root.width) : 0px;
+        property <length> left: Overlays.library-open && !root.lib-full && root.show-ui ? min(427px, root.width) : 0px;
         x: self.left + (root.width - self.left - self.width) / 2;
         y: root.viz-mode > 0 ? 64px : (root.height - self.height) / 2;
         width: min(460px, root.width - self.left - 48px);
@@ -781,7 +767,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
-    if root.has-media && root.lyrics-lines.length > 0 && !root.library-open && !root.mini && !root.karaoke-open: LyricsView {
+    if root.has-media && root.lyrics-lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
         y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: root.lyrics-lines; index: root.lyrics-index; size: root.lyrics-size * 1px; plain: root.lyrics-plain;
@@ -789,7 +775,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
-    if root.has-media && root.karaoke-open && !root.library-open && !root.mini: KaraokeView {
+    if root.has-media && Overlays.karaoke-open && !Overlays.library-open && !root.mini: KaraokeView {
         width: root.width; height: root.height;
         lines: root.lyrics-lines; index: root.lyrics-index; plain: root.lyrics-plain;
         words: root.lyrics-words; rows: root.lyrics-rows; big: root.karaoke-big;
@@ -800,7 +786,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
-    if !root.has-media || root.library-open: LibraryView {
+    if !root.has-media || Overlays.library-open: LibraryView {
         property <bool> docked: root.has-media && !root.lib-full;
         // The docked library hides with the other controls during playback.
         visible: !self.docked || root.show-ui;
@@ -820,7 +806,7 @@ export component AppWindow inherits Window {
         open(k, kind) => { root.lib-open(k, kind); }
         menu-request(kind, x, y, c) => { root.menu-request(kind, x, y, c); }
         open-file() => { root.open-file(); }
-        open-network() => { root.network-open = true; }
+        open-network() => { Overlays.network-open = true; }
         clear-recent() => { root.clear-recent(); }
         popout() => {
             if (root.has-media) { root.lib-full = !root.lib-full; } else { root.open-file(); }
@@ -837,7 +823,7 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
             IconButton { icon: @image-url("../assets/icons/open.svg"); tip: "Open file"; clicked => { root.open-file(); } }
-            if root.has-media: IconButton { icon: @image-url("../assets/icons/home.svg"); active: root.library-open; clicked => { root.library-open = !root.library-open; } }
+            if root.has-media: IconButton { icon: @image-url("../assets/icons/home.svg"); active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
             Text {
                 horizontal-stretch: 1;
                 text: root.has-media ? root.media-title : "Vivi Media Player";
@@ -845,19 +831,19 @@ export component AppWindow inherits Window {
                 overflow: elide;
             }
             if root.has-media: IconButton { icon: @image-url("../assets/icons/pip.svg"); tip: "Miniplayer (P)"; clicked => { root.toggle-mini(); } }
-            IconButton { icon: @image-url("../assets/icons/settings.svg"); active: root.settings-open; clicked => { root.settings-open = !root.settings-open; root.settings-refresh(root.settings-category, "", false); } }
+            IconButton { icon: @image-url("../assets/icons/settings.svg"); active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; root.settings-refresh(root.settings-category, "", false); } }
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
     }
 
-    if !root.mini && root.has-media && root.viz-audio && !root.library-open && !root.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
+    if !root.mini && root.has-media && root.viz-audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
         x: 12px; y: 50px;
         modes: root.viz-modes; mode: root.viz-mode;
         select(i) => { root.viz-select(i); }
     }
 
     // ---------- Side panel ----------
-    if !root.mini && root.has-media && root.panel-open: SidePanel {
+    if !root.mini && root.has-media && Overlays.panel-open: SidePanel {
         // Overlays the video; full width on narrow windows.
         scroll-y <=> root.panel-scroll;
         width: root.width < 800px ? root.width : 400px;
@@ -880,14 +866,14 @@ export component AppWindow inherits Window {
         chapter-times: root.chapter-times;
         viz-modes: root.viz-modes; viz-mode: root.viz-mode;
         viz-select(i) => { root.viz-select(i); }
-        lyrics-enabled: root.lyrics-enabled; karaoke-open: root.karaoke-open; lyrics-source: root.lyrics-source;
+        lyrics-enabled: root.lyrics-enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: root.lyrics-source;
         lyrics-offset-s: root.lyrics-offset; subs-offset-s: root.pv-sub-delay;
         lyrics-offset: root.lyrics-offset-label; lyrics-can-save: root.lyrics-can-save; lyrics-manual: root.lyrics-manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-pick-label: root.subs-pick-label; subs-sync: root.subs-sync;
         subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
         find-subs() => { root.add-subs(); }
-        open-settings(c) => { root.settings-category = c; root.settings-open = true; root.settings-refresh(c, "", false); }
+        open-settings(c) => { root.settings-category = c; Overlays.settings-open = true; root.settings-refresh(c, "", false); }
         queue: root.queue; playlists: root.playlists;
         queue-play(i) => { root.queue-play(i); }
         queue-move(i, d) => { root.queue-move(i, d); }
@@ -916,7 +902,7 @@ export component AppWindow inherits Window {
         gamma <=> root.pv-gamma;
         speed <=> root.pv-speed;
         save-preset() => { root.save-preset(); }
-        close() => { root.panel-open = false; }
+        close() => { Overlays.panel-open = false; }
     }
 
     // ---------- Network stream loading spinner / error ----------
@@ -1205,16 +1191,16 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Network stream ----------
-    if root.network-open: NetworkStreamDialog {
+    if Overlays.network-open: NetworkStreamDialog {
         width: root.width; height: root.height;
         ytdlp: root.ytdlp; history: root.net-history; error: root.net-error;
         urls <=> root.net-urls; name <=> root.net-name;
         submit(u, n) => { root.network-submit(u, n); }
-        close() => { root.network-open = false; root.net-error = ""; fs.focus(); }
+        close() => { Overlays.network-open = false; root.net-error = ""; fs.focus(); }
     }
 
     // ---------- New playlist ----------
-    if root.np-open: NewPlaylistDialog {
+    if Overlays.np-open: NewPlaylistDialog {
         width: root.width; height: root.height;
         files: root.np-files; cover: root.np-cover; has-cover: root.np-has-cover; error: root.np-error;
         name <=> root.np-name;
@@ -1226,7 +1212,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Settings dialog ----------
-    if root.settings-open: SettingsDialog {
+    if Overlays.settings-open: SettingsDialog {
         width: root.width; height: root.height;
         categories: root.settings-categories;
         rows: root.settings-rows;
@@ -1236,18 +1222,18 @@ export component AppWindow inherits Window {
         advanced <=> root.settings-advanced;
         changed(id, v) => { root.setting-changed(id, v); }
         refresh(c, q, adv) => { root.settings-refresh(c, q, adv); }
-        close() => { root.settings-open = false; fs.focus(); }
+        close() => { Overlays.settings-open = false; fs.focus(); }
     }
 
     // ---------- Plugin QR code (above Settings, which opens it) ----------
-    if root.qr-open: QrDialog {
+    if Overlays.qr-open: QrDialog {
         width: root.width; height: root.height;
         title: root.qr-title; code: root.qr-code; text: root.qr-text; caption: root.qr-caption;
-        close => { root.qr-open = false; }
+        close => { Overlays.qr-open = false; }
     }
 
     // ---------- Add Subtitles (Subtitle Search plugin) ----------
-    if root.subs-open: SubtitleDialog {
+    if Overlays.subs-open: SubtitleDialog {
         width: root.width; height: root.height;
         hits: root.subs-hits; langs: root.subs-langs; selected: root.subs-selected;
         details: root.subs-details; preview: root.subs-preview; save-next: root.subs-save-next;
@@ -1256,11 +1242,11 @@ export component AppWindow inherits Window {
         local: root.subs-local; folder: root.subs-folder;
         target <=> root.subs-target; source <=> root.subs-source;
         cmd(n, a) => { root.plugin-command("subtitle-search", n, a); }
-        close => { root.subs-open = false; fs.focus(); }
+        close => { Overlays.subs-open = false; fs.focus(); }
     }
 
     // ---------- Auto-tagger / Free Music ----------
-    if root.md-open: MusicDialog {
+    if Overlays.md-open: MusicDialog {
         width: root.width; height: root.height;
         title: root.md-title; results: root.md-results; logos: root.md-owner == "network-streams" ? root.md-logos : []; status: root.md-status; busy: root.md-busy;
         detail: root.md-detail; placeholder: root.md-placeholder; search-label: root.md-search-label;
@@ -1280,11 +1266,11 @@ export component AppWindow inherits Window {
         select(i) => { root.plugin-command(root.md-owner, "select", i); }
         primary(i) => { root.plugin-command(root.md-owner, "primary", i); }
         secondary(i) => { root.plugin-command(root.md-owner, "secondary", i); }
-        close => { root.md-open = false; root.plugin-command(root.md-owner, "close", ""); fs.focus(); }
+        close => { Overlays.md-open = false; root.plugin-command(root.md-owner, "close", ""); fs.focus(); }
     }
 
     // ---------- Find Lyrics (Lyrics plugin) ----------
-    if root.ls-open: LyricsSearchDialog {
+    if Overlays.ls-open: LyricsSearchDialog {
         width: root.width; height: root.height;
         results: root.ls-results; status: root.ls-status; preview: root.ls-preview; busy: root.ls-busy;
         artist <=> root.ls-artist; title <=> root.ls-title; selected <=> root.ls-selected;
@@ -1292,7 +1278,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Auto-tagger review ----------
-    if root.tr-open: TagReviewDialog {
+    if Overlays.tr-open: TagReviewDialog {
         width: root.width; height: root.height;
         files: root.tr-files; status: root.tr-status; busy: root.tr-busy;
         summary: root.tr-summary; summary-sub: root.tr-summary-sub; summary-ok: root.tr-summary-ok; results: root.tr-results; can-undo: root.tr-can-undo;
@@ -1300,7 +1286,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Customize player ----------
-    if root.customize-open: CustomizeDialog {
+    if Overlays.customize-open: CustomizeDialog {
         width: root.width; height: root.height;
         items: root.bar-items; styles: root.bar-styles; bar-style: root.bar-style;
         pick-style(st) => { root.customize-style(st); }
@@ -1315,7 +1301,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- First-run onboarding ----------
-    if root.onboarding-open: OnboardingDialog {
+    if Overlays.onboarding-open: OnboardingDialog {
         width: root.width; height: root.height;
         step <=> root.onboarding-step;
         dark: Theme.dark; accent: root.accent-name;
@@ -1327,13 +1313,13 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Properties & Metadata ----------
-    if root.info-open: Modal {
+    if Overlays.info-open: Modal {
         card-width: 520px;
         card-height: icol.preferred-height;
         inset: 48px;
         card-background: Theme.bar-solid;
         bordered: false;
-        dismissed => { root.info-open = false; }
+        dismissed => { Overlays.info-open = false; }
         icol := VerticalLayout {
             padding: 20px; spacing: 10px;
             Text { text: root.info-title; color: Theme.fg-1; font-size: Metrics.font-lg; overflow: elide; }
@@ -1347,17 +1333,17 @@ export component AppWindow inherits Window {
                 alignment: end;
                 PrimaryButton {
                     size: ButtonSize.sm; min-w: 80px; text: "Close";
-                    clicked => { root.info-open = false; }
+                    clicked => { Overlays.info-open = false; }
                 }
             }
         }
     }
 
     // ---------- Keyboard shortcuts ("?") ----------
-    if root.shortcuts-open: ShortcutsDialog {
+    if Overlays.shortcuts-open: ShortcutsDialog {
         width: root.width; height: root.height;
         actions: root.shortcut-actions; keys: root.shortcut-keys;
-        close => { root.shortcuts-open = false; fs.focus(); }
+        close => { Overlays.shortcuts-open = false; fs.focus(); }
     }
 
     // ---------- Menus (topmost) ----------

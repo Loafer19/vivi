@@ -500,7 +500,7 @@ fn handle(
                 json!({ "available": !lines.is_empty(), "synced": !a.get_lyrics_plain(),
                 "current_line": a.get_lyrics_index(), "lines": lines,
                 "source": a.get_lyrics_source().as_str(), "offset_seconds": a.get_lyrics_offset(),
-                "karaoke": a.get_karaoke_open() }),
+                "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }),
             )
         }
         "__subs_ctx" => {

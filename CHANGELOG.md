@@ -14,6 +14,7 @@
 - One set of shared components in `ui/core/`: Primary / Secondary / Flat / Icon buttons with size variants, section headers, badges, value chips, list rows, one slider, one modal (same scrim darkness, rounding, border and shadow for Settings, Customize, Properties, the plugin dialogs and the playlist / stream dialogs) and the text field (now also in the side panel and the library search). One `Icons` lookup replaces five, one `Format` replaces two.
 - Menu, dropdown option, visualizer, preset, queue and library rows are built on the shared `ListRow`; onboarding uses the shared `Modal`; the dropdown lives in `ui/core/dropdown.slint`.
 - Typed UI state: `BarStyle` (with per-style `BarMetrics` for the control bar geometry), `PanelTab`, `Overlay` (the Esc target is now computed in Slint as `top-overlay`) and `TagStatus` replace string and number comparisons. `bar_style` in config.toml is now matched case-insensitively (`classic` works); unknown values still fall back to Compact.
+- UI state is moving from one large `AppWindow` into per-feature Slint globals in `ui/state/` that Rust reaches with `app.global::<X>()`: `Overlays` (which overlays are open).
 - **Karaoke follows the theme**: the full-screen lyrics stage, its chips and the empty state are light in light mode. It reads a typed lyrics state (found / searching / missing) and the numeric offset instead of comparing display strings.
 
 ### Fixed

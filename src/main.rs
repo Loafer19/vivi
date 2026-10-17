@@ -148,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             libview::flush_pending(&player);
                             // The docked library sidebar stays; the full library closes.
                             if a.get_lib_full() {
-                                a.set_library_open(false);
+                                a.global::<crate::Overlays>().set_library_open(false);
                                 a.set_lib_full(false);
                             }
                             a.invoke_lib_refresh();
@@ -466,11 +466,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             A::OpenFile => open_file(),
             A::Settings => {
-                a.set_settings_open(!a.get_settings_open());
+                a.global::<crate::Overlays>()
+                    .set_settings_open(!a.global::<crate::Overlays>().get_settings_open());
                 a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
             }
             A::Bookmark => a.invoke_add_bookmark(),
-            A::Shortcuts => a.set_shortcuts_open(!a.get_shortcuts_open()),
+            A::Shortcuts => a
+                .global::<crate::Overlays>()
+                .set_shortcuts_open(!a.global::<crate::Overlays>().get_shortcuts_open()),
             A::Escape => {
                 overlays::escape(&a);
             }
@@ -511,7 +514,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     a.set_controls_visible(want);
                 }
                 // Lift subtitles above the bottom bar while it is shown.
-                let bar = want || a.get_panel_open();
+                let bar = want || a.global::<crate::Overlays>().get_panel_open();
                 let h = a
                     .window()
                     .size()
@@ -815,12 +818,12 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         .and_then(|c| c.parse().ok())
     {
         app.set_settings_category(c);
-        app.set_settings_open(true);
+        app.global::<crate::Overlays>().set_settings_open(true);
         app.invoke_settings_refresh(c, "".into(), false);
     }
     if let Ok(t) = std::env::var("VIVI_PANEL") {
         app.set_panel_tab(panel_tab(t.parse().unwrap_or(0)));
-        app.set_panel_open(true);
+        app.global::<crate::Overlays>().set_panel_open(true);
         if let Some(y) = std::env::var("VIVI_PANEL_SCROLL")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())
@@ -844,7 +847,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         // `VIVI_PLUGIN_CMDS="free-music open|free-music chip Jazz"`: plugin commands,
         // one every 4 s (screenshots of plugin dialogs).
         if let Ok(cmds) = std::env::var("VIVI_PLUGIN_CMDS") {
-            app.set_onboarding_open(false);
+            app.global::<crate::Overlays>().set_onboarding_open(false);
             for (i, c) in cmds.split('|').enumerate() {
                 let parts: Vec<String> = c.split_whitespace().map(String::from).collect();
                 if parts.len() < 2 {
@@ -932,7 +935,7 @@ fn open_plugin_link(app: &AppWindow, id: &str) {
     });
     let n = 12; // Extensions
     let q: slint::SharedString = name.unwrap_or_default().into();
-    app.set_settings_open(true);
+    app.global::<crate::Overlays>().set_settings_open(true);
     app.set_settings_category(n);
     app.set_settings_search(q.clone());
     app.invoke_settings_refresh(n, q, false);
@@ -943,7 +946,7 @@ fn debug_ui(app: &AppWindow) {
     if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
         let adv = var("VIVI_ADVANCED").is_some();
         let q = var("VIVI_SEARCH").unwrap_or_default();
-        app.set_settings_open(true);
+        app.global::<crate::Overlays>().set_settings_open(true);
         app.set_settings_category(n);
         app.set_settings_advanced(adv);
         app.set_settings_search(q.clone().into());
@@ -986,14 +989,14 @@ fn debug_ui(app: &AppWindow) {
         if let Some(n) = var("VIVI_NET_NAME") {
             app.set_net_name(n.into());
         }
-        app.set_network_open(true);
+        app.global::<crate::Overlays>().set_network_open(true);
     }
     if let Some(n) = var("VIVI_NEW_PLAYLIST") {
         app.set_np_name(n.into());
-        app.set_np_open(true);
+        app.global::<crate::Overlays>().set_np_open(true);
     }
     if var("VIVI_LIBRARY").is_some() {
-        app.set_library_open(true);
+        app.global::<crate::Overlays>().set_library_open(true);
     }
     // VIVI_MENU="kind;x;y;ctx" (ctx lines joined by '|'), VIVI_SUB="row-id;y": open a menu.
     if let Some(m) = var("VIVI_MENU") {
@@ -1025,7 +1028,7 @@ fn debug_ui(app: &AppWindow) {
     }
     if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
         app.set_onboarding_step(n);
-        app.set_onboarding_open(true);
+        app.global::<crate::Overlays>().set_onboarding_open(true);
     }
 }
 

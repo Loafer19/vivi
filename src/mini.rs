@@ -70,9 +70,9 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
                 w.set_maximized(false);
             }
             full.set(Some(geometry(&a)));
-            a.set_panel_open(false);
-            a.set_settings_open(false);
-            a.set_library_open(false);
+            a.global::<crate::Overlays>().set_panel_open(false);
+            a.global::<crate::Overlays>().set_settings_open(false);
+            a.global::<crate::Overlays>().set_library_open(false);
             a.set_mini(true);
             let saved = cfg.borrow().interface.mini_window;
             let (mw, mh) = saved.map_or((W, H), |g| (g[2] as f32, g[3] as f32));

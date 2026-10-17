@@ -17,6 +17,7 @@ use super::web;
 use super::{Ctx, Manifest, Plugin, SettingSpec};
 use crate::Item;
 use serde::{Deserialize, Serialize};
+use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
@@ -996,7 +997,7 @@ impl Streams {
         cx.toast(&format!("Playing {}", s.name));
         Self::ui(cx, &format!("Playing {}", s.name), false);
         if how == 2 {
-            cx.app.set_md_open(false);
+            cx.app.global::<crate::Overlays>().set_md_open(false);
             if !cx.app.get_mini() {
                 cx.app.invoke_toggle_mini();
             }
@@ -1398,7 +1399,7 @@ impl Plugin for Streams {
         self.rx = None;
         cx.app.set_np_show(false);
         if cx.app.get_md_owner() == ID {
-            cx.app.set_md_open(false);
+            cx.app.global::<crate::Overlays>().set_md_open(false);
         }
     }
     fn command(&mut self, cx: &Ctx, name: &str, args: &[String]) {
@@ -1411,7 +1412,7 @@ impl Plugin for Streams {
         match name {
             "open" => {
                 let a = cx.app;
-                a.set_settings_open(false);
+                a.global::<crate::Overlays>().set_settings_open(false);
                 a.set_md_owner(ID.into());
                 a.set_md_title("Network Streams".into());
                 a.set_md_placeholder(placeholder(Self::mode(cx)).into());
@@ -1423,7 +1424,7 @@ impl Plugin for Streams {
                 if !SOURCES.contains(&a.get_md_source().as_str()) {
                     a.set_md_source(SOURCES[0].into());
                 }
-                a.set_md_open(true);
+                a.global::<crate::Overlays>().set_md_open(true);
                 std::thread::spawn(|| prune_logos(64 * 1024 * 1024));
                 self.local(cx, SAVED);
                 if self.list.is_empty() {
@@ -1684,7 +1685,7 @@ impl Plugin for Streams {
     }
     fn tick(&mut self, cx: &Ctx) {
         self.poll = self.poll.wrapping_add(1);
-        if cx.app.get_md_open() && cx.app.get_md_owner() == ID {
+        if cx.app.global::<crate::Overlays>().get_md_open() && cx.app.get_md_owner() == ID {
             let src = cx.app.get_md_source();
             if src.as_str() != self.last_source {
                 self.last_source = src.to_string();
@@ -1702,7 +1703,10 @@ impl Plugin for Streams {
                 }
             }
         }
-        if live_filter(self.mode) && !self.all.is_empty() && cx.app.get_md_open() {
+        if live_filter(self.mode)
+            && !self.all.is_empty()
+            && cx.app.global::<crate::Overlays>().get_md_open()
+        {
             let q = cx.app.get_md_query().to_string();
             if q != self.filtered_by {
                 self.filtered_by = q.clone();

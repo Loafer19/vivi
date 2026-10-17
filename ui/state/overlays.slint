@@ -1,0 +1,19 @@
+// Which overlays are open. One place for the overlay stack: AppWindow.top-overlay
+// picks the top-most one for Esc (src/overlays.rs closes it).
+export global Overlays {
+    in-out property <bool> shortcuts-open; // `?` keyboard shortcuts overlay
+    in-out property <bool> info-open; // Properties & Metadata
+    in-out property <bool> onboarding-open; // first-run onboarding
+    in-out property <bool> customize-open; // Customize Player
+    in-out property <bool> settings-open; // Settings dialog
+    in-out property <bool> network-open; // Open Network Stream
+    in-out property <bool> qr-open; // QR code dialog
+    in-out property <bool> np-open; // New Playlist dialog
+    in-out property <bool> subs-open; // Add Subtitles dialog
+    in-out property <bool> md-open; // plugin music / streams dialog
+    in-out property <bool> ls-open; // Find Lyrics
+    in-out property <bool> tr-open; // tag review
+    in-out property <bool> panel-open; // side panel
+    in-out property <bool> library-open; // library (an overlay only while media is loaded)
+    in-out property <bool> karaoke-open; // full-window karaoke
+}

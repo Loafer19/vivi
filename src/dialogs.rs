@@ -86,7 +86,7 @@ fn push_np(a: &AppWindow) {
 
 /// A file dropped on the window: true when the New Playlist dialog took it.
 pub fn take_drop(a: &AppWindow, path: &std::path::Path) -> bool {
-    if !a.get_np_open() {
+    if !a.global::<crate::Overlays>().get_np_open() {
         return false;
     }
     let abs = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
@@ -135,8 +135,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
             a.set_net_error("".into());
             a.set_net_urls("".into());
             a.set_net_name("".into());
-            a.set_network_open(false);
-            a.set_library_open(false);
+            a.global::<crate::Overlays>().set_network_open(false);
+            a.global::<crate::Overlays>().set_library_open(false);
             let w = a.as_weak();
             // Recent is updated once the stream has loaded.
             slint::Timer::single_shot(std::time::Duration::from_secs(3), move || {
@@ -208,7 +208,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         app.on_np_close(move || {
             NP.with(|n| *n.borrow_mut() = NewPlaylist::default());
             if let Some(a) = w.upgrade() {
-                a.set_np_open(false);
+                a.global::<crate::Overlays>().set_np_open(false);
                 a.set_np_name("".into());
                 push_np(&a);
             }
@@ -296,7 +296,7 @@ pub fn show_qr(a: &AppWindow, title: &str, text: &str, caption: &str) {
     a.set_qr_code(img);
     a.set_qr_text(text.trim().into());
     a.set_qr_caption(caption.trim().into());
-    a.set_qr_open(true);
+    a.global::<crate::Overlays>().set_qr_open(true);
 }
 
 #[cfg(test)]

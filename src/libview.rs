@@ -749,7 +749,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             match kind.as_str() {
                 "action" => match key.as_str() {
                     "action:add-folder" => a.invoke_lib_add_folder(),
-                    "action:network" => a.set_network_open(true),
+                    "action:network" => a.global::<crate::Overlays>().set_network_open(true),
                     "action:create-playlist" => a.invoke_lib_create_playlist(),
                     k => a.invoke_lib_navigate(k.into()),
                 },
@@ -772,7 +772,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     }
                     // The docked sidebar stays next to the video; the full view closes.
                     if a.get_lib_full() || !a.get_has_media() {
-                        a.set_library_open(false);
+                        a.global::<crate::Overlays>().set_library_open(false);
                     }
                     a.set_lib_full(false);
                 }
@@ -927,7 +927,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     } else {
                         "Audio"
                     }));
-                    a.set_settings_open(true);
+                    a.global::<crate::Overlays>().set_settings_open(true);
                     a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
                 }
                 "resync" => a.invoke_lib_rescan(),
@@ -936,7 +936,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     a.set_info_title(title.into());
                     a.set_info_keys(strings(rows.iter().map(|r| r.0.to_string())));
                     a.set_info_values(strings(rows.into_iter().map(|r| r.1)));
-                    a.set_info_open(true);
+                    a.global::<crate::Overlays>().set_info_open(true);
                 }
                 _ => {}
             }
@@ -955,8 +955,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             }
             p.open(&url);
             if let Some(a) = w.upgrade() {
-                a.set_network_open(false);
-                a.set_library_open(false);
+                a.global::<crate::Overlays>().set_network_open(false);
+                a.global::<crate::Overlays>().set_library_open(false);
             }
         });
     }
@@ -1022,7 +1022,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         app.on_lib_create_playlist(move || {
             // Figma "New Playlist" dialog (src/dialogs.rs saves it).
             if let Some(a) = w.upgrade() {
-                a.set_np_open(true);
+                a.global::<crate::Overlays>().set_np_open(true);
             }
         });
     }

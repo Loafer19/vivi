@@ -22,6 +22,7 @@
 
 use super::{Ctx, Manifest, Plugin, SettingSpec};
 use crate::{Item, SubHit};
+use slint::ComponentHandle;
 use slint::{ModelRc, VecModel};
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
@@ -923,7 +924,7 @@ impl SubtitleSearch {
             ));
         }
         Self::status(cx, "", false);
-        cx.app.set_subs_open(false);
+        cx.app.global::<crate::Overlays>().set_subs_open(false);
     }
     fn creds(cx: &Ctx) -> Creds {
         let mut key = cx.get("api-key").trim().to_string();
@@ -1135,7 +1136,7 @@ impl SubtitleSearch {
             Self::show_pick(cx, self.pick.as_ref(), cx.local_path().as_deref());
         }
         Self::status(cx, "", false);
-        cx.app.set_subs_open(false);
+        cx.app.global::<crate::Overlays>().set_subs_open(false);
         cx.toast(&format!("Subtitles loaded{note}"));
     }
     fn fetch(&mut self, cx: &Ctx, i: Option<usize>, preview: bool) {
@@ -1323,7 +1324,7 @@ impl Plugin for SubtitleSearch {
     }
     fn disable(&mut self, cx: &Ctx) {
         cx.app.set_subs_plugin(false);
-        cx.app.set_subs_open(false);
+        cx.app.global::<crate::Overlays>().set_subs_open(false);
         cx.player.cmd(
             "change-list",
             &["script-opts", "append", "vivi-sub-offsets=0"],

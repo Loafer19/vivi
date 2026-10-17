@@ -11,6 +11,7 @@
 use super::tagger::{self, Tags};
 use super::web;
 use super::{Ctx, Manifest, Plugin, SettingSpec};
+use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -1627,7 +1628,7 @@ impl FreeMusic {
 
     fn open(&mut self, cx: &Ctx) {
         let a = cx.app;
-        cx.app.set_settings_open(false);
+        cx.app.global::<crate::Overlays>().set_settings_open(false);
         a.set_md_owner(ID.into());
         a.set_md_placeholder("Search songs, artists, albums, genres…".into());
         a.set_md_search_label("Search".into());
@@ -1636,7 +1637,7 @@ impl FreeMusic {
         a.set_md_sources(ModelRc::new(VecModel::from(src)));
         a.set_md_source(SOURCES[self.q.source].into());
         a.set_md_detail("".into());
-        a.set_md_open(true);
+        a.global::<crate::Overlays>().set_md_open(true);
         self.back.clear();
         self.title.clear();
         self.q.album = None;
@@ -1878,7 +1879,7 @@ impl Plugin for FreeMusic {
         self.gen += 1;
         self.pending.clear();
         if cx.app.get_md_owner() == ID {
-            cx.app.set_md_open(false);
+            cx.app.global::<crate::Overlays>().set_md_open(false);
         }
     }
     fn command(&mut self, cx: &Ctx, name: &str, args: &[String]) {
@@ -2086,7 +2087,10 @@ impl Plugin for FreeMusic {
                 self.show(cx);
             }
             status = true;
-        } else if self.covers_dirty && cx.app.get_md_owner() == ID && cx.app.get_md_open() {
+        } else if self.covers_dirty
+            && cx.app.get_md_owner() == ID
+            && cx.app.global::<crate::Overlays>().get_md_open()
+        {
             self.covers_dirty = false;
             self.show(cx);
         }
