@@ -49,7 +49,9 @@ results; `NowPlaying` holds the radio now-playing card (station, track, info, lo
 code writes them with `cx.app.global::<crate::Lyrics>().set_lines(...)`, and
 `ui/app.slint` binds the plugin's dialog properties to that global, so a new field
 touches the global, the dialog, one binding and the plugin. User actions still reach the plugin through
-`plugin-command(id, action, args)`.
+`plugin-command(id, action, args)`. After this split `AppWindow` itself only carries window
+input (`key`, `activity`), `plugin-command` and a few layout values computed from the
+window size (for example `karaoke-big` / `karaoke-cols`); everything else is a global.
 
 ### Music plugins (#63, #65, #69, #70)
 

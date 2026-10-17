@@ -511,10 +511,10 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
         ),
         _ => match id {
             "play" => p.toggle_pause(),
-            "stop" => a.invoke_stop(),
+            "stop" => a.global::<crate::Playback>().invoke_stop(),
             "prev" => p.playlist_step(false),
             "next" => p.playlist_step(true),
-            "record" => a.invoke_toggle_record(),
+            "record" => a.global::<crate::Playback>().invoke_toggle_record(),
             "hide-ui" => crate::toggle_ui_hidden(a),
             "quit" => {
                 let _ = a.hide();
@@ -549,7 +549,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                     p.cmd(if sub { "sub-add" } else { "audio-add" }, &[&f, "select"]);
                 }
             }
-            "mini" => a.invoke_toggle_mini(),
+            "mini" => a.global::<crate::Playback>().invoke_toggle_mini(),
             "customize" => a.global::<crate::Overlays>().set_customize_open(true),
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "settings" => {
@@ -568,7 +568,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                     .set_resume_text("Saved the queue as a playlist".into());
             }
             "clear-queue" => a.global::<crate::Panel>().invoke_queue_clear(),
-            "open-file" => a.invoke_open_file(),
+            "open-file" => a.global::<crate::Playback>().invoke_open_file(),
             "open-folder" => a.global::<crate::Library>().invoke_open_folder(),
             "open-network" => a.global::<crate::Overlays>().set_network_open(true),
             "library" => a.global::<crate::Overlays>().set_library_open(true),

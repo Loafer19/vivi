@@ -1016,7 +1016,7 @@ impl Streams {
         if how == 2 {
             cx.app.global::<crate::Overlays>().set_md_open(false);
             if !cx.app.get_mini() {
-                cx.app.invoke_toggle_mini();
+                cx.app.global::<crate::Playback>().invoke_toggle_mini();
             }
         }
     }

@@ -57,7 +57,7 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
 
     let weak = app.as_weak();
     let r = remember.clone();
-    app.on_toggle_mini(move || {
+    app.global::<crate::Playback>().on_toggle_mini(move || {
         let Some(a) = weak.upgrade() else { return };
         let w = a.window();
         let mini = !a.get_mini();
@@ -94,15 +94,16 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
     });
 
     let weak = app.as_weak();
-    app.on_toggle_mini_queue(move || {
-        let Some(a) = weak.upgrade() else { return };
-        let show = !a.get_mini_queue();
-        let (_, size) = geometry(&a);
-        a.set_mini_queue(show);
-        let h = size.height + if show { QUEUE_H } else { -QUEUE_H };
-        a.window()
-            .set_size(LogicalSize::new(size.width, h.max(160.0)));
-    });
+    app.global::<crate::Playback>()
+        .on_toggle_mini_queue(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let show = !a.get_mini_queue();
+            let (_, size) = geometry(&a);
+            a.set_mini_queue(show);
+            let h = size.height + if show { QUEUE_H } else { -QUEUE_H };
+            a.window()
+                .set_size(LogicalSize::new(size.width, h.max(160.0)));
+        });
 
     // Save geometry after the user moves/resizes the miniplayer (debounced).
     let weak = app.as_weak();

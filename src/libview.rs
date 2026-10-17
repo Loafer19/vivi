@@ -984,7 +984,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let p = player.clone();
         let w = app.as_weak();
-        app.on_open_url(move |url| {
+        app.global::<crate::Playback>().on_open_url(move |url| {
             let url = url.trim().to_string();
             if url.is_empty() {
                 return;

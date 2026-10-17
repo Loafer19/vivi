@@ -72,7 +72,7 @@ pub fn escape(a: &AppWindow) -> bool {
         return true;
     }
     if a.get_mini() {
-        a.invoke_toggle_mini();
+        a.global::<crate::Playback>().invoke_toggle_mini();
         return true;
     }
     if a.window().is_fullscreen() {

@@ -292,17 +292,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     let p = player.clone();
-    app.on_toggle_play(move || p.toggle_pause());
+    app.global::<crate::Playback>()
+        .on_toggle_play(move || p.toggle_pause());
     let p = player.clone();
-    app.on_seek(move |t| p.seek_abs(t as f64));
+    app.global::<crate::Playback>()
+        .on_seek(move |t| p.seek_abs(t as f64));
     let p = player.clone();
-    app.on_volume_changed(move |v| p.set_volume(v as f64));
+    app.global::<crate::Playback>()
+        .on_volume_changed(move |v| p.set_volume(v as f64));
     let p = player.clone();
-    app.on_toggle_mute(move || p.toggle_mute());
+    app.global::<crate::Playback>()
+        .on_toggle_mute(move || p.toggle_mute());
     let p = player.clone();
-    app.on_prev(move || p.playlist_step(false));
+    app.global::<crate::Playback>()
+        .on_prev(move || p.playlist_step(false));
     let p = player.clone();
-    app.on_next(move || p.playlist_step(true));
+    app.global::<crate::Playback>()
+        .on_next(move || p.playlist_step(true));
 
     let weak = app.as_weak();
     let toggle_fs = move || {
@@ -314,7 +320,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let tfs = toggle_fs.clone();
-    app.on_toggle_fullscreen(tfs);
+    app.global::<crate::Playback>().on_toggle_fullscreen(tfs);
 
     let open_file = {
         let p = player.clone();
@@ -341,17 +347,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let of = open_file.clone();
-    app.on_open_file(of);
+    app.global::<crate::Playback>().on_open_file(of);
 
     {
         let p = player.clone();
-        app.on_stop(move || {
+        app.global::<crate::Playback>().on_stop(move || {
             p.save_position();
             p.run("stop");
         });
         let p = player.clone();
         let weak = app.as_weak();
-        app.on_toggle_record(move || {
+        app.global::<crate::Playback>().on_toggle_record(move || {
             // mpv stream-record: dump the stream to a file next to the user's videos.
             let rec = p.get("stream-record").unwrap_or_default();
             let key = keymap::shown(keymap::Action::Record);
@@ -438,11 +444,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             A::Fullscreen => toggle_fs(),
             A::Miniplayer => {
                 if a.global::<crate::Playback>().get_has_media() {
-                    a.invoke_toggle_mini();
+                    a.global::<crate::Playback>().invoke_toggle_mini();
                 }
             }
             A::Mute => p.toggle_mute(),
-            A::Stop => a.invoke_stop(),
+            A::Stop => a.global::<crate::Playback>().invoke_stop(),
             A::QueueStep => p.playlist_step(!shift),
             A::AbLoop => a.global::<crate::Panel>().invoke_run("ab-loop".into()),
             A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "karaoke", &[]),
@@ -473,7 +479,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 a.global::<crate::Viz>()
                     .invoke_select((a.global::<crate::Viz>().get_mode() + 1).rem_euclid(n));
             }
-            A::Record => a.invoke_toggle_record(),
+            A::Record => a.global::<crate::Playback>().invoke_toggle_record(),
             A::HideUi => toggle_ui_hidden(&a),
             A::Quit => {
                 let _ = slint::quit_event_loop();
@@ -751,7 +757,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     });
     {
         let (p, w) = (player.clone(), app.as_weak());
-        app.on_ab_set(move |x, y| {
+        app.global::<crate::Playback>().on_ab_set(move |x, y| {
             let v = |t: f32| {
                 if t < 0.0 {
                     "no".to_string()
@@ -895,9 +901,9 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             let weak = app.as_weak();
             slint::Timer::single_shot(Duration::from_millis(2500), move || {
                 if let Some(a) = weak.upgrade() {
-                    a.invoke_toggle_mini();
+                    a.global::<crate::Playback>().invoke_toggle_mini();
                     if m == "queue" {
-                        a.invoke_toggle_mini_queue();
+                        a.global::<crate::Playback>().invoke_toggle_mini_queue();
                     }
                 }
             });
@@ -1007,7 +1013,7 @@ fn debug_ui(app: &AppWindow) {
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(1500), move || {
             if let Some(a) = w.upgrade() {
-                a.invoke_open_url(u.into());
+                a.global::<crate::Playback>().invoke_open_url(u.into());
             }
         });
     }
@@ -1147,7 +1153,8 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
     app.global::<crate::Panel>()
         .on_queue_clear(move || p.clear_queue());
     let p = player.clone();
-    app.on_queue_sort(move || p.sort_queue());
+    app.global::<crate::Playback>()
+        .on_queue_sort(move || p.sort_queue());
     let p = player.clone();
     app.global::<crate::Panel>().on_queue_add(move || {
         if let Some(files) = rfd::FileDialog::new()
