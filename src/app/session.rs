@@ -4,12 +4,16 @@ use crate::*;
 use slint::ComponentHandle;
 use std::rc::Rc;
 
-/// Error toast of a network stream that failed to open (shown without media too).
-pub(crate) fn show_stream_error(app: &AppWindow, msg: &str) {
-    app.global::<crate::Notices>().set_stream_error(msg.into());
+/// Error toast of a network stream that failed to open (shown without media too),
+/// with Retry (re-opens `url`) and Copy. It stays up long enough to use them.
+pub(crate) fn show_stream_error(app: &AppWindow, msg: &str, url: &str) {
+    let n = app.global::<crate::Notices>();
+    n.set_stream_url(url.into());
+    n.set_stream_copied(false);
+    n.set_stream_error(msg.into());
     let w = app.as_weak();
     let m = msg.to_string();
-    slint::Timer::single_shot(Duration::from_secs(6), move || {
+    slint::Timer::single_shot(Duration::from_secs(12), move || {
         if let Some(a) = w.upgrade() {
             if a.global::<crate::Notices>().get_stream_error().as_str() == m {
                 a.global::<crate::Notices>().set_stream_error("".into());

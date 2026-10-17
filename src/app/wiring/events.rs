@@ -101,13 +101,13 @@ pub(crate) fn wire(
                     PlayerEvent::Buffering(b) => load.cache(b),
                     PlayerEvent::EndFile(err) => {
                         let name = a.global::<crate::Notices>().get_loading_name().to_string();
-                        if load.end(err).is_some() {
+                        if let Some(url) = load.end(err) {
                             let why = if last_err.is_empty() {
                                 "the stream did not respond".to_string()
                             } else {
                                 last_err.clone()
                             };
-                            show_stream_error(&a, &format!("Could not open {name}: {why}"));
+                            show_stream_error(&a, &format!("Could not open {name}: {why}"), &url);
                         }
                     }
                     PlayerEvent::ClientMessage(args) => {

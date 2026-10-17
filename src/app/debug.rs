@@ -56,6 +56,15 @@ pub(crate) fn debug_ui(app: &AppWindow) {
         app.global::<crate::Library>().set_query(q.clone().into());
         app.global::<crate::Library>().invoke_search(q.into());
     }
+    if let Some(u) = var("VIVI_STREAM_ERROR") {
+        // The failed-stream banner (Retry / Copy) without a network round trip.
+        let name = u.rsplit('/').next().unwrap_or(&u).to_string();
+        super::session::show_stream_error(
+            app,
+            &format!("Could not open {name}: the stream did not respond"),
+            &u,
+        );
+    }
     if let Some(u) = var("VIVI_URL") {
         // After the render context exists (files must not load before it).
         let w = app.as_weak();

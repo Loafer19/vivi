@@ -6,6 +6,8 @@ export global Notices {
     in-out property <bool> loading-buffering;
     in-out property <string> loading-name;
     in-out property <string> stream-error;
+    in-out property <string> stream-url;     // the stream that failed (Retry re-opens it)
+    in-out property <bool> stream-copied;     // "Copy" was pressed for the current error
     callback start-over();
     callback dismiss-resume();
 }

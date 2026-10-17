@@ -15,6 +15,7 @@
 - **Drag to re-order the bottom bar in Customize**: drag a placed tile left or right; an accent marker shows where it will land. The ‹ › buttons still work (and remain the keyboard path).
 - **Progress-bar styles show a preview in Customize**: each style chip draws a miniature of its bar (Compact, Classic, Waveform, Plain); the profile and style chips have screen-reader names.
 - **Empty states offer the next step**: an empty library shows Open file, Open stream and Add folders (opens Settings → Library); empty Bookmarks and Queue tabs show Add bookmark / Add files buttons.
+- **Failed streams can be retried or copied**: the "Could not open …" banner has Retry (re-opens the same URL) and Copy (message and URL to the clipboard), and stays up 12 s instead of 6 s so the buttons can be used.
 ### Changed
 - **Esc closes the top-most open overlay** — menus, shortcuts, info, onboarding, Customize, tag review, Find Lyrics, music / streams dialog, Add Subtitles, QR, Settings, New Playlist, Network Stream, side panel, library, karaoke — and only then leaves the miniplayer, then fullscreen. It also works while a text field in a dialog has focus.
 - **Consistent UI**: every colour, corner radius and font size in the UI now comes from design tokens (`ui/core/theme.slint`: `Theme` status / scrim / shadow / on-media / stage colours and a `Metrics` scale for spacing, radii, fonts, icons and row heights). Odd values are snapped to the scale (e.g. 15 px text → 16 px, 5 px corners → 6 px).

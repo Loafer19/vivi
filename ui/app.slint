@@ -15,7 +15,7 @@ import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
 import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsState, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
 import { Modal } from "core/modal.slint";
-import { IconButton, PrimaryButton, ButtonSize } from "core/buttons.slint";
+import { IconButton, PrimaryButton, FlatButton, ButtonSize } from "core/buttons.slint";
 import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
 import { Overlays } from "state/overlays.slint";
 import { Playback } from "state/playback.slint";
@@ -671,12 +671,32 @@ export component AppWindow inherits Window {
         }
     }
     if Notices.stream-error != "": Rectangle {
-        width: min(se.preferred-width + 40px, root.width - 32px); height: 48px;
+        width: min(se.preferred-width + se-actions.preferred-width + 52px, root.width - 32px); height: 48px;
         x: (root.width - self.width) / 2;
         y: root.height - root.bar-h - self.height - 16px;
         border-radius: Metrics.radius-xxl; background: Theme.bar;
-        se := Text { text: Notices.stream-error; color: Theme.err; font-size: Metrics.font-base; vertical-alignment: center; horizontal-alignment: center; overflow: elide; }
-        TouchArea { clicked => { Notices.stream-error = ""; } }
+        // Click the message to dismiss it.
+        TouchArea { accessible-role: button; accessible-label: "Dismiss: " + Notices.stream-error; clicked => { Notices.stream-error = ""; } }
+        HorizontalLayout {
+            padding-left: 20px; padding-right: 10px; spacing: 12px;
+            se := Text { text: Notices.stream-error; color: Theme.err; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+            se-actions := HorizontalLayout {
+                alignment: center; spacing: Metrics.space-1; horizontal-stretch: 0;
+                if Notices.stream-url != "": FlatButton {
+                    y: (48px - self.height) / 2; size: ButtonSize.sm; text: "Retry";
+                    clicked => { Notices.stream-error = ""; Playback.open-url(Notices.stream-url); }
+                }
+                FlatButton {
+                    y: (48px - self.height) / 2; size: ButtonSize.sm; text: Notices.stream-copied ? "Copied ✓" : "Copy";
+                    clicked => { se-copy.select-all(); se-copy.copy(); se-copy.clear-selection(); Notices.stream-copied = true; }
+                }
+            }
+        }
+        // Invisible carrier for the clipboard copy (message and URL).
+        se-copy := TextInput {
+            height: 0px; visible: false; read-only: true;
+            text: Notices.stream-url != "" ? Notices.stream-error + "\n" + Notices.stream-url : Notices.stream-error;
+        }
     }
 
     // ---------- Resume toast ----------
