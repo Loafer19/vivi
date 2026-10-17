@@ -24,9 +24,10 @@ import { Dialogs } from "state/dialogs.slint";
 import { Menus } from "state/menus.slint";
 import { Library } from "state/library.slint";
 import { Settings } from "state/settings.slint";
+import { Customize } from "state/customize.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -460,25 +461,10 @@ export component AppWindow inherits Window {
     // Side-panel slider values (synced from mpv so presets/defaults show up)
 
     // Toolbar (bottom bar) and customization
-    in property <[string]> bar-items: ["prev", "play", "next", "time", "seek", "duration", "volume", "audio", "subtitles", "settings", "queue", "fullscreen"];
     // Cumulative ~32 px slots of foldable items (-1 = always shown) and their total.
-    in property <[int]> bar-cum;
-    in property <int> bar-slots;
-    in property <BarStyle> bar-style: BarStyle.compact;
-    in property <[string]> bar-styles;
-    callback customize-style(string);
     pure function is-core(id: string) -> bool {
         return id == "prev" || id == "play" || id == "next" || id == "time" || id == "seek" || id == "duration" || id == "spacer" || id == "back10" || id == "fwd10";
     }
-    in property <[string]> customize-available;
-    in property <[string]> profiles;
-    in property <string> profile;
-    callback bar-action(string);
-    callback customize-move(int, int);
-    callback customize-remove(int);
-    callback customize-add(string);
-    callback customize-profile(string);
-    callback customize-done(bool);
     public function bar-act(id: string) {
         if (id == "queue") { root.open-panel(PanelTab.queue); }
         else if (id == "subtitles") { root.open-panel(PanelTab.subtitles); }
@@ -490,7 +476,7 @@ export component AppWindow inherits Window {
         else if (id == "fullscreen") { root.toggle-fullscreen(); }
         else if (id == "bookmark") { Panel.add-bookmark(); }
         else if (id == "settings") { Overlays.settings-open = true; Settings.settings-refresh(Settings.settings-category, "", false); }
-        else { root.bar-action(id); }
+        else { Playback.bar-action(id); }
     }
     // Responsive bottom bar: how many items fit on each side of the play controls.
     // Items are ~40px wide; the left side also holds the time display. The rest go to "⋯".
@@ -549,7 +535,7 @@ export component AppWindow inherits Window {
     // "?" overlay; rows come from the keymap (src/keymap.rs).
     callback ab-set(float, float);
     // Plugin range on the seekbar (`script-message vivi-range <a> <b> [label]`), e.g. Cut & Export In/Out.
-    property <BarMetrics> bar: Bars.metrics(root.bar-style);
+    property <BarMetrics> bar: Bars.metrics(Customize.bar-style);
     property <bool> bar-classic: root.bar.classic;
     out property <length> bar-h: root.bar.height;
     function open-panel(t: PanelTab) {
@@ -846,8 +832,8 @@ export component AppWindow inherits Window {
             }
             HorizontalLayout {
                 spacing: root.bar.gap;
-                for id[i] in root.bar-items: HorizontalLayout {
-                    property <bool> on: i >= root.bar-cum.length || root.bar-cum[i] < 0 || root.bar-cum[i] <= root.bar-fit;
+                for id[i] in Customize.bar-items: HorizontalLayout {
+                    property <bool> on: i >= Customize.bar-cum.length || Customize.bar-cum[i] < 0 || Customize.bar-cum[i] <= root.bar-fit;
                     property <bool> ab: Playback.ab-a >= 0 && Playback.ab-b >= 0;
                     horizontal-stretch: id == "seek" || id == "spacer" ? 1 : 0;
                     spacing: 2px;
@@ -900,7 +886,7 @@ export component AppWindow inherits Window {
                         volume-changed(v) => { Playback.volume = v; root.volume-changed(v); }
                     }
                 }
-                if root.bar-slots > root.bar-fit: IconButton {
+                if Customize.bar-slots > root.bar-fit: IconButton {
                     size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; icon: @image-url("../assets/icons/more.svg"); tip: "More";
                     clicked => { overflow.show(); }
                 }
@@ -1041,7 +1027,7 @@ export component AppWindow inherits Window {
         }
         VerticalLayout {
             padding: 6px;
-            for id[i] in root.bar-items: OverflowRow { visible: i < root.bar-cum.length && root.bar-cum[i] > root.bar-fit; height: self.visible ? 36px : 0; id: id; active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
+            for id[i] in Customize.bar-items: OverflowRow { visible: i < Customize.bar-cum.length && Customize.bar-cum[i] > root.bar-fit; height: self.visible ? 36px : 0; id: id; active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
         }
     }
 
@@ -1143,16 +1129,16 @@ export component AppWindow inherits Window {
     // ---------- Customize player ----------
     if Overlays.customize-open: CustomizeDialog {
         width: root.width; height: root.height;
-        items: root.bar-items; styles: root.bar-styles; bar-style: root.bar-style;
-        pick-style(st) => { root.customize-style(st); }
-        available: root.customize-available;
-        profiles: root.profiles; profile: root.profile;
-        move(i, d) => { root.customize-move(i, d); }
-        remove(i) => { root.customize-remove(i); }
-        add(id) => { root.customize-add(id); }
-        pick-profile(p) => { root.customize-profile(p); }
-        save() => { root.customize-done(true); fs.focus(); }
-        cancel() => { root.customize-done(false); fs.focus(); }
+        items: Customize.bar-items; styles: Customize.bar-styles; bar-style: Customize.bar-style;
+        pick-style(st) => { Customize.customize-style(st); }
+        available: Customize.customize-available;
+        profiles: Customize.profiles; profile: Customize.profile;
+        move(i, d) => { Customize.customize-move(i, d); }
+        remove(i) => { Customize.customize-remove(i); }
+        add(id) => { Customize.customize-add(id); }
+        pick-profile(p) => { Customize.customize-profile(p); }
+        save() => { Customize.customize-done(true); fs.focus(); }
+        cancel() => { Customize.customize-done(false); fs.focus(); }
     }
 
     // ---------- First-run onboarding ----------

@@ -168,7 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             peaks::start(
                                 &a,
                                 &player.get("path").unwrap_or_default(),
-                                a.get_bar_style() == BarStyle::Waveform && viz::audio_only(&player),
+                                a.global::<crate::Customize>().get_bar_style()
+                                    == BarStyle::Waveform
+                                    && viz::audio_only(&player),
                             );
                             a.global::<crate::Playback>().set_range_a(-1.0);
                             a.global::<crate::Playback>().set_range_b(-1.0);
@@ -982,7 +984,8 @@ fn debug_ui(app: &AppWindow) {
             .invoke_settings_refresh(n, q.into(), adv);
     }
     if let Some(p) = var("VIVI_CUSTOMIZE") {
-        app.invoke_customize_profile(p.into());
+        app.global::<crate::Customize>()
+            .invoke_customize_profile(p.into());
     }
     if let Some(n) = var("VIVI_LIB") {
         app.global::<crate::Library>().invoke_lib_navigate(n.into());

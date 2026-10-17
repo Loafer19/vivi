@@ -1,0 +1,18 @@
+// Customize: the control bar layout (items, slots, style) and profiles being edited in the Customize overlay, with its actions.
+import { BarStyle } from "../core/types.slint";
+export global Customize {
+    in-out property <[string]> bar-items: ["prev", "play", "next", "time", "seek", "duration", "volume", "audio", "subtitles", "settings", "queue", "fullscreen"];
+    in-out property <[int]> bar-cum;
+    in-out property <int> bar-slots;
+    in-out property <BarStyle> bar-style: BarStyle.compact;
+    in-out property <[string]> bar-styles;
+    in-out property <[string]> customize-available;
+    in-out property <[string]> profiles;
+    in-out property <string> profile;
+    callback customize-style(string);
+    callback customize-move(int, int);
+    callback customize-remove(int);
+    callback customize-add(string);
+    callback customize-profile(string);
+    callback customize-done(bool);
+}
