@@ -32,9 +32,10 @@ import { TagReview } from "state/tag-review.slint";
 import { NowPlaying } from "state/now-playing.slint";
 import { Notices } from "state/notices.slint";
 import { Viz } from "state/viz.slint";
+import { SkipIntro } from "state/skip-intro.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -336,8 +337,6 @@ export component AppWindow inherits Window {
     // Music visualizer (src/viz): shown for audio-only media; mode 0 = Disabled.
     // Plugins (src/plugins). Fields of `plugin-command` args are joined with U+001F.
     callback plugin-command(string, string, string);
-    in-out property <string> skip-label;
-    in property <float> skip-target;
     // Plain (unsynced) lyrics, e.g. radio: a scrollable block without highlight.
     // Full-screen karaoke view and manual search (Lyrics plugin).
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
@@ -715,10 +714,10 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Skip intro / credits (Skip Intro plugin) ----------
-    if Playback.has-media && root.skip-label != "" && !root.mini: SkipButton {
+    if Playback.has-media && SkipIntro.label != "" && !root.mini: SkipButton {
         x: root.width - self.width - 24px;
         y: root.height - (root.show-ui ? root.bar-h : 0px) - self.height - 24px;
-        text: root.skip-label;
+        text: SkipIntro.label;
         clicked => { root.plugin-command("skip-intro", "skip", ""); fs.focus(); }
         dismiss => { root.plugin-command("skip-intro", "dismiss", ""); fs.focus(); }
     }

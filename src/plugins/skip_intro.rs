@@ -5,6 +5,7 @@
 
 use super::{Ctx, Manifest, Plugin, SettingSpec};
 use crate::config::show_key;
+use slint::ComponentHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Part {
@@ -220,7 +221,7 @@ impl Plugin for SkipIntro {
     }
     fn disable(&mut self, cx: &Ctx) {
         self.ranges.clear();
-        cx.app.set_skip_label("".into());
+        cx.app.global::<crate::SkipIntro>().set_label("".into());
     }
     fn file_loaded(&mut self, cx: &Ctx) {
         self.mark = None;
@@ -283,7 +284,7 @@ impl Plugin for SkipIntro {
                 if let Some(i) = self.current(t) {
                     self.done.push(i);
                 }
-                cx.app.set_skip_label("".into());
+                cx.app.global::<crate::SkipIntro>().set_label("".into());
                 return;
             }
             _ => return,
@@ -294,8 +295,8 @@ impl Plugin for SkipIntro {
 
     fn tick(&mut self, cx: &Ctx) {
         if self.ranges.is_empty() {
-            if !cx.app.get_skip_label().is_empty() {
-                cx.app.set_skip_label("".into());
+            if !cx.app.global::<crate::SkipIntro>().get_label().is_empty() {
+                cx.app.global::<crate::SkipIntro>().set_label("".into());
             }
             return;
         }
@@ -308,18 +309,20 @@ impl Plugin for SkipIntro {
                     self.skip(cx, i);
                     ""
                 } else {
-                    cx.app.set_skip_target(if r.end.is_infinite() {
-                        self.duration as f32
-                    } else {
-                        r.end as f32
-                    });
+                    cx.app
+                        .global::<crate::SkipIntro>()
+                        .set_target(if r.end.is_infinite() {
+                            self.duration as f32
+                        } else {
+                            r.end as f32
+                        });
                     r.part.label()
                 }
             }
             None => "",
         };
-        if cx.app.get_skip_label().as_str() != label {
-            cx.app.set_skip_label(label.into());
+        if cx.app.global::<crate::SkipIntro>().get_label().as_str() != label {
+            cx.app.global::<crate::SkipIntro>().set_label(label.into());
         }
     }
 }
@@ -333,7 +336,7 @@ impl SkipIntro {
         } else {
             cx.player.seek_abs(r.end);
         }
-        cx.app.set_skip_label("".into());
+        cx.app.global::<crate::SkipIntro>().set_label("".into());
         if cx.flag("auto") {
             cx.toast(match r.part {
                 Part::Intro => "Skipped intro",
