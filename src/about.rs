@@ -117,15 +117,23 @@ pub fn detect_install() -> Install {
     Install::Tarball
 }
 
-/// Release asset for this platform and install type, if one fits; package
-/// managers (Flatpak, pacman) update through the store, so they get the page.
+/// Release asset for this platform and install type, if one fits. Release
+/// assets: `vivi-vX-linux-x86_64.tar.gz`, `Vivi-vX-x86_64.AppImage`,
+/// `vivi-vX-x86_64.flatpak`, `vivi-vX-windows-x86_64.zip`, `vivi-vX-macos-arm64.zip`.
+/// pacman installs update through the package manager, so they get the page.
 pub fn pick_asset(install: Install, arch: &str, assets: &[(String, String)]) -> Option<String> {
-    let want: &[&str] = match install {
-        Install::AppImage => &[".appimage"],
-        Install::Tarball => &[".tar.gz", ".tar.xz", ".tar.zst"],
-        Install::Windows => &[".msi", ".exe", ".zip"],
-        Install::MacOs => &[".dmg"],
-        Install::Flatpak | Install::Pacman => return None,
+    // (substring the name must contain, extension)
+    let want: &[(&str, &str)] = match install {
+        Install::AppImage => &[("", ".appimage")],
+        Install::Flatpak => &[("", ".flatpak")],
+        Install::Tarball => &[
+            ("-linux-", ".tar.gz"),
+            ("-linux-", ".tar.xz"),
+            ("-linux-", ".tar.zst"),
+        ],
+        Install::Windows => &[("-windows-", ".zip")],
+        Install::MacOs => &[("-macos-", ".zip")],
+        Install::Pacman => return None,
     };
     let arch_ok = |n: &str| {
         let alt = if arch == "x86_64" { "amd64" } else { "arm64" };
@@ -136,10 +144,10 @@ pub fn pick_asset(install: Install, arch: &str, assets: &[(String, String)]) -> 
                 || n.contains("amd64")
                 || n.contains("arm64"))
     };
-    for ext in want {
+    for (part, ext) in want {
         if let Some((_, u)) = assets.iter().find(|(n, _)| {
             let n = n.to_lowercase();
-            n.ends_with(ext) && arch_ok(&n) && !n.contains("source")
+            n.contains(part) && n.ends_with(ext) && arch_ok(&n) && !n.contains("source")
         }) {
             return Some(u.clone());
         }
@@ -414,31 +422,29 @@ mod tests {
 
     #[test]
     fn assets() {
-        let a = vec![
-            ("vivi-0.12.0-x86_64.AppImage".to_string(), "A".to_string()),
-            (
-                "vivi-0.12.0-linux-x86_64.tar.gz".to_string(),
-                "T".to_string(),
-            ),
-            (
-                "vivi-0.12.0-windows-x86_64.msi".to_string(),
-                "W".to_string(),
-            ),
-        ];
-        assert_eq!(
-            pick_asset(Install::AppImage, "x86_64", &a).as_deref(),
-            Some("A")
-        );
-        assert_eq!(
-            pick_asset(Install::Tarball, "x86_64", &a).as_deref(),
-            Some("T")
-        );
-        assert_eq!(
-            pick_asset(Install::Windows, "x86_64", &a).as_deref(),
-            Some("W")
-        );
-        assert_eq!(pick_asset(Install::AppImage, "aarch64", &a), None);
-        assert_eq!(pick_asset(Install::Flatpak, "x86_64", &a), None);
+        let a: Vec<(String, String)> = [
+            ("SHA256SUMS", "S"),
+            ("PKGBUILD", "P"),
+            ("Vivi-v0.12.0-x86_64.AppImage", "A"),
+            ("vivi-v0.12.0-linux-x86_64.tar.gz", "T"),
+            ("vivi-v0.12.0-x86_64.flatpak", "F"),
+            ("vivi-v0.12.0-windows-x86_64.zip", "W"),
+            ("vivi-v0.12.0-macos-arm64.zip", "M"),
+        ]
+        .iter()
+        .map(|(n, u)| (n.to_string(), u.to_string()))
+        .collect();
+        let pick = |i, arch| pick_asset(i, arch, &a);
+        assert_eq!(pick(Install::AppImage, "x86_64").as_deref(), Some("A"));
+        assert_eq!(pick(Install::Tarball, "x86_64").as_deref(), Some("T"));
+        assert_eq!(pick(Install::Flatpak, "x86_64").as_deref(), Some("F"));
+        assert_eq!(pick(Install::Windows, "x86_64").as_deref(), Some("W"));
+        assert_eq!(pick(Install::MacOs, "aarch64").as_deref(), Some("M"));
+        // No macOS x86_64 or Linux aarch64 builds; pacman updates via the package manager.
+        assert_eq!(pick(Install::MacOs, "x86_64"), None);
+        assert_eq!(pick(Install::AppImage, "aarch64"), None);
+        assert_eq!(pick(Install::Tarball, "aarch64"), None);
+        assert_eq!(pick(Install::Pacman, "x86_64"), None);
     }
 
     #[test]
