@@ -95,7 +95,7 @@ fn bar_action(a: &AppWindow, p: &Player, id: &str) {
 
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
     app.global::<crate::Settings>()
-        .set_settings_categories(ModelRc::new(VecModel::from(
+        .set_categories(ModelRc::new(VecModel::from(
             CATEGORIES
                 .iter()
                 .map(|s| SharedString::from(*s))
@@ -124,7 +124,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     let query = Rc::new(RefCell::new((0i32, String::new(), false)));
     let rows: Rc<VecModel<SettingRow>> = Rc::new(VecModel::default());
     app.global::<crate::Settings>()
-        .set_settings_rows(ModelRc::from(rows.clone()));
+        .set_rows(ModelRc::from(rows.clone()));
     // Update rows in place when the set of rows is unchanged, so focused
     // widgets (e.g. the language text fields) are not recreated.
     let refresh = {
@@ -158,11 +158,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         move || {
             let res = cfg.borrow().save();
             if let Some(a) = w.upgrade() {
-                a.global::<crate::Settings>()
-                    .set_settings_status(match res {
-                        Ok(()) => format!("Saved to {}", config::path().display()).into(),
-                        Err(e) => format!("Could not save: {e}").into(),
-                    });
+                a.global::<crate::Settings>().set_status(match res {
+                    Ok(()) => format!("Saved to {}", config::path().display()).into(),
+                    Err(e) => format!("Could not save: {e}").into(),
+                });
             }
         }
     };
@@ -178,7 +177,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let refresh = refresh.clone();
         let query = query.clone();
         app.global::<crate::Settings>()
-            .on_settings_refresh(move |c, s, adv| {
+            .on_refresh(move |c, s, adv| {
                 *query.borrow_mut() = (c, s.to_string(), adv);
                 refresh();
             });
@@ -199,7 +198,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 if id.starts_with("plugin.") {
                     let msg = plugins::setting_changed(&id, v);
                     a.global::<crate::Settings>()
-                        .set_settings_status(msg.unwrap_or_default().into());
+                        .set_status(msg.unwrap_or_default().into());
                     refresh();
                     return;
                 }
@@ -248,7 +247,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         "rescan" => {
                             let n = plugins::rescan();
                             a.global::<crate::Settings>()
-                                .set_settings_status(format!("{n} mpv scripts found").into());
+                                .set_status(format!("{n} mpv scripts found").into());
                         }
                         "catalog" => open_url(CATALOG_URL),
                         _ => {}
@@ -297,7 +296,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             drop(c);
                             a.global::<crate::Overlays>().set_settings_open(false);
                             a.global::<crate::Customize>()
-                                .invoke_customize_profile("".into());
+                                .invoke_select_profile("".into());
                             return;
                         }
                         "interface.onboarding" => {
@@ -332,14 +331,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         "privacy.recent" => {
                             a.global::<crate::Library>().invoke_clear_recent();
                             a.global::<crate::Settings>()
-                                .set_settings_status("Recent files cleared".into());
+                                .set_status("Recent files cleared".into());
                             return;
                         }
                         "privacy.watch_later" => {
                             let _ = std::fs::remove_dir_all(store::watch_later_dir());
                             let _ = std::fs::create_dir_all(store::watch_later_dir());
                             a.global::<crate::Settings>()
-                                .set_settings_status("Resume positions cleared".into());
+                                .set_status("Resume positions cleared".into());
                             return;
                         }
                         "library.add" => {
@@ -362,7 +361,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         "library.clear_thumbs" => {
                             let _ = std::fs::remove_dir_all(store::cache_dir().join("thumbs"));
                             a.global::<crate::Settings>()
-                                .set_settings_status("Thumbnail cache cleared".into());
+                                .set_status("Thumbnail cache cleared".into());
                             return;
                         }
                         k if k.starts_with("library.remove:") => {
@@ -383,7 +382,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 save();
                 refresh();
                 if rescan {
-                    a.global::<crate::Library>().invoke_lib_rescan();
+                    a.global::<crate::Library>().invoke_rescan();
                 }
             });
     }

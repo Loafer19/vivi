@@ -1,12 +1,12 @@
 // Settings: the settings page (categories, rows, search, status), the shortcuts overlay, accent choices and onboarding, with their actions.
 import { SettingRow } from "../settings.slint";
 export global Settings {
-    in-out property <[string]> settings-categories;
-    in-out property <[SettingRow]> settings-rows;
-    in-out property <int> settings-category: 0;
-    in-out property <string> settings-status;
-    in-out property <string> settings-search;
-    in-out property <bool> settings-advanced;
+    in-out property <[string]> categories;
+    in-out property <[SettingRow]> rows;
+    in-out property <int> category: 0;
+    in-out property <string> status;
+    in-out property <string> search;
+    in-out property <bool> advanced;
     in-out property <[string]> shortcut-actions;
     in-out property <[string]> shortcut-keys;
     in-out property <[string]> accent-names;
@@ -16,6 +16,6 @@ export global Settings {
     in-out property <[string]> onboarding-keys;
     in-out property <[string]> onboarding-actions;
     callback setting-changed(string, string);
-    callback settings-refresh(int, string, bool);
+    callback refresh(int, string, bool);
     callback onboarding-done();
 }

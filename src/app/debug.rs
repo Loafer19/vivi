@@ -28,11 +28,9 @@ pub(crate) fn open_plugin_link(app: &AppWindow, id: &str) {
     let n = 12; // Extensions
     let q: slint::SharedString = name.unwrap_or_default().into();
     app.global::<crate::Overlays>().set_settings_open(true);
-    app.global::<crate::Settings>().set_settings_category(n);
-    app.global::<crate::Settings>()
-        .set_settings_search(q.clone());
-    app.global::<crate::Settings>()
-        .invoke_settings_refresh(n, q, false);
+    app.global::<crate::Settings>().set_category(n);
+    app.global::<crate::Settings>().set_search(q.clone());
+    app.global::<crate::Settings>().invoke_refresh(n, q, false);
 }
 
 pub(crate) fn debug_ui(app: &AppWindow) {
@@ -41,24 +39,22 @@ pub(crate) fn debug_ui(app: &AppWindow) {
         let adv = var("VIVI_ADVANCED").is_some();
         let q = var("VIVI_SEARCH").unwrap_or_default();
         app.global::<crate::Overlays>().set_settings_open(true);
-        app.global::<crate::Settings>().set_settings_category(n);
-        app.global::<crate::Settings>().set_settings_advanced(adv);
+        app.global::<crate::Settings>().set_category(n);
+        app.global::<crate::Settings>().set_advanced(adv);
+        app.global::<crate::Settings>().set_search(q.clone().into());
         app.global::<crate::Settings>()
-            .set_settings_search(q.clone().into());
-        app.global::<crate::Settings>()
-            .invoke_settings_refresh(n, q.into(), adv);
+            .invoke_refresh(n, q.into(), adv);
     }
     if let Some(p) = var("VIVI_CUSTOMIZE") {
         app.global::<crate::Customize>()
-            .invoke_customize_profile(p.into());
+            .invoke_select_profile(p.into());
     }
     if let Some(n) = var("VIVI_LIB") {
-        app.global::<crate::Library>().invoke_lib_navigate(n.into());
+        app.global::<crate::Library>().invoke_navigate(n.into());
     }
     if let Some(q) = var("VIVI_LIBQ") {
-        app.global::<crate::Library>()
-            .set_lib_query(q.clone().into());
-        app.global::<crate::Library>().invoke_lib_search(q.into());
+        app.global::<crate::Library>().set_query(q.clone().into());
+        app.global::<crate::Library>().invoke_search(q.into());
     }
     if let Some(u) = var("VIVI_URL") {
         // After the render context exists (files must not load before it).

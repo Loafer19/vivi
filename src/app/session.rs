@@ -47,7 +47,8 @@ pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
             .map(|x| x.to_string_lossy().into_owned())
             .unwrap_or(path);
         store::push_recent(&abs);
-        a.global::<crate::Library>().set_recent(recent_items());
+        a.global::<crate::Library>()
+            .set_recent_files(recent_items());
     }
     let p = p.clone();
     let w = a.as_weak();
@@ -76,7 +77,8 @@ pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
 }
 
 pub(crate) fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
-    app.global::<crate::Library>().set_recent(recent_items());
+    app.global::<crate::Library>()
+        .set_recent_files(recent_items());
     app.global::<crate::Panel>().set_playlists(playlist_items());
 
     let p = player.clone();
@@ -155,7 +157,8 @@ pub(crate) fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) 
     app.global::<crate::Library>().on_clear_recent(move || {
         store::clear_recent();
         if let Some(a) = weak.upgrade() {
-            a.global::<crate::Library>().set_recent(recent_items());
+            a.global::<crate::Library>()
+                .set_recent_files(recent_items());
         }
     });
     let p = player.clone();

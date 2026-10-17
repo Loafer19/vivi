@@ -124,7 +124,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                         Ok(path) => {
                             a.global::<crate::Panel>()
                                 .set_playlists(crate::playlist_items());
-                            a.global::<crate::Library>().invoke_lib_refresh();
+                            a.global::<crate::Library>().invoke_refresh();
                             p.open(&path.to_string_lossy());
                         }
                         Err(e) => {
@@ -256,7 +256,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                             .set_new_playlist_error("".into());
                         a.global::<crate::Panel>()
                             .set_playlists(crate::playlist_items());
-                        a.global::<crate::Library>().invoke_lib_refresh();
+                        a.global::<crate::Library>().invoke_refresh();
                         a.global::<crate::Dialogs>().invoke_new_playlist_close();
                     }
                     Err(e) => a

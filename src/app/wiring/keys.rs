@@ -96,8 +96,8 @@ pub(crate) fn wire(
             A::Settings => {
                 a.global::<crate::Overlays>()
                     .set_settings_open(!a.global::<crate::Overlays>().get_settings_open());
-                a.global::<crate::Settings>().invoke_settings_refresh(
-                    a.global::<crate::Settings>().get_settings_category(),
+                a.global::<crate::Settings>().invoke_refresh(
+                    a.global::<crate::Settings>().get_category(),
                     "".into(),
                     false,
                 );

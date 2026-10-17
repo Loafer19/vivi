@@ -257,13 +257,12 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
         .set_bar_styles(strings(config::BAR_STYLES));
     a.global::<crate::Customize>()
         .set_profile(c.interface.profile.clone().into());
-    a.global::<crate::Customize>()
-        .set_customize_available(strings(
-            config::TOOL_ITEMS
-                .iter()
-                .filter(|i| **i == "spacer" || !t.iter().any(|s| s == *i))
-                .copied(),
-        ));
+    a.global::<crate::Customize>().set_available(strings(
+        config::TOOL_ITEMS
+            .iter()
+            .filter(|i| **i == "spacer" || !t.iter().any(|s| s == *i))
+            .copied(),
+    ));
     a.global::<crate::Playback>()
         .set_volume_max(c.audio.volume_max as f32);
 }

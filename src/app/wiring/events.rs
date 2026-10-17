@@ -49,11 +49,11 @@ pub(crate) fn wire(
                         on_file_loaded(&a, &player, log);
                         libview::flush_pending(&player);
                         // The docked library sidebar stays; the full library closes.
-                        if a.global::<crate::Library>().get_lib_full() {
+                        if a.global::<crate::Library>().get_full() {
                             a.global::<crate::Overlays>().set_library_open(false);
-                            a.global::<crate::Library>().set_lib_full(false);
+                            a.global::<crate::Library>().set_full(false);
                         }
-                        a.global::<crate::Library>().invoke_lib_refresh();
+                        a.global::<crate::Library>().invoke_refresh();
                         let dur: f64 = player.mpv.get_property("duration").unwrap_or(0.0);
                         preview::start(
                             &a,

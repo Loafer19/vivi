@@ -487,15 +487,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
 fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
     let (head, arg) = id.split_once(':').unwrap_or((id, ""));
     match head {
-        "lib" => a.global::<crate::Library>().invoke_lib_menu(
+        "lib" => a.global::<crate::Library>().invoke_menu(
             ctx.key.clone().into(),
             ctx.kind.clone().into(),
             arg.into(),
         ),
-        "sort" => a.global::<crate::Library>().invoke_lib_set_sort(arg.into()),
-        "view" => a
-            .global::<crate::Library>()
-            .invoke_lib_set_grid(arg == "grid"),
+        "sort" => a.global::<crate::Library>().invoke_set_sort(arg.into()),
+        "view" => a.global::<crate::Library>().invoke_set_grid(arg == "grid"),
         "speed" => p.set("speed", arg),
         "aspect" => p.set("video-aspect-override", arg),
         "vid" | "aid" | "sid" => p.set(head, arg),
@@ -554,8 +552,8 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "settings" => {
                 a.global::<crate::Overlays>().set_settings_open(true);
-                a.global::<crate::Settings>().invoke_settings_refresh(
-                    a.global::<crate::Settings>().get_settings_category(),
+                a.global::<crate::Settings>().invoke_refresh(
+                    a.global::<crate::Settings>().get_category(),
                     "".into(),
                     false,
                 );

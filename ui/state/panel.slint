@@ -2,8 +2,8 @@
 import { Item } from "../panel.slint";
 import { PanelTab } from "../core/types.slint";
 export global Panel {
-    in-out property <length> panel-scroll;
-    in-out property <PanelTab> panel-tab: PanelTab.subtitles;
+    in-out property <length> scroll;
+    in-out property <PanelTab> tab: PanelTab.subtitles;
     in-out property <[Item]> sub-tracks;
     in-out property <[Item]> audio-tracks;
     in-out property <[Item]> audio-devices;
@@ -15,7 +15,7 @@ export global Panel {
     in-out property <[Item]> queue;
     in-out property <[Item]> playlists;
     in-out property <string> preset-name;
-    in-out property <[Item]> panel-lib;
+    in-out property <[Item]> lib;
     in-out property <string> sleep-state: "";
     in-out property <string> hwdec: "auto-safe";
     in-out property <float> pv-sub-delay: 0;
@@ -46,6 +46,6 @@ export global Panel {
     callback playlist-save(string);
     callback playlist-load(string);
     callback playlist-delete(string);
-    callback panel-lib-search(string);
+    callback lib-search(string);
     callback save-preset();
 }

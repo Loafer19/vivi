@@ -151,7 +151,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     });
     {
         let (p, w) = (player.clone(), app.as_weak());
-        app.global::<crate::Playback>().on_ab_set(move |x, y| {
+        app.global::<crate::Playback>().on_set_ab(move |x, y| {
             let v = |t: f32| {
                 if t < 0.0 {
                     "no".to_string()
@@ -247,14 +247,14 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         .ok()
         .and_then(|c| c.parse().ok())
     {
-        app.global::<crate::Settings>().set_settings_category(c);
+        app.global::<crate::Settings>().set_category(c);
         app.global::<crate::Overlays>().set_settings_open(true);
         app.global::<crate::Settings>()
-            .invoke_settings_refresh(c, "".into(), false);
+            .invoke_refresh(c, "".into(), false);
     }
     if let Ok(t) = std::env::var("VIVI_PANEL") {
         app.global::<crate::Panel>()
-            .set_panel_tab(panel_tab(t.parse().unwrap_or(0)));
+            .set_tab(panel_tab(t.parse().unwrap_or(0)));
         app.global::<crate::Overlays>().set_panel_open(true);
         if let Some(y) = std::env::var("VIVI_PANEL_SCROLL")
             .ok()
@@ -263,7 +263,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             let w = app.as_weak();
             slint::Timer::single_shot(Duration::from_millis(2500), move || {
                 if let Some(a) = w.upgrade() {
-                    a.global::<crate::Panel>().set_panel_scroll(-y);
+                    a.global::<crate::Panel>().set_scroll(-y);
                 }
             });
         }

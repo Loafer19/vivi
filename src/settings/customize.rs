@@ -28,7 +28,7 @@ pub(crate) fn customize(
         let cfg = cfg.clone();
         let backup = backup.clone();
         app.global::<crate::Customize>()
-            .on_customize_profile(move |p| {
+            .on_select_profile(move |p| {
                 let Some(a) = w.upgrade() else { return };
                 if !a.global::<crate::Overlays>().get_customize_open() {
                     *backup.borrow_mut() = Some(cfg.borrow().interface.clone());
@@ -45,60 +45,56 @@ pub(crate) fn customize(
     }
     {
         let edit = edit.clone();
-        app.global::<crate::Customize>()
-            .on_customize_move(move |i, d| {
-                edit(&|t| {
-                    let (i, j) = (i as usize, i as usize as i64 + d as i64);
-                    if j >= 0 && (j as usize) < t.len() && i < t.len() {
-                        t.swap(i, j as usize);
-                    }
-                })
-            });
+        app.global::<crate::Customize>().on_move(move |i, d| {
+            edit(&|t| {
+                let (i, j) = (i as usize, i as usize as i64 + d as i64);
+                if j >= 0 && (j as usize) < t.len() && i < t.len() {
+                    t.swap(i, j as usize);
+                }
+            })
+        });
     }
     {
         let edit = edit.clone();
-        app.global::<crate::Customize>()
-            .on_customize_remove(move |i| {
-                edit(&|t| {
-                    if (i as usize) < t.len() {
-                        t.remove(i as usize);
-                    }
-                })
-            });
+        app.global::<crate::Customize>().on_remove(move |i| {
+            edit(&|t| {
+                if (i as usize) < t.len() {
+                    t.remove(i as usize);
+                }
+            })
+        });
     }
     {
         let w = app.as_weak();
         let cfg = cfg.clone();
-        app.global::<crate::Customize>()
-            .on_customize_style(move |st| {
-                let Some(a) = w.upgrade() else { return };
-                let mut c = cfg.borrow_mut();
-                c.interface.bar_style = st.to_string();
-                c.interface.profile = profile_of(&c.interface);
-                apply_toolbar(&a, &c);
-            });
+        app.global::<crate::Customize>().on_style(move |st| {
+            let Some(a) = w.upgrade() else { return };
+            let mut c = cfg.borrow_mut();
+            c.interface.bar_style = st.to_string();
+            c.interface.profile = profile_of(&c.interface);
+            apply_toolbar(&a, &c);
+        });
     }
     app.global::<crate::Customize>()
-        .on_customize_add(move |id| edit(&|t| t.push(id.to_string())));
+        .on_add(move |id| edit(&|t| t.push(id.to_string())));
     {
         let w = app.as_weak();
         let cfg = cfg.clone();
         let p = player.clone();
-        app.global::<crate::Customize>()
-            .on_customize_done(move |keep| {
-                let Some(a) = w.upgrade() else { return };
-                a.global::<crate::Overlays>().set_customize_open(false);
-                let old = backup.borrow_mut().take();
-                if keep {
-                    save();
-                    if log {
-                        eprintln!("toolbar saved: {:?}", cfg.borrow().interface.toolbar);
-                    }
-                } else if let Some(old) = old {
-                    cfg.borrow_mut().interface = old;
+        app.global::<crate::Customize>().on_done(move |keep| {
+            let Some(a) = w.upgrade() else { return };
+            a.global::<crate::Overlays>().set_customize_open(false);
+            let old = backup.borrow_mut().take();
+            if keep {
+                save();
+                if log {
+                    eprintln!("toolbar saved: {:?}", cfg.borrow().interface.toolbar);
                 }
-                apply_toolbar(&a, &cfg.borrow());
-            });
+            } else if let Some(old) = old {
+                cfg.borrow_mut().interface = old;
+            }
+            apply_toolbar(&a, &cfg.borrow());
+        });
         let w = app.as_weak();
         app.global::<crate::Playback>().on_bar_action(move |id| {
             if let Some(a) = w.upgrade() {
