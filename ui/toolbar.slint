@@ -57,6 +57,17 @@ export global Tools {
         if id == "|" { return "Play controls"; }
         return id;
     }
+    // Tile caption in Customize (fits 76px); tooltips keep the full label.
+    public pure function short(id: string) -> string {
+        if id == "back10" { return "Back 10s"; }
+        if id == "fwd10" { return "Fwd 10s"; }
+        if id == "spacer" { return "Space"; }
+        if id == "speed" { return "Speed"; }
+        if id == "time" { return "Elapsed"; }
+        if id == "duration" { return "Total"; }
+        if id == "play" { return "Play"; }
+        return Tools.label(id);
+    }
 }
 
 component Glyph inherits Rectangle {
@@ -76,13 +87,18 @@ component Placed inherits Rectangle {
     in property <bool> last;
     callback move(int);
     callback remove();
-    width: 70px; height: 62px;
+    width: 76px; height: 74px;
     border-radius: Metrics.radius-md; background: Theme.bg-a1;
     border-width: 1px; border-color: hov.has-hover ? Theme.accent : Theme.divider;
     hov := TouchArea { }
-    Icon { y: 8px; source: Tools.icon(root.id); width: 22px; height: 22px; tint: Theme.fg-1; }
+    Icon { y: 7px; source: Tools.icon(root.id); width: 20px; height: 20px; tint: Theme.fg-1; }
+    Text {
+        x: 4px; y: 30px; width: parent.width - 8px; height: 16px;
+        text: Tools.short(root.id); color: Theme.fg-a2; font-size: Metrics.font-xs;
+        horizontal-alignment: center; vertical-alignment: center; overflow: elide;
+    }
     HorizontalLayout {
-        y: 34px; height: 24px; alignment: center; spacing: 1px;
+        y: 47px; height: 24px; alignment: center; spacing: 1px;
         Glyph { text: "‹"; enabled: !root.first; clicked => { root.move(-1); } }
         Glyph { text: "×"; clicked => { root.remove(); } }
         Glyph { text: "›"; enabled: !root.last; clicked => { root.move(1); } }
@@ -102,12 +118,12 @@ component Zone inherits Rectangle {
     in property <bool> lock-last;
     callback move(int, int);
     callback remove(int);
-    min-height: 90px; border-radius: Metrics.radius-md; background: Theme.bg-b1;
+    min-height: 102px; border-radius: Metrics.radius-md; background: Theme.bg-b1;
     preferred-width: row.preferred-width + 20px;
     Text { x: 12px; y: 6px; text: root.title; color: Theme.fg-a1; font-size: Metrics.font-xs; }
     if root.items.length == 0: Text { text: "Empty"; color: Theme.fg-a3; }
     row := HorizontalLayout {
-        x: 10px; y: 22px; height: 62px; spacing: 6px; alignment: start;
+        x: 10px; y: 22px; height: 74px; spacing: 6px; alignment: start;
         for id[i] in root.items: Placed {
             id: id;
             first: i == 0;
@@ -174,7 +190,7 @@ export component CustomizeDialog inherits Modal {
         }
         Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }
         Flickable {
-            height: 92px; content-width: max(self.width, zone.preferred-width);
+            height: 104px; content-width: max(self.width, zone.preferred-width);
             zone := Zone {
                 width: max(parent.width, self.preferred-width);
                 title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
@@ -184,15 +200,20 @@ export component CustomizeDialog inherits Modal {
         }
         Text { text: "Available items"; color: Theme.fg-1; font-weight: 600; }
         Rectangle {
-            height: 64px; border-radius: Metrics.radius-md;
+            height: 76px; border-radius: Metrics.radius-md;
             border-width: 1px; border-color: Theme.divider;
             if root.available.length == 0: Text { text: "Every item is already in the player."; color: Theme.fg-a3; }
             HorizontalLayout {
-                x: 10px; y: 12px; height: 40px; spacing: 6px; alignment: start;
+                x: 10px; y: 10px; height: 56px; spacing: 6px; alignment: start;
                 for id in root.available: Rectangle {
-                    height: 40px; width: 44px; border-radius: Metrics.radius-md;
+                    height: 56px; width: 76px; border-radius: Metrics.radius-md;
                     background: ata.has-hover ? Theme.divider : Theme.bg-a1;
-                    Icon { source: Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
+                    Icon { y: 8px; source: Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
+                    Text {
+                        x: 4px; y: 32px; width: parent.width - 8px; height: 16px;
+                        text: Tools.short(id); color: Theme.fg-a2; font-size: Metrics.font-xs;
+                        horizontal-alignment: center; vertical-alignment: center; overflow: elide;
+                    }
                     ata := TouchArea { mouse-cursor: pointer; clicked => { root.add(id); } }
                     if ata.has-hover: Rectangle {
                         y: -30px; height: 24px; width: tl.preferred-width + 14px; z: 5;
