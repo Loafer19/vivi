@@ -1622,7 +1622,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             .on_setting_changed(move |id, value| {
                 let Some(a) = w.upgrade() else { return };
                 let v = value.as_str();
-                let num = v.parse::<f64>().unwrap_or(0.0);
                 if log {
                     eprintln!("setting {id} = {v}");
                 }
@@ -1716,7 +1715,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                                 _ => c.recording.dir = val,
                             }
                         }
-                        "interface.accent" => c.interface.accent = v.into(),
                         "interface.profile" => {
                             if let Some(t) = config::profile_toolbar(v) {
                                 c.interface.toolbar = t;
@@ -1737,21 +1735,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             a.global::<crate::Overlays>().set_onboarding_open(true);
                             return;
                         }
-                        "interface.autohide" => c.interface.autohide_secs = num as u32,
-                        "playback.resume" => c.playback.resume = v == "true",
-                        "playback.speed" => c.playback.speed = (num * 100.0).round() / 100.0,
-                        "playback.hwdec" => c.playback.hwdec = v.into(),
-                        "audio.language" => c.audio.language = v.trim().into(),
-                        "audio.volume_max" => c.audio.volume_max = num as i64,
-                        "subtitles.language" => c.subtitles.language = v.trim().into(),
-                        "subtitles.scale" => c.subtitles.scale = (num * 10.0).round() / 10.0,
-                        "subtitles.auto_load" => c.subtitles.auto_load = v.into(),
-                        "subtitles.enabled" => c.subtitles.enabled = v == "true",
-                        "subtitles.encoding" => c.subtitles.encoding = v.into(),
-                        "subtitles.font" => c.subtitles.font = v.into(),
-                        "subtitles.bold" => c.subtitles.bold = v == "true",
-                        "subtitles.color" => c.subtitles.color = v.trim().into(),
-                        "subtitles.opacity" => c.subtitles.opacity = num as i64,
                         "subtitles.outline" => {
                             c.subtitles.outline = match v {
                                 "None" => 0.0,
@@ -1760,33 +1743,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                                 _ => 3.0,
                             }
                         }
-                        "subtitles.outline_color" => c.subtitles.outline_color = v.trim().into(),
-                        "subtitles.shadow" => c.subtitles.shadow = v == "true",
-                        "subtitles.position" => c.subtitles.position = num as i64,
-                        "playback.repeat" => c.playback.repeat = v.into(),
-                        "playback.precise_seek" => c.playback.precise_seek = v == "true",
-                        "playback.quality" => c.playback.quality = v.into(),
-                        "controls.short_skip" => c.controls.short_skip = lead_num(v),
-                        "controls.long_skip" => c.controls.long_skip = lead_num(v),
-                        "audio.volume_step" => c.audio.volume_step = lead_num(v) as i64,
-                        "audio.enabled" => c.audio.enabled = v == "true",
-                        "audio.device" => c.audio.device = v.into(),
-                        "audio.startup_volume" => c.audio.startup_volume = num as i64,
-                        "audio.normalize" => c.audio.normalize = v == "true",
-                        "audio.delay" => c.audio.delay = (num * 100.0).round() / 100.0,
-                        "video.enabled" => c.video.enabled = v == "true",
-                        "video.stop_screensaver" => c.video.stop_screensaver = v == "true",
-                        "video.hue" => c.video.hue = num as i64,
-                        "video.brightness" => c.video.brightness = num as i64,
-                        "video.contrast" => c.video.contrast = num as i64,
-                        "video.saturation" => c.video.saturation = num as i64,
-                        "video.gamma" => c.video.gamma = num as i64,
                         "video.reset_picture" => {
                             let v = &mut c.video;
                             (v.hue, v.brightness, v.contrast, v.saturation, v.gamma) =
                                 (0, 0, 0, 0, 0);
                         }
-                        "video.deinterlace" => c.video.deinterlace = v.into(),
                         "video.aspect" => {
                             c.video.aspect = if v == "Automatic" {
                                 "no".into()
@@ -1794,17 +1755,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                                 v.into()
                             }
                         }
-                        "video.screenshot_format" => c.video.screenshot_format = v.into(),
-                        "network.buffering" => c.network.buffering = v.into(),
-                        "network.cache" => c.network.cache = v.into(),
-                        "network.cache_secs" => c.network.cache_secs = num as i64,
-                        "network.http_proxy" => c.network.http_proxy = v.trim().into(),
-                        "network.tls_verify" => c.network.tls_verify = v == "true",
-                        "network.user_agent" => c.network.user_agent = v.into(),
-                        "performance.skip_loop_filter" => c.performance.skip_loop_filter = v.into(),
-                        "performance.threads" => c.performance.threads = num as i64,
-                        "performance.framedrop" => c.performance.framedrop = v == "true",
-                        "performance.video_sync" => c.performance.video_sync = v.into(),
                         k if k.starts_with("stub.") => {
                             c.stubs.insert(k.into(), v.into());
                         }
@@ -1838,7 +1788,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             rescan = true;
                         }
                         "library.rescan" => rescan = true,
-                        "library.thumbnails" => c.library.thumbnails = v == "true",
                         "library.clear_thumbs" => {
                             let _ = std::fs::remove_dir_all(store::cache_dir().join("thumbs"));
                             a.global::<crate::Settings>()
