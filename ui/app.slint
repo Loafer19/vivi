@@ -569,7 +569,7 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
             IconButton { tab-focus: false; icon: @image-url("../assets/icons/open.svg"); tip: "Open file"; clicked => { Playback.open-file(); } }
-            if Playback.has-media: IconButton { tab-focus: false; icon: @image-url("../assets/icons/home.svg"); active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
+            if Playback.has-media: IconButton { tab-focus: false; icon: @image-url("../assets/icons/home.svg"); tip: "Library"; active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
             Text {
                 horizontal-stretch: 1;
                 text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
@@ -577,8 +577,8 @@ export component AppWindow inherits Window {
                 overflow: elide;
             }
             if Playback.has-media: IconButton { tab-focus: false; icon: @image-url("../assets/icons/pip.svg"); tip: "Miniplayer (P)"; clicked => { Playback.toggle-mini(); } }
-            IconButton { tab-focus: false; icon: @image-url("../assets/icons/settings.svg"); active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
-            IconButton { tab-focus: false; icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
+            IconButton { tab-focus: false; icon: @image-url("../assets/icons/settings.svg"); tip: "Settings (Ctrl+,)"; active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
+            IconButton { tab-focus: false; icon: @image-url("../assets/icons/fullscreen.svg"); tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
         }
     }
 
