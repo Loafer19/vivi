@@ -1318,19 +1318,28 @@ pub fn profile_of(i: &config::Interface) -> String {
 /// Mirror mpv's current values into the side-panel sliders.
 pub fn sync_panel(a: &AppWindow, p: &Player) {
     let f = |k: &str, d: f64| p.get(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d) as f32;
-    a.set_pv_sub_delay(f("sub-delay", 0.0));
-    a.set_pv_sub_scale(f("sub-scale", 1.0));
-    a.set_pv_sub_pos(f("sub-pos", 100.0));
-    a.set_pv_audio_delay(f("audio-delay", 0.0));
-    a.set_pv_boost(f("volume", 100.0));
-    a.set_pv_rotate(f("video-rotate", 0.0) as i32);
-    a.set_pv_zoom(f("video-zoom", 0.0));
-    a.set_pv_panscan(f("panscan", 0.0) * 100.0);
-    a.set_pv_brightness(f("brightness", 0.0));
-    a.set_pv_contrast(f("contrast", 0.0));
-    a.set_pv_saturation(f("saturation", 0.0));
-    a.set_pv_gamma(f("gamma", 0.0));
-    a.set_pv_speed(f("speed", 1.0));
+    a.global::<crate::Panel>()
+        .set_pv_sub_delay(f("sub-delay", 0.0));
+    a.global::<crate::Panel>()
+        .set_pv_sub_scale(f("sub-scale", 1.0));
+    a.global::<crate::Panel>()
+        .set_pv_sub_pos(f("sub-pos", 100.0));
+    a.global::<crate::Panel>()
+        .set_pv_audio_delay(f("audio-delay", 0.0));
+    a.global::<crate::Panel>().set_pv_boost(f("volume", 100.0));
+    a.global::<crate::Panel>()
+        .set_pv_rotate(f("video-rotate", 0.0) as i32);
+    a.global::<crate::Panel>().set_pv_zoom(f("video-zoom", 0.0));
+    a.global::<crate::Panel>()
+        .set_pv_panscan(f("panscan", 0.0) * 100.0);
+    a.global::<crate::Panel>()
+        .set_pv_brightness(f("brightness", 0.0));
+    a.global::<crate::Panel>()
+        .set_pv_contrast(f("contrast", 0.0));
+    a.global::<crate::Panel>()
+        .set_pv_saturation(f("saturation", 0.0));
+    a.global::<crate::Panel>().set_pv_gamma(f("gamma", 0.0));
+    a.global::<crate::Panel>().set_pv_speed(f("speed", 1.0));
 }
 
 /// Bottom-bar actions that need the player.
@@ -1827,7 +1836,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let w = app.as_weak();
         let p = player.clone();
-        app.on_save_preset(move || {
+        app.global::<crate::Panel>().on_save_preset(move || {
             let Some(a) = w.upgrade() else { return };
             let Some(path) = p.get("path") else { return };
             let key = config::show_key(&path);

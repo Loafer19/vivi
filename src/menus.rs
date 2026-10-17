@@ -549,10 +549,10 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "shuffle-now" => p.run("playlist-shuffle"),
             "save-queue" => {
                 let name = queue_name();
-                a.invoke_playlist_save(name.into());
+                a.global::<crate::Panel>().invoke_playlist_save(name.into());
                 a.set_resume_text("Saved the queue as a playlist".into());
             }
-            "clear-queue" => a.invoke_queue_clear(),
+            "clear-queue" => a.global::<crate::Panel>().invoke_queue_clear(),
             "open-file" => a.invoke_open_file(),
             "open-folder" => a.invoke_open_folder(),
             "open-network" => a.global::<crate::Overlays>().set_network_open(true),

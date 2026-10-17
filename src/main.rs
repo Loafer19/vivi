@@ -177,7 +177,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             settings::sync_panel(&a, &player);
                             drop(c);
                             plugins::file_loaded();
-                            a.set_preset_name(
+                            a.global::<crate::Panel>().set_preset_name(
                                 key.or_else(|| player.get("path").map(|p| config::show_key(&p)))
                                     .unwrap_or_default()
                                     .into(),
@@ -439,7 +439,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             A::Mute => p.toggle_mute(),
             A::Stop => a.invoke_stop(),
             A::QueueStep => p.playlist_step(!shift),
-            A::AbLoop => a.invoke_run("ab-loop".into()),
+            A::AbLoop => a.global::<crate::Panel>().invoke_run("ab-loop".into()),
             A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "karaoke", &[]),
             A::FindLyrics => crate::plugins::command(plugins::lyrics::ID, "search-open", &[]),
             // [ ] lyrics timing offset (Shift or { }: 0.5 s).
@@ -475,7 +475,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .set_settings_open(!a.global::<crate::Overlays>().get_settings_open());
                 a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
             }
-            A::Bookmark => a.invoke_add_bookmark(),
+            A::Bookmark => a.global::<crate::Panel>().invoke_add_bookmark(),
             A::Shortcuts => a
                 .global::<crate::Overlays>()
                 .set_shortcuts_open(!a.global::<crate::Overlays>().get_shortcuts_open()),
@@ -621,8 +621,10 @@ fn chapter_thumbs(a: &AppWindow, p: &Player) {
                 .unwrap_or_default()
         })
         .collect();
-    a.set_chapter_thumbs(slint::ModelRc::new(slint::VecModel::from(imgs)));
-    a.set_chapter_has_thumb(slint::ModelRc::new(slint::VecModel::from(has)));
+    a.global::<crate::Panel>()
+        .set_chapter_thumbs(slint::ModelRc::new(slint::VecModel::from(imgs)));
+    a.global::<crate::Panel>()
+        .set_chapter_has_thumb(slint::ModelRc::new(slint::VecModel::from(has)));
 }
 
 /// Re-read tracks, devices and chapters from mpv into the side panel models.
@@ -634,34 +636,36 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
                 .map(|(id, l, s)| (id.to_string(), l, s)),
         )
     };
-    a.set_sub_tracks(tr("sub"));
-    a.set_audio_tracks(tr("audio"));
+    a.global::<crate::Panel>().set_sub_tracks(tr("sub"));
+    a.global::<crate::Panel>().set_audio_tracks(tr("audio"));
     let cur_dev = p.get("audio-device").unwrap_or_default();
-    a.set_audio_devices(items(
+    a.global::<crate::Panel>().set_audio_devices(items(
         p.audio_devices()
             .into_iter()
             .map(|(n, d)| (n.clone(), d, n == cur_dev)),
     ));
     let cur_ch: i64 = p.mpv.get_property("chapter").unwrap_or(-1);
     let chs = p.chapters();
-    a.set_chapter_times(slint::ModelRc::new(slint::VecModel::from(
-        chs.iter()
-            .map(|(_, s)| slint::SharedString::from(hms(*s)))
-            .collect::<Vec<_>>(),
-    )));
+    a.global::<crate::Panel>()
+        .set_chapter_times(slint::ModelRc::new(slint::VecModel::from(
+            chs.iter()
+                .map(|(_, s)| slint::SharedString::from(hms(*s)))
+                .collect::<Vec<_>>(),
+        )));
     a.global::<crate::Playback>()
         .set_chapter_starts(slint::ModelRc::new(slint::VecModel::from(
             chs.iter().map(|(_, s)| *s as f32).collect::<Vec<_>>(),
         )));
-    a.set_chapters(items(
+    a.global::<crate::Panel>().set_chapters(items(
         chs.into_iter()
             .enumerate()
             .map(|(i, (t, _))| (i.to_string(), t, i as i64 == cur_ch)),
     ));
     chapter_thumbs(a, p);
-    a.set_hwdec(p.get("hwdec").unwrap_or_default().into());
+    a.global::<crate::Panel>()
+        .set_hwdec(p.get("hwdec").unwrap_or_default().into());
     let q = p.queue();
-    a.set_queue(items(
+    a.global::<crate::Panel>().set_queue(items(
         q.iter()
             .enumerate()
             .map(|(i, (f, cur))| (i.to_string(), store::display_name(f), *cur)),
@@ -682,38 +686,39 @@ fn refresh_lists(a: &AppWindow, p: &Player, log: bool) {
 fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     let p = player.clone();
     let weak = app.as_weak();
-    app.on_set_prop(move |name, value| {
-        p.set(&name, &value);
-        if name == "sub-delay" {
-            crate::plugins::command(
-                plugins::subtitles::ID,
-                "offset-changed",
-                &[value.to_string()],
-            );
-        }
-        if log {
-            eprintln!("set {name}={value} -> {:?}", p.get(&name));
-        }
-        if let Some(a) = weak.upgrade() {
-            if matches!(
-                name.as_str(),
-                "hwdec" | "chapter" | "audio-device" | "aid" | "sid"
-            ) {
-                refresh_lists(&a, &p, log);
+    app.global::<crate::Panel>()
+        .on_set_prop(move |name, value| {
+            p.set(&name, &value);
+            if name == "sub-delay" {
+                crate::plugins::command(
+                    plugins::subtitles::ID,
+                    "offset-changed",
+                    &[value.to_string()],
+                );
             }
-        }
-    });
+            if log {
+                eprintln!("set {name}={value} -> {:?}", p.get(&name));
+            }
+            if let Some(a) = weak.upgrade() {
+                if matches!(
+                    name.as_str(),
+                    "hwdec" | "chapter" | "audio-device" | "aid" | "sid"
+                ) {
+                    refresh_lists(&a, &p, log);
+                }
+            }
+        });
     let p = player.clone();
     let weak = app.as_weak();
     {
         let (p, w) = (p.clone(), weak.clone());
-        app.on_chapters_refresh(move || {
+        app.global::<crate::Panel>().on_chapters_refresh(move || {
             if let Some(a) = w.upgrade() {
                 chapter_thumbs(&a, &p);
             }
         });
     }
-    app.on_run(move |cmd| {
+    app.global::<crate::Panel>().on_run(move |cmd| {
         p.run(&cmd);
         if let Some(a) = weak.upgrade() {
             let ab = |k| p.get(k).filter(|v| v != "no");
@@ -756,7 +761,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         });
     }
     let p = player.clone();
-    app.on_load_sub(move || {
+    app.global::<crate::Panel>().on_load_sub(move || {
         if let Some(f) = rfd::FileDialog::new()
             .set_title("Add subtitles")
             .add_filter("Subtitles", &["srt", "ass", "ssa", "vtt", "sub"])
@@ -770,18 +775,20 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     let sleep_timer = Rc::new(slint::Timer::default());
     let p = player.clone();
     let weak = app.as_weak();
-    app.on_sleep(move |min| {
+    app.global::<crate::Panel>().on_sleep(move |min| {
         let Some(a) = weak.upgrade() else { return };
         sleep_timer.stop();
         p.set("keep-open", "yes");
         match min {
-            0 => a.set_sleep_state("".into()),
+            0 => a.global::<crate::Panel>().set_sleep_state("".into()),
             -1 => {
-                a.set_sleep_state("Pausing at end of file".into());
+                a.global::<crate::Panel>()
+                    .set_sleep_state("Pausing at end of file".into());
                 p.set("keep-open", "always");
             }
             m => {
-                a.set_sleep_state(format!("Pausing in {m} min").into());
+                a.global::<crate::Panel>()
+                    .set_sleep_state(format!("Pausing in {m} min").into());
                 let p = p.clone();
                 let w = weak.clone();
                 sleep_timer.start(
@@ -790,7 +797,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     move || {
                         p.set("pause", "yes");
                         if let Some(a) = w.upgrade() {
-                            a.set_sleep_state("".into());
+                            a.global::<crate::Panel>().set_sleep_state("".into());
                         }
                     },
                 );
@@ -799,10 +806,11 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     });
     // In-memory bookmarks (persisted later with settings).
     let marks: Rc<slint::VecModel<Item>> = Rc::new(slint::VecModel::default());
-    app.set_bookmarks(marks.clone().into());
+    app.global::<crate::Panel>()
+        .set_bookmarks(marks.clone().into());
     {
         let marks = marks.clone();
-        app.on_remove_bookmark(move || {
+        app.global::<crate::Panel>().on_remove_bookmark(move || {
             let n = marks.row_count();
             if n > 0 {
                 marks.remove(n - 1);
@@ -810,7 +818,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         });
     }
     let p = player.clone();
-    app.on_add_bookmark(move || {
+    app.global::<crate::Panel>().on_add_bookmark(move || {
         let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
         marks.push(Item {
             key: format!("{t:.3}").into(),
@@ -831,7 +839,8 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         app.invoke_settings_refresh(c, "".into(), false);
     }
     if let Ok(t) = std::env::var("VIVI_PANEL") {
-        app.set_panel_tab(panel_tab(t.parse().unwrap_or(0)));
+        app.global::<crate::Panel>()
+            .set_panel_tab(panel_tab(t.parse().unwrap_or(0)));
         app.global::<crate::Overlays>().set_panel_open(true);
         if let Some(y) = std::env::var("VIVI_PANEL_SCROLL")
             .ok()
@@ -840,7 +849,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             let w = app.as_weak();
             slint::Timer::single_shot(Duration::from_millis(2500), move || {
                 if let Some(a) = w.upgrade() {
-                    a.set_panel_scroll(-y);
+                    a.global::<crate::Panel>().set_panel_scroll(-y);
                 }
             });
         }
@@ -907,13 +916,15 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     ("aid", "1"),
                 ];
                 if let Some((k, v)) = ops.get(n) {
-                    a.invoke_set_prop((*k).into(), (*v).into());
+                    a.global::<crate::Panel>()
+                        .invoke_set_prop((*k).into(), (*v).into());
                 } else if n == ops.len() {
-                    a.invoke_add_bookmark();
-                    a.invoke_playlist_save("Selftest".into());
-                    a.invoke_save_preset();
-                    a.invoke_run("ab-loop".into());
-                    a.invoke_run("ab-loop".into());
+                    a.global::<crate::Panel>().invoke_add_bookmark();
+                    a.global::<crate::Panel>()
+                        .invoke_playlist_save("Selftest".into());
+                    a.global::<crate::Panel>().invoke_save_preset();
+                    a.global::<crate::Panel>().invoke_run("ab-loop".into());
+                    a.global::<crate::Panel>().invoke_run("ab-loop".into());
                 }
             },
         );
@@ -1094,20 +1105,24 @@ fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
 
 fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
     app.set_recent(recent_items());
-    app.set_playlists(playlist_items());
+    app.global::<crate::Panel>().set_playlists(playlist_items());
 
     let p = player.clone();
-    app.on_queue_play(move |i| p.play_index(i));
+    app.global::<crate::Panel>()
+        .on_queue_play(move |i| p.play_index(i));
     let p = player.clone();
-    app.on_queue_move(move |i, d| p.move_index(i, d));
+    app.global::<crate::Panel>()
+        .on_queue_move(move |i, d| p.move_index(i, d));
     let p = player.clone();
-    app.on_queue_remove(move |i| p.remove_index(i));
+    app.global::<crate::Panel>()
+        .on_queue_remove(move |i| p.remove_index(i));
     let p = player.clone();
-    app.on_queue_clear(move || p.clear_queue());
+    app.global::<crate::Panel>()
+        .on_queue_clear(move || p.clear_queue());
     let p = player.clone();
     app.on_queue_sort(move || p.sort_queue());
     let p = player.clone();
-    app.on_queue_add(move || {
+    app.global::<crate::Panel>().on_queue_add(move || {
         if let Some(files) = rfd::FileDialog::new()
             .set_title("Add to queue")
             .add_filter(
@@ -1127,7 +1142,7 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
     });
     let p = player.clone();
     let weak = app.as_weak();
-    app.on_playlist_save(move |name| {
+    app.global::<crate::Panel>().on_playlist_save(move |name| {
         let files: Vec<String> = p
             .queue()
             .into_iter()
@@ -1146,18 +1161,20 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
             _ => {}
         }
         if let Some(a) = weak.upgrade() {
-            a.set_playlists(playlist_items());
+            a.global::<crate::Panel>().set_playlists(playlist_items());
         }
     });
     let p = player.clone();
-    app.on_playlist_load(move |path| p.open(&path));
+    app.global::<crate::Panel>()
+        .on_playlist_load(move |path| p.open(&path));
     let weak = app.as_weak();
-    app.on_playlist_delete(move |path| {
-        store::delete_playlist(std::path::Path::new(path.as_str()));
-        if let Some(a) = weak.upgrade() {
-            a.set_playlists(playlist_items());
-        }
-    });
+    app.global::<crate::Panel>()
+        .on_playlist_delete(move |path| {
+            store::delete_playlist(std::path::Path::new(path.as_str()));
+            if let Some(a) = weak.upgrade() {
+                a.global::<crate::Panel>().set_playlists(playlist_items());
+            }
+        });
     let p = player.clone();
     app.on_open_recent(move |path| p.open(&path));
     let weak = app.as_weak();

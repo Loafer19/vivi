@@ -117,7 +117,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
             if !name.is_empty() {
                 match store::save_playlist(&name, &urls) {
                     Ok(path) => {
-                        a.set_playlists(crate::playlist_items());
+                        a.global::<crate::Panel>()
+                            .set_playlists(crate::playlist_items());
                         a.invoke_lib_refresh();
                         p.open(&path.to_string_lossy());
                     }
@@ -238,7 +239,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                         }
                     }
                     a.set_np_error("".into());
-                    a.set_playlists(crate::playlist_items());
+                    a.global::<crate::Panel>()
+                        .set_playlists(crate::playlist_items());
                     a.invoke_lib_refresh();
                     a.invoke_np_close();
                 }

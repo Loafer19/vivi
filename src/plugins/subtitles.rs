@@ -1045,7 +1045,7 @@ impl SubtitleSearch {
     }
     fn show_offset(cx: &Ctx, o: f64) {
         cx.app.set_subs_offset(offset_label(o).into());
-        cx.app.set_pv_sub_delay(o as f32);
+        cx.app.global::<crate::Panel>().set_pv_sub_delay(o as f32);
     }
     /// Set (`save`: and remember) the offset of the playing file.
     fn set_offset(&mut self, cx: &Ctx, o: f64, toast: bool) {

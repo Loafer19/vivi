@@ -19,9 +19,10 @@ import { IconButton, PrimaryButton, ButtonSize } from "core/buttons.slint";
 import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
 import { Overlays } from "state/overlays.slint";
 import { Playback } from "state/playback.slint";
+import { Panel } from "state/panel.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -423,12 +424,10 @@ export component AppWindow inherits Window {
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
         if (root.subs-plugin) { Overlays.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
-        else { root.load-sub(); }
+        else { Panel.load-sub(); }
     }
 
     // Side panel
-    in-out property <length> panel-scroll;
-    in-out property <PanelTab> panel-tab: PanelTab.subtitles;
     // The overlay Esc closes (top-most open one); same conditions as each overlay's `if` below.
     out property <Overlay> top-overlay:
         root.menu-kind != "" ? Overlay.menu
@@ -448,49 +447,16 @@ export component AppWindow inherits Window {
         : Overlays.library-open && Playback.has-media ? Overlay.library
         : Overlays.karaoke-open && Playback.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
         : Overlay.none;
-    in property <[Item]> sub-tracks;
-    in property <[Item]> audio-tracks;
-    in property <[Item]> audio-devices;
-    in property <[Item]> chapters;
-    in property <[image]> chapter-thumbs;
-    in property <[bool]> chapter-has-thumb;
-    in property <[string]> chapter-times;
-    callback chapters-refresh();
-    in property <[Item]> bookmarks;
-    callback remove-bookmark();
-    in property <[Item]> queue;
-    in property <[Item]> playlists;
     in property <[Item]> recent;
     in property <string> resume-text;
     // Only the resume message (this text) offers "Start over"; other toasts just have OK.
     in property <string> resume-offer;
-    callback queue-play(int);
-    callback queue-move(int, int);
-    callback queue-remove(int);
-    callback queue-add();
-    callback queue-clear();
-    callback playlist-save(string);
-    callback playlist-load(string);
-    callback playlist-delete(string);
     callback open-recent(string);
     callback clear-recent();
     callback start-over();
     callback dismiss-resume();
 
     // Side-panel slider values (synced from mpv so presets/defaults show up)
-    in-out property <float> pv-sub-delay: 0;
-    in-out property <float> pv-sub-scale: 1;
-    in-out property <float> pv-sub-pos: 100;
-    in-out property <float> pv-audio-delay: 0;
-    in-out property <float> pv-boost: 100;
-    in-out property <int> pv-rotate: 0;
-    in-out property <float> pv-zoom: 0;
-    in-out property <float> pv-panscan: 0;
-    in-out property <float> pv-brightness: 0;
-    in-out property <float> pv-contrast: 0;
-    in-out property <float> pv-saturation: 0;
-    in-out property <float> pv-gamma: 0;
-    in-out property <float> pv-speed: 1;
 
     // Toolbar (bottom bar) and customization
     in property <[string]> bar-items: ["prev", "play", "next", "time", "seek", "duration", "volume", "audio", "subtitles", "settings", "queue", "fullscreen"];
@@ -518,10 +484,10 @@ export component AppWindow inherits Window {
         else if (id == "audio") { root.open-panel(PanelTab.audio); }
         else if (id == "video") { root.open-panel(PanelTab.video); }
         else if (id == "speed") { root.open-panel(PanelTab.playback); }
-        else if (id == "chapters") { root.open-panel(PanelTab.chapters); root.chapters-refresh(); }
+        else if (id == "chapters") { root.open-panel(PanelTab.chapters); Panel.chapters-refresh(); }
         else if (id == "mute") { root.toggle-mute(); }
         else if (id == "fullscreen") { root.toggle-fullscreen(); }
-        else if (id == "bookmark") { root.add-bookmark(); }
+        else if (id == "bookmark") { Panel.add-bookmark(); }
         else if (id == "settings") { Overlays.settings-open = true; root.settings-refresh(root.settings-category, "", false); }
         else { root.bar-action(id); }
     }
@@ -531,12 +497,12 @@ export component AppWindow inherits Window {
     property <int> bar-fit: max(0, floor((root.width - root.bar.reserve) / root.bar.slot));
     property <bool> bar-has-volume: root.width >= root.bar.volume-min-window;
     function bar-active(id: string) -> bool {
-        return (id == "queue" && Overlays.panel-open && root.panel-tab == PanelTab.queue)
-            || (id == "subtitles" && Overlays.panel-open && root.panel-tab == PanelTab.subtitles)
-            || (id == "audio" && Overlays.panel-open && root.panel-tab == PanelTab.audio)
-            || (id == "video" && Overlays.panel-open && root.panel-tab == PanelTab.video)
-            || (id == "speed" && Overlays.panel-open && root.panel-tab == PanelTab.playback)
-            || (id == "chapters" && Overlays.panel-open && root.panel-tab == PanelTab.chapters)
+        return (id == "queue" && Overlays.panel-open && Panel.panel-tab == PanelTab.queue)
+            || (id == "subtitles" && Overlays.panel-open && Panel.panel-tab == PanelTab.subtitles)
+            || (id == "audio" && Overlays.panel-open && Panel.panel-tab == PanelTab.audio)
+            || (id == "video" && Overlays.panel-open && Panel.panel-tab == PanelTab.video)
+            || (id == "speed" && Overlays.panel-open && Panel.panel-tab == PanelTab.playback)
+            || (id == "chapters" && Overlays.panel-open && Panel.panel-tab == PanelTab.chapters)
             || (id == "repeat" && Playback.repeat-on) || (id == "shuffle" && Playback.shuffle-on)
             || (id == "settings" && Overlays.settings-open);
     }
@@ -595,7 +561,6 @@ export component AppWindow inherits Window {
     in property <bool> lib-scanning;
     in property <bool> ytdlp;
     in-out property <string> lib-query;
-    in property <[Item]> panel-lib;
     // Menus (built in src/menus.rs): main right-click menu, library context menus,
     // sort and view options. menu-kind "" = closed.
     in-out property <string> menu-kind;
@@ -624,14 +589,14 @@ export component AppWindow inherits Window {
     property <length> mini-video-h: root.height - root.mini-q-h - root.mini-strip-h;
     property <float> mini-margin: root.mini ? root.mini-q-h / root.height : 0;
     property <float> mini-margin-b: root.mini ? root.mini-strip-h / root.height : 0;
-    changed mini-margin-b => { root.set-prop("video-margin-ratio-bottom", root.mini-margin-b); }
+    changed mini-margin-b => { Panel.set-prop("video-margin-ratio-bottom", root.mini-margin-b); }
     in property <string> mini-folder;
     in property <string> mini-sub;
     in property <string> mini-q-meta;
     in property <[string]> queue-durations;
     callback queue-sort();
     property <int> mini-q-sel: -1;
-    changed mini-margin => { root.set-prop("video-margin-ratio-top", root.mini-margin); }
+    changed mini-margin => { Panel.set-prop("video-margin-ratio-top", root.mini-margin); }
     callback lib-refresh();
     callback lib-rescan();
     callback lib-navigate(string);
@@ -641,7 +606,6 @@ export component AppWindow inherits Window {
     callback lib-open(string, string);
     callback lib-menu(string, string, string);
     callback open-url(string);
-    callback panel-lib-search(string);
 
     // Onboarding
     in-out property <int> onboarding-step;
@@ -662,25 +626,16 @@ export component AppWindow inherits Window {
     in property <string> settings-status;
     in-out property <string> settings-search;
     in-out property <bool> settings-advanced;
-    in property <string> preset-name;
     callback setting-changed(string, string);
     callback settings-refresh(int, string, bool);
-    callback save-preset();
-    callback add-bookmark();
     callback ab-set(float, float);
     // Plugin range on the seekbar (`script-message vivi-range <a> <b> [label]`), e.g. Cut & Export In/Out.
     property <BarMetrics> bar: Bars.metrics(root.bar-style);
     property <bool> bar-classic: root.bar.classic;
     out property <length> bar-h: root.bar.height;
-    in property <string> sleep-state: "";
-    in property <string> hwdec: "auto-safe";
-    callback set-prop(string, string);
-    callback run(string);
-    callback load-sub();
-    callback sleep(int);
     function open-panel(t: PanelTab) {
-        if (Overlays.panel-open && root.panel-tab == t) { Overlays.panel-open = false; }
-        else { root.panel-tab = t; Overlays.panel-open = true; }
+        if (Overlays.panel-open && Panel.panel-tab == t) { Overlays.panel-open = false; }
+        else { Panel.panel-tab = t; Overlays.panel-open = true; }
     }
 
     pure function fmt(t: float) -> string {
@@ -826,63 +781,63 @@ export component AppWindow inherits Window {
     // ---------- Side panel ----------
     if !root.mini && Playback.has-media && Overlays.panel-open: SidePanel {
         // Overlays the video; full width on narrow windows.
-        scroll-y <=> root.panel-scroll;
+        scroll-y <=> Panel.panel-scroll;
         width: root.width < 800px ? root.width : 400px;
         x: root.width - self.width;
         y: 40px;
         height: root.height - 40px - root.bar-h;
-        tab <=> root.panel-tab;
-        sub-tracks: root.sub-tracks; audio-tracks: root.audio-tracks;
-        audio-devices: root.audio-devices; chapters: root.chapters; chapter-thumbs: root.chapter-thumbs; chapter-has-thumb: root.chapter-has-thumb;
-        chapters-refresh => { root.chapters-refresh(); }
-        ab-state: Playback.ab-state; sleep-state: root.sleep-state; hwdec: root.hwdec;
-        set-prop(n, v) => { root.set-prop(n, v); }
-        run(c) => { root.run(c); }
-        load-sub() => { root.load-sub(); }
-        sleep(m) => { root.sleep(m); }
-        bookmarks: root.bookmarks;
+        tab <=> Panel.panel-tab;
+        sub-tracks: Panel.sub-tracks; audio-tracks: Panel.audio-tracks;
+        audio-devices: Panel.audio-devices; chapters: Panel.chapters; chapter-thumbs: Panel.chapter-thumbs; chapter-has-thumb: Panel.chapter-has-thumb;
+        chapters-refresh => { Panel.chapters-refresh(); }
+        ab-state: Playback.ab-state; sleep-state: Panel.sleep-state; hwdec: Panel.hwdec;
+        set-prop(n, v) => { Panel.set-prop(n, v); }
+        run(c) => { Panel.run(c); }
+        load-sub() => { Panel.load-sub(); }
+        sleep(m) => { Panel.sleep(m); }
+        bookmarks: Panel.bookmarks;
         seek-to(k) => { root.seek(k.to-float()); }
-        add-bookmark() => { root.add-bookmark(); }
-        remove-bookmark() => { root.remove-bookmark(); }
-        chapter-times: root.chapter-times;
+        add-bookmark() => { Panel.add-bookmark(); }
+        remove-bookmark() => { Panel.remove-bookmark(); }
+        chapter-times: Panel.chapter-times;
         viz-modes: root.viz-modes; viz-mode: root.viz-mode;
         viz-select(i) => { root.viz-select(i); }
         lyrics-enabled: root.lyrics-enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: root.lyrics-source;
-        lyrics-offset-s: root.lyrics-offset; subs-offset-s: root.pv-sub-delay;
+        lyrics-offset-s: root.lyrics-offset; subs-offset-s: Panel.pv-sub-delay;
         lyrics-offset: root.lyrics-offset-label; lyrics-can-save: root.lyrics-can-save; lyrics-manual: root.lyrics-manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-pick-label: root.subs-pick-label; subs-sync: root.subs-sync;
         subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
         find-subs() => { root.add-subs(); }
         open-settings(c) => { root.settings-category = c; Overlays.settings-open = true; root.settings-refresh(c, "", false); }
-        queue: root.queue; playlists: root.playlists;
-        queue-play(i) => { root.queue-play(i); }
-        queue-move(i, d) => { root.queue-move(i, d); }
-        queue-remove(i) => { root.queue-remove(i); }
-        queue-add() => { root.queue-add(); }
-        queue-clear() => { root.queue-clear(); }
-        playlist-save(n) => { root.playlist-save(n); }
-        playlist-load(k) => { root.playlist-load(k); }
-        playlist-delete(k) => { root.playlist-delete(k); }
-        preset-name: root.preset-name;
-        library: root.panel-lib;
-        library-search(q) => { root.panel-lib-search(q); }
+        queue: Panel.queue; playlists: Panel.playlists;
+        queue-play(i) => { Panel.queue-play(i); }
+        queue-move(i, d) => { Panel.queue-move(i, d); }
+        queue-remove(i) => { Panel.queue-remove(i); }
+        queue-add() => { Panel.queue-add(); }
+        queue-clear() => { Panel.queue-clear(); }
+        playlist-save(n) => { Panel.playlist-save(n); }
+        playlist-load(k) => { Panel.playlist-load(k); }
+        playlist-delete(k) => { Panel.playlist-delete(k); }
+        preset-name: Panel.preset-name;
+        library: Panel.panel-lib;
+        library-search(q) => { Panel.panel-lib-search(q); }
         library-play(k) => { root.lib-open(k, "video"); }
         library-enqueue(k) => { root.lib-menu(k, "video", "enqueue"); }
-        sub-delay <=> root.pv-sub-delay;
-        sub-scale <=> root.pv-sub-scale;
-        sub-pos <=> root.pv-sub-pos;
-        audio-delay <=> root.pv-audio-delay;
-        boost <=> root.pv-boost;
-        rotate <=> root.pv-rotate;
-        zoom <=> root.pv-zoom;
-        panscan <=> root.pv-panscan;
-        brightness <=> root.pv-brightness;
-        contrast <=> root.pv-contrast;
-        saturation <=> root.pv-saturation;
-        gamma <=> root.pv-gamma;
-        speed <=> root.pv-speed;
-        save-preset() => { root.save-preset(); }
+        sub-delay <=> Panel.pv-sub-delay;
+        sub-scale <=> Panel.pv-sub-scale;
+        sub-pos <=> Panel.pv-sub-pos;
+        audio-delay <=> Panel.pv-audio-delay;
+        boost <=> Panel.pv-boost;
+        rotate <=> Panel.pv-rotate;
+        zoom <=> Panel.pv-zoom;
+        panscan <=> Panel.pv-panscan;
+        brightness <=> Panel.pv-brightness;
+        contrast <=> Panel.pv-contrast;
+        saturation <=> Panel.pv-saturation;
+        gamma <=> Panel.pv-gamma;
+        speed <=> Panel.pv-speed;
+        save-preset() => { Panel.save-preset(); }
         close() => { Overlays.panel-open = false; }
     }
 
@@ -1117,21 +1072,21 @@ export component AppWindow inherits Window {
                 height: 34px; padding-left: 12px; padding-right: 6px; spacing: 2px;
                 Text { text: root.mini-q-meta; color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; horizontal-stretch: 1; }
                 IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/sort.svg"); tip: "Sort by name"; clicked => { root.queue-sort(); } }
-                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/remove.svg"); tip: "Remove selected"; clicked => { if (root.mini-q-sel >= 0) { root.queue-remove(root.mini-q-sel); root.mini-q-sel = -1; } } }
-                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/add.svg"); tip: "Add files"; clicked => { root.queue-add(); } }
+                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/remove.svg"); tip: "Remove selected"; clicked => { if (root.mini-q-sel >= 0) { Panel.queue-remove(root.mini-q-sel); root.mini-q-sel = -1; } } }
+                IconButton { y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/add.svg"); tip: "Add files"; clicked => { Panel.queue-add(); } }
             }
             ScrollView {
                 vertical-stretch: 1;
                 VerticalLayout {
                     alignment: start; spacing: 0px; padding-left: 6px; padding-right: 6px;
-                    for it[i] in root.queue: Rectangle {
+                    for it[i] in Panel.queue: Rectangle {
                         height: 30px; border-radius: Metrics.radius-sm;
                         property <length> dy;
                         background: i == root.mini-q-sel ? Theme.bg-a1 : row-ta.has-hover ? Theme.hover : transparent;
                         row-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => { root.mini-q-sel = i; }
-                            double-clicked => { root.queue-play(i); }
+                            double-clicked => { Panel.queue-play(i); }
                         }
                         HorizontalLayout {
                             padding-left: 4px; padding-right: 8px; spacing: 8px;
@@ -1143,7 +1098,7 @@ export component AppWindow inherits Window {
                                     pointer-event(e) => {
                                         if (e.kind == PointerEventKind.up) {
                                             let d = round((self.mouse-y - self.pressed-y) / 30px);
-                                            if (d != 0) { root.queue-move(i, clamp(d, -i, root.queue.length - 1 - i)); }
+                                            if (d != 0) { Panel.queue-move(i, clamp(d, -i, Panel.queue.length - 1 - i)); }
                                         }
                                     }
                                 }

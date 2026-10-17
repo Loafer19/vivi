@@ -632,7 +632,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             a.set_lib_can_back(!l.back.is_empty());
             a.set_lib_can_forward(!l.fwd.is_empty());
             drop(l);
-            a.invoke_panel_lib_search("".into());
+            a.global::<crate::Panel>()
+                .invoke_panel_lib_search("".into());
         })
     };
 
@@ -754,7 +755,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     k => a.invoke_lib_navigate(k.into()),
                 },
                 "folder" | "group" => a.invoke_lib_navigate(key),
-                "playlist" => a.invoke_playlist_load(key),
+                "playlist" => a.global::<crate::Panel>().invoke_playlist_load(key),
                 _ => {
                     // Play the item and queue the rest of the current list after it.
                     p.open(&key);
@@ -885,7 +886,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     }
                 }
                 "delete" => {
-                    a.invoke_playlist_delete(key);
+                    a.global::<crate::Panel>().invoke_playlist_delete(key);
                     render();
                 }
                 "addpl" | "newpl" => {}
@@ -964,7 +965,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         // Compact library in the side panel.
         let w = app.as_weak();
         let lib = lib.clone();
-        app.on_panel_lib_search(move |q| {
+        app.global::<crate::Panel>().on_panel_lib_search(move |q| {
             let Some(a) = w.upgrade() else { return };
             let l = lib.borrow();
             let q = q.to_lowercase();
@@ -988,7 +989,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     selected: false,
                 })
                 .collect();
-            a.set_panel_lib(ModelRc::new(VecModel::from(items)));
+            a.global::<crate::Panel>()
+                .set_panel_lib(ModelRc::new(VecModel::from(items)));
         });
     }
 
