@@ -1360,7 +1360,8 @@ fn bar_action(a: &AppWindow, p: &Player, id: &str) {
         }
         "snapshot" => {
             p.run("screenshot");
-            a.set_resume_text("Snapshot saved".into());
+            a.global::<crate::Notices>()
+                .set_resume_text("Snapshot saved".into());
         }
         "repeat" => {
             let on = !a.global::<crate::Playback>().get_repeat_on();
@@ -1877,7 +1878,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 .insert(key.clone(), current_preset(&p));
             save();
             refresh();
-            a.set_resume_text(format!("Preset saved for “{key}”").into());
+            a.global::<crate::Notices>()
+                .set_resume_text(format!("Preset saved for “{key}”").into());
             if log {
                 eprintln!("preset saved: {key} {:?}", cfg.borrow().presets.get(&key));
             }

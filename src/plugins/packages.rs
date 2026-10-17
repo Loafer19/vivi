@@ -709,13 +709,13 @@ fn toast(msg: &str) {
     let Some(a) = APP.with(|a| a.borrow().as_ref().and_then(|w| w.upgrade())) else {
         return;
     };
-    a.set_resume_text(msg.into());
+    a.global::<crate::Notices>().set_resume_text(msg.into());
     let w = a.as_weak();
     let m = msg.to_string();
     slint::Timer::single_shot(Duration::from_secs(6), move || {
         if let Some(a) = w.upgrade() {
-            if a.get_resume_text().as_str() == m {
-                a.set_resume_text("".into());
+            if a.global::<crate::Notices>().get_resume_text().as_str() == m {
+                a.global::<crate::Notices>().set_resume_text("".into());
             }
         }
     });

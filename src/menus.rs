@@ -564,7 +564,8 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "save-queue" => {
                 let name = queue_name();
                 a.global::<crate::Panel>().invoke_playlist_save(name.into());
-                a.set_resume_text("Saved the queue as a playlist".into());
+                a.global::<crate::Notices>()
+                    .set_resume_text("Saved the queue as a playlist".into());
             }
             "clear-queue" => a.global::<crate::Panel>().invoke_queue_clear(),
             "open-file" => a.invoke_open_file(),

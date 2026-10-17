@@ -821,7 +821,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         } else {
                             p.open(&path);
                         }
-                        a.set_resume_text(
+                        a.global::<crate::Notices>().set_resume_text(
                             format!("Added “{}” to the queue", name_of(&path)).into(),
                         );
                     }
@@ -908,7 +908,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         }
                         if let Some(to) = dlg.save_file() {
                             match std::fs::copy(&path, &to) {
-                                Ok(_) => a.set_resume_text(
+                                Ok(_) => a.global::<crate::Notices>().set_resume_text(
                                     format!("Exported to {}", to.display()).into(),
                                 ),
                                 Err(e) => eprintln!("vivi: export playlist: {e}"),
@@ -928,7 +928,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             .open(pl)
                             .and_then(|mut f| writeln!(f, "{path}"));
                         match res {
-                            Ok(()) => a.set_resume_text(
+                            Ok(()) => a.global::<crate::Notices>().set_resume_text(
                                 format!("Added to “{}”", store::display_name(pl)).into(),
                             ),
                             Err(e) => eprintln!("vivi: add to playlist: {e}"),

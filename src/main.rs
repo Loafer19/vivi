@@ -34,13 +34,13 @@ slint::include_modules!();
 
 /// Error toast of a network stream that failed to open (shown without media too).
 fn show_stream_error(app: &AppWindow, msg: &str) {
-    app.set_stream_error(msg.into());
+    app.global::<crate::Notices>().set_stream_error(msg.into());
     let w = app.as_weak();
     let m = msg.to_string();
     slint::Timer::single_shot(Duration::from_secs(6), move || {
         if let Some(a) = w.upgrade() {
-            if a.get_stream_error().as_str() == m {
-                a.set_stream_error("".into());
+            if a.global::<crate::Notices>().get_stream_error().as_str() == m {
+                a.global::<crate::Notices>().set_stream_error("".into());
             }
         }
     });
@@ -196,15 +196,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let path = player.get("path").unwrap_or_default();
                             load.start(&path);
                             if load.url().is_some() {
-                                a.set_stream_error("".into());
+                                a.global::<crate::Notices>().set_stream_error("".into());
                                 let t = player.get("media-title").unwrap_or_default();
-                                a.set_loading_name(loading::name_for(&path, &t).into());
+                                a.global::<crate::Notices>()
+                                    .set_loading_name(loading::name_for(&path, &t).into());
                             }
                         }
                         PlayerEvent::PlaybackRestart => load.restart(),
                         PlayerEvent::Buffering(b) => load.cache(b),
                         PlayerEvent::EndFile(err) => {
-                            let name = a.get_loading_name().to_string();
+                            let name = a.global::<crate::Notices>().get_loading_name().to_string();
                             if load.end(err).is_some() {
                                 let why = if last_err.is_empty() {
                                     "the stream did not respond".to_string()
@@ -262,8 +263,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 if was != (load.visible(), load.buffering()) {
-                    a.set_loading_show(load.visible());
-                    a.set_loading_buffering(load.buffering());
+                    a.global::<crate::Notices>()
+                        .set_loading_show(load.visible());
+                    a.global::<crate::Notices>()
+                        .set_loading_buffering(load.buffering());
                 }
             },
         );
@@ -1108,16 +1111,17 @@ fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
         if t > 5.0 {
             let s = t as i64;
             let msg = format!("Resumed from {}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60);
-            a.set_resume_offer(msg.as_str().into());
-            a.set_resume_text(msg.into());
+            a.global::<crate::Notices>()
+                .set_resume_offer(msg.as_str().into());
+            a.global::<crate::Notices>().set_resume_text(msg.into());
             let w = a.as_weak();
             slint::Timer::single_shot(Duration::from_secs(8), move || {
                 if let Some(a) = w.upgrade() {
-                    a.set_resume_text("".into());
+                    a.global::<crate::Notices>().set_resume_text("".into());
                 }
             });
         } else {
-            a.set_resume_text("".into());
+            a.global::<crate::Notices>().set_resume_text("".into());
         }
     });
 }
@@ -1206,16 +1210,16 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
     });
     let p = player.clone();
     let weak = app.as_weak();
-    app.on_start_over(move || {
+    app.global::<crate::Notices>().on_start_over(move || {
         p.seek_abs(0.0);
         if let Some(a) = weak.upgrade() {
-            a.set_resume_text("".into());
+            a.global::<crate::Notices>().set_resume_text("".into());
         }
     });
     let weak = app.as_weak();
-    app.on_dismiss_resume(move || {
+    app.global::<crate::Notices>().on_dismiss_resume(move || {
         if let Some(a) = weak.upgrade() {
-            a.set_resume_text("".into());
+            a.global::<crate::Notices>().set_resume_text("".into());
         }
     });
     // Save the resume position periodically so a crash or kill keeps it.

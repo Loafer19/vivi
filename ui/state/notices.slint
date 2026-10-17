@@ -1,0 +1,11 @@
+// Core notices: the bottom toast / resume prompt (Start over, dismiss), the network stream loading spinner and the stream error banner.
+export global Notices {
+    in-out property <string> resume-text;
+    in-out property <string> resume-offer;
+    in-out property <bool> loading-show;
+    in-out property <bool> loading-buffering;
+    in-out property <string> loading-name;
+    in-out property <string> stream-error;
+    callback start-over();
+    callback dismiss-resume();
+}

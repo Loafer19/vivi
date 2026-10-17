@@ -668,13 +668,13 @@ pub fn mpv_log(prefix: &str, text: &str) {
 
 /// Show `msg` in the player toast for 4 s.
 pub fn toast(app: &AppWindow, msg: &str) {
-    app.set_resume_text(msg.into());
+    app.global::<crate::Notices>().set_resume_text(msg.into());
     let w = app.as_weak();
     let m = msg.to_string();
     slint::Timer::single_shot(Duration::from_secs(4), move || {
         if let Some(a) = w.upgrade() {
-            if a.get_resume_text().as_str() == m {
-                a.set_resume_text("".into());
+            if a.global::<crate::Notices>().get_resume_text().as_str() == m {
+                a.global::<crate::Notices>().set_resume_text("".into());
             }
         }
     });

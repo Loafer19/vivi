@@ -30,9 +30,10 @@ import { Subtitles } from "state/subtitles.slint";
 import { MusicDialogState, MdCaps } from "state/music-dialog.slint";
 import { TagReview } from "state/tag-review.slint";
 import { NowPlaying } from "state/now-playing.slint";
+import { Notices } from "state/notices.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -348,10 +349,6 @@ export component AppWindow inherits Window {
     // Characters per karaoke row, for wrapping the word-timed current line.
     out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
     // Network stream loading overlay (core, see loading.rs).
-    in property <bool> loading-show;
-    in property <bool> loading-buffering;
-    in property <string> loading-name;
-    in-out property <string> stream-error;
     // Now-playing card for audio-only network streams (Network Streams plugin).
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
@@ -379,11 +376,7 @@ export component AppWindow inherits Window {
         : Overlays.library-open && Playback.has-media ? Overlay.library
         : Overlays.karaoke-open && Playback.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
         : Overlay.none;
-    in property <string> resume-text;
     // Only the resume message (this text) offers "Start over"; other toasts just have OK.
-    in property <string> resume-offer;
-    callback start-over();
-    callback dismiss-resume();
 
     // Side-panel slider values (synced from mpv so presets/defaults show up)
 
@@ -674,7 +667,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Network stream loading spinner / error ----------
-    if root.loading-show && !root.mini: Rectangle {
+    if Notices.loading-show && !root.mini: Rectangle {
         background: transparent;
         VerticalLayout {
             alignment: center; spacing: 14px;
@@ -687,21 +680,21 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-            Text { text: root.loading-buffering ? "Buffering…" : "Opening…"; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-alignment: center; }
-            Text { text: root.loading-name; color: Theme.fg-1; font-size: Metrics.font-h3; horizontal-alignment: center; overflow: elide; }
+            Text { text: Notices.loading-buffering ? "Buffering…" : "Opening…"; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-alignment: center; }
+            Text { text: Notices.loading-name; color: Theme.fg-1; font-size: Metrics.font-h3; horizontal-alignment: center; overflow: elide; }
         }
     }
-    if root.stream-error != "": Rectangle {
+    if Notices.stream-error != "": Rectangle {
         width: min(se.preferred-width + 40px, root.width - 32px); height: 48px;
         x: (root.width - self.width) / 2;
         y: root.height - root.bar-h - self.height - 16px;
         border-radius: Metrics.radius-xxl; background: Theme.bar;
-        se := Text { text: root.stream-error; color: Theme.err; font-size: Metrics.font-base; vertical-alignment: center; horizontal-alignment: center; overflow: elide; }
-        TouchArea { clicked => { root.stream-error = ""; } }
+        se := Text { text: Notices.stream-error; color: Theme.err; font-size: Metrics.font-base; vertical-alignment: center; horizontal-alignment: center; overflow: elide; }
+        TouchArea { clicked => { Notices.stream-error = ""; } }
     }
 
     // ---------- Resume toast ----------
-    if Playback.has-media && root.resume-text != "": Rectangle {
+    if Playback.has-media && Notices.resume-text != "": Rectangle {
         width: toast.preferred-width; height: 52px;
         x: (root.width - self.width) / 2;
         y: root.height - root.bar-h - self.height - 16px;
@@ -709,18 +702,18 @@ export component AppWindow inherits Window {
         background: Theme.bar;
         toast := HorizontalLayout {
             padding-left: 20px; padding-right: 10px; spacing: 24px;
-            Text { text: root.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
+            Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
             HorizontalLayout {
                 spacing: 10px; padding-top: 10px; padding-bottom: 10px;
-                if root.resume-offer != "" && root.resume-offer == root.resume-text: Rectangle {
+                if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
                     width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
                     so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { mouse-cursor: pointer; clicked => { root.start-over(); } }
+                    TouchArea { mouse-cursor: pointer; clicked => { Notices.start-over(); } }
                 }
                 Rectangle {
                     width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;
                     Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
-                    TouchArea { mouse-cursor: pointer; clicked => { root.dismiss-resume(); } }
+                    TouchArea { mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
                 }
             }
         }
