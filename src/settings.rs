@@ -1291,7 +1291,7 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
     a.set_bar_items(strings(t.iter().cloned()));
     a.set_bar_cum(ModelRc::new(VecModel::from(cum)));
     a.set_bar_slots(used);
-    a.set_bar_style(c.interface.bar_style.clone().into());
+    a.set_bar_style(bar_style(&c.interface.bar_style));
     a.set_bar_styles(strings(config::BAR_STYLES));
     a.set_profile(c.interface.profile.clone().into());
     a.set_customize_available(strings(
@@ -1839,6 +1839,16 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 eprintln!("preset saved: {key} {:?}", cfg.borrow().presets.get(&key));
             }
         });
+    }
+}
+
+/// Config bar style name ("Compact", "Classic", …) as the typed UI state.
+fn bar_style(s: &str) -> crate::BarStyle {
+    match config::bar_style_name(s) {
+        "Classic" => crate::BarStyle::Classic,
+        "Waveform" => crate::BarStyle::Waveform,
+        "Plain" => crate::BarStyle::Plain,
+        _ => crate::BarStyle::Compact,
     }
 }
 

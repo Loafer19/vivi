@@ -2,6 +2,7 @@
 import { Theme, Metrics, Icon } from "core/theme.slint";
 import { Modal } from "core/modal.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
+import { BarStyle, Bars } from "core/types.slint";
 
 export global Tools {
     public pure function icon(id: string) -> image {
@@ -120,7 +121,7 @@ component Zone inherits Rectangle {
 export component CustomizeDialog inherits Modal {
     in property <[string]> items;
     in property <[string]> styles;
-    in property <string> bar-style;
+    in property <BarStyle> bar-style;
     callback pick-style(string);
     in property <[string]> available;
     in property <[string]> profiles;
@@ -161,12 +162,12 @@ export component CustomizeDialog inherits Modal {
         HorizontalLayout {
             spacing: 8px; alignment: start;
             Text { text: "Progress bar"; color: Theme.fg-2; vertical-alignment: center; }
-            for st in root.styles: Rectangle {
+            for st[si] in root.styles: Rectangle {
                 height: 30px; width: stt.preferred-width + 22px; border-radius: Metrics.radius-md;
-                background: st == root.bar-style ? Theme.accent : (sta.has-hover ? Theme.divider : Theme.bg-a1);
+                background: si == Bars.index(root.bar-style) ? Theme.accent : (sta.has-hover ? Theme.divider : Theme.bg-a1);
                 stt := Text {
                     text: st == "Compact" ? "Compact inline" : st == "Classic" ? "Classic (full width on top)" : st == "Waveform" ? "Waveform (audio)" : "Plain thin";
-                    color: st == root.bar-style ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
+                    color: si == Bars.index(root.bar-style) ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
                 }
                 sta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-style(st); } }
             }

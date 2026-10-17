@@ -1,0 +1,48 @@
+// Typed UI state shared by Rust and Slint, so views never compare display
+// strings or magic numbers.
+import { Metrics } from "theme.slint";
+
+// Progress bar style (config `[interface] bar_style`, see src/config.rs).
+export enum BarStyle { compact, classic, waveform, plain }
+
+// Geometry of the bottom control bar for one style.
+export struct BarMetrics {
+    classic: bool,       // full-width seekbar on its own row above the buttons
+    boxed: bool,         // seek track drawn as a dark box (all but Plain)
+    height: length,      // bar height
+    pad-x-left: length,
+    pad-x-right: length,
+    pad-top: length,
+    pad-bottom: length,
+    gap: length,         // spacing between bar items
+    reserve: length,     // width kept for times / seekbar before slots overflow
+    slot: length,        // width of one button slot
+    volume-min-window: length, // window width from which the volume wedge shows
+}
+
+export global Bars {
+    pure public function metrics(s: BarStyle) -> BarMetrics {
+        if (s == BarStyle.classic) {
+            return { classic: true, boxed: true, height: Metrics.bar-h-classic, pad-x-left: 20px, pad-x-right: 20px, pad-top: 4px, pad-bottom: 8px,
+                gap: 6px, reserve: 300px, slot: 40px, volume-min-window: 900px };
+        }
+        return { classic: false, boxed: s != BarStyle.plain, height: Metrics.bar-h, pad-x-left: 10px, pad-x-right: 8px, pad-top: 4px, pad-bottom: 4px,
+            gap: 2px, reserve: 460px, slot: 32px, volume-min-window: 820px };
+    }
+    // Position in the Customize style list (same order as config::BAR_STYLES).
+    pure public function index(s: BarStyle) -> int {
+        s == BarStyle.compact ? 0 : s == BarStyle.classic ? 1 : s == BarStyle.waveform ? 2 : 3
+    }
+}
+
+// Side panel tabs.
+export enum PanelTab { subtitles, audio, video, playback, queue, library, bookmarks, chapters }
+
+// Overlays, top-most first after `none` (see src/overlays.rs).
+export enum Overlay {
+    none, menu, shortcuts, info, onboarding, customize, tag-review, lyrics-search,
+    music-dialog, subtitles, qr, settings, new-playlist, network, side-panel, library, karaoke
+}
+
+// Outcome of one file in the tag review.
+export enum TagStatus { tagged, renamed, skipped, failed, undone }

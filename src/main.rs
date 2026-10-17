@@ -819,7 +819,7 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         app.invoke_settings_refresh(c, "".into(), false);
     }
     if let Ok(t) = std::env::var("VIVI_PANEL") {
-        app.set_panel_tab(t.parse().unwrap_or(0));
+        app.set_panel_tab(panel_tab(t.parse().unwrap_or(0)));
         app.set_panel_open(true);
         if let Some(y) = std::env::var("VIVI_PANEL_SCROLL")
             .ok()
@@ -1463,5 +1463,19 @@ mod hms_tests {
     fn formats_hours() {
         assert_eq!(super::hms(0.0), "00:00:00");
         assert_eq!(super::hms(3725.9), "01:02:05");
+    }
+}
+
+/// `VIVI_PANEL=<n>` (screenshot helper): the side panel tab by its old number.
+fn panel_tab(n: u8) -> PanelTab {
+    match n {
+        1 => PanelTab::Audio,
+        2 => PanelTab::Video,
+        3 => PanelTab::Playback,
+        4 => PanelTab::Queue,
+        5 => PanelTab::Library,
+        6 => PanelTab::Bookmarks,
+        7 => PanelTab::Chapters,
+        _ => PanelTab::Subtitles,
     }
 }

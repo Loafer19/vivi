@@ -518,6 +518,15 @@ pub const CORE_ITEMS: [&str; 7] = ["prev", "play", "next", "time", "seek", "dura
 
 pub const BAR_STYLES: [&str; 4] = ["Compact", "Classic", "Waveform", "Plain"];
 
+/// The canonical [`BAR_STYLES`] name for a config value, ignoring case
+/// ("classic" → "Classic"); unknown values fall back to "Compact".
+pub fn bar_style_name(s: &str) -> &'static str {
+    BAR_STYLES
+        .into_iter()
+        .find(|b| b.eq_ignore_ascii_case(s.trim()))
+        .unwrap_or("Compact")
+}
+
 pub const PROFILES: [&str; 3] = ["Minimal", "Default", "Power"];
 
 /// Built-in toolbar layouts.
@@ -630,9 +639,7 @@ pub fn migrate_toolbar(i: &mut Interface) {
     }
     i.skip_buttons = None;
     i.waveform = None;
-    if !BAR_STYLES.contains(&i.bar_style.as_str()) {
-        i.bar_style = "Compact".into();
-    }
+    i.bar_style = bar_style_name(&i.bar_style).into();
 }
 
 #[cfg(test)]
@@ -672,5 +679,19 @@ mod toolbar_tests {
         migrate_toolbar(&mut d);
         assert_eq!(d.toolbar, profile_toolbar("Default").unwrap());
         assert_eq!(d.bar_style, "Waveform");
+    }
+
+    #[test]
+    fn bar_style_names_are_case_insensitive() {
+        assert_eq!(bar_style_name("classic"), "Classic");
+        assert_eq!(bar_style_name(" PLAIN "), "Plain");
+        assert_eq!(bar_style_name("Waveform"), "Waveform");
+        assert_eq!(bar_style_name("bogus"), "Compact");
+        let mut i = Interface {
+            bar_style: "plain".into(),
+            ..Default::default()
+        };
+        migrate_toolbar(&mut i);
+        assert_eq!(i.bar_style, "Plain");
     }
 }

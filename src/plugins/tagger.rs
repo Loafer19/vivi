@@ -1771,7 +1771,7 @@ impl AutoTagger {
                     .to_string_lossy()
                     .as_ref()
                     .into(),
-                status: r.status.into(),
+                status: tag_status(r.status),
                 detail: r.detail.as_str().into(),
                 changes: ModelRc::new(VecModel::from(
                     r.changes
@@ -2388,6 +2388,17 @@ impl Plugin for AutoTagger {
                 }
             }
         }
+    }
+}
+
+/// The review's status word as the typed UI state.
+fn tag_status(s: &str) -> crate::TagStatus {
+    match s {
+        "tagged" => crate::TagStatus::Tagged,
+        "renamed" => crate::TagStatus::Renamed,
+        "skipped" => crate::TagStatus::Skipped,
+        "undone" => crate::TagStatus::Undone,
+        _ => crate::TagStatus::Failed,
     }
 }
 

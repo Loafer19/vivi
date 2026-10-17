@@ -32,6 +32,12 @@ downloadable package (`plugins/scrobbler`). Scripts cannot draw Slint widgets, s
 would mean either a worse UI (mpv OSD text) or a declarative-UI host API, which is the
 WASM step below. They stay built in until that exists.
 
+Built-in plugins hand the UI typed state rather than display strings: the tag review
+sends a `TagStatus` per file (tagged / renamed / skipped / failed / undone), lyrics a
+`LyricsState` (found / searching / missing) and numeric offsets. Shared enums live in
+`ui/core/types.slint` (also `BarStyle`, `PanelTab`, `Overlay`); Rust maps its own values
+onto them at the boundary.
+
 ### Music plugins (#63, #65, #69, #70)
 
 | Plugin | Where | Why | Keys |

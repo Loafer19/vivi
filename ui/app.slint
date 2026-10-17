@@ -16,9 +16,10 @@ import { VizView, VizDropdown } from "viz.slint";
 import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsState, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
 import { Modal } from "core/modal.slint";
 import { IconButton, PrimaryButton, ButtonSize } from "core/buttons.slint";
+import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -438,7 +439,26 @@ export component AppWindow inherits Window {
     // Side panel
     in-out property <bool> panel-open: false;
     in-out property <length> panel-scroll;
-    in-out property <int> panel-tab: 0;
+    in-out property <PanelTab> panel-tab: PanelTab.subtitles;
+    // The overlay Esc closes (top-most open one); same conditions as each overlay's `if` below.
+    out property <Overlay> top-overlay:
+        root.menu-kind != "" ? Overlay.menu
+        : root.shortcuts-open ? Overlay.shortcuts
+        : root.info-open ? Overlay.info
+        : root.onboarding-open ? Overlay.onboarding
+        : root.customize-open ? Overlay.customize
+        : root.tr-open ? Overlay.tag-review
+        : root.ls-open ? Overlay.lyrics-search
+        : root.md-open ? Overlay.music-dialog
+        : root.subs-open ? Overlay.subtitles
+        : root.qr-open ? Overlay.qr
+        : root.settings-open ? Overlay.settings
+        : root.np-open ? Overlay.new-playlist
+        : root.network-open ? Overlay.network
+        : root.panel-open && root.has-media && !root.mini ? Overlay.side-panel
+        : root.library-open && root.has-media ? Overlay.library
+        : root.karaoke-open && root.has-media && !root.mini && !root.library-open ? Overlay.karaoke
+        : Overlay.none;
     in property <[Item]> sub-tracks;
     in property <[Item]> audio-tracks;
     in property <[Item]> audio-devices;
@@ -488,7 +508,7 @@ export component AppWindow inherits Window {
     // Cumulative ~32 px slots of foldable items (-1 = always shown) and their total.
     in property <[int]> bar-cum;
     in property <int> bar-slots;
-    in property <string> bar-style: "Compact";
+    in property <BarStyle> bar-style: BarStyle.compact;
     in property <[string]> bar-styles;
     callback customize-style(string);
     pure function is-core(id: string) -> bool {
@@ -508,12 +528,12 @@ export component AppWindow inherits Window {
     callback customize-profile(string);
     callback customize-done(bool);
     public function bar-act(id: string) {
-        if (id == "queue") { root.open-panel(4); }
-        else if (id == "subtitles") { root.open-panel(0); }
-        else if (id == "audio") { root.open-panel(1); }
-        else if (id == "video") { root.open-panel(2); }
-        else if (id == "speed") { root.open-panel(3); }
-        else if (id == "chapters") { root.open-panel(7); root.chapters-refresh(); }
+        if (id == "queue") { root.open-panel(PanelTab.queue); }
+        else if (id == "subtitles") { root.open-panel(PanelTab.subtitles); }
+        else if (id == "audio") { root.open-panel(PanelTab.audio); }
+        else if (id == "video") { root.open-panel(PanelTab.video); }
+        else if (id == "speed") { root.open-panel(PanelTab.playback); }
+        else if (id == "chapters") { root.open-panel(PanelTab.chapters); root.chapters-refresh(); }
         else if (id == "mute") { root.toggle-mute(); }
         else if (id == "fullscreen") { root.toggle-fullscreen(); }
         else if (id == "bookmark") { root.add-bookmark(); }
@@ -523,15 +543,15 @@ export component AppWindow inherits Window {
     // Responsive bottom bar: how many items fit on each side of the play controls.
     // Items are ~40px wide; the left side also holds the time display. The rest go to "⋯".
     // Foldable slots that fit beside the transport, times and a 200 px seekbar.
-    property <int> bar-fit: max(0, floor((root.width - (root.bar-classic ? 300px : 460px)) / (root.bar-classic ? 40px : 32px)));
-    property <bool> bar-has-volume: root.width >= (root.bar-classic ? 900px : 820px);
+    property <int> bar-fit: max(0, floor((root.width - root.bar.reserve) / root.bar.slot));
+    property <bool> bar-has-volume: root.width >= root.bar.volume-min-window;
     function bar-active(id: string) -> bool {
-        return (id == "queue" && root.panel-open && root.panel-tab == 4)
-            || (id == "subtitles" && root.panel-open && root.panel-tab == 0)
-            || (id == "audio" && root.panel-open && root.panel-tab == 1)
-            || (id == "video" && root.panel-open && root.panel-tab == 2)
-            || (id == "speed" && root.panel-open && root.panel-tab == 3)
-            || (id == "chapters" && root.panel-open && root.panel-tab == 7)
+        return (id == "queue" && root.panel-open && root.panel-tab == PanelTab.queue)
+            || (id == "subtitles" && root.panel-open && root.panel-tab == PanelTab.subtitles)
+            || (id == "audio" && root.panel-open && root.panel-tab == PanelTab.audio)
+            || (id == "video" && root.panel-open && root.panel-tab == PanelTab.video)
+            || (id == "speed" && root.panel-open && root.panel-tab == PanelTab.playback)
+            || (id == "chapters" && root.panel-open && root.panel-tab == PanelTab.chapters)
             || (id == "repeat" && root.repeat-on) || (id == "shuffle" && root.shuffle-on)
             || (id == "settings" && root.settings-open);
     }
@@ -682,15 +702,16 @@ export component AppWindow inherits Window {
     in property <float> range-a: -1;
     in property <float> range-b: -1;
     in property <string> range-label;
-    property <bool> bar-classic: root.bar-style == "Classic";
-    out property <length> bar-h: root.bar-classic ? 72px : 36px;
+    property <BarMetrics> bar: Bars.metrics(root.bar-style);
+    property <bool> bar-classic: root.bar.classic;
+    out property <length> bar-h: root.bar.height;
     in property <string> sleep-state: "";
     in property <string> hwdec: "auto-safe";
     callback set-prop(string, string);
     callback run(string);
     callback load-sub();
     callback sleep(int);
-    function open-panel(t: int) {
+    function open-panel(t: PanelTab) {
         if (root.panel-open && root.panel-tab == t) { root.panel-open = false; }
         else { root.panel-tab = t; root.panel-open = true; }
     }
@@ -971,8 +992,8 @@ export component AppWindow inherits Window {
         TouchArea { } // swallow clicks so they don't toggle play
         Rectangle { y: 0; height: 1px; background: Theme.bar-line; }
         VerticalLayout {
-            padding-left: root.bar-classic ? 20px : 10px; padding-right: root.bar-classic ? 20px : 8px;
-            padding-top: root.bar-classic ? 4px : 4px; padding-bottom: root.bar-classic ? 8px : 4px;
+            padding-left: root.bar.pad-x-left; padding-right: root.bar.pad-x-right;
+            padding-top: root.bar.pad-top; padding-bottom: root.bar.pad-bottom;
             spacing: 2px;
             if root.bar-classic: SeekBar {
                 position: root.position; duration: root.duration;
@@ -983,7 +1004,7 @@ export component AppWindow inherits Window {
                 seek(t) => { root.seek(t); fs.focus(); }
             }
             HorizontalLayout {
-                spacing: root.bar-classic ? 6px : 2px;
+                spacing: root.bar.gap;
                 for id[i] in root.bar-items: HorizontalLayout {
                     property <bool> on: i >= root.bar-cum.length || root.bar-cum[i] < 0 || root.bar-cum[i] <= root.bar-fit;
                     property <bool> ab: root.ab-a >= 0 && root.ab-b >= 0;
@@ -1022,7 +1043,7 @@ export component AppWindow inherits Window {
                     if id == "seek" && !root.bar-classic: SeekBar {
                         horizontal-stretch: 1;
                         height: root.wave-peaks.length > 0 ? 24px : 18px;
-                        boxed: root.bar-style != "Plain";
+                        boxed: root.bar.boxed;
                         track-h: 4px;
                         position: root.position; duration: root.duration;
                         frames: root.preview-frames; peaks: root.wave-peaks;

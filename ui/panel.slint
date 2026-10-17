@@ -9,6 +9,7 @@ import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 import { Format } from "core/format.slint";
 import { SecondaryButton, ButtonSize } from "core/buttons.slint";
 import { SectionHeader, ValueChip, ListRow } from "core/rows.slint";
+import { PanelTab } from "core/types.slint";
 
 export struct Item { key: string, label: string, selected: bool }
 
@@ -220,7 +221,7 @@ component TimeRow inherits Rectangle {
 
 
 export component SidePanel inherits Rectangle {
-    in-out property <int> tab: 0;
+    in-out property <PanelTab> tab: PanelTab.subtitles;
     in-out property <length> scroll-y;
     in property <[Item]> sub-tracks;
     in property <[Item]> audio-tracks;
@@ -311,7 +312,7 @@ export component SidePanel inherits Rectangle {
     in-out property <string> stereo: "Auto";
     in-out property <string> hdr: "Auto";
     property <string> sleep-choice: root.sleep-state == "" ? "Off" : root.sleep-state;
-    property <bool> settings-group: root.tab <= 3;
+    property <bool> settings-group: root.tab == PanelTab.subtitles || root.tab == PanelTab.audio || root.tab == PanelTab.video || root.tab == PanelTab.playback;
     property <bool> narrow: root.width < 360px;
 
     width: 400px;
@@ -324,14 +325,14 @@ export component SidePanel inherits Rectangle {
             height: 44px; background: Theme.bg-b1.with-alpha(0.7);
             HorizontalLayout {
                 padding-left: 4px; padding-right: 4px;
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == 3; clicked => { root.tab = 3; } }
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == 2; clicked => { root.tab = 2; } }
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == 1; clicked => { root.tab = 1; } }
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/subtitles.svg"); label: "Subtitles"; active: root.tab == 0; clicked => { root.tab = 0; } }
-                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == 4; clicked => { root.tab = 4; } }
-                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/bookmark.svg"); label: "Bookmarks"; active: root.tab == 6; clicked => { root.tab = 6; } }
-                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/chapters.svg"); label: "Chapters"; active: root.tab == 7; clicked => { root.tab = 7; root.chapters-refresh(); } }
-                if !root.settings-group: Tab { compact: true; icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == 5; clicked => { root.tab = 5; root.library-search(""); } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == PanelTab.playback; clicked => { root.tab = PanelTab.playback; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == PanelTab.video; clicked => { root.tab = PanelTab.video; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == PanelTab.audio; clicked => { root.tab = PanelTab.audio; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/subtitles.svg"); label: "Subtitles"; active: root.tab == PanelTab.subtitles; clicked => { root.tab = PanelTab.subtitles; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == PanelTab.queue; clicked => { root.tab = PanelTab.queue; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/bookmark.svg"); label: "Bookmarks"; active: root.tab == PanelTab.bookmarks; clicked => { root.tab = PanelTab.bookmarks; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/chapters.svg"); label: "Chapters"; active: root.tab == PanelTab.chapters; clicked => { root.tab = PanelTab.chapters; root.chapters-refresh(); } }
+                if !root.settings-group: Tab { compact: true; icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == PanelTab.library; clicked => { root.tab = PanelTab.library; root.library-search(""); } }
                 Rectangle {
                     width: 32px;
                     Icon { source: @image-url("../assets/icons/close.svg"); width: 16px; height: 16px; tint: Theme.fg-a3; }
@@ -346,7 +347,7 @@ export component SidePanel inherits Rectangle {
             VerticalLayout {
                 spacing: 14px; padding: 16px; padding-right: 20px; alignment: start;
                 // ---- Playback ----
-                if root.tab == 3: VerticalLayout {
+                if root.tab == PanelTab.playback: VerticalLayout {
                     spacing: 6px; alignment: start;
                     Group { first: true; title: "Speed";
                         HorizontalLayout { spacing: 6px;
@@ -407,7 +408,7 @@ export component SidePanel inherits Rectangle {
                     AdvancedLink { clicked => { root.open-settings(4); } }
                 }
                 // ---- Video ----
-                if root.tab == 2: VerticalLayout {
+                if root.tab == PanelTab.video: VerticalLayout {
                     spacing: 6px; alignment: start;
                     Group { first: true; title: "Geometry";
                         Text { text: "Flip"; color: Theme.fg-a1; font-size: Metrics.font-md; }
@@ -447,7 +448,7 @@ export component SidePanel inherits Rectangle {
                     AdvancedLink { clicked => { root.open-settings(5); } }
                 }
                 // ---- Audio ----
-                if root.tab == 1: VerticalLayout {
+                if root.tab == PanelTab.audio: VerticalLayout {
                     spacing: 6px; alignment: start;
                     Group { first: true; title: "Track";
                         OptionList { items: root.audio-tracks; empty-text: "No audio tracks"; pick(it) => { root.set-prop("aid", it.key); } }
@@ -479,7 +480,7 @@ export component SidePanel inherits Rectangle {
                     AdvancedLink { clicked => { root.open-settings(6); } }
                 }
                 // ---- Subtitles ----
-                if root.tab == 0: VerticalLayout {
+                if root.tab == PanelTab.subtitles: VerticalLayout {
                     spacing: 6px; alignment: start;
                     Group { first: true; title: "Track";
                         OptionList {
@@ -542,7 +543,7 @@ export component SidePanel inherits Rectangle {
                     AdvancedLink { clicked => { root.open-settings(7); } }
                 }
                 // ---- Bookmarks ----
-                if root.tab == 6: VerticalLayout {
+                if root.tab == PanelTab.bookmarks: VerticalLayout {
                     spacing: 4px; alignment: start;
                     ListHeader {
                         text: root.bookmarks.length + (root.bookmarks.length == 1 ? " Bookmark" : " Bookmarks");
@@ -556,7 +557,7 @@ export component SidePanel inherits Rectangle {
                     }
                 }
                 // ---- Chapters ----
-                if root.tab == 7: VerticalLayout {
+                if root.tab == PanelTab.chapters: VerticalLayout {
                     spacing: 2px; alignment: start;
                     if root.chapters.length == 0: Text { text: "No chapters in this file."; color: Theme.fg-a3; }
                     for it[i] in root.chapters: crow := Rectangle {
@@ -579,7 +580,7 @@ export component SidePanel inherits Rectangle {
                     }
                 }
                 // ---- Compact library ----
-                if root.tab == 5: VerticalLayout {
+                if root.tab == PanelTab.library: VerticalLayout {
                     spacing: 10px; alignment: start;
                     TextField { placeholder: "Search library"; edited(t) => { root.library-search(t); } }
                     if root.library.length == 0: Text { text: "No matching files. Folders are set in Settings → Library."; color: Theme.fg-a3; wrap: word-wrap; }
@@ -597,7 +598,7 @@ export component SidePanel inherits Rectangle {
                     }
                 }
                 // ---- Queue & playlists (Figma "Miniplayer", "playlist", "new playlist") ----
-                if root.tab == 4: VerticalLayout {
+                if root.tab == PanelTab.queue: VerticalLayout {
                     spacing: 14px; alignment: start;
                     ListHeader {
                         text: root.queue.length + (root.queue.length == 1 ? " Item" : " Items") + " in Queue";

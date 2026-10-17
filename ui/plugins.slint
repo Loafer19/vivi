@@ -8,6 +8,7 @@ import { Dropdown, TextField } from "core/controls.slint";
 import { Modal } from "core/modal.slint";
 import { FlatButton, PrimaryButton } from "core/buttons.slint";
 import { Badge, BadgeTone } from "core/rows.slint";
+import { TagStatus } from "core/types.slint";
 
 // "Skip intro" / "Skip credits" pill, bottom right above the controls.
 export component SkipButton inherits Rectangle {
@@ -602,7 +603,7 @@ export component NowPlayingCard inherits Rectangle {
 
 // ---------- Auto-tagger review (src/plugins/tagger.rs) ----------
 export struct TagField { name: string, old: string, new: string, changed: bool, checked: bool, source: string, alts: int }  // source: where `new` comes from; alts: other sources' values (⇄ cycles)
-export struct TagResult { name: string, status: string, detail: string, changes: [string], can-undo: bool }  // status: tagged | renamed | skipped | failed | undone
+export struct TagResult { name: string, status: TagStatus, detail: string, changes: [string], can-undo: bool }  // status: tagged | renamed | skipped | failed | undone
 export struct TagCover { img: image, label: string, info: string }
 export struct TagFile {
     name: string, source: string, confidence: int, note: string, checked: bool, fields: [TagField],
@@ -787,18 +788,18 @@ export component TagReviewDialog inherits Modal {
                 }
                 for r[ri] in root.results: Rectangle {
                     border-radius: Metrics.radius-lg; background: Theme.bg-a3; border-width: 1px;
-                    border-color: r.status == "failed" ? Theme.err-bg.with-alpha(0.5) : Theme.bg-a1;
-                    opacity: r.status == "skipped" || r.status == "undone" ? 0.7 : 1;
+                    border-color: r.status == TagStatus.failed ? Theme.err-bg.with-alpha(0.5) : Theme.bg-a1;
+                    opacity: r.status == TagStatus.skipped || r.status == TagStatus.undone ? 0.7 : 1;
                     VerticalLayout {
                         padding: 12px; spacing: 4px;
                         HorizontalLayout {
                             spacing: 10px; height: 26px;
                             Rectangle {
                                 width: st.preferred-width + 16px; height: 20px; y: 3px; border-radius: self.height / 2;
-                                background: (r.status == "failed" ? Theme.err-bg : r.status == "skipped" || r.status == "undone" ? Theme.neutral-bg : r.status == "renamed" ? Theme.accent : Theme.ok-bg).with-alpha(0.25);
-                                st := Text { text: r.status == "tagged" ? "Tagged" : r.status == "renamed" ? "Tagged + renamed" : r.status == "skipped" ? "Skipped" : r.status == "undone" ? "Undone" : "Failed";
+                                background: (r.status == TagStatus.failed ? Theme.err-bg : r.status == TagStatus.skipped || r.status == TagStatus.undone ? Theme.neutral-bg : r.status == TagStatus.renamed ? Theme.accent : Theme.ok-bg).with-alpha(0.25);
+                                st := Text { text: r.status == TagStatus.tagged ? "Tagged" : r.status == TagStatus.renamed ? "Tagged + renamed" : r.status == TagStatus.skipped ? "Skipped" : r.status == TagStatus.undone ? "Undone" : "Failed";
                                     font-size: Metrics.font-xs; font-weight: 600; horizontal-alignment: center; vertical-alignment: center;
-                                    color: r.status == "failed" ? Theme.err : r.status == "skipped" || r.status == "undone" ? Theme.fg-a2 : r.status == "renamed" ? Theme.accent-bright : Theme.ok; }
+                                    color: r.status == TagStatus.failed ? Theme.err : r.status == TagStatus.skipped || r.status == TagStatus.undone ? Theme.fg-a2 : r.status == TagStatus.renamed ? Theme.accent-bright : Theme.ok; }
                             }
                             VerticalLayout { horizontal-stretch: 1; alignment: center;
                                 Text { text: r.name; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; overflow: elide; } }
