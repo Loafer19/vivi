@@ -1324,8 +1324,8 @@ impl Streams {
             && a.get_viz_audio()
             && path.contains("://");
         if !show {
-            if a.get_np_show() {
-                a.set_np_show(false);
+            if a.global::<crate::NowPlaying>().get_show() {
+                a.global::<crate::NowPlaying>().set_show(false);
             }
             return;
         }
@@ -1337,13 +1337,13 @@ impl Streams {
                 .filter(|s| s.url == path)
                 .or_else(|| self.list.iter().find(|s| s.url == path).cloned())
                 .or_else(|| known_station(&path));
-            a.set_np_has_logo(false);
+            a.global::<crate::NowPlaying>().set_has_logo(false);
             self.logo_rx = None;
             let name = st
                 .as_ref()
                 .map(|s| display_name(&s.name))
                 .unwrap_or_default();
-            a.set_np_station(name.into());
+            a.global::<crate::NowPlaying>().set_station(name.into());
             if let Some(logo) = st.map(|s| s.logo).filter(|l| l.starts_with("http")) {
                 let (tx, rx) = channel();
                 self.logo_rx = Some(rx);
@@ -1354,11 +1354,11 @@ impl Streams {
             }
         }
         let g = |k: &str| cx.player.get(k).filter(|v| !v.trim().is_empty());
-        if a.get_np_station().is_empty() {
+        if a.global::<crate::NowPlaying>().get_station().is_empty() {
             let n = g("metadata/by-key/icy-name")
                 .or_else(|| g("media-title"))
                 .unwrap_or_else(|| display_name(path.rsplit('/').next().unwrap_or(&path)));
-            a.set_np_station(n.into());
+            a.global::<crate::NowPlaying>().set_station(n.into());
         }
         let track = g("metadata/by-key/icy-title").unwrap_or_default();
         let mut info = Vec::new();
@@ -1374,10 +1374,11 @@ impl Streams {
         if let Some(r) = g("audio-params/samplerate").and_then(|r| r.parse::<f64>().ok()) {
             info.push(format!("{:.1} kHz", r / 1000.0));
         }
-        a.set_np_track(track.into());
-        a.set_np_info(info.join(" · ").into());
-        if !a.get_np_show() {
-            a.set_np_show(true);
+        a.global::<crate::NowPlaying>().set_track(track.into());
+        a.global::<crate::NowPlaying>()
+            .set_info(info.join(" · ").into());
+        if !a.global::<crate::NowPlaying>().get_show() {
+            a.global::<crate::NowPlaying>().set_show(true);
         }
     }
 }
@@ -1418,7 +1419,7 @@ impl Plugin for Streams {
     }
     fn disable(&mut self, cx: &Ctx) {
         self.rx = None;
-        cx.app.set_np_show(false);
+        cx.app.global::<crate::NowPlaying>().set_show(false);
         if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             cx.app.global::<crate::Overlays>().set_md_open(false);
         }
@@ -1819,10 +1820,10 @@ impl Plugin for Streams {
                 if url == self.np_url {
                     match path.and_then(|p| slint::Image::load_from_path(&p).ok()) {
                         Some(img) => {
-                            cx.app.set_np_logo(img);
-                            cx.app.set_np_has_logo(true);
+                            cx.app.global::<crate::NowPlaying>().set_logo(img);
+                            cx.app.global::<crate::NowPlaying>().set_has_logo(true);
                         }
-                        None => cx.app.set_np_has_logo(false),
+                        None => cx.app.global::<crate::NowPlaying>().set_has_logo(false),
                     }
                 }
             }

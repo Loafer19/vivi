@@ -29,9 +29,10 @@ import { Lyrics } from "state/lyrics.slint";
 import { Subtitles } from "state/subtitles.slint";
 import { MusicDialogState, MdCaps } from "state/music-dialog.slint";
 import { TagReview } from "state/tag-review.slint";
+import { NowPlaying } from "state/now-playing.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -352,12 +353,6 @@ export component AppWindow inherits Window {
     in property <string> loading-name;
     in-out property <string> stream-error;
     // Now-playing card for audio-only network streams (Network Streams plugin).
-    in property <bool> np-show;
-    in property <string> np-station;
-    in property <string> np-track;
-    in property <string> np-info;
-    in property <image> np-logo;
-    in property <bool> np-has-logo;
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
         if (Subtitles.plugin) { Overlays.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
@@ -529,14 +524,14 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Now playing card (audio-only network streams) ----------
-    if Playback.has-media && root.np-show && !root.mini: NowPlayingCard {
+    if Playback.has-media && NowPlaying.show && !root.mini: NowPlayingCard {
         // Centred in the space right of the docked library while that is shown.
         property <length> left: Overlays.library-open && !Library.lib-full && root.show-ui ? min(427px, root.width) : 0px;
         x: self.left + (root.width - self.left - self.width) / 2;
         y: root.viz-mode > 0 ? 64px : (root.height - self.height) / 2;
         width: min(460px, root.width - self.left - 48px);
-        station: root.np-station; track: root.np-track; info: root.np-info;
-        logo: root.np-logo; has-logo: root.np-has-logo;
+        station: NowPlaying.station; track: NowPlaying.track; info: NowPlaying.info;
+        logo: NowPlaying.logo; has-logo: NowPlaying.has-logo;
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
