@@ -553,6 +553,7 @@ export component AppWindow inherits Window {
         menu-request(kind, x, y, c) => { Menus.menu-request(kind, x, y, c); }
         open-file() => { Playback.open-file(); }
         open-network() => { Overlays.network-open = true; }
+        add-folders() => { Settings.category = 8; Overlays.settings-open = true; Settings.refresh(8, "", false); }
         clear-recent() => { Library.clear-recent(); }
         popout() => {
             if (Playback.has-media) { Library.full = !Library.full; } else { Playback.open-file(); }

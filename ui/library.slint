@@ -9,6 +9,7 @@ import { TextField } from "core/controls.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { ListRow } from "core/rows.slint";
+import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 
 export struct LibItem {
     key: string,
@@ -240,6 +241,7 @@ export component LibraryView inherits Rectangle {
     callback menu-request(string, length, length, string);
     callback open-file();
     callback open-network();
+    callback add-folders();
     callback clear-recent();
     callback popout();
     in-out property <string> query;
@@ -345,6 +347,12 @@ export component LibraryView inherits Rectangle {
                             HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: 72px; height: 72px; } }
                             Text { text: "Your library is empty"; color: Theme.fg-1; font-size: Metrics.font-xl; horizontal-alignment: center; }
                             Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; wrap: word-wrap; }
+                            HorizontalLayout {
+                                alignment: center; spacing: Metrics.space-2; padding-top: 6px;
+                                PrimaryButton { text: "Open file"; clicked => { root.open-file(); } }
+                                SecondaryButton { text: "Open stream"; clicked => { root.open-network(); } }
+                                SecondaryButton { text: "Add folders"; clicked => { root.add-folders(); } }
+                            }
                         }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;
                             title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }

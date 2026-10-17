@@ -8,6 +8,7 @@ import { Toggle, Slider, Segmented, TextField, Dropdown } from "core/controls.sl
 import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 import { Format } from "core/format.slint";
 import { SecondaryButton, ButtonSize } from "core/buttons.slint";
+import { SecondaryButton, ButtonSize } from "core/buttons.slint";
 import { SectionHeader, ValueChip, ListRow } from "core/rows.slint";
 import { PanelTab } from "core/types.slint";
 
@@ -551,7 +552,11 @@ export component SidePanel inherits Rectangle {
                         show-minus: root.bookmarks.length > 0;
                         minus => { root.remove-bookmark(); } plus => { root.add-bookmark(); }
                     }
-                    if root.bookmarks.length == 0: Text { text: "No bookmarks yet — press + or Ctrl+B."; color: Theme.fg-a3; wrap: word-wrap; }
+                    if root.bookmarks.length == 0: VerticalLayout {
+                        spacing: 10px; alignment: start;
+                        Text { text: "No bookmarks yet — press + or Ctrl+B."; color: Theme.fg-a3; wrap: word-wrap; }
+                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; text: "Add bookmark"; clicked => { root.add-bookmark(); } } }
+                    }
                     for it in root.bookmarks: TimeRow {
                         title: it.label; time: Format.hms(it.key.to-float(), true);
                         clicked => { root.seek-to(it.key); }
@@ -606,7 +611,11 @@ export component SidePanel inherits Rectangle {
                         minus-tip: "Clear queue"; plus-tip: "Add files";
                         minus => { root.queue-clear(); } plus => { root.queue-add(); }
                     }
-                    if root.queue.length == 0: Text { text: "Queue is empty — add files or drop them on the window."; color: Theme.fg-a3; wrap: word-wrap; }
+                    if root.queue.length == 0: VerticalLayout {
+                        spacing: 10px; alignment: start;
+                        Text { text: "Queue is empty — add files or drop them on the window."; color: Theme.fg-a3; wrap: word-wrap; }
+                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; text: "Add files"; clicked => { root.queue-add(); } } }
+                    }
                     VerticalLayout {
                         spacing: 2px; alignment: start;
                         for it[i] in root.queue: QueueRow {
