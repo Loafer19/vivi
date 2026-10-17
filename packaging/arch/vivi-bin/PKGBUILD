@@ -2,7 +2,7 @@
 # Prebuilt binary from the GitHub release. The release workflow also attaches this file
 # with the version and checksum filled in (asset "PKGBUILD").
 pkgname=vivi-bin
-pkgver=0.11.0
+pkgver=0.11.1
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64')

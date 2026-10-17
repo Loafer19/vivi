@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-17
+
 ### Added
 - **Settings → About** (last item of the System group): app icon, version and build info (commit, build date, target OS/arch, libmpv and Slint versions, install type), **Check for updates** against the latest GitHub release with an "Up to date" / "Version X available" status, release-notes excerpt and a Download button (matching AppImage / tarball / Windows / macOS asset, release page for Flatpak and pacman installs), optional *Check automatically on startup* (off by default), What's new, links (website, plugins, source, prefilled bug report, license) and credits. **Copy system info** puts the build and OS details on the clipboard for bug reports. `VIVI_SETTINGS=<category>` opens Settings on start (screenshot helper).
 
@@ -11,6 +13,7 @@
 ### Fixed
 - Compact control bar matches the reference density: 36 px row, all buttons on one vertical centre (no per-icon offsets), smaller equal-size buttons, near-black seek track with a dim orange played fill and a slim bright handle, times next to the bar, smaller volume wedge. Title bar buttons are centred in the 40 px strip.
 - Compact seek track uses the reference colours (track #090909, played #371F06, accent handle, bar #181818): rounded track with the fill and handle inset 1.5 px so a thin dark border stays all round; times in the secondary grey.
+- About → Check for updates picks the real release assets (Windows/macOS `.zip`, AppImage, Linux tarball, `.flatpak`) instead of looking for `.msi` / `.exe` / `.dmg`.
 
 ## [0.11.0] - 2026-10-17
 
