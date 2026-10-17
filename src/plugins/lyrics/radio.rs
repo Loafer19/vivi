@@ -78,11 +78,11 @@ pub(crate) fn clean_title(t: &str) -> String {
 }
 
 pub(crate) fn radio_cache_file(artist: &str, title: &str) -> PathBuf {
-    let key = format!(
-        "radio\u{1f}{}\u{1f}{}",
+    let key = crate::plugins::protocol::join(&[
+        "radio".to_string(),
         artist.to_lowercase(),
-        title.to_lowercase()
-    );
+        title.to_lowercase(),
+    ]);
     crate::store::cache_dir()
         .join("lyrics")
         .join(format!("{:x}.json", md5::compute(key)))

@@ -108,13 +108,12 @@ pub fn with_offset(text: &str, offset: f64) -> String {
 }
 
 pub(crate) fn cache_key(t: &Track) -> String {
-    format!(
-        "{}\u{1f}{}\u{1f}{}\u{1f}{}",
+    crate::plugins::protocol::join(&[
         t.artist.to_lowercase(),
         t.title.to_lowercase(),
         t.album.to_lowercase(),
-        t.duration.round()
-    )
+        t.duration.round().to_string(),
+    ])
 }
 
 pub(crate) fn lyrics_dir() -> PathBuf {

@@ -682,7 +682,7 @@ impl Lyrics {
         let parsed = parse_stream_title(&raw, &station);
         let key = parsed
             .as_ref()
-            .map(|(a, t)| format!("{a}\u{1f}{t}"))
+            .map(|(a, t)| crate::plugins::protocol::join(&[a, t]))
             .unwrap_or_default();
         r.key = key.clone();
         r.song = parsed.clone();
@@ -691,7 +691,7 @@ impl Lyrics {
             self.show(cx, None); // ad / station ID / talk: hide
             return;
         };
-        self.set_key(cx, format!("radio\u{1f}{key}"));
+        self.set_key(cx, crate::plugins::protocol::join(&["radio", key.as_str()]));
         if let Ok(s) = std::fs::read_to_string(manual_file(&self.key)) {
             let it = if is_synced(&s) {
                 LrclibItem {

@@ -23,6 +23,7 @@ pub mod epg;
 pub mod free_music;
 pub mod lyrics;
 pub mod packages;
+pub mod protocol;
 pub mod scripts;
 pub mod skip_intro;
 pub mod streams;
@@ -378,8 +379,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     });
     // UI callbacks addressed to plugins.
     app.on_plugin_command(|id, name, args| {
-        let args: Vec<String> = args.split('\u{1f}').map(String::from).collect();
-        command(&id, &name, &args);
+        let c = protocol::PluginCommand::from_ui(&id, &name, &args);
+        command(&c.id, &c.name, &c.args);
     });
     let auto = with(|r| {
         r.cfg
@@ -521,41 +522,44 @@ pub fn script_status(id: &str) -> Option<String> {
     with(|r| r.status.get(id).cloned()).flatten()
 }
 
-/// Toast text of a `script-message vivi-toast <text> [seconds]` from a plugin.
-pub fn toast_text(args: &[String]) -> Option<&str> {
-    match args {
-        [m, text, ..] if m == "vivi-toast" && !text.trim().is_empty() => Some(text.trim()),
+/// Toast text of a `script-message vivi-toast <text> [seconds]` (tests).
+#[cfg(test)]
+fn toast_text(args: &[String]) -> Option<&str> {
+    match protocol::ScriptMessage::parse(args)? {
+        protocol::ScriptMessage::Toast(text) => Some(text),
         _ => None,
     }
 }
 
 /// A `script-message` broadcast reached Vivi's mpv client.
 pub fn client_message(args: &[String]) {
-    match args {
-        [m, id, key, value] if m == "vivi-setting" => return store_setting(id, key, value),
-        [m, id, key] if m == "vivi-pick-folder" => return pick_folder(id, key),
+    use protocol::ScriptMessage as M;
+    match M::parse(args) {
+        Some(M::Setting { id, key, value }) => store_setting(id, key, value),
+        Some(M::PickFolder { id, key }) => pick_folder(id, key),
         // Subtitle Auto-Sync 1.2+: offset keys and sync results, saved per file by Vivi.
-        [m, v] if m == "vivi-sub-offset" => {
-            return command(subtitles::ID, "offset", std::slice::from_ref(v))
-        }
-        [m, path, json] if m == "vivi-tagger-acoustid" => return tagger_acoustid(path, json),
-        [m, title, text, rest @ ..] if m == "vivi-qr" => {
-            let caption = rest.first().map(String::as_str).unwrap_or("");
+        Some(M::SubOffset(v)) => command(subtitles::ID, "offset", &[v.to_string()]),
+        Some(M::TaggerAcoustid { path, json }) => tagger_acoustid(path, json),
+        Some(M::Qr {
+            title,
+            text,
+            caption,
+        }) => {
             with(|r| {
                 if let Some(a) = r.app.upgrade() {
                     crate::dialogs::show_qr(&a, title, text, caption);
                 }
             });
-            return;
+        }
+        Some(M::Toast(text)) => {
+            with(|r| {
+                if let Some(a) = r.app.upgrade() {
+                    toast(&a, text);
+                }
+            });
         }
         _ => {}
     }
-    let Some(text) = toast_text(args) else { return };
-    with(|r| {
-        if let Some(a) = r.app.upgrade() {
-            toast(&a, text);
-        }
-    });
 }
 
 /// `script-message vivi-tagger-acoustid <path> <json>` (AcoustID package): open the

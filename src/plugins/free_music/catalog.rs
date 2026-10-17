@@ -57,7 +57,7 @@ impl Track {
         )
     }
     pub(crate) fn key(&self) -> String {
-        format!("{}\u{1f}{}", norm(&self.artist), norm(&self.title))
+        crate::plugins::protocol::join(&[norm(&self.artist), norm(&self.title)])
     }
 }
 

@@ -111,35 +111,28 @@ pub(crate) fn wire(
                         }
                     }
                     PlayerEvent::ClientMessage(args) => {
-                        match args.first().map(String::as_str) {
+                        use crate::plugins::protocol::ScriptMessage as M;
+                        match M::parse(&args) {
                             // Chapter Thumbnails package: new files in its cache.
-                            Some("vivi-preview-frames") => {
+                            Some(M::PreviewFrames) => {
                                 preview::load_cached(&a, &player.get("path").unwrap_or_default());
                             }
-                            Some("vivi-chapter-thumbs") => chapter_thumbs(&a, &player),
-                            // `vivi-range <a> <b> [label]` / `vivi-range clear`: a plugin's
-                            // range (Cut & Export In/Out) drawn on the seekbar.
-                            Some("vivi-range") => {
-                                let t = |i: usize| {
-                                    args.get(i)
-                                        .and_then(|v| v.parse::<f32>().ok())
-                                        .unwrap_or(-1.0)
-                                };
-                                a.global::<crate::Playback>().set_range_a(t(1));
-                                a.global::<crate::Playback>().set_range_b(t(2));
-                                a.global::<crate::Playback>().set_range_label(
-                                    args.get(3).cloned().unwrap_or_default().into(),
-                                );
+                            Some(M::ChapterThumbs) => chapter_thumbs(&a, &player),
+                            // A plugin's range (Cut & Export In/Out) drawn on the seekbar.
+                            Some(M::Range {
+                                a: ra,
+                                b: rb,
+                                label,
+                            }) => {
+                                a.global::<crate::Playback>().set_range_a(ra);
+                                a.global::<crate::Playback>().set_range_b(rb);
+                                a.global::<crate::Playback>().set_range_label(label.into());
                             }
-                            // `vivi-fullscreen [toggle|on|off]` (Remote Control package):
-                            // Vivi owns the window, so mpv's own fullscreen does nothing.
-                            Some("vivi-fullscreen") => {
+                            // Remote Control package: Vivi owns the window, so mpv's own
+                            // fullscreen does nothing.
+                            Some(M::Fullscreen(on)) => {
                                 let w = a.window();
-                                let fs = match args.get(1).map(String::as_str) {
-                                    Some("on") => true,
-                                    Some("off") => false,
-                                    _ => !w.is_fullscreen(),
-                                };
+                                let fs = on.unwrap_or(!w.is_fullscreen());
                                 w.set_fullscreen(fs);
                                 a.set_fullscreen(fs);
                             }
