@@ -129,6 +129,7 @@ component QueueRow inherits ListRow {
     callback move(int, int);
     callback remove(int);
     selected: root.it.selected;
+    label: root.it.label;
     clicked => { root.play(root.index); }
     HorizontalLayout {
         padding-left: 10px; padding-right: 4px; spacing: 6px;

@@ -193,32 +193,32 @@ component Row inherits Rectangle {
             if setting.info != "": VerticalLayout { alignment: center; Info { text: setting.info; } }
         }
         if setting.kind == "toggle": VerticalLayout { alignment: center;
-            Toggle { on: setting.value == "true"; enabled: setting.enabled; toggled => { root.changed(setting.id, setting.value == "true" ? "false" : "true"); } } }
+            Toggle { on: setting.value == "true"; enabled: setting.enabled; label: setting.title; toggled => { root.changed(setting.id, setting.value == "true" ? "false" : "true"); } } }
         if setting.kind == "choice": VerticalLayout { alignment: center;
-            Dropdown { width: root.ctl-w; options: setting.options; value: setting.value; selected(i, o) => { root.changed(setting.id, o); } } }
+            Dropdown { width: root.ctl-w; options: setting.options; value: setting.value; label: setting.title; selected(i, o) => { root.changed(setting.id, o); } } }
         if setting.kind == "segmented": VerticalLayout { alignment: center;
-            Segmented { width: root.ctl-w; options: setting.options; value: setting.value; enabled: setting.enabled; selected(o) => { root.changed(setting.id, o); } } }
+            Segmented { width: root.ctl-w; options: setting.options; value: setting.value; enabled: setting.enabled; label: setting.title; selected(o) => { root.changed(setting.id, o); } } }
         if setting.kind == "color": VerticalLayout { alignment: center;
             Rectangle { width: root.ctl-w; height: 34px; border-radius: Metrics.radius-md; background: Theme.field;
                 HorizontalLayout { padding: 2px; alignment: space-between;
                     for o[i] in setting.options: Swatch { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } } } }
         if setting.kind == "text": VerticalLayout { alignment: center;
             TextField {
-                width: root.ctl-w; text: setting.value; enabled: setting.enabled;
+                width: root.ctl-w; text: setting.value; enabled: setting.enabled; label: setting.title;
                 placeholder: setting.options.length > 0 ? setting.options[0] : "";
                 accepted(t) => { root.changed(setting.id, t); }
                 edited(t) => { root.changed(setting.id, t); }
             } }
         if setting.kind == "secret": VerticalLayout { alignment: center;
             TextField {
-                width: root.ctl-w; text: setting.value; enabled: setting.enabled; password: true;
+                width: root.ctl-w; text: setting.value; enabled: setting.enabled; password: true; label: setting.title;
                 placeholder: "Not set";
                 accepted(t) => { root.changed(setting.id, t); }
                 edited(t) => { root.changed(setting.id, t); }
             } }
         if setting.kind == "path": VerticalLayout { alignment: center;
             PathField {
-                width: root.ctl-w; text: setting.value; enabled: setting.enabled;
+                width: root.ctl-w; text: setting.value; enabled: setting.enabled; label: setting.title;
                 edited(t) => { root.changed(setting.id, t); }
                 browse => { root.changed(setting.id, "::browse"); }
             } }
@@ -227,7 +227,7 @@ component Row inherits Rectangle {
             VerticalLayout { alignment: center; horizontal-stretch: 1;
                 Slider {
                     value: setting.value.to-float(); minimum: setting.minimum; maximum: setting.maximum; step: setting.step;
-                    labels: setting.labels; enabled: setting.enabled;
+                    labels: setting.labels; enabled: setting.enabled; label: setting.title;
                     changed(v) => { root.changed(setting.id, v); }
                 } }
             if setting.labels.length == 0: Text { width: 44px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-a2; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: right; }

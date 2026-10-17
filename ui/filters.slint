@@ -49,6 +49,7 @@ component PresetRow inherits ListRow {
     in property <bool> dim;
     callback rename();
     callback delete();
+    label: root.text;
     row-height: 30px;
     hover-bg: Theme.popup-hover; selected-bg: Theme.popup-hover;
     HorizontalLayout {
@@ -183,7 +184,7 @@ export component FxSlider inherits VerticalLayout {
     }
     Slider {
         value: root.value; minimum: root.minimum; maximum: root.maximum; step: root.step;
-        enabled: root.enabled;
+        enabled: root.enabled; label: root.label;
         changed(v) => { FxState.set(root.group, root.index, v); }
     }
 }

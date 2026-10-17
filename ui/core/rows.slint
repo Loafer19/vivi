@@ -57,6 +57,8 @@ export component ListRow inherits Rectangle {
     in property <length> radius: Metrics.radius-sm;
     in property <brush> hover-bg: Theme.bg-a1;
     in property <brush> selected-bg: Theme.accent-bg;
+    // Screen-reader name of the row.
+    in property <string> label;
     out property <bool> row-hovered: ta.has-hover;
     callback clicked();
     callback entered();
@@ -68,6 +70,9 @@ export component ListRow inherits Rectangle {
     opacity: root.enabled ? 1 : 0.4;
     ta := TouchArea {
         enabled: root.enabled; mouse-cursor: pointer;
+        accessible-role: list-item; accessible-label: root.label;
+        accessible-item-selected: root.selected; accessible-enabled: root.enabled;
+        accessible-action-default => { root.clicked(); }
         clicked => { root.clicked(); }
         changed has-hover => { if (self.has-hover) { root.entered(); } }
         pointer-event(e) => {

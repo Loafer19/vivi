@@ -14,6 +14,8 @@ export { Dropdown }
 export component Toggle inherits Rectangle {
     in property <bool> on;
     in property <bool> enabled: true;
+    // Screen-reader name (the setting's title).
+    in property <string> label;
     callback toggled();
     width: 64px; height: 30px; border-radius: Metrics.radius-md;
     background: Theme.field;
@@ -35,7 +37,13 @@ export component Toggle inherits Rectangle {
         background: on ? Theme.accent : Theme.field-knob;
         animate x { duration: 110ms; }
     }
-    TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.toggled(); } }
+    TouchArea {
+        enabled: root.enabled; mouse-cursor: pointer;
+        accessible-role: switch; accessible-label: root.label; accessible-checked: root.on;
+        accessible-enabled: root.enabled;
+        accessible-action-default => { root.toggled(); }
+        clicked => { root.toggled(); }
+    }
 }
 
 // Segmented control (e.g. Theme: Dark | Light | System).
@@ -43,7 +51,9 @@ export component Segmented inherits Rectangle {
     in property <[string]> options;
     in property <string> value;
     in property <bool> enabled: true;
+    in property <string> label;
     callback selected(string);
+    accessible-role: tab-list; accessible-label: root.label; accessible-value: root.value;
     height: 32px; border-radius: Metrics.radius-md; background: Theme.field;
     opacity: enabled ? 1 : 0.4;
     HorizontalLayout {
@@ -56,7 +66,12 @@ export component Segmented inherits Rectangle {
                 color: o == root.value ? Theme.accent : Theme.fg-a2;
                 horizontal-alignment: center; vertical-alignment: center;
             }
-            sta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.selected(o); } }
+            sta := TouchArea {
+                enabled: root.enabled; mouse-cursor: pointer;
+                accessible-role: tab; accessible-label: o; accessible-item-selected: o == root.value;
+                accessible-action-default => { root.selected(o); }
+                clicked => { root.selected(o); }
+            }
         }
     }
 }
@@ -67,6 +82,8 @@ export component TextField inherits Rectangle {
     in property <string> placeholder;
     in property <bool> enabled: true;
     in property <bool> password;
+    // Screen-reader name; the placeholder when empty.
+    in property <string> label;
     callback edited(string);
     callback accepted(string);
     public function focus-input() { ti.focus(); }
@@ -85,6 +102,7 @@ export component TextField inherits Rectangle {
         color: Theme.fg-2; font-size: Metrics.font-md; vertical-alignment: center;
         selection-background-color: Theme.accent-bg;
         single-line: true;
+        accessible-label: root.label != "" ? root.label : root.placeholder;
         edited => { root.edited(self.text); }
         accepted => { root.accepted(self.text); }
     }
@@ -94,10 +112,11 @@ export component TextField inherits Rectangle {
 export component PathField inherits HorizontalLayout {
     in-out property <string> text;
     in property <bool> enabled: true;
+    in property <string> label;
     callback edited(string);
     callback browse();
     spacing: 8px;
-    TextField { horizontal-stretch: 1; text <=> root.text; enabled: root.enabled; edited(t) => { root.edited(t); } }
+    TextField { horizontal-stretch: 1; text <=> root.text; enabled: root.enabled; label: root.label; edited(t) => { root.edited(t); } }
     FlatButton { text: "Browse"; enabled: root.enabled; clicked => { root.browse(); } }
 }
 

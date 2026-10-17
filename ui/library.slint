@@ -106,6 +106,7 @@ component LibRow inherits ListRow {
     in property <bool> dim; // Home sections draw rows in the dimmer #6B6B6B
     callback open();
     callback menu(length, length);
+    label: root.it.title;
     row-height: 32px; radius: 0; hover-bg: transparent;
     clicked => { root.open(); }
     right-clicked(x, y) => { if (root.it.kind != "action") { root.menu(x, y); } }

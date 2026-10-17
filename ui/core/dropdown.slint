@@ -7,6 +7,7 @@ import { ListRow } from "rows.slint";
 // label after a 24 px icon slot (x = 48), accent check on the selected option.
 component OptionRow inherits ListRow {
     in property <string> text;
+    label: root.text;
     row-height: 48px; radius: Metrics.radius-md;
     hover-bg: Theme.popup; selected-bg: Theme.popup;
     Text { x: 48px; width: parent.width - 48px - 48px; text: root.text; color: Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; }
@@ -16,6 +17,8 @@ component OptionRow inherits ListRow {
 export component Dropdown inherits Rectangle {
     in property <[string]> options;
     in property <string> value;
+    // Screen-reader name (the setting's title).
+    in property <string> label;
     callback selected(int, string);
     height: 36px; min-width: 140px;
     border-radius: Metrics.radius-md;
@@ -25,7 +28,12 @@ export component Dropdown inherits Rectangle {
         Text { text: root.value; color: Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Icon { y: (parent.height - 20px) / 2; width: 20px; height: 20px; source: @image-url("../../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
     }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        accessible-role: combobox; accessible-label: root.label; accessible-value: root.value;
+        accessible-action-default => { pop.show(); }
+        clicked => { pop.show(); }
+    }
     pop := PopupWindow {
         x: 0; y: root.height + 4px;
         width: max(root.width, 220px);

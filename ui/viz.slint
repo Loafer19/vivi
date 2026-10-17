@@ -10,6 +10,7 @@ import { ListRow } from "core/rows.slint";
 component VizRow inherits ListRow {
     in property <int> index;
     in property <string> text;
+    label: root.text;
     row-height: 40px; radius: Metrics.radius-md;
     hover-bg: Theme.popup; selected-bg: Theme.popup;
     if root.index > 0: TriIcon {

@@ -14,6 +14,8 @@ export component Slider inherits Rectangle {
     in property <[string]> labels;
     in property <int> ticks: 9;
     in property <bool> enabled: true;
+    // Screen-reader name (the row's label).
+    in property <string> label;
     callback changed(float);
     property <float> frac: clamp((root.value - root.minimum) / max(0.0001, root.maximum - root.minimum), 0, 1);
     property <length> track-h: 16px;
@@ -33,6 +35,11 @@ export component Slider inherits Rectangle {
         ta := TouchArea {
             enabled: root.enabled;
             mouse-cursor: pointer;
+            accessible-role: slider; accessible-label: root.label; accessible-enabled: root.enabled;
+            accessible-value: root.value; accessible-value-minimum: root.minimum;
+            accessible-value-maximum: root.maximum; accessible-value-step: root.step;
+            accessible-action-increment => { root.changed(min(root.maximum, root.value + root.step)); }
+            accessible-action-decrement => { root.changed(max(root.minimum, root.value - root.step)); }
             function apply() {
                 let raw = root.minimum + clamp(self.mouse-x / self.width, 0, 1) * (root.maximum - root.minimum);
                 root.changed(round(raw / root.step) * root.step);

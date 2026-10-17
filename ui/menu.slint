@@ -29,6 +29,7 @@ component MenuRow inherits ListRow {
     in property <bool> open; // its submenu is showing
     callback activated();
     callback hovered();
+    label: root.item.label;
     row-height: 48px; radius: Metrics.radius-md;
     hover-bg: Theme.bg-a3; selected-bg: Theme.bg-a3;
     highlighted: root.open; selected: root.item.checked;
