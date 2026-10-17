@@ -13,19 +13,22 @@ export component Modal inherits Rectangle {
     in property <length> lift: 0;
     in property <brush> card-background: Theme.bg-a4;
     in property <bool> bordered: true;
+    in property <length> card-radius: Metrics.radius-xl;
+    // Backdrop; onboarding uses an opaque one.
+    in property <brush> scrim: Theme.scrim;
     // Clicking the scrim reports dismissed(); off for dialogs with unsaved edits.
     in property <bool> dismiss-on-scrim: true;
     out property <length> card-w: card.width;
     out property <length> card-h: card.height;
     callback dismissed();
-    background: Theme.scrim;
+    background: root.scrim;
     TouchArea { clicked => { if (root.dismiss-on-scrim) { root.dismissed(); } } }
     card := Rectangle {
         width: min(root.card-width, root.width - root.inset);
         height: min(root.card-height, root.height - root.inset - root.lift);
         x: (root.width - self.width) / 2;
         y: max(root.inset / 2, (root.height - root.lift - self.height) / 2);
-        background: root.card-background; border-radius: Metrics.radius-xl;
+        background: root.card-background; border-radius: root.card-radius;
         border-width: root.bordered ? 1px : 0; border-color: Theme.bg-a1;
         drop-shadow-blur: 24px; drop-shadow-offset-y: 10px; drop-shadow-color: Theme.shadow;
         clip: true;

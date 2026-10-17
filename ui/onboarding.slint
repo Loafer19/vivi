@@ -1,6 +1,7 @@
 // First-run onboarding per Figma "Onboarding" frames: welcome → theme & color → hotkeys.
 import { Theme, Metrics, Icon } from "core/theme.slint";
 import { PrimaryButton, SecondaryButton, ButtonSize } from "core/buttons.slint";
+import { Modal } from "core/modal.slint";
 
 component ThemeCard inherits Rectangle {
     in property <string> name;
@@ -24,7 +25,7 @@ component ThemeCard inherits Rectangle {
     TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
-export component OnboardingDialog inherits Rectangle {
+export component OnboardingDialog inherits Modal {
     in-out property <int> step: 0;
     in property <bool> dark: true;
     in property <string> accent;
@@ -38,87 +39,83 @@ export component OnboardingDialog inherits Rectangle {
 
     // Compact layout for small windows.
     property <bool> compact: root.width < 700px || root.height < 520px;
-    background: Theme.bg-b1;
-    TouchArea { }
+    card-width: 1090px;
+    card-height: 640px;
+    inset: root.compact ? 16px : 48px;
+    card-radius: Metrics.radius-xxl;
+    scrim: Theme.bg-b1;
+    dismiss-on-scrim: false;
+    // Step dots + skip
+    HorizontalLayout {
+        x: 24px; y: 22px; height: 10px; spacing: 6px; alignment: start;
+        for i in 3: Rectangle { width: i == root.step ? 24px : 10px; height: 10px; border-radius: self.height / 2;
+            background: i == root.step ? Theme.accent : Theme.divider; animate width { duration: 150ms; } }
+    }
     Rectangle {
-        width: min(1090px, root.width - (root.compact ? 16px : 48px));
-        height: min(640px, root.height - (root.compact ? 16px : 48px));
-        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
-        background: Theme.bg-a4; border-radius: Metrics.radius-xxl; border-width: 1px; border-color: Theme.bg-a1;
-        clip: true;
+        x: root.card-w - self.width - 16px; y: 12px; width: sk.preferred-width + 20px; height: 30px; border-radius: Metrics.radius-sm;
+        background: ska.has-hover ? Theme.bg-a1 : transparent;
+        sk := Text { text: "Skip"; color: Theme.fg-a1; vertical-alignment: center; horizontal-alignment: center; }
+        ska := TouchArea { mouse-cursor: pointer; clicked => { root.finish(); } }
+    }
 
-        // Step dots + skip
-        HorizontalLayout {
-            x: 24px; y: 22px; height: 10px; spacing: 6px; alignment: start;
-            for i in 3: Rectangle { width: i == root.step ? 24px : 10px; height: 10px; border-radius: self.height / 2;
-                background: i == root.step ? Theme.accent : Theme.divider; animate width { duration: 150ms; } }
+    VerticalLayout {
+        y: root.compact ? 44px : 60px; height: root.card-h - (root.compact ? 44px + 62px : 60px + 80px);
+        padding-left: root.compact ? 16px : 60px; padding-right: self.padding-left; spacing: 18px; alignment: center;
+        if root.step == 0: VerticalLayout {
+            spacing: 18px; alignment: center;
+            HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: root.compact ? 56px : 96px; height: self.width; } }
+            Text { text: "Welcome to Vivi!"; color: Theme.fg-1; font-size: root.compact ? Metrics.font-xxl : Metrics.font-display; font-weight: 600; horizontal-alignment: center; }
+            Text {
+                text: "A fast, minimal media player built on mpv. It plays nearly any video or audio file, remembers where you stopped, and stays out of your way.";
+                color: Theme.fg-a1; font-size: Metrics.font-lg; wrap: word-wrap; horizontal-alignment: center;
+            }
         }
-        Rectangle {
-            x: parent.width - self.width - 16px; y: 12px; width: sk.preferred-width + 20px; height: 30px; border-radius: Metrics.radius-sm;
-            background: ska.has-hover ? Theme.bg-a1 : transparent;
-            sk := Text { text: "Skip"; color: Theme.fg-a1; vertical-alignment: center; horizontal-alignment: center; }
-            ska := TouchArea { mouse-cursor: pointer; clicked => { root.finish(); } }
-        }
-
-        VerticalLayout {
-            y: root.compact ? 44px : 60px; height: parent.height - (root.compact ? 44px + 62px : 60px + 80px);
-            padding-left: root.compact ? 16px : 60px; padding-right: self.padding-left; spacing: 18px; alignment: center;
-            if root.step == 0: VerticalLayout {
-                spacing: 18px; alignment: center;
-                HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: root.compact ? 56px : 96px; height: self.width; } }
-                Text { text: "Welcome to Vivi!"; color: Theme.fg-1; font-size: root.compact ? Metrics.font-xxl : Metrics.font-display; font-weight: 600; horizontal-alignment: center; }
-                Text {
-                    text: "A fast, minimal media player built on mpv. It plays nearly any video or audio file, remembers where you stopped, and stays out of your way.";
-                    color: Theme.fg-a1; font-size: Metrics.font-lg; wrap: word-wrap; horizontal-alignment: center;
+        if root.step == 1: VerticalLayout {
+            spacing: root.compact ? 12px : 22px; alignment: center;
+            Text { text: "Select your preferred theme and color."; wrap: word-wrap; color: Theme.fg-1; font-size: root.compact ? Metrics.font-h3 : Metrics.font-xxl; font-weight: 600; horizontal-alignment: center; }
+            HorizontalLayout {
+                spacing: root.compact ? 10px : 20px; alignment: center;
+                ThemeCard { w: root.compact ? min(150px, (root.width - 80px) / 2) : 200px; name: "Dark"; dark: true; selected: root.dark; clicked => { root.set-theme("dark"); } }
+                ThemeCard { w: root.compact ? min(150px, (root.width - 80px) / 2) : 200px; name: "Light"; dark: false; selected: !root.dark; clicked => { root.set-theme("light"); } }
+            }
+            HorizontalLayout {
+                spacing: root.compact ? 8px : 12px; alignment: center;
+                for a[i] in root.accents: Rectangle {
+                    width: root.compact ? 28px : 34px; height: self.width; border-radius: self.width / 2; background: root.swatches[i];
+                    border-width: a == root.accent ? 3px : 0px; border-color: Theme.fg-1;
+                    TouchArea { mouse-cursor: pointer; clicked => { root.set-accent(a); } }
                 }
             }
-            if root.step == 1: VerticalLayout {
-                spacing: root.compact ? 12px : 22px; alignment: center;
-                Text { text: "Select your preferred theme and color."; wrap: word-wrap; color: Theme.fg-1; font-size: root.compact ? Metrics.font-h3 : Metrics.font-xxl; font-weight: 600; horizontal-alignment: center; }
-                HorizontalLayout {
-                    spacing: root.compact ? 10px : 20px; alignment: center;
-                    ThemeCard { w: root.compact ? min(150px, (root.width - 80px) / 2) : 200px; name: "Dark"; dark: true; selected: root.dark; clicked => { root.set-theme("dark"); } }
-                    ThemeCard { w: root.compact ? min(150px, (root.width - 80px) / 2) : 200px; name: "Light"; dark: false; selected: !root.dark; clicked => { root.set-theme("light"); } }
-                }
-                HorizontalLayout {
-                    spacing: root.compact ? 8px : 12px; alignment: center;
-                    for a[i] in root.accents: Rectangle {
-                        width: root.compact ? 28px : 34px; height: self.width; border-radius: self.width / 2; background: root.swatches[i];
-                        border-width: a == root.accent ? 3px : 0px; border-color: Theme.fg-1;
-                        TouchArea { mouse-cursor: pointer; clicked => { root.set-accent(a); } }
-                    }
-                }
-                if !root.compact: Text { text: "You can change this later in Settings → Interface."; color: Theme.fg-a3; horizontal-alignment: center; }
-            }
-            if root.step == 2: VerticalLayout {
-                spacing: root.compact ? 8px : 14px; alignment: center;
-                Text { text: "A few keys worth knowing"; color: Theme.fg-1; font-size: root.compact ? Metrics.font-h3 : Metrics.font-xxl; font-weight: 600; horizontal-alignment: center; }
-                HorizontalLayout { alignment: center;
-                    VerticalLayout {
-                        width: min(460px, root.width - 64px); spacing: root.compact ? 2px : 6px;
-                        for k[i] in root.keys: HorizontalLayout {
-                            height: root.compact ? 28px : 34px;
-                            Text { text: root.actions[i]; color: Theme.fg-2; vertical-alignment: center; horizontal-stretch: 1; }
-                            Rectangle {
-                                width: kt.preferred-width + 18px; border-radius: Metrics.radius-sm; background: Theme.bg-a1;
-                                border-width: 1px; border-color: Theme.divider;
-                                kt := Text { text: k; color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; horizontal-alignment: center; }
-                            }
+            if !root.compact: Text { text: "You can change this later in Settings → Interface."; color: Theme.fg-a3; horizontal-alignment: center; }
+        }
+        if root.step == 2: VerticalLayout {
+            spacing: root.compact ? 8px : 14px; alignment: center;
+            Text { text: "A few keys worth knowing"; color: Theme.fg-1; font-size: root.compact ? Metrics.font-h3 : Metrics.font-xxl; font-weight: 600; horizontal-alignment: center; }
+            HorizontalLayout { alignment: center;
+                VerticalLayout {
+                    width: min(460px, root.width - 64px); spacing: root.compact ? 2px : 6px;
+                    for k[i] in root.keys: HorizontalLayout {
+                        height: root.compact ? 28px : 34px;
+                        Text { text: root.actions[i]; color: Theme.fg-2; vertical-alignment: center; horizontal-stretch: 1; }
+                        Rectangle {
+                            width: kt.preferred-width + 18px; border-radius: Metrics.radius-sm; background: Theme.bg-a1;
+                            border-width: 1px; border-color: Theme.divider;
+                            kt := Text { text: k; color: Theme.fg-1; font-family: "DM Mono"; vertical-alignment: center; horizontal-alignment: center; }
                         }
                     }
                 }
-                if !root.compact: Text { text: "All shortcuts: press ? at any time."; color: Theme.fg-a3; horizontal-alignment: center; }
             }
+            if !root.compact: Text { text: "All shortcuts: press ? at any time."; color: Theme.fg-a3; horizontal-alignment: center; }
         }
+    }
 
-        HorizontalLayout {
-            x: root.compact ? 12px : 24px; y: parent.height - (root.compact ? 50px : 62px); width: parent.width - 2 * self.x; height: 38px; spacing: 10px;
-            if root.step > 0: SecondaryButton { size: ButtonSize.lg; text: "Back"; clicked => { root.step -= 1; } }
-            Rectangle { horizontal-stretch: 1; }
-            PrimaryButton {
-                size: ButtonSize.lg; text: root.step < 2 ? "Next" : "Get started";
-                clicked => { if (root.step < 2) { root.step += 1; } else { root.finish(); } }
-            }
+    HorizontalLayout {
+        x: root.compact ? 12px : 24px; y: root.card-h - (root.compact ? 50px : 62px); width: root.card-w - 2 * self.x; height: 38px; spacing: 10px;
+        if root.step > 0: SecondaryButton { size: ButtonSize.lg; text: "Back"; clicked => { root.step -= 1; } }
+        Rectangle { horizontal-stretch: 1; }
+        PrimaryButton {
+            size: ButtonSize.lg; text: root.step < 2 ? "Next" : "Get started";
+            clicked => { if (root.step < 2) { root.step += 1; } else { root.finish(); } }
         }
     }
 }

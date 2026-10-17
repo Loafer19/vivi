@@ -3,23 +3,21 @@
 // Spectrum / Waveform" dropdown (components-dropdowns-filters frame), plus our extra modes.
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
+import { ListRow } from "core/rows.slint";
 
 
 
-component VizRow inherits Rectangle {
+component VizRow inherits ListRow {
     in property <int> index;
     in property <string> text;
-    in property <bool> selected;
-    callback clicked();
-    height: 40px; border-radius: Metrics.radius-md;
-    background: ta.has-hover || root.selected ? Theme.popup : transparent;
+    row-height: 40px; radius: Metrics.radius-md;
+    hover-bg: Theme.popup; selected-bg: Theme.popup;
     if root.index > 0: TriIcon {
         x: 12px; y: (parent.height - 20px) / 2; width: 20px; height: 20px;
         base: Icons.viz(root.index); accent: Icons.viz-accent(root.index); dim: Icons.viz-dim(root.index);
     }
     Text { x: 42px; width: parent.width - 42px - 40px; text: root.text; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
     if root.selected: Icon { x: parent.width - 10px - 20px; y: (parent.height - 20px) / 2; width: 20px; height: 20px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 export component VizDropdown inherits Rectangle {

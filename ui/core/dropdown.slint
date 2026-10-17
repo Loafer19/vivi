@@ -1,0 +1,49 @@
+// Dropdown (select) with a check mark on the chosen option, used by the
+// settings rows, side panel and effects.
+import { Theme, Metrics, Icon } from "theme.slint";
+import { ListRow } from "rows.slint";
+
+// Dropdown per the Figma "Option" rows: 48 px rows, #1F1F1F hover/selected fill, radius 6,
+// label after a 24 px icon slot (x = 48), accent check on the selected option.
+component OptionRow inherits ListRow {
+    in property <string> text;
+    row-height: 48px; radius: Metrics.radius-md;
+    hover-bg: Theme.popup; selected-bg: Theme.popup;
+    Text { x: 48px; width: parent.width - 48px - 48px; text: root.text; color: Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; }
+    if root.selected: Icon { x: parent.width - 14px - 24px; source: @image-url("../../assets/icons/check-active.svg"); tint: Theme.accent; }
+}
+
+export component Dropdown inherits Rectangle {
+    in property <[string]> options;
+    in property <string> value;
+    callback selected(int, string);
+    height: 36px; min-width: 140px;
+    border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.popup-hover : Theme.popup;
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 8px; spacing: 6px;
+        Text { text: root.value; color: Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        Icon { y: (parent.height - 20px) / 2; width: 20px; height: 20px; source: @image-url("../../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    pop := PopupWindow {
+        x: 0; y: root.height + 4px;
+        width: max(root.width, 220px);
+        height: min(root.options.length * 48px + 8px, 440px);
+        Rectangle {
+            background: Theme.bar-solid.with-alpha(0.95); border-radius: Metrics.radius-xl;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
+            clip: true;
+            Flickable {
+                content-height: root.options.length * 48px + 8px;
+                VerticalLayout {
+                    padding: 4px; alignment: start;
+                    for o[i] in root.options: OptionRow {
+                        text: o; selected: o == root.value;
+                        clicked => { root.selected(i, o); pop.close(); }
+                    }
+                }
+            }
+        }
+    }
+}

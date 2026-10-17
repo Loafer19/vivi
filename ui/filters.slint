@@ -6,6 +6,7 @@ import { Toggle, Slider, TextField } from "core/controls.slint";
 import { Icons } from "core/icons.slint";
 import { Format } from "core/format.slint";
 import { PrimaryButton, ButtonSize } from "core/buttons.slint";
+import { ListRow } from "core/rows.slint";
 
 export global FxState {
     in property <[float]> eq: [12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -40,19 +41,16 @@ export global FxState {
 
 
 // Row in the presets popup.
-component PresetRow inherits Rectangle {
+component PresetRow inherits ListRow {
     in property <string> text;
     in property <image> icon;
     in property <bool> has-icon: true;
-    in property <bool> selected;
     in property <bool> editable;
     in property <bool> dim;
-    callback clicked();
     callback rename();
     callback delete();
-    height: 30px; border-radius: Metrics.radius-sm;
-    background: ta.has-hover || root.selected ? Theme.popup-hover : transparent;
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    row-height: 30px;
+    hover-bg: Theme.popup-hover; selected-bg: Theme.popup-hover;
     HorizontalLayout {
         padding-left: 8px; padding-right: 6px; spacing: 8px;
         if root.has-icon: Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: root.icon; tint: Theme.fg-a2; }

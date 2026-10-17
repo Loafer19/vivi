@@ -8,7 +8,7 @@ import { Toggle, Slider, Segmented, TextField, Dropdown } from "core/controls.sl
 import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 import { Format } from "core/format.slint";
 import { SecondaryButton, ButtonSize } from "core/buttons.slint";
-import { SectionHeader, ValueChip } from "core/rows.slint";
+import { SectionHeader, ValueChip, ListRow } from "core/rows.slint";
 
 export struct Item { key: string, label: string, selected: bool }
 
@@ -121,16 +121,14 @@ component AdvancedLink inherits Rectangle {
 }
 
 // Queue row with hover actions (play, move up/down, remove).
-component QueueRow inherits Rectangle {
+component QueueRow inherits ListRow {
     in property <Item> it;
     in property <int> index;
     callback play(int);
     callback move(int, int);
     callback remove(int);
-    height: 36px;
-    border-radius: Metrics.radius-sm;
-    background: ta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg : transparent);
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.play(root.index); } }
+    selected: root.it.selected;
+    clicked => { root.play(root.index); }
     HorizontalLayout {
         padding-left: 10px; padding-right: 4px; spacing: 6px;
         Text { text: (root.index + 1) + "."; color: Theme.fg-a3; vertical-alignment: center; font-family: "DM Mono"; font-size: Metrics.font-sm; }

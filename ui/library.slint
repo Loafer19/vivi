@@ -8,6 +8,7 @@ import { ScrollView } from "std-widgets.slint";
 import { TextField } from "core/controls.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
+import { ListRow } from "core/rows.slint";
 
 export struct LibItem {
     key: string,
@@ -100,14 +101,16 @@ component Grid inherits Rectangle {
 }
 
 // One 32 px library row (Figma "media" / "playlist" components).
-component LibRow inherits Rectangle {
+component LibRow inherits ListRow {
     in property <LibItem> it;
     in property <bool> dim; // Home sections draw rows in the dimmer #6B6B6B
     callback open();
     callback menu(length, length);
-    height: 32px;
+    row-height: 32px; radius: 0; hover-bg: transparent;
+    clicked => { root.open(); }
+    right-clicked(x, y) => { if (root.it.kind != "action") { root.menu(x, y); } }
     property <bool> media: (it.kind == "video" || it.kind == "audio") && it.icon == "";
-    property <bool> hover: ta.has-hover || more-ta.has-hover;
+    property <bool> hover: root.row-hovered || more-ta.has-hover;
     if root.media || root.it.has-thumb: Rectangle {
         x: 0; width: 32px; height: 32px; border-radius: Metrics.radius-xs; clip: true;
         background: Theme.field-raised;
@@ -129,15 +132,6 @@ component LibRow inherits Rectangle {
         height: root.height;
         text: root.it.title; font-size: Metrics.font-base; overflow: elide; vertical-alignment: center;
         color: root.it.watched || root.dim ? Theme.fg-a3 : Theme.fg-a2; // hover only adds "⋯" (Figma)
-    }
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.open(); }
-        pointer-event(e) => {
-            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && root.it.kind != "action") {
-                root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
-            }
-        }
     }
     if root.hover && root.it.kind != "action": Icon {
         x: root.width - 24px; y: 4px; source: @image-url("../assets/icons/more.svg");

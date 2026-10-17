@@ -44,24 +44,36 @@ export component ValueChip inherits Rectangle {
     bt := Text { text: root.text; color: Theme.fg-2; font-family: "DM Mono"; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
 }
 
-// One clickable row in a list or menu: hover/selected background, children
-// laid out by the caller.
+// One clickable row in a list or menu. Colours are parameters so menus,
+// dropdown options, presets, the queue and library rows share one hit area
+// and hover logic while keeping their own look. Children are drawn above
+// the row's touch area, so inner buttons still get their clicks.
 export component ListRow inherits Rectangle {
     in property <bool> selected;
+    // Drawn like hover (e.g. a menu row whose submenu is open).
+    in property <bool> highlighted;
     in property <bool> enabled: true;
     in property <length> row-height: Metrics.row-h;
-    out property <bool> hovered: ta.has-hover;
+    in property <length> radius: Metrics.radius-sm;
+    in property <brush> hover-bg: Theme.bg-a1;
+    in property <brush> selected-bg: Theme.accent-bg;
+    out property <bool> row-hovered: ta.has-hover;
     callback clicked();
+    callback entered();
+    // Window coordinates of a right click.
     callback right-clicked(length, length);
     height: root.row-height;
-    border-radius: Metrics.radius-sm;
-    background: root.selected ? Theme.accent-bg : ta.has-hover && root.enabled ? Theme.bg-a1 : transparent;
+    border-radius: root.radius;
+    background: (ta.has-hover && root.enabled) || root.highlighted ? root.hover-bg : root.selected ? root.selected-bg : transparent;
     opacity: root.enabled ? 1 : 0.4;
     ta := TouchArea {
         enabled: root.enabled; mouse-cursor: pointer;
         clicked => { root.clicked(); }
+        changed has-hover => { if (self.has-hover) { root.entered(); } }
         pointer-event(e) => {
-            if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) { root.right-clicked(self.mouse-x, self.mouse-y); }
+            if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                root.right-clicked(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+            }
         }
     }
     @children
