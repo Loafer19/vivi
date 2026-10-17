@@ -59,12 +59,12 @@ component PresetRow inherits ListRow {
         if root.editable: Rectangle {
             width: 22px;
             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/edit.svg"); tint: ra.has-hover ? Theme.fg-1 : Theme.fg-a3; }
-            ra := TouchArea { mouse-cursor: pointer; clicked => { root.rename(); } }
+            ra := TouchArea { accessible-role: button; accessible-label: "Rename " + root.text; mouse-cursor: pointer; clicked => { root.rename(); } }
         }
         if root.editable: Rectangle {
             width: 22px;
             Icon { width: 12px; height: 12px; source: @image-url("../assets/icons/close.svg"); tint: da.has-hover ? Theme.fg-1 : Theme.fg-a3; }
-            da := TouchArea { mouse-cursor: pointer; clicked => { root.delete(); } }
+            da := TouchArea { accessible-role: button; accessible-label: "Delete " + root.text; mouse-cursor: pointer; clicked => { root.delete(); } }
         }
         if root.selected: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; }
     }
@@ -97,7 +97,7 @@ component ResetLink inherits Rectangle {
     width: t.preferred-width + 16px; height: 24px; border-radius: Metrics.radius-sm;
     background: ra.has-hover ? Theme.field-raised : transparent;
     t := Text { text: "Reset"; color: Theme.fg-a2; font-size: Metrics.font-sm; }
-    ra := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ra := TouchArea { accessible-role: button; accessible-label: "Reset"; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 component GradientPick inherits Rectangle {
@@ -109,7 +109,7 @@ component GradientPick inherits Rectangle {
         Text { text: FxState.gradients[root.cur]; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; horizontal-alignment: center; }
         Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
     }
-    ga := TouchArea { mouse-cursor: pointer; clicked => { gp.show(); } }
+    ga := TouchArea { accessible-role: combobox; accessible-label: "Gradient"; accessible-value: FxState.gradients[root.cur]; mouse-cursor: pointer; clicked => { gp.show(); } }
     gp := PopupWindow {
         x: 0; y: root.height + 4px; width: root.width;
         Rectangle { background: Theme.popup; border-radius: Metrics.radius-lg; drop-shadow-blur: 12px; drop-shadow-color: Theme.shadow-soft; }
@@ -149,7 +149,7 @@ export component FilterBox inherits Rectangle {
                     source: root.expanded ? @image-url("../assets/icons/chevron-down.svg") : @image-url("../assets/icons/chevron-right.svg");
                 }
             }
-            TouchArea { mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; } }
+            TouchArea { accessible-role: button; accessible-label: root.expanded ? root.expanded-text : root.collapsed-text; mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; } }
         }
         Rectangle {
             height: root.expanded ? body.preferred-height : 0px;
@@ -193,6 +193,7 @@ export component FxSlider inherits VerticalLayout {
 
 // Vertical band slider (Figma equalizer): dark well, dim accent fill from the bottom, pill thumb.
 component BandSlider inherits Rectangle {
+    in property <string> label;
     in property <float> value;
     in property <float> minimum: -20;
     in property <float> maximum: 20;
@@ -221,6 +222,11 @@ component BandSlider inherits Rectangle {
     ta := TouchArea {
         enabled: root.enabled;
         mouse-cursor: pointer;
+        accessible-role: slider; accessible-label: root.label;
+        accessible-value: round(root.value * 10) / 10 + " dB";
+        accessible-value-minimum: root.minimum; accessible-value-maximum: root.maximum; accessible-value-step: 0.5;
+        accessible-action-increment => { root.changed(clamp(root.value + 0.5, root.minimum, root.maximum)); }
+        accessible-action-decrement => { root.changed(clamp(root.value - 0.5, root.minimum, root.maximum)); }
         function at() -> float { return clamp(1 - self.mouse-y / self.height, 0, 1); }
         pointer-event(e) => {
             if (e.kind == PointerEventKind.down) { root.drag = self.at(); }
@@ -249,7 +255,7 @@ export component PresetDropdown inherits Rectangle {
         Text { text: FxState.preset; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
     }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    ta := TouchArea { accessible-role: combobox; accessible-label: "Equalizer preset"; accessible-value: FxState.preset; mouse-cursor: pointer; clicked => { pop.show(); } }
     property <int> rows: 3 + FxState.custom.length + FxState.builtin.length;
     pop := PopupWindow {
         x: 0; y: root.height + 4px; width: root.width;
@@ -324,6 +330,7 @@ export component Equalizer inherits VerticalLayout {
             for i in 11: HorizontalLayout {
                 alignment: center; horizontal-stretch: 1;
                 BandSlider {
+                    label: i == 0 ? "Preamp" : "Equalizer band " + i;
                     value: FxState.eq[i]; minimum: i == 0 ? 0 : -20; maximum: 20;
                     enabled: root.on;
                     changed(v) => { FxState.set("eq", i, v); }
@@ -423,7 +430,7 @@ export component VideoFilters inherits VerticalLayout {
                     source: FxState.crop[4] > 0 ? @image-url("../assets/icons/link-active.svg") : @image-url("../assets/icons/link.svg");
                     tint: FxState.crop[4] > 0 ? Theme.accent : Theme.fg-a2;
                 }
-                TouchArea { mouse-cursor: pointer; clicked => { FxState.set("crop", 4, FxState.crop[4] > 0 ? 0 : 1); } }
+                TouchArea { accessible-role: checkbox; accessible-label: "Link crop sides"; accessible-checked: FxState.crop[4] > 0; mouse-cursor: pointer; clicked => { FxState.set("crop", 4, FxState.crop[4] > 0 ? 0 : 1); } }
             }
         }
     }

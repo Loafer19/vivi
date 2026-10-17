@@ -68,6 +68,7 @@ component Tile inherits Rectangle {
         text: root.it.subtitle; color: Theme.fg-a1; overflow: elide; font-size: Metrics.font-sm;
     }
     ta := TouchArea {
+        accessible-role: button; accessible-label: root.it.title + (root.it.subtitle != "" ? ", " + root.it.subtitle : "");
         mouse-cursor: pointer;
         clicked => { root.open(); }
         pointer-event(e) => {
@@ -141,6 +142,7 @@ component LibRow inherits ListRow {
     }
     more-ta := TouchArea {
         x: root.width - 28px; width: 28px;
+        accessible-role: button; accessible-label: "More options: " + root.it.title;
         mouse-cursor: pointer;
         clicked => { root.menu(self.absolute-position.x, self.absolute-position.y + 28px); }
     }

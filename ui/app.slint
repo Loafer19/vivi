@@ -147,6 +147,11 @@ component SeekBar inherits Rectangle {
     }
     ta := TouchArea {
         mouse-cursor: pointer;
+        accessible-role: slider; accessible-label: "Seek";
+        accessible-value: root.fmt(root.position) + " of " + root.fmt(root.duration);
+        accessible-value-minimum: 0; accessible-value-maximum: root.duration; accessible-value-step: 5;
+        accessible-action-increment => { root.seek(min(root.duration, root.position + 5)); }
+        accessible-action-decrement => { root.seek(max(0, root.position - 5)); }
         pointer-event(e) => {
             if (e.kind == PointerEventKind.up && root.duration > 0) {
                 root.seek(root.hover-frac * root.duration);
@@ -244,6 +249,10 @@ component VolumeBar inherits Rectangle {
     }
     TouchArea {
         mouse-cursor: pointer;
+        accessible-role: slider; accessible-label: "Volume"; accessible-value: round(root.value) + "%";
+        accessible-value-minimum: 0; accessible-value-maximum: root.maximum; accessible-value-step: 5;
+        accessible-action-increment => { root.changed(min(root.maximum, root.value + 5)); }
+        accessible-action-decrement => { root.changed(max(0, root.value - 5)); }
         moved => { if (self.pressed) { root.changed(min(root.maximum, root.volume-of(clamp(self.mouse-x / self.width, 0, 1) * 88))); } }
         pointer-event(e) => {
             if (e.kind == PointerEventKind.down) { root.changed(min(root.maximum, root.volume-of(clamp(self.mouse-x / self.width, 0, 1) * 88))); }
@@ -861,6 +870,8 @@ export component AppWindow inherits Window {
             }
             TouchArea {
                 mouse-cursor: pointer;
+                accessible-role: slider; accessible-label: "Seek";
+                accessible-value-minimum: 0; accessible-value-maximum: Playback.duration; accessible-value: round(Playback.position) + " s";
                 clicked => { if (Playback.duration > 0) { Playback.seek(clamp(self.mouse-x / self.width, 0, 1) * Playback.duration); } }
             }
         }
@@ -916,6 +927,8 @@ export component AppWindow inherits Window {
                         property <length> dy;
                         background: i == root.mini-q-sel ? Theme.bg-a1 : row-ta.has-hover ? Theme.hover : transparent;
                         row-ta := TouchArea {
+                            accessible-role: list-item; accessible-label: it.label; accessible-item-selected: i == root.mini-q-sel;
+                            accessible-action-default => { Panel.queue-play(i); }
                             mouse-cursor: pointer;
                             clicked => { root.mini-q-sel = i; }
                             double-clicked => { Panel.queue-play(i); }
@@ -926,6 +939,7 @@ export component AppWindow inherits Window {
                                 width: 22px;
                                 Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/list.svg"); tint: drag.pressed ? Theme.accent : Theme.fg-a3; }
                                 drag := TouchArea {
+                                    accessible-role: button; accessible-label: "Drag to re-order " + it.label;
                                     mouse-cursor: grab;
                                     pointer-event(e) => {
                                         if (e.kind == PointerEventKind.up) {

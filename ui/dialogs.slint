@@ -89,6 +89,7 @@ export component NetworkStreamDialog inherits Rectangle {
                     background: hta.has-hover ? Theme.bg-a1 : transparent;
                     Text { x: 8px; width: parent.width - 16px; text: h; color: Theme.fg-a2; font-size: Metrics.font-sm; font-family: "DM Mono"; overflow: elide; vertical-alignment: center; }
                     hta := TouchArea {
+                        accessible-role: button; accessible-label: "Add recent stream " + h;
                         mouse-cursor: pointer;
                         clicked => { root.urls = root.urls == "" ? h : root.urls + "\n" + h; }
                     }

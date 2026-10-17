@@ -146,5 +146,5 @@ export component AdvancedBar inherits Rectangle {
             tint: Theme.fg-a1;
         }
     }
-    ata := TouchArea { mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; root.toggled(root.expanded); } }
+    ata := TouchArea { accessible-role: button; accessible-label: "Advanced Options"; accessible-checked: root.expanded; mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; root.toggled(root.expanded); } }
 }
