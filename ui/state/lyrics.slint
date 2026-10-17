@@ -1,0 +1,26 @@
+// Lyrics plugin: the synced / plain lyrics view, full-screen karaoke words and the manual lyrics search (search-*).
+import { KWord, LyricsHit, LyricsState } from "../plugins.slint";
+export global Lyrics {
+    in-out property <[string]> lines;
+    in-out property <int> index: -1;
+    in-out property <bool> plain;
+    in-out property <float> size: 22;
+    in-out property <bool> enabled;
+    in-out property <[KWord]> words;
+    in-out property <int> rows;
+    in-out property <string> source;
+    in-out property <float> offset;
+    in-out property <LyricsState> state: LyricsState.missing;
+    in-out property <string> offset-label: "0.0 s";
+    in-out property <string> title;
+    in-out property <string> artist;
+    in-out property <bool> can-save;
+    in-out property <bool> manual;
+    in-out property <string> search-artist;
+    in-out property <string> search-title;
+    in-out property <int> search-selected: -1;
+    in-out property <[LyricsHit]> search-results;
+    in-out property <string> search-status;
+    in-out property <string> search-preview;
+    in-out property <bool> search-busy;
+}

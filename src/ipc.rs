@@ -495,11 +495,16 @@ fn handle(
             )
         }
         "lyrics" => {
-            let lines: Vec<String> = a.get_lyrics_lines().iter().map(|s| s.to_string()).collect();
+            let lines: Vec<String> = a
+                .global::<crate::Lyrics>()
+                .get_lines()
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
             Ok(
-                json!({ "available": !lines.is_empty(), "synced": !a.get_lyrics_plain(),
-                "current_line": a.get_lyrics_index(), "lines": lines,
-                "source": a.get_lyrics_source().as_str(), "offset_seconds": a.get_lyrics_offset(),
+                json!({ "available": !lines.is_empty(), "synced": !a.global::<crate::Lyrics>().get_plain(),
+                "current_line": a.global::<crate::Lyrics>().get_index(), "lines": lines,
+                "source": a.global::<crate::Lyrics>().get_source().as_str(), "offset_seconds": a.global::<crate::Lyrics>().get_offset(),
                 "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }),
             )
         }

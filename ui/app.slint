@@ -25,9 +25,10 @@ import { Menus } from "state/menus.slint";
 import { Library } from "state/library.slint";
 import { Settings } from "state/settings.slint";
 import { Customize } from "state/customize.slint";
+import { Lyrics } from "state/lyrics.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -337,33 +338,11 @@ export component AppWindow inherits Window {
     callback plugin-command(string, string, string);
     in-out property <string> skip-label;
     in property <float> skip-target;
-    in property <[string]> lyrics-lines;
-    in property <int> lyrics-index: -1;
     // Plain (unsynced) lyrics, e.g. radio: a scrollable block without highlight.
-    in property <bool> lyrics-plain;
-    in property <float> lyrics-size: 22;
     // Full-screen karaoke view and manual search (Lyrics plugin).
-    in property <bool> lyrics-enabled;
-    in property <[KWord]> lyrics-words;
-    in property <int> lyrics-rows;
-    in property <string> lyrics-source;
-    in property <float> lyrics-offset;
-    in property <LyricsState> lyrics-state: LyricsState.missing;
-    in property <string> lyrics-offset-label: "0.0 s";
-    in property <string> lyrics-title;
-    in property <string> lyrics-artist;
-    in property <bool> lyrics-can-save;
-    in property <bool> lyrics-manual;
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
     // Characters per karaoke row, for wrapping the word-timed current line.
     out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
-    in-out property <string> ls-artist;
-    in-out property <string> ls-title;
-    in-out property <int> ls-selected: -1;
-    in property <[LyricsHit]> ls-results;
-    in property <string> ls-status;
-    in property <string> ls-preview;
-    in property <bool> ls-busy;
     in property <bool> subs-plugin;
     in property <[SubHit]> subs-hits;
     in property <[Item]> subs-langs;
@@ -608,21 +587,21 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
-    if Playback.has-media && root.lyrics-lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
+    if Playback.has-media && Lyrics.lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
         y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
-        lines: root.lyrics-lines; index: root.lyrics-index; size: root.lyrics-size * 1px; plain: root.lyrics-plain;
+        lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
         backdrop: !(root.viz-audio && root.viz-mode > 0);
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
     if Playback.has-media && Overlays.karaoke-open && !Overlays.library-open && !root.mini: KaraokeView {
         width: root.width; height: root.height;
-        lines: root.lyrics-lines; index: root.lyrics-index; plain: root.lyrics-plain;
-        words: root.lyrics-words; rows: root.lyrics-rows; big: root.karaoke-big;
-        title: root.lyrics-title; artist: root.lyrics-artist; source: root.lyrics-source;
-        state: root.lyrics-state; offset-s: root.lyrics-offset;
-        offset: root.lyrics-offset-label; can-save: root.lyrics-can-save; manual: root.lyrics-manual;
+        lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain;
+        words: Lyrics.words; rows: Lyrics.rows; big: root.karaoke-big;
+        title: Lyrics.title; artist: Lyrics.artist; source: Lyrics.source;
+        state: Lyrics.state; offset-s: Lyrics.offset;
+        offset: Lyrics.offset-label; can-save: Lyrics.can-save; manual: Lyrics.manual;
         cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); }
     }
 
@@ -707,9 +686,9 @@ export component AppWindow inherits Window {
         chapter-times: Panel.chapter-times;
         viz-modes: root.viz-modes; viz-mode: root.viz-mode;
         viz-select(i) => { root.viz-select(i); }
-        lyrics-enabled: root.lyrics-enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: root.lyrics-source;
-        lyrics-offset-s: root.lyrics-offset; subs-offset-s: Panel.pv-sub-delay;
-        lyrics-offset: root.lyrics-offset-label; lyrics-can-save: root.lyrics-can-save; lyrics-manual: root.lyrics-manual;
+        lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: Lyrics.source;
+        lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
+        lyrics-offset: Lyrics.offset-label; lyrics-can-save: Lyrics.can-save; lyrics-manual: Lyrics.manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-pick-label: root.subs-pick-label; subs-sync: root.subs-sync;
         subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
@@ -1113,8 +1092,8 @@ export component AppWindow inherits Window {
     // ---------- Find Lyrics (Lyrics plugin) ----------
     if Overlays.ls-open: LyricsSearchDialog {
         width: root.width; height: root.height;
-        results: root.ls-results; status: root.ls-status; preview: root.ls-preview; busy: root.ls-busy;
-        artist <=> root.ls-artist; title <=> root.ls-title; selected <=> root.ls-selected;
+        results: Lyrics.search-results; status: Lyrics.search-status; preview: Lyrics.search-preview; busy: Lyrics.search-busy;
+        artist <=> Lyrics.search-artist; title <=> Lyrics.search-title; selected <=> Lyrics.search-selected;
         cmd(n, a) => { root.plugin-command("lyrics", n, a); if (n == "search-close") { fs.focus(); } }
     }
 

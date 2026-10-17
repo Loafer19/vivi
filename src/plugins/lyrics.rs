@@ -806,16 +806,19 @@ impl Lyrics {
         self.radio_synced = false;
         self.word_line = None;
         self.words = None;
-        cx.app.set_lyrics_plain(false);
+        cx.app.global::<crate::Lyrics>().set_plain(false);
         cx.app
-            .set_lyrics_words(ModelRc::new(VecModel::<crate::KWord>::default()));
-        cx.app.set_lyrics_rows(0);
+            .global::<crate::Lyrics>()
+            .set_words(ModelRc::new(VecModel::<crate::KWord>::default()));
+        cx.app.global::<crate::Lyrics>().set_rows(0);
         let lines: Vec<SharedString> = lrc
             .as_ref()
             .map(|l| l.lines.iter().map(|(_, s)| s.as_str().into()).collect())
             .unwrap_or_default();
-        cx.app.set_lyrics_lines(ModelRc::new(VecModel::from(lines)));
-        cx.app.set_lyrics_index(-1);
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_lines(ModelRc::new(VecModel::from(lines)));
+        cx.app.global::<crate::Lyrics>().set_index(-1);
         self.lrc = lrc.filter(|l| !l.lines.is_empty());
         if self.lrc.is_none() {
             self.current = None;
@@ -843,7 +846,7 @@ impl Lyrics {
                     ..Default::default()
                 }),
             );
-            cx.app.set_lyrics_plain(true);
+            cx.app.global::<crate::Lyrics>().set_plain(true);
         } else {
             self.show(cx, Some(lrc));
         }
@@ -865,7 +868,7 @@ impl Lyrics {
             }
             None => crate::LyricsState::Missing,
         };
-        cx.app.set_lyrics_state(state);
+        cx.app.global::<crate::Lyrics>().set_state(state);
         let src = match &self.current {
             Some(c) => format!(
                 "{} · {}",
@@ -883,15 +886,18 @@ impl Lyrics {
             }
             None => "No lyrics found".into(),
         };
-        cx.app.set_lyrics_source(src.into());
-        cx.app.set_lyrics_manual(
+        cx.app.global::<crate::Lyrics>().set_source(src.into());
+        cx.app.global::<crate::Lyrics>().set_manual(
             self.current
                 .as_ref()
                 .is_some_and(|c| c.source == Source::Manual),
         );
-        cx.app.set_lyrics_offset(self.offset as f32);
         cx.app
-            .set_lyrics_offset_label(offset_label(self.offset).into());
+            .global::<crate::Lyrics>()
+            .set_offset(self.offset as f32);
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_offset_label(offset_label(self.offset).into());
         let (artist, title) = match (
             &self.track,
             self.radio.as_ref().and_then(|r| r.song.clone()),
@@ -903,19 +909,21 @@ impl Lyrics {
                 cx.player.get("media-title").unwrap_or_default(),
             ),
         };
-        cx.app.set_lyrics_artist(artist.into());
-        cx.app.set_lyrics_title(title.into());
-        cx.app.set_lyrics_can_save(
+        cx.app.global::<crate::Lyrics>().set_artist(artist.into());
+        cx.app.global::<crate::Lyrics>().set_title(title.into());
+        cx.app.global::<crate::Lyrics>().set_can_save(
             self.current.is_some() && self.radio.is_none() && cx.local_path().is_some(),
         );
     }
 
     fn apply_size(&self, cx: &Ctx) {
-        cx.app.set_lyrics_size(match cx.get("size").as_str() {
-            "Small" => 16.0,
-            "Large" => 30.0,
-            _ => 22.0,
-        });
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_size(match cx.get("size").as_str() {
+                "Small" => 16.0,
+                "Large" => 30.0,
+                _ => 22.0,
+            });
     }
 
     fn set_key(&mut self, cx: &Ctx, key: String) {
@@ -1101,33 +1109,58 @@ impl Lyrics {
                     .unwrap_or_default(),
             ),
         };
-        cx.app.set_ls_artist(a.into());
-        cx.app.set_ls_title(t.into());
-        cx.app.set_ls_preview("".into());
-        cx.app.set_ls_selected(-1);
+        cx.app.global::<crate::Lyrics>().set_search_artist(a.into());
+        cx.app.global::<crate::Lyrics>().set_search_title(t.into());
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_search_preview("".into());
+        cx.app.global::<crate::Lyrics>().set_search_selected(-1);
         self.search.results.clear();
         self.search_results(cx);
         cx.app.global::<crate::Overlays>().set_ls_open(true);
-        if !cx.app.get_ls_title().is_empty() {
+        if !cx
+            .app
+            .global::<crate::Lyrics>()
+            .get_search_title()
+            .is_empty()
+        {
             self.search_run(cx);
         } else {
-            cx.app.set_ls_status("Enter an artist and a title.".into());
+            cx.app
+                .global::<crate::Lyrics>()
+                .set_search_status("Enter an artist and a title.".into());
         }
     }
 
     fn search_run(&mut self, cx: &Ctx) {
-        let artist = cx.app.get_ls_artist().trim().to_string();
-        let title = cx.app.get_ls_title().trim().to_string();
+        let artist = cx
+            .app
+            .global::<crate::Lyrics>()
+            .get_search_artist()
+            .trim()
+            .to_string();
+        let title = cx
+            .app
+            .global::<crate::Lyrics>()
+            .get_search_title()
+            .trim()
+            .to_string();
         if title.is_empty() {
-            cx.app.set_ls_status("Enter a title.".into());
+            cx.app
+                .global::<crate::Lyrics>()
+                .set_search_status("Enter a title.".into());
             return;
         }
         let (tx, rx) = channel();
         self.search.rx = Some(rx);
-        cx.app.set_ls_busy(true);
-        cx.app.set_ls_selected(-1);
-        cx.app.set_ls_preview("".into());
-        cx.app.set_ls_status("Searching LRCLIB…".into());
+        cx.app.global::<crate::Lyrics>().set_search_busy(true);
+        cx.app.global::<crate::Lyrics>().set_search_selected(-1);
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_search_preview("".into());
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_search_status("Searching LRCLIB…".into());
         std::thread::spawn(move || {
             let _ = tx.send(search_lrclib(&artist, &title));
         });
@@ -1163,14 +1196,16 @@ impl Lyrics {
                 }
             })
             .collect();
-        cx.app.set_ls_results(ModelRc::new(VecModel::from(hits)));
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_search_results(ModelRc::new(VecModel::from(hits)));
     }
 
     fn search_tick(&mut self, cx: &Ctx) {
         let Some(rx) = &self.search.rx else { return };
         let Ok(res) = rx.try_recv() else { return };
         self.search.rx = None;
-        cx.app.set_ls_busy(false);
+        cx.app.global::<crate::Lyrics>().set_search_busy(false);
         match res {
             Ok(mut items) => {
                 let dur = if self.radio.is_some() {
@@ -1181,7 +1216,7 @@ impl Lyrics {
                 rank(&mut items, dur);
                 let n = items.len();
                 self.search.results = items;
-                cx.app.set_ls_status(
+                cx.app.global::<crate::Lyrics>().set_search_status(
                     match n {
                         0 => "No lyrics found. Try another spelling, or only the title.".into(),
                         1 => "1 result".into(),
@@ -1192,7 +1227,9 @@ impl Lyrics {
             }
             Err(e) => {
                 self.search.results.clear();
-                cx.app.set_ls_status(format!("Search failed: {e}").into());
+                cx.app
+                    .global::<crate::Lyrics>()
+                    .set_search_status(format!("Search failed: {e}").into());
             }
         }
         self.search_results(cx);
@@ -1206,7 +1243,9 @@ impl Lyrics {
             Some(s) => Lrc::parse(s).texts().join("\n"),
             None => it.plain.clone().unwrap_or_default(),
         };
-        cx.app.set_ls_preview(text.trim().into());
+        cx.app
+            .global::<crate::Lyrics>()
+            .set_search_preview(text.trim().into());
     }
 
     /// Use result `i` (`plain`: its plain lyrics even when synced ones exist).
@@ -1248,7 +1287,7 @@ impl Lyrics {
                         ..Default::default()
                     }),
                 );
-                cx.app.set_lyrics_plain(true);
+                cx.app.global::<crate::Lyrics>().set_plain(true);
                 self.current = cur;
                 self.update_info(cx);
             }
@@ -1270,8 +1309,9 @@ impl Lyrics {
             if self.word_line.take().is_some() {
                 self.words = None;
                 cx.app
-                    .set_lyrics_words(ModelRc::new(VecModel::<crate::KWord>::default()));
-                cx.app.set_lyrics_rows(0);
+                    .global::<crate::Lyrics>()
+                    .set_words(ModelRc::new(VecModel::<crate::KWord>::default()));
+                cx.app.global::<crate::Lyrics>().set_rows(0);
             }
             return;
         };
@@ -1290,9 +1330,12 @@ impl Lyrics {
                 })
                 .collect();
             let model = std::rc::Rc::new(VecModel::from(m));
-            cx.app.set_lyrics_words(ModelRc::from(model.clone()));
             cx.app
-                .set_lyrics_rows(rows.last().map(|r| r + 1).unwrap_or(0));
+                .global::<crate::Lyrics>()
+                .set_words(ModelRc::from(model.clone()));
+            cx.app
+                .global::<crate::Lyrics>()
+                .set_rows(rows.last().map(|r| r + 1).unwrap_or(0));
             self.words = Some(model);
             self.word_line = Some(i);
             self.word_cols = cols;
@@ -1459,7 +1502,7 @@ impl Lyrics {
                         ..Default::default()
                     }),
                 );
-                cx.app.set_lyrics_plain(true);
+                cx.app.global::<crate::Lyrics>().set_plain(true);
             }
         }
         self.current = Found::new(source, text);
@@ -1514,14 +1557,14 @@ impl Plugin for Lyrics {
         ))
     }
     fn enable(&mut self, cx: &Ctx) {
-        cx.app.set_lyrics_enabled(true);
+        cx.app.global::<crate::Lyrics>().set_enabled(true);
         self.apply_size(cx);
         if cx.app.global::<crate::Playback>().get_has_media() {
             self.load(cx);
         }
     }
     fn disable(&mut self, cx: &Ctx) {
-        cx.app.set_lyrics_enabled(false);
+        cx.app.global::<crate::Lyrics>().set_enabled(false);
         cx.app.global::<crate::Overlays>().set_karaoke_open(false);
         cx.app.global::<crate::Overlays>().set_ls_open(false);
         self.rx = None;
@@ -1579,7 +1622,7 @@ impl Plugin for Lyrics {
             }
             "search-close" => {
                 self.search.rx = None;
-                cx.app.set_ls_busy(false);
+                cx.app.global::<crate::Lyrics>().set_search_busy(false);
                 cx.app.global::<crate::Overlays>().set_ls_open(false);
             }
             "forget" => {
@@ -1623,7 +1666,9 @@ impl Plugin for Lyrics {
         let i = l.index_at(t + 0.15);
         if i != self.index {
             self.index = i;
-            cx.app.set_lyrics_index(i.map(|i| i as i32).unwrap_or(-1));
+            cx.app
+                .global::<crate::Lyrics>()
+                .set_index(i.map(|i| i as i32).unwrap_or(-1));
         }
         self.update_words(cx, t + 0.05);
     }
