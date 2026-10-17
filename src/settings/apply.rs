@@ -228,13 +228,7 @@ pub(crate) fn current_preset(p: &Player) -> Preset {
     }
 }
 
-pub(crate) fn strings(
-    v: impl IntoIterator<Item = impl Into<SharedString>>,
-) -> ModelRc<SharedString> {
-    ModelRc::new(VecModel::from(
-        v.into_iter().map(Into::into).collect::<Vec<_>>(),
-    ))
-}
+pub(crate) use crate::util::strings;
 
 /// Push the configured bottom-bar layout to the UI.
 pub fn apply_toolbar(a: &AppWindow, c: &Config) {

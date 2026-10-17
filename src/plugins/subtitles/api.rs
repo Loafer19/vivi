@@ -234,12 +234,7 @@ pub struct Creds {
 }
 
 pub(crate) fn agent() -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(20)))
-        .user_agent(format!("Vivi v{}", env!("CARGO_PKG_VERSION")))
-        .http_status_as_error(false)
-        .build()
-        .into()
+    crate::plugins::web::agent_as(20, &format!("Vivi v{}", env!("CARGO_PKG_VERSION")), false)
 }
 
 pub(crate) fn api_err(code: u16, body: &str) -> String {

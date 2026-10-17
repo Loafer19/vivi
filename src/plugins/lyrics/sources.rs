@@ -245,14 +245,11 @@ pub fn rank(items: &mut [LrclibItem], duration: f64) {
 }
 
 pub(crate) fn agent() -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(12)))
-        .user_agent(format!(
-            "{} (https://github.com/Loafer19/vivi)",
-            crate::plugins::USER_AGENT
-        ))
-        .build()
-        .into()
+    let ua = format!(
+        "{} (https://github.com/Loafer19/vivi)",
+        crate::plugins::USER_AGENT
+    );
+    crate::plugins::web::agent_as(12, &ua, true)
 }
 
 /// Runs an LRCLIB request, retrying when the server is busy. LRCLIB answers uncached

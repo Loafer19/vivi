@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::library::{self, Media};
 use crate::player::Player;
 use crate::{store, AppWindow, Item, LibItem};
-use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::path::Path;
@@ -521,11 +521,7 @@ impl Lib {
     }
 }
 
-fn strings(v: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
-    ModelRc::new(VecModel::from(
-        v.into_iter().map(SharedString::from).collect::<Vec<_>>(),
-    ))
-}
+use crate::util::strings;
 
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
     let items = Rc::new(VecModel::default());

@@ -29,8 +29,6 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-use std::time::Duration;
-
 mod api;
 mod files;
 pub use api::*;

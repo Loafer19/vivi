@@ -19,10 +19,16 @@ pub fn agent() -> ureq::Agent {
 
 /// Agent whose whole request (connect + body) gives up after `secs`.
 pub fn agent_with_timeout(secs: u64) -> ureq::Agent {
+    agent_as(secs, &user_agent(), false)
+}
+
+/// Agent with a whole-request timeout, its own User-Agent, and whether HTTP error
+/// statuses come back as `Err` (ureq's default) or as normal responses.
+pub fn agent_as(secs: u64, ua: &str, status_as_error: bool) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(secs)))
-        .user_agent(user_agent())
-        .http_status_as_error(false)
+        .user_agent(ua)
+        .http_status_as_error(status_as_error)
         .build()
         .into()
 }

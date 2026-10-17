@@ -23,6 +23,7 @@ mod render;
 mod scenes;
 mod settings;
 mod store;
+mod util;
 mod viz;
 
 use app::debug::{debug_ui, open_plugin_link, panel_tab, screenshot_mode};

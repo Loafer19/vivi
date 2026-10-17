@@ -59,7 +59,7 @@ pub fn wrap_rows(words: &[&str], cols: usize) -> Vec<i32> {
 #[derive(Default)]
 struct Search {
     results: Vec<LrclibItem>,
-    rx: Option<Receiver<Result<Vec<LrclibItem>, String>>>,
+    task: crate::util::Task<Result<Vec<LrclibItem>, String>>,
 }
 
 fn mmss(s: f64) -> String {
@@ -440,8 +440,6 @@ impl Lyrics {
                 .set_search_status("Enter a title.".into());
             return;
         }
-        let (tx, rx) = channel();
-        self.search.rx = Some(rx);
         cx.app.global::<crate::Lyrics>().set_search_busy(true);
         cx.app.global::<crate::Lyrics>().set_search_selected(-1);
         cx.app
@@ -450,9 +448,7 @@ impl Lyrics {
         cx.app
             .global::<crate::Lyrics>()
             .set_search_status("Searching LRCLIB…".into());
-        std::thread::spawn(move || {
-            let _ = tx.send(search_lrclib(&artist, &title));
-        });
+        self.search.task = crate::util::Task::spawn(move || search_lrclib(&artist, &title));
     }
 
     fn duration(&self, cx: &Ctx) -> f64 {
@@ -491,9 +487,9 @@ impl Lyrics {
     }
 
     fn search_tick(&mut self, cx: &Ctx) {
-        let Some(rx) = &self.search.rx else { return };
-        let Ok(res) = rx.try_recv() else { return };
-        self.search.rx = None;
+        let Some(res) = self.search.task.poll() else {
+            return;
+        };
         cx.app.global::<crate::Lyrics>().set_search_busy(false);
         match res {
             Ok(mut items) => {
@@ -910,7 +906,7 @@ impl Plugin for Lyrics {
                 }
             }
             "search-close" => {
-                self.search.rx = None;
+                self.search.task.cancel();
                 cx.app.global::<crate::Lyrics>().set_search_busy(false);
                 cx.app.global::<crate::Overlays>().set_ls_open(false);
             }

@@ -345,11 +345,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     }
 }
 
-/// Seconds → "HH:MM:SS" (side-panel chapter list).
-pub(crate) fn hms(s: f64) -> String {
-    let s = s.max(0.0) as u64;
-    format!("{:02}:{:02}:{:02}", s / 3600, s % 3600 / 60, s % 60)
-}
+pub(crate) use crate::util::hms;
 
 #[cfg(test)]
 mod hms_tests {

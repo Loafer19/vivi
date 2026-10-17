@@ -8,9 +8,7 @@ pub(crate) fn hex(s: &str) -> Color {
 }
 
 pub(crate) fn strs(o: &[&str]) -> ModelRc<SharedString> {
-    ModelRc::new(VecModel::from(
-        o.iter().map(|s| SharedString::from(*s)).collect::<Vec<_>>(),
-    ))
+    crate::util::strings(o.iter().copied())
 }
 
 /// Builds the row list category by category; rows added after

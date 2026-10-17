@@ -99,12 +99,7 @@ pub fn fmt_time(t: f64) -> String {
     if t.is_infinite() {
         return "end".into();
     }
-    let s = t.round() as i64;
-    if s >= 3600 {
-        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
-    } else {
-        format!("{}:{:02}", s / 60, s % 60)
-    }
+    crate::util::clock(t.round() as i64)
 }
 
 /// Parse `show = a-b, c-d; other = …` into (show, ranges). The first range of a show
