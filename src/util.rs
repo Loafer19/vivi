@@ -57,6 +57,11 @@ impl<T> Task<T> {
         Some(v)
     }
 
+    /// Whether a result is still awaited.
+    pub fn is_running(&self) -> bool {
+        self.rx.is_some()
+    }
+
     /// Stop waiting; a late result is dropped.
     pub fn cancel(&mut self) {
         self.rx = None;
@@ -78,6 +83,7 @@ mod tests {
     #[test]
     fn task_yields_once() {
         let mut t = Task::spawn(|| 7);
+        assert!(t.is_running());
         let mut got = None;
         for _ in 0..200 {
             if let Some(v) = t.poll() {
@@ -87,6 +93,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert_eq!(got, Some(7));
+        assert!(!t.is_running());
         assert_eq!(t.poll(), None);
     }
 }

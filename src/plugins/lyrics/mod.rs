@@ -25,7 +25,6 @@ use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
 mod lrc;
@@ -71,7 +70,7 @@ fn mmss(s: f64) -> String {
 pub struct Lyrics {
     lrc: Option<Lrc>,
     index: Option<usize>,
-    rx: Option<Receiver<(String, Option<String>)>>,
+    task: crate::util::Task<(String, Option<String>)>,
     path: Option<String>,
     /// Some while a network stream plays.
     radio: Option<Radio>,
@@ -152,7 +151,9 @@ impl Lyrics {
     fn update_info(&self, cx: &Ctx) {
         let state = match &self.current {
             Some(_) => crate::LyricsState::Found,
-            None if self.rx.is_some() || self.radio.as_ref().is_some_and(|r| r.rx.is_some()) => {
+            None if self.task.is_running()
+                || self.radio.as_ref().is_some_and(|r| r.task.is_running()) =>
+            {
                 crate::LyricsState::Searching
             }
             None => crate::LyricsState::Missing,
@@ -170,7 +171,9 @@ impl Lyrics {
                     "synced"
                 }
             ),
-            None if self.rx.is_some() || self.radio.as_ref().is_some_and(|r| r.rx.is_some()) => {
+            None if self.task.is_running()
+                || self.radio.as_ref().is_some_and(|r| r.task.is_running()) =>
+            {
                 "Searching LRCLIB…".into()
             }
             None => "No lyrics found".into(),
@@ -225,7 +228,7 @@ impl Lyrics {
     }
 
     fn load(&mut self, cx: &Ctx) {
-        self.rx = None;
+        self.task.cancel();
         self.track = None;
         self.show(cx, None);
         self.path = cx.player.get("path");
@@ -275,18 +278,16 @@ impl Lyrics {
         if found.iter().any(|f| f.source == Source::Cache) {
             return;
         }
-        let (tx, rx) = channel();
-        self.rx = Some(rx);
-        self.update_info(cx);
         let key = self.path.clone().unwrap_or_default();
-        std::thread::spawn(move || {
+        self.task = crate::util::Task::spawn(move || {
             let res = fetch_lrclib(&t);
             match &res {
                 Ok(s) => write_cache(&cache, s.as_deref()),
                 Err(e) => eprintln!("vivi: lyrics: {e}"),
             }
-            let _ = tx.send((key, res.ok().flatten()));
+            (key, res.ok().flatten())
         });
+        self.update_info(cx);
     }
 
     /// Online result: shown unless a better local source is already displayed.
@@ -674,7 +675,7 @@ impl Lyrics {
         }
         r.title = raw.clone();
         r.since = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
-        r.rx = None;
+        r.task.cancel();
         let station = cx
             .player
             .get("metadata/by-key/icy-name")
@@ -724,39 +725,34 @@ impl Lyrics {
         if offline {
             r.mem.insert(key.clone(), None);
         }
-        let (tx, rx) = channel();
         if !offline {
-            r.rx = Some(rx);
+            r.task = crate::util::Task::spawn(move || {
+                let res = fetch_radio(&artist, &title);
+                if let Some(d) = cache.parent() {
+                    let _ = std::fs::create_dir_all(d);
+                }
+                match &res {
+                    Ok(Some(it)) => {
+                        if let Ok(j) = serde_json::to_string(it) {
+                            let _ = std::fs::write(&cache, j);
+                        }
+                    }
+                    Ok(None) => {
+                        let _ = std::fs::write(cache.with_extension("none"), b"");
+                    }
+                    Err(e) => eprintln!("vivi: radio lyrics: {e}"),
+                }
+                (key, res.ok().flatten())
+            });
         }
         self.show(cx, None);
-        if offline {
-            return;
-        }
-        std::thread::spawn(move || {
-            let res = fetch_radio(&artist, &title);
-            if let Some(d) = cache.parent() {
-                let _ = std::fs::create_dir_all(d);
-            }
-            match &res {
-                Ok(Some(it)) => {
-                    if let Ok(j) = serde_json::to_string(it) {
-                        let _ = std::fs::write(&cache, j);
-                    }
-                }
-                Ok(None) => {
-                    let _ = std::fs::write(cache.with_extension("none"), b"");
-                }
-                Err(e) => eprintln!("vivi: radio lyrics: {e}"),
-            }
-            let _ = tx.send((key, res.ok().flatten()));
-        });
     }
 
     fn radio_result(&mut self, cx: &Ctx) {
         let Some(r) = self.radio.as_mut() else { return };
-        let Some(rx) = &r.rx else { return };
-        let Ok((key, it)) = rx.try_recv() else { return };
-        r.rx = None;
+        let Some((key, it)) = r.task.poll() else {
+            return;
+        };
         r.mem.insert(key.clone(), it.clone());
         if key == r.key {
             self.show_radio(cx, it.as_ref(), Source::Online);
@@ -852,7 +848,7 @@ impl Plugin for Lyrics {
         cx.app.global::<crate::Lyrics>().set_enabled(false);
         cx.app.global::<crate::Overlays>().set_karaoke_open(false);
         cx.app.global::<crate::Overlays>().set_ls_open(false);
-        self.rx = None;
+        self.task.cancel();
         self.show(cx, None);
     }
     fn file_loaded(&mut self, cx: &Ctx) {
@@ -931,12 +927,9 @@ impl Plugin for Lyrics {
             self.radio_result(cx);
             self.radio_tick(cx);
         }
-        if let Some(rx) = &self.rx {
-            if let Ok((key, res)) = rx.try_recv() {
-                self.rx = None;
-                if Some(&key) == self.path.as_ref() {
-                    self.online_result(cx, res);
-                }
+        if let Some((key, res)) = self.task.poll() {
+            if Some(&key) == self.path.as_ref() {
+                self.online_result(cx, res);
             }
         }
         if self.lrc.is_none() || self.plain() {

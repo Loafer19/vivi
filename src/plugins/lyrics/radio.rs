@@ -173,6 +173,6 @@ pub(crate) struct Radio {
     /// Parsed (artist, title) of the current song.
     pub(crate) song: Option<(String, String)>,
     pub(crate) mem: HashMap<String, Option<LrclibItem>>,
-    pub(crate) rx: Option<Receiver<(String, Option<LrclibItem>)>>,
+    pub(crate) task: crate::util::Task<(String, Option<LrclibItem>)>,
     pub(crate) last_poll: Option<std::time::Instant>,
 }

@@ -189,7 +189,7 @@ pub struct NetworkStreams {
     list: Vec<Stream>,
     /// Source index the current list came from.
     mode: usize,
-    rx: Option<Receiver<Result<Vec<Stream>, String>>>,
+    task: crate::util::Task<Result<Vec<Stream>, String>>,
     /// Status shown when the results arrive instead of the count (fallback searches).
     note: Option<String>,
     /// Source shown in the dropdown last tick (placeholder/button follow it).
@@ -197,7 +197,7 @@ pub struct NetworkStreams {
     /// Station picked in the browser, for the now-playing card.
     playing: Option<Stream>,
     np_url: String,
-    logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
+    logo_task: crate::util::Task<(String, Option<PathBuf>)>,
     poll: u32,
     /// Unfiltered results; `list` is its view (group chip + live filter + favorites first).
     all: Vec<Stream>,
@@ -413,11 +413,7 @@ impl NetworkStreams {
     }
     /// Run `job` in the background; its result fills the list in `tick`.
     fn spawn(&mut self, job: impl FnOnce() -> Result<Vec<Stream>, String> + Send + 'static) {
-        let (tx, rx) = channel();
-        self.rx = Some(rx);
-        std::thread::spawn(move || {
-            let _ = tx.send(job());
-        });
+        self.task = crate::util::Task::spawn(job);
     }
     fn clear(&mut self, cx: &Ctx) {
         self.all.clear();
@@ -599,19 +595,15 @@ impl NetworkStreams {
                 .or_else(|| self.list.iter().find(|s| s.url == path).cloned())
                 .or_else(|| known_station(&path));
             a.global::<crate::NowPlaying>().set_has_logo(false);
-            self.logo_rx = None;
+            self.logo_task.cancel();
             let name = st
                 .as_ref()
                 .map(|s| display_name(&s.name))
                 .unwrap_or_default();
             a.global::<crate::NowPlaying>().set_station(name.into());
             if let Some(logo) = st.map(|s| s.logo).filter(|l| l.starts_with("http")) {
-                let (tx, rx) = channel();
-                self.logo_rx = Some(rx);
                 let u = path.clone();
-                std::thread::spawn(move || {
-                    let _ = tx.send((u, fetch_logo(&logo)));
-                });
+                self.logo_task = crate::util::Task::spawn(move || (u, fetch_logo(&logo)));
             }
         }
         let g = |k: &str| cx.player.get(k).filter(|v| !v.trim().is_empty());
@@ -679,7 +671,7 @@ impl Plugin for NetworkStreams {
         ))
     }
     fn disable(&mut self, cx: &Ctx) {
-        self.rx = None;
+        self.task.cancel();
         cx.app.global::<crate::NowPlaying>().set_show(false);
         if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             cx.app.global::<crate::Overlays>().set_md_open(false);
@@ -994,7 +986,7 @@ impl Plugin for NetworkStreams {
                 }
             }
             "info" => cx.toast(&now_info(|p| cx.player.get(p)).replace('\n', " · ")),
-            "close" => self.rx = None,
+            "close" => self.task.cancel(),
             _ => {}
         }
     }
@@ -1075,23 +1067,18 @@ impl Plugin for NetworkStreams {
         if self.poll.is_multiple_of(5) {
             self.now_playing(cx);
         }
-        if let Some(rx) = &self.logo_rx {
-            if let Ok((url, path)) = rx.try_recv() {
-                self.logo_rx = None;
-                if url == self.np_url {
-                    match path.and_then(|p| slint::Image::load_from_path(&p).ok()) {
-                        Some(img) => {
-                            cx.app.global::<crate::NowPlaying>().set_logo(img);
-                            cx.app.global::<crate::NowPlaying>().set_has_logo(true);
-                        }
-                        None => cx.app.global::<crate::NowPlaying>().set_has_logo(false),
+        if let Some((url, path)) = self.logo_task.poll() {
+            if url == self.np_url {
+                match path.and_then(|p| slint::Image::load_from_path(&p).ok()) {
+                    Some(img) => {
+                        cx.app.global::<crate::NowPlaying>().set_logo(img);
+                        cx.app.global::<crate::NowPlaying>().set_has_logo(true);
                     }
+                    None => cx.app.global::<crate::NowPlaying>().set_has_logo(false),
                 }
             }
         }
-        let Some(rx) = &self.rx else { return };
-        let Ok(r) = rx.try_recv() else { return };
-        self.rx = None;
+        let Some(r) = self.task.poll() else { return };
         match r {
             Ok(v) => {
                 let n = v.len();
