@@ -197,7 +197,7 @@ impl Ctx<'_> {
     }
     /// Show a short message in the player toast.
     pub fn toast(&self, msg: &str) {
-        show_toast(self.app, msg);
+        toast(self.app, msg);
     }
     /// Local path of the playing file, if it is a file.
     pub fn local_path(&self) -> Option<std::path::PathBuf> {
@@ -553,7 +553,7 @@ pub fn client_message(args: &[String]) {
     let Some(text) = toast_text(args) else { return };
     with(|r| {
         if let Some(a) = r.app.upgrade() {
-            show_toast(&a, text);
+            toast(&a, text);
         }
     });
 }
@@ -576,7 +576,7 @@ fn tagger_acoustid(path: &str, json: &str) {
     } else {
         with(|r| {
             if let Some(a) = r.app.upgrade() {
-                show_toast(
+                toast(
                     &a,
                     "Turn on the Auto-tagger plugin to review AcoustID matches",
                 );
@@ -666,7 +666,8 @@ pub fn mpv_log(prefix: &str, text: &str) {
     });
 }
 
-fn show_toast(app: &AppWindow, msg: &str) {
+/// Show `msg` in the player toast for 4 s.
+pub fn toast(app: &AppWindow, msg: &str) {
     app.set_resume_text(msg.into());
     let w = app.as_weak();
     let m = msg.to_string();

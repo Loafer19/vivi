@@ -9,7 +9,7 @@ import { SettingsDialog, SettingRow } from "settings.slint";
 import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem } from "library.slint";
-import { NetworkStreamDialog, NewPlaylistDialog, QrDialog } from "dialogs.slint";
+import { NetworkStreamDialog, NewPlaylistDialog, QrDialog, ShortcutsDialog } from "dialogs.slint";
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
@@ -686,6 +686,10 @@ export component AppWindow inherits Window {
 
     // Settings
     in-out property <bool> settings-open: false;
+    // "?" overlay; rows come from the keymap (src/keymap.rs).
+    in-out property <bool> shortcuts-open;
+    in property <[string]> shortcut-actions;
+    in property <[string]> shortcut-keys;
     in property <[string]> settings-categories;
     in property <[SettingRow]> settings-rows;
     in-out property <int> settings-category: 0;
@@ -730,13 +734,25 @@ export component AppWindow inherits Window {
     }
     property <bool> show-ui: (!root.has-media || root.controls-visible || root.panel-open || root.settings-open || root.customize-open) && !(root.ui-hidden && root.has-media);
 
+    // Rust moves focus back to the player after Esc closed an overlay.
+    public function focus-main() { fs.focus(); }
+
+    // Esc reaches the keymap even while a text field inside a dialog has focus: this
+    // scope wraps every element below and sees Esc before the focused item does.
+    keys := FocusScope {
+    width: 100%; height: 100%;
+    focus-on-click: false; focus-on-tab-navigation: false;
+    capture-key-pressed(e) => {
+        if (e.text == Key.Escape) {
+            root.activity();
+            if (root.key(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt)) { return accept; }
+        }
+        reject
+    }
+
     fs := FocusScope {
         key-pressed(e) => {
             root.activity();
-            if (e.text == "v" && !e.modifiers.control && root.has-media && root.viz-audio) {
-                root.viz-select(mod(root.viz-mode + 1, root.viz-modes.length));
-                return accept;
-            }
             if (root.key(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt)) { return accept; }
             reject
         }
@@ -1348,6 +1364,13 @@ export component AppWindow inherits Window {
         }
     }
 
+    // ---------- Keyboard shortcuts ("?") ----------
+    if root.shortcuts-open: ShortcutsDialog {
+        width: root.width; height: root.height;
+        actions: root.shortcut-actions; keys: root.shortcut-keys;
+        close => { root.shortcuts-open = false; fs.focus(); }
+    }
+
     // ---------- Menus (topmost) ----------
     if root.menu-kind != "": TouchArea {
         clicked => { root.menu-kind = ""; root.sub-open = ""; }
@@ -1376,4 +1399,5 @@ export component AppWindow inherits Window {
         items: root.sub-items;
         activated(id) => { root.menu-activate(id); }
     }
+    } // keys
 }

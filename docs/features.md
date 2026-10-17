@@ -124,16 +124,33 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | Key | Action |
 |---|---|
 | Space / K | Play / pause |
-| ← / → | Seek −5 / +5 s (Shift: 60 s) |
-| ↑ / ↓ | Volume ±5 |
-| F, double-click | Fullscreen |
-| M | Mute |
-| V | Next visualizer mode (audio-only files) |
+| → | Seek forward (Shift: long skip) |
+| ← | Seek back (Shift: long skip) |
+| ↑ | Volume up |
+| ↓ | Volume down |
+| F | Fullscreen |
 | P | Miniplayer on / off |
+| M | Mute |
+| S | Stop |
+| N / Shift+N | Next / previous in queue |
+| Shift+L | A-B loop: set A / set B / clear |
+| L | Karaoke lyrics view |
+| Ctrl+L | Find lyrics |
+| [ / ] | Lyrics timing offset ±0.1 s (Shift: 0.5 s) |
+| Z / X | Subtitle offset ±0.1 s (Shift: 1 s), per file |
+| V | Next visualizer mode (audio files) |
+| R | Start / stop recording |
+| Ctrl+\\ | Hide / show the interface |
+| Ctrl+Q | Quit |
 | Ctrl+O | Open file |
-| Ctrl+B | Add bookmark |
 | Ctrl+, | Settings |
-| Esc | Leave miniplayer / fullscreen, close settings |
+| Ctrl+B | Add bookmark |
+| ? | Keyboard shortcuts |
+| Esc | Close the top dialog or panel, then leave miniplayer / fullscreen |
+| Double-click | Fullscreen |
+| Click | Play / pause |
+| Right-click | Context menu |
+| Drop files | Open files or add them to the queue |
 
 ## Plugins
 Turn plugins on or off and change their settings in **Settings → Extensions** (`Ctrl+,`). Each card has an ON/OFF toggle, and a plugin's settings appear below its card while it is on. The state is saved in `~/.config/vivi/config.toml` under `[plugins.<id>]`.

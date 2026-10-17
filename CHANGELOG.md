@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- **Keyboard shortcuts overlay**: press `?` (or main menu → Keyboard Shortcuts) for every shortcut in two columns; Esc or `?` closes it.
+- One keymap (`src/keymap.rs`) drives the key handler, Settings → Controls → Keyboard Shortcuts, the `?` overlay, onboarding and the menu hints, so the lists can no longer drift. The list now includes S (stop), N / Shift+N, R (record), Ctrl+\ (hide UI), Ctrl+Q, V, P and `?`; a test keeps `docs/features.md` in sync.
+- Toasts when recording starts / stops (with the file path) and when Ctrl+\ hides the interface (saying how to bring it back).
+
+### Changed
+- **Esc closes the top-most open overlay** — menus, shortcuts, info, onboarding, Customize, tag review, Find Lyrics, music / streams dialog, Add Subtitles, QR, Settings, New Playlist, Network Stream, side panel, library, karaoke — and only then leaves the miniplayer, then fullscreen. It also works while a text field in a dialog has focus.
+
+### Fixed
+- Main menu → Keyboard Shortcuts opened Settings → Playback; the library's "Edit subtitles / audio" opened Controls / Privacy instead of Subtitles / Audio.
+
 ## [0.11.1] - 2026-10-17
 
 ### Added

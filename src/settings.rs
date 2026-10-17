@@ -33,26 +33,10 @@ const ACCENTS: [&str; 9] = [
     "#8C8C8C",
 ];
 
-pub const SHORTCUTS: [(&str, &str); 18] = [
-    ("Play / pause", "Space  K"),
-    ("Seek (short skip)", "←  →"),
-    ("Seek (long skip)", "Shift ← →"),
-    ("Volume (volume step)", "↑  ↓"),
-    ("Mute", "M"),
-    ("Fullscreen", "F  Double-click"),
-    ("Leave fullscreen", "Esc"),
-    ("Open file", "Ctrl O"),
-    ("Add bookmark", "Ctrl B"),
-    ("Settings", "Ctrl ,"),
-    ("Karaoke lyrics view", "L"),
-    ("A-B loop: set A / set B / clear", "Shift+L"),
-    ("Find lyrics", "Ctrl L"),
-    ("Lyrics timing offset", "[  ]  (Shift ±0.5 s)"),
-    ("Subtitle offset (per file)", "Z  X  (Shift ±1 s)"),
-    ("Previous / next in queue", "Buttons"),
-    ("Drop files", "Open or enqueue"),
-    ("Side panel", "Panel button"),
-];
+/// Index of a Settings category by name (0 = General when unknown).
+pub fn category(name: &str) -> i32 {
+    CATEGORIES.iter().position(|c| *c == name).unwrap_or(0) as i32
+}
 
 fn hex(s: &str) -> Color {
     let v = u32::from_str_radix(s.trim_start_matches('#'), 16).unwrap_or(0xD37918);
@@ -334,25 +318,28 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
             &["1 %", "2 %", "5 %", "10 %"],
         )
         .header("Keyboard Shortcuts");
-    for (t, k) in SHORTCUTS {
+    for (t, k) in crate::keymap::rows() {
         r.push("", t, "", "key", k.into());
     }
-    r.header("Mouse")
-        .stub_choice(
-            "stub.controls.wheel",
-            "Scroll wheel",
-            &s(""),
-            &["Volume", "Seek", "Nothing"],
-        )
-        .stub_toggle(
-            "stub.controls.reverse",
-            "Reverse scroll direction",
-            &s(""),
-            false,
-        )
-        .advanced()
-        .header("Remotes")
-        .stub_toggle("stub.controls.web", "Web remote control", &s(""), false);
+    r.header("Mouse");
+    for (t, k) in crate::keymap::MOUSE {
+        r.push("", t, "", "key", (*k).into());
+    }
+    r.stub_choice(
+        "stub.controls.wheel",
+        "Scroll wheel",
+        &s(""),
+        &["Volume", "Seek", "Nothing"],
+    )
+    .stub_toggle(
+        "stub.controls.reverse",
+        "Reverse scroll direction",
+        &s(""),
+        false,
+    )
+    .advanced()
+    .header("Remotes")
+    .stub_toggle("stub.controls.web", "Web remote control", &s(""), false);
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
@@ -1477,17 +1464,22 @@ fn customize(
 }
 
 fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'static) {
-    let keys = [
-        ("Play / pause", "Space"),
-        ("Seek ±5 s (Shift: 60 s)", "← →"),
-        ("Volume", "↑ ↓"),
-        ("Fullscreen", "F"),
-        ("Open file", "Ctrl O"),
-        ("Settings", "Ctrl ,"),
-    ];
+    use crate::keymap::Action as A;
+    let keys = crate::keymap::rows_of(&[
+        A::PlayPause,
+        A::SeekForward,
+        A::VolumeUp,
+        A::Fullscreen,
+        A::OpenFile,
+        A::Shortcuts,
+    ]);
     app.set_onboarding_actions(strings(keys.iter().map(|k| k.0)));
     app.set_onboarding_keys(strings(keys.iter().map(|k| k.1)));
     app.set_onboarding_open(!cfg.borrow().interface.onboarded);
+    // The `?` overlay lists the whole keymap.
+    let all: Vec<_> = crate::keymap::rows().collect();
+    app.set_shortcut_actions(strings(all.iter().map(|k| k.0)));
+    app.set_shortcut_keys(strings(all.iter().map(|k| k.1)));
     let w = app.as_weak();
     let cfg = cfg.clone();
     app.on_onboarding_done(move || {

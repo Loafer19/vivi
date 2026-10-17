@@ -3,6 +3,7 @@
 //! Slint draws them (ui/menu.slint); this module fills the rows and runs the actions.
 
 use crate::config::Config;
+use crate::keymap::{self, Action as A};
 use crate::player::Player;
 use crate::{store, AppWindow, MenuItem};
 use slint::{ComponentHandle, ModelRc, VecModel};
@@ -72,16 +73,26 @@ fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
             "play",
             if paused { "Play" } else { "Pause" },
             "play",
-            "Space",
+            &keymap::hint(A::PlayPause),
         ),
-        row("stop", "Stop", "stop", "S"),
-        row("prev", "Previous Item", "previous-item", "Shift + N"),
-        row("next", "Next Item", "next-item", "N"),
+        row("stop", "Stop", "stop", &keymap::hint(A::Stop)),
+        row(
+            "prev",
+            "Previous Item",
+            "previous-item",
+            &keymap::hint_alt(A::QueueStep),
+        ),
+        row(
+            "next",
+            "Next Item",
+            "next-item",
+            &keymap::hint(A::QueueStep),
+        ),
         row(
             "record",
             if rec { "Stop Recording" } else { "Record" },
             "record",
-            "R",
+            &keymap::hint(A::Record),
         ),
         div(row(
             "hide-ui",
@@ -91,7 +102,7 @@ fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
                 "Hide UI"
             },
             "hide-ui",
-            "Ctrl + \\",
+            &keymap::hint(A::HideUi),
         )),
         div(sub("playback", "Playback", "playback")),
         sub("video", "Video", "video"),
@@ -100,7 +111,7 @@ fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
         div(sub("more", "More Settings", "more-settings")),
         sub("playlist", "Playlist", "playlist"),
         sub("open", "Open Media", "open-media"),
-        row("quit", "Quit", "quit-vlc", "Ctrl + Q"),
+        row("quit", "Quit", "quit-vlc", &keymap::hint(A::Quit)),
     ]
 }
 
@@ -167,7 +178,12 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
             }
             v.push(div(row("rotate", "Rotate 90°", "", "")));
             v.push(row("snapshot", "Take Snapshot", "snapshot", ""));
-            v.push(row("fullscreen", "Fullscreen", "fullscreen", "F"));
+            v.push(row(
+                "fullscreen",
+                "Fullscreen",
+                "fullscreen",
+                &keymap::hint(A::Fullscreen),
+            ));
             v.push(row("panel:2", "Video Adjustments…", "paint", ""));
             v
         }
@@ -199,10 +215,20 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
             v
         }
         "more" => vec![
-            row("mini", "Miniplayer", "pip", "P"),
+            row("mini", "Miniplayer", "pip", &keymap::hint(A::Miniplayer)),
             row("customize", "Customize Player", "paint", ""),
-            row("shortcuts", "Keyboard Shortcuts", "hotkeys", ""),
-            row("settings", "Settings", "settings", "Ctrl + ,"),
+            row(
+                "shortcuts",
+                "Keyboard Shortcuts",
+                "hotkeys",
+                &keymap::hint(A::Shortcuts),
+            ),
+            row(
+                "settings",
+                "Settings",
+                "settings",
+                &keymap::hint(A::Settings),
+            ),
         ],
         "playlist" => vec![
             row("panel:4", "Show Queue", "playlist", ""),
@@ -211,7 +237,12 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
             row("clear-queue", "Clear Queue", "remove", ""),
         ],
         "open" => vec![
-            row("open-file", "Open File(s)", "file", "Ctrl + O"),
+            row(
+                "open-file",
+                "Open File(s)",
+                "file",
+                &keymap::hint(A::OpenFile),
+            ),
             row("open-folder", "Open Folder", "folder", ""),
             row("open-network", "Open Network Stream", "streaming", ""),
             row("library", "Library", "recent", ""),
@@ -466,7 +497,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "prev" => p.playlist_step(false),
             "next" => p.playlist_step(true),
             "record" => a.invoke_toggle_record(),
-            "hide-ui" => a.set_ui_hidden(!a.get_ui_hidden()),
+            "hide-ui" => crate::toggle_ui_hidden(a),
             "quit" => {
                 let _ = a.hide();
                 let _ = slint::quit_event_loop();
@@ -502,10 +533,8 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             }
             "mini" => a.invoke_toggle_mini(),
             "customize" => a.set_customize_open(true),
-            "shortcuts" | "settings" => {
-                if id == "shortcuts" {
-                    a.set_settings_category(4);
-                }
+            "shortcuts" => a.set_shortcuts_open(true),
+            "settings" => {
                 a.set_settings_open(true);
                 a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
             }

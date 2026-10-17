@@ -5,6 +5,7 @@ mod desktop;
 mod dialogs;
 mod fx;
 mod ipc;
+mod keymap;
 mod library;
 mod libview;
 mod loading;
@@ -12,6 +13,7 @@ mod menus;
 mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
+mod overlays;
 mod peaks;
 mod player;
 mod plugins;
@@ -341,10 +343,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let weak = app.as_weak();
         app.on_toggle_record(move || {
             // mpv stream-record: dump the stream to a file next to the user's videos.
-            let on = p.get("stream-record").is_some_and(|s| !s.is_empty());
-            let msg = if on {
+            let rec = p.get("stream-record").unwrap_or_default();
+            let key = keymap::shown(keymap::Action::Record);
+            let msg = if !rec.is_empty() {
                 p.set("stream-record", "");
-                "Recording stopped".to_string()
+                format!("Recording stopped · saved to {rec}")
             } else {
                 let dir = store::home().join("Videos");
                 let dir = if dir.is_dir() { dir } else { store::home() };
@@ -357,10 +360,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     n += 1;
                 };
                 p.set("stream-record", &out.to_string_lossy());
-                format!("Recording to {}", out.display())
+                format!("Recording to {} · press {key} to stop", out.display())
             };
             if let Some(a) = weak.upgrade() {
-                a.set_resume_text(msg.into());
+                plugins::toast(&a, &msg);
             }
         });
         let p = player.clone();
@@ -386,9 +389,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let p = player.clone();
     let weak = app.as_weak();
     app.on_key(move |text, shift, ctrl, alt| {
-        use slint::platform::Key;
         let s = text.as_str();
-        let is = |k: Key| s == slint::SharedString::from(k).as_str();
         if key_debug() {
             let cps: Vec<String> = s.chars().map(|c| format!("U+{:04X}", c as u32)).collect();
             eprintln!(
@@ -396,10 +397,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cps.join(" ")
             );
         }
-        // Alt combinations belong to mpv scripts / plugin packages.
-        if alt {
+        use keymap::Action as A;
+        let action = keymap::lookup(s, shift, ctrl);
+        // Alt combinations belong to mpv scripts / plugin packages (V is the exception:
+        // the visualizer cycles with Alt held too, as it always did).
+        if alt && action != Some(A::Visualizer) {
             return forward_key(&p, s, ctrl, alt);
         }
+        let Some(action) = action else {
+            forward_key(&p, s, ctrl, alt);
+            return false;
+        };
         let skip =
             |a: &std::sync::atomic::AtomicU32| a.load(std::sync::atomic::Ordering::Relaxed) as f64;
         let step = if shift {
@@ -408,102 +416,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             skip(&settings::SHORT_SKIP)
         };
         let vstep = skip(&settings::VOLUME_STEP);
-        match () {
-            _ if s == " " || s == "k" => p.toggle_pause(),
-            _ if is(Key::RightArrow) => p.seek_rel(step),
-            _ if is(Key::LeftArrow) => p.seek_rel(-step),
-            _ if is(Key::UpArrow) => p.add_volume(vstep),
-            _ if is(Key::DownArrow) => p.add_volume(-vstep),
-            _ if s == "f" => toggle_fs(),
-            _ if s == "p" && !ctrl => {
-                if let Some(a) = weak.upgrade() {
-                    if a.get_has_media() {
-                        a.invoke_toggle_mini();
-                    }
+        let Some(a) = weak.upgrade() else {
+            return false;
+        };
+        match action {
+            A::PlayPause => p.toggle_pause(),
+            A::SeekForward => p.seek_rel(step),
+            A::SeekBack => p.seek_rel(-step),
+            A::VolumeUp => p.add_volume(vstep),
+            A::VolumeDown => p.add_volume(-vstep),
+            A::Fullscreen => toggle_fs(),
+            A::Miniplayer => {
+                if a.get_has_media() {
+                    a.invoke_toggle_mini();
                 }
             }
-            _ if s == "m" => p.toggle_mute(),
-            _ if !ctrl && (s == "s" || s == "S") => {
-                if let Some(a) = weak.upgrade() {
-                    a.invoke_stop();
-                }
-            }
-            _ if !ctrl && (s == "n" || s == "N") => p.playlist_step(!shift),
-            // Lyrics: L karaoke view, Ctrl+L search, [ ] timing offset (Shift: 0.5 s).
-            // Shift+L: set A, then B, then clear the A-B loop (plain L is the lyrics view).
-            _ if shift && !ctrl && (s == "l" || s == "L") => {
-                if let Some(a) = weak.upgrade() {
-                    a.invoke_run("ab-loop".into());
-                }
-            }
-            _ if s == "l" || s == "L" => {
-                let cmd = if ctrl { "search-open" } else { "karaoke" };
-                crate::plugins::command(plugins::lyrics::ID, cmd, &[]);
-            }
-            _ if !ctrl && matches!(s, "[" | "]" | "{" | "}") => {
+            A::Mute => p.toggle_mute(),
+            A::Stop => a.invoke_stop(),
+            A::QueueStep => p.playlist_step(!shift),
+            A::AbLoop => a.invoke_run("ab-loop".into()),
+            A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "karaoke", &[]),
+            A::FindLyrics => crate::plugins::command(plugins::lyrics::ID, "search-open", &[]),
+            // [ ] lyrics timing offset (Shift or { }: 0.5 s).
+            A::LyricsOffset => {
                 let big = shift || s == "{" || s == "}";
                 let d = if big { 0.5 } else { 0.1 };
                 let d = if s == "[" || s == "{" { -d } else { d };
                 crate::plugins::command(plugins::lyrics::ID, "offset", &[d.to_string()]);
             }
-            // Subtitles: z / x offset −0.1 / +0.1 s (Shift: 1 s), saved per file.
-            _ if !ctrl && matches!(s, "z" | "x" | "Z" | "X") => {
+            // z / x subtitle offset −0.1 / +0.1 s (Shift: 1 s), saved per file.
+            A::SubtitleOffset => {
                 let big = shift || s == "Z" || s == "X";
                 let d = if big { 1.0 } else { 0.1 };
                 let d = if s.eq_ignore_ascii_case("z") { -d } else { d };
                 crate::plugins::command(plugins::subtitles::ID, "offset", &[d.to_string()]);
             }
-            _ if !ctrl && (s == "r" || s == "R") => {
-                if let Some(a) = weak.upgrade() {
-                    a.invoke_toggle_record();
+            A::Visualizer => {
+                let n = a.get_viz_modes().row_count() as i32;
+                if !(a.get_has_media() && a.get_viz_audio()) || n == 0 {
+                    forward_key(&p, s, ctrl, alt);
+                    return false;
                 }
+                a.invoke_viz_select((a.get_viz_mode() + 1).rem_euclid(n));
             }
-            _ if ctrl && s == "\\" => {
-                if let Some(a) = weak.upgrade() {
-                    a.set_ui_hidden(!a.get_ui_hidden());
-                }
-            }
-            _ if ctrl && s == "q" => {
+            A::Record => a.invoke_toggle_record(),
+            A::HideUi => toggle_ui_hidden(&a),
+            A::Quit => {
                 let _ = slint::quit_event_loop();
             }
-            _ if ctrl && s == "o" => open_file(),
-            _ if ctrl && s == "," => {
-                if let Some(a) = weak.upgrade() {
-                    a.set_settings_open(!a.get_settings_open());
-                    a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
-                }
+            A::OpenFile => open_file(),
+            A::Settings => {
+                a.set_settings_open(!a.get_settings_open());
+                a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
             }
-            _ if ctrl && s == "b" => {
-                if let Some(a) = weak.upgrade() {
-                    a.invoke_add_bookmark();
-                }
-            }
-            _ if is(Key::Escape) => {
-                if let Some(a) = weak.upgrade() {
-                    if a.get_mini() {
-                        a.invoke_toggle_mini();
-                    } else if a.window().is_fullscreen() {
-                        a.window().set_fullscreen(false);
-                        a.set_fullscreen(false);
-                    } else if a.get_ls_open() {
-                        crate::plugins::command(plugins::lyrics::ID, "search-close", &[]);
-                    } else if a.get_karaoke_open() {
-                        a.set_karaoke_open(false);
-                    } else if a.get_customize_open() {
-                        a.invoke_customize_done(false);
-                    } else if a.get_subs_open() {
-                        a.set_subs_open(false);
-                    } else if a.get_md_open() {
-                        a.set_md_open(false);
-                        crate::plugins::command(&a.get_md_owner(), "close", &[]);
-                    } else if a.get_settings_open() {
-                        a.set_settings_open(false);
-                    }
-                }
-            }
-            _ => {
-                forward_key(&p, s, ctrl, alt);
-                return false;
+            A::Bookmark => a.invoke_add_bookmark(),
+            A::Shortcuts => a.set_shortcuts_open(!a.get_shortcuts_open()),
+            A::Escape => {
+                overlays::escape(&a);
             }
         }
         true
@@ -597,6 +566,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.run()?;
     player.save_position();
     Ok(())
+}
+
+/// Ctrl+\\ (and the menu's Hide UI): hide every control; a toast says how to get them back.
+pub fn toggle_ui_hidden(a: &AppWindow) {
+    let hide = !a.get_ui_hidden();
+    a.set_ui_hidden(hide);
+    if hide {
+        let key = keymap::shown(keymap::Action::HideUi);
+        plugins::toast(
+            a,
+            &format!("Interface hidden · press {key} to show it again"),
+        );
+    }
 }
 
 fn items(v: impl IntoIterator<Item = (String, String, bool)>) -> slint::ModelRc<Item> {
