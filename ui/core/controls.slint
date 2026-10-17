@@ -1,0 +1,120 @@
+// Reusable settings controls per the Figma "Components" and "Settings" frames:
+// ON/OFF toggle, accent slider with ticks, segmented control, text field,
+// path field with Browse, action button and the collapsible "Advanced Options" bar.
+// The dropdown with check mark lives in menu.slint and is re-exported here.
+import { Dropdown } from "../menu.slint";
+import { Theme, Metrics, Icon } from "theme.slint";
+import { FlatButton } from "buttons.slint";
+import { Slider } from "slider.slint";
+export { Slider }
+export { Dropdown }
+
+
+// Figma ON/OFF toggle: 64×30 well, a square knob and the state label.
+export component Toggle inherits Rectangle {
+    in property <bool> on;
+    in property <bool> enabled: true;
+    callback toggled();
+    width: 64px; height: 30px; border-radius: Metrics.radius-md;
+    background: Theme.field;
+    opacity: enabled ? 1 : 0.4;
+    // Label well (the half without the knob)
+    Rectangle {
+        x: on ? 3px : parent.width / 2; y: 3px;
+        width: parent.width / 2 - 3px; height: parent.height - 6px; border-radius: Metrics.radius-sm;
+        background: on ? Theme.accent.mix(Theme.field, 30%) : Theme.field-raised;
+        Text {
+            text: on ? "ON" : "OFF"; font-size: Metrics.font-xs;
+            color: on ? Theme.accent : Theme.fg-a3;
+            horizontal-alignment: center; vertical-alignment: center;
+        }
+    }
+    Rectangle {
+        x: on ? parent.width / 2 : 3px; y: 3px;
+        width: parent.width / 2 - 3px; height: parent.height - 6px; border-radius: Metrics.radius-sm;
+        background: on ? Theme.accent : Theme.field-knob;
+        animate x { duration: 110ms; }
+    }
+    TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.toggled(); } }
+}
+
+// Segmented control (e.g. Theme: Dark | Light | System).
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in property <string> value;
+    in property <bool> enabled: true;
+    callback selected(string);
+    height: 32px; border-radius: Metrics.radius-md; background: Theme.field;
+    opacity: enabled ? 1 : 0.4;
+    HorizontalLayout {
+        padding: 2px; spacing: 2px;
+        for o in root.options: Rectangle {
+            horizontal-stretch: 1; border-radius: Metrics.radius-sm;
+            background: o == root.value ? Theme.accent.mix(Theme.field, 30%) : (sta.has-hover ? Theme.field-raised : Theme.field-raised.mix(Theme.field, 60%));
+            Text {
+                text: o; font-size: Metrics.font-md;
+                color: o == root.value ? Theme.accent : Theme.fg-a2;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
+            sta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.selected(o); } }
+        }
+    }
+}
+
+// Single-line text field on the dark field fill.
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    in property <bool> password;
+    callback edited(string);
+    callback accepted(string);
+    public function focus-input() { ti.focus(); }
+    height: 32px; border-radius: Metrics.radius-md; background: Theme.field;
+    border-width: ti.has-focus ? 1px : 0px; border-color: Theme.accent;
+    opacity: enabled ? 1 : 0.4;
+    clip: true;
+    if root.text == "" && !ti.has-focus: Text {
+        x: 12px; height: parent.height; text: root.placeholder;
+        color: Theme.fg-a3; font-size: Metrics.font-md; vertical-alignment: center;
+    }
+    ti := TextInput {
+        x: 12px; width: parent.width - 24px; height: parent.height;
+        text <=> root.text; enabled: root.enabled;
+        input-type: root.password ? InputType.password : InputType.text;
+        color: Theme.fg-2; font-size: Metrics.font-md; vertical-alignment: center;
+        selection-background-color: Theme.accent-bg;
+        single-line: true;
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(self.text); }
+    }
+}
+
+// Path / file field with a Browse button.
+export component PathField inherits HorizontalLayout {
+    in-out property <string> text;
+    in property <bool> enabled: true;
+    callback edited(string);
+    callback browse();
+    spacing: 8px;
+    TextField { horizontal-stretch: 1; text <=> root.text; enabled: root.enabled; edited(t) => { root.edited(t); } }
+    FlatButton { text: "Browse"; enabled: root.enabled; clicked => { root.browse(); } }
+}
+
+// Collapsible "Advanced Options ›" bar shown at the end of a section.
+export component AdvancedBar inherits Rectangle {
+    in-out property <bool> expanded;
+    callback toggled(bool);
+    height: 40px; border-radius: Metrics.radius-md;
+    background: ata.has-hover ? Theme.bg-a3.mix(Theme.bg-a1, 50%) : Theme.bg-a3;
+    HorizontalLayout {
+        alignment: center; spacing: 8px;
+        Text { text: "Advanced Options"; color: Theme.fg-a1; font-size: Metrics.font-md; vertical-alignment: center; }
+        Icon {
+            y: (parent.height - 16px) / 2; width: 16px; height: 16px;
+            source: root.expanded ? @image-url("../../assets/icons/chevron-down.svg") : @image-url("../../assets/icons/chevron-right.svg");
+            tint: Theme.fg-a1;
+        }
+    }
+    ata := TouchArea { mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; root.toggled(root.expanded); } }
+}

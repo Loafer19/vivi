@@ -1,38 +1,34 @@
 // "Open Network Stream" and "New Playlist" dialogs per the Figma frame
 // docs/design/frames/dialog-network-playlist.png.
-import { Theme, Icon } from "theme.slint";
-import { Field, TextField } from "controls.slint";
+import { Theme, Metrics, Icon } from "core/theme.slint";
+import { TextField } from "core/controls.slint";
 import { ScrollView } from "std-widgets.slint";
+import { Modal } from "core/modal.slint";
+import { PrimaryButton, SecondaryButton, ButtonSize } from "core/buttons.slint";
 
 // Window chrome shared by both dialogs: dark title bar with the close cross.
-component DialogFrame inherits Rectangle {
+component DialogFrame inherits Modal {
     in property <string> title;
     in property <length> dialog-width: 760px;
     callback close();
-    background: #00000099;
-    TouchArea { clicked => { root.close(); } }
-    Rectangle {
-        width: min(root.dialog-width, root.width - 32px);
-        height: min(col.preferred-height, root.height - 32px);
-        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
-        background: Theme.dark ? #232323 : #E9E9E9; border-radius: 10px;
-        drop-shadow-blur: 24px; drop-shadow-offset-y: 10px; drop-shadow-color: #00000080;
-        clip: true;
-        TouchArea { }
-        col := VerticalLayout {
-            Rectangle {
-                height: 40px; background: Theme.dark ? #111111 : #DCDCDC;
-                HorizontalLayout {
-                    padding-left: 16px; padding-right: 8px;
-                    Text { text: root.title; color: Theme.fg-a2; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
-                    VerticalLayout { alignment: center;
-                        Rectangle { width: 28px; height: 28px; border-radius: 4px; background: cx.has-hover ? Theme.bg-a1 : transparent;
-                            Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a2; }
-                            cx := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } } } }
-                }
+    card-width: root.dialog-width;
+    card-height: col.preferred-height;
+    card-background: Theme.surface;
+    bordered: false;
+    dismissed => { root.close(); }
+    col := VerticalLayout {
+        Rectangle {
+            height: 40px; background: Theme.surface-head;
+            HorizontalLayout {
+                padding-left: 16px; padding-right: 8px;
+                Text { text: root.title; color: Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-stretch: 1; }
+                VerticalLayout { alignment: center;
+                    Rectangle { width: 28px; height: 28px; border-radius: Metrics.radius-sm; background: cx.has-hover ? Theme.bg-a1 : transparent;
+                        Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a2; }
+                        cx := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } } } }
             }
-            @children
         }
+        @children
     }
 }
 
@@ -43,26 +39,10 @@ component Heading inherits VerticalLayout {
     spacing: 8px;
     HorizontalLayout {
         spacing: 4px; alignment: start;
-        Text { text: root.title; color: Theme.fg-1; font-size: 14px; font-weight: 500; }
-        if root.extra != "": Text { text: root.extra; color: Theme.fg-a3; font-size: 14px; }
+        Text { text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 500; }
+        if root.extra != "": Text { text: root.extra; color: Theme.fg-a3; font-size: Metrics.font-base; }
     }
-    Text { text: root.hint; color: Theme.fg-a3; font-size: 12px; wrap: word-wrap; }
-}
-
-component DialogButton inherits Rectangle {
-    in property <string> text;
-    in property <bool> primary;
-    in property <bool> enabled: true;
-    callback clicked();
-    width: max(72px, t.preferred-width + 32px); height: 30px; border-radius: 4px;
-    background: !root.enabled ? transparent
-        : root.primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
-        : (ta.has-hover ? Theme.bg-a1 : (Theme.dark ? #161616 : #D4D4D4));
-    t := Text {
-        text: root.text; font-size: 12px; font-weight: 500;
-        color: !root.enabled ? Theme.fg-a3 : root.primary ? Theme.bg-b2 : Theme.fg-1;
-    }
-    ta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    Text { text: root.hint; color: Theme.fg-a3; font-size: Metrics.font-sm; wrap: word-wrap; }
 }
 
 // Multi-line URL box; one link per line.
@@ -87,27 +67,27 @@ export component NetworkStreamDialog inherits Rectangle {
                     + (root.ytdlp ? " YouTube and other sites play through yt-dlp." : " Install yt-dlp to play YouTube and other sites.");
             }
             Rectangle {
-                height: 136px; border-radius: 4px; background: Theme.dark ? #0B0B0B : #F6F6F6;
+                height: 136px; border-radius: Metrics.radius-sm; background: Theme.field;
                 border-width: box.has-focus ? 1px : 0px; border-color: Theme.accent;
                 clip: true;
                 if root.urls == "" && !box.has-focus: Text {
                     x: 10px; y: 10px; text: "e.g., https://www.example.com/stream.avi";
-                    color: Theme.fg-a3; font-size: 12px;
+                    color: Theme.fg-a3; font-size: Metrics.font-sm;
                 }
                 box := TextInput {
                     x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px;
                     text <=> root.urls; single-line: false; wrap: word-wrap;
-                    color: Theme.fg-2; font-size: 12px; font-family: "DM Mono";
+                    color: Theme.fg-2; font-size: Metrics.font-sm; font-family: "DM Mono";
                     selection-background-color: Theme.accent-bg;
                 }
             }
             if root.history.length > 0: VerticalLayout {
                 spacing: 4px;
-                Text { text: "Recent streams"; color: Theme.fg-a3; font-size: 12px; }
+                Text { text: "Recent streams"; color: Theme.fg-a3; font-size: Metrics.font-sm; }
                 for h in root.history: Rectangle {
-                    height: 26px; border-radius: 4px;
+                    height: 26px; border-radius: Metrics.radius-sm;
                     background: hta.has-hover ? Theme.bg-a1 : transparent;
-                    Text { x: 8px; width: parent.width - 16px; text: h; color: Theme.fg-a2; font-size: 12px; font-family: "DM Mono"; overflow: elide; vertical-alignment: center; }
+                    Text { x: 8px; width: parent.width - 16px; text: h; color: Theme.fg-a2; font-size: Metrics.font-sm; font-family: "DM Mono"; overflow: elide; vertical-alignment: center; }
                     hta := TouchArea {
                         mouse-cursor: pointer;
                         clicked => { root.urls = root.urls == "" ? h : root.urls + "\n" + h; }
@@ -116,13 +96,14 @@ export component NetworkStreamDialog inherits Rectangle {
             }
             Heading { title: "Playlist Name"; extra: "(optional)"; hint: "The playlist will be saved and displayed with this title."; }
             TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite TV Channels"; }
-            if root.error != "": Text { text: root.error; color: #E5484D; font-size: 12px; wrap: word-wrap; }
+            if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Metrics.font-sm; wrap: word-wrap; }
             Rectangle { height: 8px; }
             HorizontalLayout {
                 alignment: space-between;
-                DialogButton { text: "Cancel"; clicked => { root.close(); } }
-                DialogButton {
-                    text: root.name == "" ? "Open" : "Save"; primary: root.has-urls; enabled: root.has-urls;
+                SecondaryButton { size: ButtonSize.sm; min-w: 72px; text: "Cancel"; clicked => { root.close(); } }
+                PrimaryButton {
+                    size: ButtonSize.sm; min-w: 72px;
+                    text: root.name == "" ? "Open" : "Save"; enabled: root.has-urls;
                     clicked => { root.submit(root.urls, root.name); }
                 }
             }
@@ -157,12 +138,12 @@ export component NewPlaylistDialog inherits Rectangle {
                     nm := TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite Videos"; accepted => { root.save(root.name); } }
                 }
                 Rectangle {
-                    width: 96px; height: 96px; border-radius: 4px; clip: true;
-                    background: Theme.dark ? #0B0B0B : #F6F6F6;
+                    width: 96px; height: 96px; border-radius: Metrics.radius-sm; clip: true;
+                    background: Theme.field;
                     border-width: ca.has-hover ? 1px : 0px; border-color: Theme.accent;
                     if root.has-cover: Image { width: parent.width; height: parent.height; source: root.cover; image-fit: ImageFit.cover; }
                     if !root.has-cover: Rectangle {
-                        width: 28px; height: 28px; border-radius: 4px; background: Theme.dark ? #262626 : #DADADA;
+                        width: 28px; height: 28px; border-radius: Metrics.radius-sm; background: Theme.popup-hover;
                         Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; }
                     }
                     ca := TouchArea { mouse-cursor: pointer; clicked => { root.pick-cover(); } }
@@ -171,23 +152,23 @@ export component NewPlaylistDialog inherits Rectangle {
             Heading { title: "Select Files"; hint: "These files will be added to the playlist."; }
             Rectangle {
                 height: root.files.length == 0 ? 150px : 190px;
-                border-radius: 4px; background: Theme.dark ? #0B0B0B : #F6F6F6;
+                border-radius: Metrics.radius-sm; background: Theme.field;
                 border-width: 1px; border-color: root.drag-over || za.has-hover ? Theme.accent : Theme.divider;
                 clip: true;
                 // Dashed outline per Figma: short dashes over the border.
                 if root.files.length == 0: VerticalLayout {
                     alignment: center; spacing: 12px;
-                    Text { text: "Drag files into the box or click here to select files."; color: Theme.fg-a3; font-size: 12px; horizontal-alignment: center; }
+                    Text { text: "Drag files into the box or click here to select files."; color: Theme.fg-a3; font-size: Metrics.font-sm; horizontal-alignment: center; }
                     HorizontalLayout { alignment: center;
-                        Rectangle { width: 46px; height: 24px; border-radius: 4px; background: Theme.dark ? #262626 : #DADADA;
+                        Rectangle { width: 46px; height: 24px; border-radius: Metrics.radius-sm; background: Theme.popup-hover;
                             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; } } }
                 }
                 za := TouchArea { mouse-cursor: pointer; clicked => { root.pick-files(); } }
                 if root.files.length > 0: VerticalLayout {
                     padding: 8px; spacing: 4px;
                     HorizontalLayout {
-                        Text { text: root.files.length + (root.files.length == 1 ? " file" : " files"); color: Theme.fg-a2; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center; }
-                        Rectangle { width: 46px; height: 24px; border-radius: 4px; background: aa.has-hover ? Theme.divider : (Theme.dark ? #262626 : #DADADA);
+                        Text { text: root.files.length + (root.files.length == 1 ? " file" : " files"); color: Theme.fg-a2; font-size: Metrics.font-sm; horizontal-stretch: 1; vertical-alignment: center; }
+                        Rectangle { width: 46px; height: 24px; border-radius: Metrics.radius-sm; background: aa.has-hover ? Theme.divider : (Theme.popup-hover);
                             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; }
                             aa := TouchArea { mouse-cursor: pointer; clicked => { root.pick-files(); } } }
                     }
@@ -195,13 +176,13 @@ export component NewPlaylistDialog inherits Rectangle {
                         VerticalLayout {
                             alignment: start; spacing: 0px;
                             for f[i] in root.files: Rectangle {
-                                height: 28px; border-radius: 4px;
+                                height: 28px; border-radius: Metrics.radius-sm;
                                 background: fta.has-hover ? Theme.bg-a1 : transparent;
                                 fta := TouchArea { }
                                 HorizontalLayout {
                                     padding-left: 8px; padding-right: 4px; spacing: 8px;
-                                    Text { text: (i + 1) + "."; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 11px; vertical-alignment: center; width: 24px; }
-                                    Text { text: f; color: Theme.fg-2; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                    Text { text: (i + 1) + "."; color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-xs; vertical-alignment: center; width: 24px; }
+                                    Text { text: f; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                                     Rectangle { width: 24px;
                                         Icon { width: 12px; height: 12px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a3; }
                                         TouchArea { mouse-cursor: pointer; clicked => { root.remove-file(i); } } }
@@ -211,12 +192,13 @@ export component NewPlaylistDialog inherits Rectangle {
                     }
                 }
             }
-            if root.error != "": Text { text: root.error; color: #E5484D; font-size: 12px; }
+            if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Metrics.font-sm; }
             HorizontalLayout {
                 alignment: space-between;
-                DialogButton { text: "Cancel"; clicked => { root.close(); } }
-                DialogButton {
-                    text: "Save"; primary: root.name != ""; enabled: root.name != "";
+                SecondaryButton { size: ButtonSize.sm; min-w: 72px; text: "Cancel"; clicked => { root.close(); } }
+                PrimaryButton {
+                    size: ButtonSize.sm; min-w: 72px;
+                    text: "Save"; enabled: root.name != "";
                     clicked => { root.save(root.name); }
                 }
             }
@@ -238,13 +220,13 @@ export component QrDialog inherits Rectangle {
         VerticalLayout {
             padding: 20px; spacing: 12px; alignment: start;
             HorizontalLayout { alignment: center;
-                Rectangle { width: 264px; height: 264px; background: #FFFFFF; border-radius: 8px;
+                Rectangle { width: 264px; height: 264px; background: white; border-radius: Metrics.radius-lg;
                     Image { width: 240px; height: 240px; source: root.code; image-rendering: pixelated; }
                 }
             }
-            Text { text: root.text; color: Theme.fg-1; font-size: 12px; horizontal-alignment: center; wrap: char-wrap; }
-            if root.caption != "": Text { text: root.caption; color: Theme.fg-a3; font-size: 12px; horizontal-alignment: center; wrap: word-wrap; }
-            HorizontalLayout { alignment: end; DialogButton { text: "Done"; primary: true; clicked => { root.close(); } } }
+            Text { text: root.text; color: Theme.fg-1; font-size: Metrics.font-sm; horizontal-alignment: center; wrap: char-wrap; }
+            if root.caption != "": Text { text: root.caption; color: Theme.fg-a3; font-size: Metrics.font-sm; horizontal-alignment: center; wrap: word-wrap; }
+            HorizontalLayout { alignment: end; PrimaryButton { size: ButtonSize.sm; min-w: 72px; text: "Done"; clicked => { root.close(); } } }
         }
     }
 }
@@ -254,12 +236,12 @@ component ShortcutRow inherits HorizontalLayout {
     in property <string> action;
     in property <string> keys;
     height: 30px; spacing: 12px;
-    Text { text: root.action; color: Theme.fg-2; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+    Text { text: root.action; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
     VerticalLayout { alignment: center;
         Rectangle {
-            width: kt.preferred-width + 16px; height: 22px; border-radius: Theme.radius;
-            background: Field.fill; border-width: 1px; border-color: Theme.divider;
-            kt := Text { text: root.keys; color: Theme.fg-1; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
+            width: kt.preferred-width + 16px; height: 22px; border-radius: Metrics.radius-sm;
+            background: Theme.field; border-width: 1px; border-color: Theme.divider;
+            kt := Text { text: root.keys; color: Theme.fg-1; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
         }
     }
 }
@@ -290,7 +272,7 @@ export component ShortcutsDialog inherits Rectangle {
         }
         Text {
             text: "Press ? or Esc to close · also in Settings → Controls";
-            color: Theme.fg-a3; font-size: 11px; horizontal-alignment: center;
+            color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-alignment: center;
             height: 30px; vertical-alignment: center;
         }
     }

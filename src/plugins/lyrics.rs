@@ -857,6 +857,14 @@ impl Lyrics {
 
     /// Source, offset and track labels for the karaoke view and the side panel.
     fn update_info(&self, cx: &Ctx) {
+        let state = match &self.current {
+            Some(_) => crate::LyricsState::Found,
+            None if self.rx.is_some() || self.radio.as_ref().is_some_and(|r| r.rx.is_some()) => {
+                crate::LyricsState::Searching
+            }
+            None => crate::LyricsState::Missing,
+        };
+        cx.app.set_lyrics_state(state);
         let src = match &self.current {
             Some(c) => format!(
                 "{} · {}",

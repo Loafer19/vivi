@@ -1,0 +1,146 @@
+// Design tokens from Figma "VLC Redesign" (Dark/* and Light/* styles). Switched at runtime.
+export global Theme {
+    in-out property <bool> dark: true;
+    in-out property <color> accent: #D37918;
+    out property <color> accent-bright: dark ? accent.brighter(25%) : accent.darker(10%);
+    out property <color> accent-dim: accent.darker(20%);
+    out property <color> accent-bg: dark ? accent.mix(#000000, 22%) : accent.mix(#EDEDED, 30%);
+    out property <color> bg-a1: dark ? #222222 : #D5D5D5;
+    out property <color> bg-a3: dark ? #1B1B1B : #DDDDDD;
+    out property <color> bg-a4: dark ? #191919 : #EDEDED;
+    out property <color> bg-b1: dark ? #0E0E0E : #E7E7E7;
+    out property <color> bg-b2: #090909; // text on accent
+    out property <color> bar: dark ? #191919ED : #EDEDEDF0;
+    out property <color> bar-solid: dark ? #191919 : #EDEDED;
+    out property <color> fg-1: dark ? #EAEAEA : #161616;
+    out property <color> fg-2: dark ? #C6C6C6 : #2E2E2E;
+    out property <color> fg-a1: dark ? #969696 : #3C3C3C;
+    out property <color> fg-a2: dark ? #8F8F8F : #3B3B3B;
+    out property <color> fg-a3: dark ? #6B6B6B : #6B6B6B;
+    out property <color> divider: dark ? #373737 : #ACACAC;
+    out property <length> gap: 10px;
+
+    // Surfaces
+    out property <color> surface: dark ? #232323 : #E9E9E9;       // dialog card
+    out property <color> surface-head: dark ? #111111 : #DCDCDC;  // dialog title strip
+    out property <color> popup: dark ? #1F1F1F : #E2E2E2;         // menus, dropdown lists
+    out property <color> popup-hover: dark ? #262626 : #DADADA;
+    out property <color> hover: dark ? #FFFFFF0D : #0000000D;     // faint row hover
+    out property <color> bar-dark: dark ? #181818F2 : bar;        // bottom control bar
+    out property <color> bar-line: dark ? #212121 : divider;
+
+    out property <color> button: dark ? #161616 : #D4D4D4;        // secondary dialog button
+    out property <color> popup-line: dark ? #2B2B2B : #D0D0D0;
+    out property <color> edge: dark ? #000000 : #CFCFCF;          // slider knob outline
+    // Form fields (text fields, slider tracks, inactive toggles)
+    out property <color> field: dark ? #0B0B0B : #F6F6F6;
+    out property <color> field-raised: dark ? #222222 : #DADADA;
+    out property <color> field-knob: dark ? #444444 : #BDBDBD;
+    // Onboarding theme cards always preview both themes
+    out property <color> preview-dark: #0E0E0E;
+    out property <color> preview-dark-bar: #191919;
+    out property <color> preview-light: #E7E7E7;
+    out property <color> preview-light-bar: #D5D5D5;
+
+    // Overlays
+    out property <color> scrim: #000000A0;        // behind every modal
+    out property <color> scrim-soft: #00000066;   // over video (miniplayer controls)
+    out property <color> scrim-strong: #000000D0; // image zoom
+    out property <color> shadow: #00000080;
+    out property <color> shadow-soft: #00000066;  // menus, dropdowns
+    out property <color> on-media: #FFFFFF;       // text and icons drawn over video
+    out property <color> on-media-dim: #FFFFFF26;
+    out property <color> media-chip: #000000A0;   // dark chip over video / thumbnails
+    out property <color> media-track: #00000080;  // progress strip on thumbnails
+    out property <color> video-bg: #000000;
+
+    // Seek track (Compact / Waveform reference colours)
+    out property <color> track: #090909;
+    out property <color> track-fill: #371F06;
+    out property <color> track-fill-hover: #4A2A08;
+    out property <color> track-tick: #FFFFFF0D;
+    out property <color> range: #4FC3F7;          // plugin range on the seekbar
+    // Volume wedge gradient
+    out property <color> meter-low: #95D318;
+    out property <color> meter-mid: #B2A918;
+    out property <color> meter-high: #D37918;
+    out property <color> meter-peak: #FF3737;
+
+    // Status: fg for text/icons, bg as a solid base (use .with-alpha for tints)
+    out property <color> ok: dark ? #7CC47F : #2E7D32;
+    out property <color> ok-bg: #2E7D32;
+    out property <color> warn: dark ? #E2B44A : #8A6400;
+    out property <color> warn-bg: #B8860B;
+    out property <color> err: dark ? #E57373 : #B23B3B;
+    out property <color> err-bg: #B23B3B;
+    out property <color> info: dark ? #7FB8F0 : #2155C4;
+    out property <color> info-bg: #2A6FDB;
+    out property <color> danger: #E5484D;         // form errors
+    out property <color> neutral-bg: #666666;
+    out property <color> tag-pink: #B03A9A;       // source badge (FMA)
+
+    // Full-screen "stage" (karaoke): near-black in dark mode, paper in light mode
+    out property <color> stage: dark ? #0A0A0A : #F4F4F4;
+    out property <color> stage-fg: dark ? #FFFFFF : #141414;
+    out property <color> stage-chip: dark ? #FFFFFF12 : #0000000D;
+    out property <color> stage-chip-hover: dark ? #FFFFFF22 : #0000001A;
+    out property <color> stage-chip-line: dark ? #FFFFFF1A : #00000014;
+}
+
+// Spacing, radius, type and icon scale. Use these instead of literals.
+export global Metrics {
+    out property <length> space-1: 4px;
+    out property <length> space-2: 8px;
+    out property <length> space-3: 12px;
+    out property <length> space-4: 16px;
+    out property <length> space-5: 24px;
+    out property <length> space-6: 32px;
+
+    out property <length> radius-xs: 2px;   // thin tracks, ticks
+    out property <length> radius-sm: 4px;   // buttons, fields
+    out property <length> radius-md: 6px;   // cards, toggles
+    out property <length> radius-lg: 8px;   // panels, popups
+    out property <length> radius-xl: 10px;  // dialogs
+    out property <length> radius-xxl: 16px; // toasts, big cards
+
+    out property <length> font-micro: 10px;
+    out property <length> font-xs: 11px;
+    out property <length> font-sm: 12px;
+    out property <length> font-md: 13px;
+    out property <length> font-base: 14px;
+    out property <length> font-lg: 16px;
+    out property <length> font-h3: 18px;
+    out property <length> font-xl: 20px;
+    out property <length> font-xxl: 24px;
+    out property <length> font-display: 28px;
+
+    out property <length> icon-xs: 14px;
+    out property <length> icon-sm: 16px;
+    out property <length> icon-md: 20px;
+    out property <length> icon-lg: 24px;
+
+    out property <length> row-h: 36px;
+    out property <length> bar-h: 36px;       // Compact / Waveform / Plain bottom bar
+    out property <length> bar-h-classic: 72px;
+}
+
+export component Icon inherits Image {
+    in property <color> tint: Theme.fg-2;
+    width: 24px; height: 24px;
+    colorize: tint;
+    image-fit: contain;
+}
+
+
+// Two-tone icon drawn from the colour layers made by tools/icon_layers.py:
+// base follows the text colour, accent/dim follow the theme accent.
+export component TriIcon inherits Rectangle {
+    in property <image> base;
+    in property <image> accent;
+    in property <image> dim;
+    in property <color> tint: Theme.fg-a2;
+    width: 24px; height: 24px;
+    Image { width: 100%; height: 100%; source: root.base; colorize: root.tint; image-fit: contain; }
+    Image { width: 100%; height: 100%; source: root.dim; colorize: Theme.accent-dim; image-fit: contain; }
+    Image { width: 100%; height: 100%; source: root.accent; colorize: Theme.accent; image-fit: contain; }
+}

@@ -1,5 +1,7 @@
 // Bottom-bar customization per Figma "Player - customize" and "Profiles".
-import { Theme, Icon } from "theme.slint";
+import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Modal } from "core/modal.slint";
+import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 
 export global Tools {
     public pure function icon(id: string) -> image {
@@ -56,23 +58,13 @@ export global Tools {
     }
 }
 
-component SmallButton inherits Rectangle {
-    in property <string> text;
-    in property <bool> primary;
-    callback clicked();
-    width: t.preferred-width + 28px; height: 36px; border-radius: Theme.radius-lg;
-    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent) : (ta.has-hover ? Theme.divider : Theme.bg-a1);
-    t := Text { text: root.text; color: primary ? Theme.bg-b2 : Theme.fg-1; font-weight: primary ? 600 : 400; vertical-alignment: center; horizontal-alignment: center; }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
-}
-
 component Glyph inherits Rectangle {
     in property <string> text;
     in property <bool> enabled: true;
     callback clicked();
-    width: 20px; height: 24px; border-radius: 3px;
+    width: 20px; height: 24px; border-radius: Metrics.radius-sm;
     background: ta.has-hover && enabled ? Theme.divider : transparent;
-    Text { text: root.text; color: enabled ? Theme.fg-1 : Theme.fg-a3; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
+    Text { text: root.text; color: enabled ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center; horizontal-alignment: center; }
     ta := TouchArea { mouse-cursor: enabled ? pointer : default; clicked => { if (root.enabled) { root.clicked(); } } }
 }
 
@@ -84,7 +76,7 @@ component Placed inherits Rectangle {
     callback move(int);
     callback remove();
     width: 70px; height: 62px;
-    border-radius: Theme.radius-lg; background: Theme.bg-a1;
+    border-radius: Metrics.radius-md; background: Theme.bg-a1;
     border-width: 1px; border-color: hov.has-hover ? Theme.accent : Theme.divider;
     hov := TouchArea { }
     Icon { y: 8px; source: Tools.icon(root.id); width: 22px; height: 22px; tint: Theme.fg-1; }
@@ -96,8 +88,8 @@ component Placed inherits Rectangle {
     }
     if hov.has-hover: Rectangle {
         y: -28px; height: 24px; width: tl.preferred-width + 14px; z: 5;
-        background: Theme.bg-a1; border-radius: Theme.radius; border-width: 1px; border-color: Theme.divider;
-        tl := Text { text: Tools.label(root.id); color: Theme.fg-1; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
+        background: Theme.bg-a1; border-radius: Metrics.radius-sm; border-width: 1px; border-color: Theme.divider;
+        tl := Text { text: Tools.label(root.id); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
     }
 }
 
@@ -109,9 +101,9 @@ component Zone inherits Rectangle {
     in property <bool> lock-last;
     callback move(int, int);
     callback remove(int);
-    min-height: 90px; border-radius: Theme.radius-lg; background: Theme.bg-b1;
+    min-height: 90px; border-radius: Metrics.radius-md; background: Theme.bg-b1;
     preferred-width: row.preferred-width + 20px;
-    Text { x: 12px; y: 6px; text: root.title; color: Theme.fg-a1; font-size: 11px; }
+    Text { x: 12px; y: 6px; text: root.title; color: Theme.fg-a1; font-size: Metrics.font-xs; }
     if root.items.length == 0: Text { text: "Empty"; color: Theme.fg-a3; }
     row := HorizontalLayout {
         x: 10px; y: 22px; height: 62px; spacing: 6px; alignment: start;
@@ -125,7 +117,7 @@ component Zone inherits Rectangle {
     }
 }
 
-export component CustomizeDialog inherits Rectangle {
+export component CustomizeDialog inherits Modal {
     in property <[string]> items;
     in property <[string]> styles;
     in property <string> bar-style;
@@ -140,83 +132,79 @@ export component CustomizeDialog inherits Rectangle {
     callback save();
     callback cancel();
 
-    background: #00000080;
-    TouchArea { }
-    Rectangle {
-        width: min(1000px, root.width - 48px);
-        height: col.preferred-height;
-        x: (root.width - self.width) / 2;
-        y: max(24px, (root.height - 72px - self.height) / 2);
-        background: Theme.bg-a4; border-radius: 12px; border-width: 1px; border-color: Theme.bg-a1;
-        col := VerticalLayout {
-            padding: 22px; spacing: 14px;
-            Text { text: "Customize Player"; color: Theme.fg-1; font-size: 20px; font-weight: 600; }
-            Text {
-                text: "Every element is movable: use ‹ › to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it. The bar under this dialog is a live preview.";
-                color: Theme.fg-a1; wrap: word-wrap;
+    card-width: 1000px;
+    card-height: col.preferred-height;
+    inset: 48px;
+    lift: 72px;
+    dismiss-on-scrim: false;
+    col := VerticalLayout {
+        padding: 22px; spacing: 14px;
+        Text { text: "Customize Player"; color: Theme.fg-1; font-size: Metrics.font-xl; font-weight: 600; }
+        Text {
+            text: "Every element is movable: use ‹ › to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it. The bar under this dialog is a live preview.";
+            color: Theme.fg-a1; wrap: word-wrap;
+        }
+        HorizontalLayout {
+            spacing: 8px; alignment: start;
+            Text { text: "Profile"; color: Theme.fg-2; vertical-alignment: center; }
+            for p in root.profiles: Rectangle {
+                height: 30px; width: pt.preferred-width + 22px; border-radius: Metrics.radius-md;
+                background: p == root.profile ? Theme.accent : (pta.has-hover ? Theme.divider : Theme.bg-a1);
+                pt := Text { text: p; color: p == root.profile ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
+                pta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-profile(p); } }
             }
+            if root.profile == "Custom": Rectangle {
+                height: 30px; width: ct.preferred-width + 22px; border-radius: Metrics.radius-md; background: Theme.accent;
+                ct := Text { text: "Custom"; color: Theme.bg-b2; vertical-alignment: center; horizontal-alignment: center; }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px; alignment: start;
+            Text { text: "Progress bar"; color: Theme.fg-2; vertical-alignment: center; }
+            for st in root.styles: Rectangle {
+                height: 30px; width: stt.preferred-width + 22px; border-radius: Metrics.radius-md;
+                background: st == root.bar-style ? Theme.accent : (sta.has-hover ? Theme.divider : Theme.bg-a1);
+                stt := Text {
+                    text: st == "Compact" ? "Compact inline" : st == "Classic" ? "Classic (full width on top)" : st == "Waveform" ? "Waveform (audio)" : "Plain thin";
+                    color: st == root.bar-style ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
+                }
+                sta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-style(st); } }
+            }
+        }
+        Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }
+        Flickable {
+            height: 92px; content-width: max(self.width, zone.preferred-width);
+            zone := Zone {
+                width: max(parent.width, self.preferred-width);
+                title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
+                move(i, d) => { root.move(i, d); }
+                remove(i) => { root.remove(i); }
+            }
+        }
+        Text { text: "Available items"; color: Theme.fg-1; font-weight: 600; }
+        Rectangle {
+            height: 64px; border-radius: Metrics.radius-md;
+            border-width: 1px; border-color: Theme.divider;
+            if root.available.length == 0: Text { text: "Every item is already in the player."; color: Theme.fg-a3; }
             HorizontalLayout {
-                spacing: 8px; alignment: start;
-                Text { text: "Profile"; color: Theme.fg-2; vertical-alignment: center; }
-                for p in root.profiles: Rectangle {
-                    height: 30px; width: pt.preferred-width + 22px; border-radius: Theme.radius-lg;
-                    background: p == root.profile ? Theme.accent : (pta.has-hover ? Theme.divider : Theme.bg-a1);
-                    pt := Text { text: p; color: p == root.profile ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
-                    pta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-profile(p); } }
-                }
-                if root.profile == "Custom": Rectangle {
-                    height: 30px; width: ct.preferred-width + 22px; border-radius: Theme.radius-lg; background: Theme.accent;
-                    ct := Text { text: "Custom"; color: Theme.bg-b2; vertical-alignment: center; horizontal-alignment: center; }
-                }
-            }
-            HorizontalLayout {
-                spacing: 8px; alignment: start;
-                Text { text: "Progress bar"; color: Theme.fg-2; vertical-alignment: center; }
-                for st in root.styles: Rectangle {
-                    height: 30px; width: stt.preferred-width + 22px; border-radius: Theme.radius-lg;
-                    background: st == root.bar-style ? Theme.accent : (sta.has-hover ? Theme.divider : Theme.bg-a1);
-                    stt := Text {
-                        text: st == "Compact" ? "Compact inline" : st == "Classic" ? "Classic (full width on top)" : st == "Waveform" ? "Waveform (audio)" : "Plain thin";
-                        color: st == root.bar-style ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
-                    }
-                    sta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-style(st); } }
-                }
-            }
-            Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }
-            Flickable {
-                height: 92px; content-width: max(self.width, zone.preferred-width);
-                zone := Zone {
-                    width: max(parent.width, self.preferred-width);
-                    title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
-                    move(i, d) => { root.move(i, d); }
-                    remove(i) => { root.remove(i); }
-                }
-            }
-            Text { text: "Available items"; color: Theme.fg-1; font-weight: 600; }
-            Rectangle {
-                height: 64px; border-radius: Theme.radius-lg;
-                border-width: 1px; border-color: Theme.divider;
-                if root.available.length == 0: Text { text: "Every item is already in the player."; color: Theme.fg-a3; }
-                HorizontalLayout {
-                    x: 10px; y: 12px; height: 40px; spacing: 6px; alignment: start;
-                    for id in root.available: Rectangle {
-                        height: 40px; width: 44px; border-radius: Theme.radius-lg;
-                        background: ata.has-hover ? Theme.divider : Theme.bg-a1;
-                        Icon { source: Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
-                        ata := TouchArea { mouse-cursor: pointer; clicked => { root.add(id); } }
-                        if ata.has-hover: Rectangle {
-                            y: -30px; height: 24px; width: tl.preferred-width + 14px; z: 5;
-                            background: Theme.bg-a1; border-radius: Theme.radius;
-                            tl := Text { text: "Add " + Tools.label(id); color: Theme.fg-1; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
-                        }
+                x: 10px; y: 12px; height: 40px; spacing: 6px; alignment: start;
+                for id in root.available: Rectangle {
+                    height: 40px; width: 44px; border-radius: Metrics.radius-md;
+                    background: ata.has-hover ? Theme.divider : Theme.bg-a1;
+                    Icon { source: Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
+                    ata := TouchArea { mouse-cursor: pointer; clicked => { root.add(id); } }
+                    if ata.has-hover: Rectangle {
+                        y: -30px; height: 24px; width: tl.preferred-width + 14px; z: 5;
+                        background: Theme.bg-a1; border-radius: Metrics.radius-sm;
+                        tl := Text { text: "Add " + Tools.label(id); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
                     }
                 }
             }
-            HorizontalLayout {
-                spacing: 10px; alignment: end;
-                SmallButton { text: "Cancel"; clicked => { root.cancel(); } }
-                SmallButton { text: "Save"; primary: true; clicked => { root.save(); } }
-            }
+        }
+        HorizontalLayout {
+            spacing: 10px; alignment: end;
+            SecondaryButton { text: "Cancel"; clicked => { root.cancel(); } }
+            PrimaryButton { text: "Save"; clicked => { root.save(); } }
         }
     }
 }

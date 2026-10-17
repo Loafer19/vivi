@@ -1,8 +1,11 @@
 // Equalizer and filter panels per the Figma "Components" frames
 // (components-miniplayer-menus-eq.png, components-dropdowns-filters.png).
 // State lives in Rust (src/fx.rs); the FxState global carries it both ways.
-import { Theme, Icon } from "theme.slint";
-import { Field, Toggle, AccentSlider, TextField } from "controls.slint";
+import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Toggle, Slider, TextField } from "core/controls.slint";
+import { Icons } from "core/icons.slint";
+import { Format } from "core/format.slint";
+import { PrimaryButton, ButtonSize } from "core/buttons.slint";
 
 export global FxState {
     in property <[float]> eq: [12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -18,8 +21,8 @@ export global FxState {
     in property <[string]> gradients: ["Turbo", "Magma", "Viridis", "Heat", "Cividis"];
     in property <string> extract-color: "#FF0000";
     in property <string> threshold-color: "#FF0000";
-    in property <color> extract-swatch: #FF0000;
-    in property <color> threshold-swatch: #FF0000;
+    in property <color> extract-swatch: red;
+    in property <color> threshold-swatch: red;
     in-out property <bool> eq-open: true;
     callback set(string, int, float);
     // Text typed into a dB/px field ("3.5 dB" → 3.5).
@@ -31,36 +34,10 @@ export global FxState {
 }
 
 // Icon for a built-in preset (assets/icons/eq-*.svg).
-global PresetIcon {
-    pure public function of(n: string) -> image {
-        return n == "Classical" ? @image-url("../assets/icons/eq-classical.svg")
-            : n == "Club" ? @image-url("../assets/icons/eq-club.svg")
-            : n == "Dance" ? @image-url("../assets/icons/eq-dance.svg")
-            : n == "Full bass" ? @image-url("../assets/icons/eq-full_bass.svg")
-            : n == "Full bass & treble" ? @image-url("../assets/icons/eq-full_bass_and_treble.svg")
-            : n == "Full treble" ? @image-url("../assets/icons/eq-full_treble.svg")
-            : n == "Headphones" ? @image-url("../assets/icons/eq-headphones.svg")
-            : n == "Large hall" ? @image-url("../assets/icons/eq-large_hall.svg")
-            : n == "Live" ? @image-url("../assets/icons/eq-live.svg")
-            : n == "Party" ? @image-url("../assets/icons/eq-party.svg")
-            : n == "Pop" ? @image-url("../assets/icons/eq-pop.svg")
-            : n == "Reggae" ? @image-url("../assets/icons/eq-reggae.svg")
-            : n == "Rock" ? @image-url("../assets/icons/eq-rock.svg")
-            : n == "Ska" ? @image-url("../assets/icons/eq-ska.svg")
-            : n == "Soft" ? @image-url("../assets/icons/eq-soft.svg")
-            : n == "Soft rock" ? @image-url("../assets/icons/eq-soft_rock.svg")
-            : n == "Techno" ? @image-url("../assets/icons/eq-techno.svg")
-            : @image-url("../assets/icons/remove.svg");
-    }
-}
+
 
 // Formats a value with one decimal ("12.0").
-global Fmt {
-    pure public function one(v: float) -> string {
-        let r = round(v * 10) / 10;
-        return r == round(r) ? r + ".0" : r;
-    }
-}
+
 
 // Row in the presets popup.
 component PresetRow inherits Rectangle {
@@ -73,13 +50,13 @@ component PresetRow inherits Rectangle {
     callback clicked();
     callback rename();
     callback delete();
-    height: 30px; border-radius: 4px;
-    background: ta.has-hover || root.selected ? (Theme.dark ? #2A2A2A : #DADADA) : transparent;
+    height: 30px; border-radius: Metrics.radius-sm;
+    background: ta.has-hover || root.selected ? Theme.popup-hover : transparent;
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     HorizontalLayout {
         padding-left: 8px; padding-right: 6px; spacing: 8px;
         if root.has-icon: Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: root.icon; tint: Theme.fg-a2; }
-        Text { text: root.text; color: root.dim ? Theme.fg-a3 : Theme.fg-a2; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        Text { text: root.text; color: root.dim ? Theme.fg-a3 : Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
         if root.editable: Rectangle {
             width: 22px;
             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/edit.svg"); tint: ra.has-hover ? Theme.fg-1 : Theme.fg-a3; }
@@ -101,13 +78,13 @@ export component ValueBox inherits Rectangle {
     in property <float> value;
     in property <string> unit: " dB";
     in property <bool> mono: true;
-    height: 28px; border-radius: 6px; background: Field.fill;
+    height: 28px; border-radius: Metrics.radius-md; background: Theme.field;
     border-width: ti.has-focus ? 1px : 0px; border-color: Theme.accent;
     clip: true;
-    in property <length> font-size: 12px;
+    in property <length> font-size: Metrics.font-sm;
     ti := TextInput {
         x: 2px; width: parent.width - 4px; height: parent.height;
-        text: Fmt.one(root.value) + root.unit;
+        text: Format.one(root.value) + root.unit;
         color: Theme.fg-a2; font-size: root.font-size; font-family: root.mono ? "DM Mono" : "Inter";
         horizontal-alignment: center; vertical-alignment: center;
         single-line: true;
@@ -118,25 +95,25 @@ export component ValueBox inherits Rectangle {
 
 component ResetLink inherits Rectangle {
     callback clicked();
-    width: t.preferred-width + 16px; height: 24px; border-radius: 4px;
-    background: ra.has-hover ? Field.raised : transparent;
-    t := Text { text: "Reset"; color: Theme.fg-a2; font-size: 12px; }
+    width: t.preferred-width + 16px; height: 24px; border-radius: Metrics.radius-sm;
+    background: ra.has-hover ? Theme.field-raised : transparent;
+    t := Text { text: "Reset"; color: Theme.fg-a2; font-size: Metrics.font-sm; }
     ra := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 component GradientPick inherits Rectangle {
-    height: 32px; border-radius: 6px;
-    background: ga.has-hover ? Field.raised : Field.fill;
+    height: 32px; border-radius: Metrics.radius-md;
+    background: ga.has-hover ? Theme.field-raised : Theme.field;
     property <int> cur: FxState.color[9];
     HorizontalLayout {
         padding-left: 12px; padding-right: 8px;
-        Text { text: FxState.gradients[root.cur]; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; horizontal-alignment: center; }
+        Text { text: FxState.gradients[root.cur]; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; horizontal-alignment: center; }
         Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
     }
     ga := TouchArea { mouse-cursor: pointer; clicked => { gp.show(); } }
     gp := PopupWindow {
         x: 0; y: root.height + 4px; width: root.width;
-        Rectangle { background: Theme.dark ? #1F1F1F : #EAEAEA; border-radius: 8px; drop-shadow-blur: 12px; drop-shadow-color: #00000066; }
+        Rectangle { background: Theme.popup; border-radius: Metrics.radius-lg; drop-shadow-blur: 12px; drop-shadow-color: Theme.shadow-soft; }
         VerticalLayout {
             padding: 6px;
             for g[i] in FxState.gradients: PresetRow {
@@ -154,8 +131,8 @@ export component FilterBox inherits Rectangle {
     in property <string> collapsed-text: "Expand Settings";
     in property <string> expanded-text: "Collapse Settings";
     in property <bool> centered;
-    border-radius: 6px;
-    background: root.expanded ? (Theme.dark ? #1E1E1E : #E4E4E4) : Field.fill;
+    border-radius: Metrics.radius-md;
+    background: root.expanded ? Theme.popup : Theme.field;
     clip: true;
     VerticalLayout {
         Rectangle {
@@ -165,7 +142,7 @@ export component FilterBox inherits Rectangle {
                 alignment: root.centered ? center : stretch;
                 Text {
                     text: root.expanded ? root.expanded-text : root.collapsed-text;
-                    color: Theme.fg-a2; font-size: 13px; vertical-alignment: center;
+                    color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center;
                     horizontal-stretch: root.centered ? 0 : 1;
                 }
                 Icon {
@@ -200,13 +177,13 @@ export component FxSlider inherits VerticalLayout {
     in property <float> value;
     spacing: 4px;
     HorizontalLayout {
-        Text { text: root.label; color: Theme.fg-a2; font-size: 13px; horizontal-stretch: 1; }
+        Text { text: root.label; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-stretch: 1; }
         Text {
-            text: (root.decimals == 0 ? round(root.value) : Fmt.one(root.value)) + root.unit;
-            color: Theme.fg-a2; font-family: "DM Mono"; font-size: 12px;
+            text: (root.decimals == 0 ? round(root.value) : Format.one(root.value)) + root.unit;
+            color: Theme.fg-a2; font-family: "DM Mono"; font-size: Metrics.font-sm;
         }
     }
-    AccentSlider {
+    Slider {
         value: root.value; minimum: root.minimum; maximum: root.maximum; step: root.step;
         enabled: root.enabled;
         changed(v) => { FxState.set(root.group, root.index, v); }
@@ -228,17 +205,17 @@ component BandSlider inherits Rectangle {
     width: 28px;
     opacity: root.enabled ? 1 : 0.45;
     Rectangle {
-        x: (parent.width - self.width) / 2; width: 20px; border-radius: 6px;
-        background: Field.fill;
-        border-width: 1px; border-color: Theme.dark ? #000000 : #CFCFCF;
+        x: (parent.width - self.width) / 2; width: 20px; border-radius: Metrics.radius-md;
+        background: Theme.field;
+        border-width: 1px; border-color: Theme.edge;
         Rectangle {
-            x: 1px; width: parent.width - 2px; border-radius: 5px;
+            x: 1px; width: parent.width - 2px; border-radius: Metrics.radius-md;
             y: parent.height * (1 - root.shown); height: parent.height * root.shown;
-            background: Theme.accent.mix(Field.fill, 22%);
+            background: Theme.accent.mix(Theme.field, 22%);
         }
     }
     Rectangle {
-        x: 0; width: parent.width; height: 8px; border-radius: 4px;
+        x: 0; width: parent.width; height: 8px; border-radius: self.height / 2;
         y: clamp(parent.height * (1 - root.shown) - 4px, 0, parent.height - 8px);
         background: Theme.accent;
     }
@@ -266,11 +243,11 @@ component BandSlider inherits Rectangle {
 // Figma "Default Preset ⌃" dropdown: New Preset, custom presets (rename/delete) and built-ins.
 export component PresetDropdown inherits Rectangle {
     callback rename-request(string);
-    height: 32px; border-radius: 6px;
-    background: ta.has-hover ? Field.raised : Field.fill;
+    height: 32px; border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.field-raised : Theme.field;
     HorizontalLayout {
         padding-left: 12px; padding-right: 8px; spacing: 6px;
-        Text { text: FxState.preset; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        Text { text: FxState.preset; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2; source: @image-url("../assets/icons/chevron-down.svg"); }
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
@@ -279,9 +256,9 @@ export component PresetDropdown inherits Rectangle {
         x: 0; y: root.height + 4px; width: root.width;
         height: min(root.rows * 30px + 24px, 380px);
         Rectangle {
-            background: Theme.dark ? #1F1F1F : #EAEAEA; border-radius: 8px;
-            border-width: 1px; border-color: Theme.dark ? #2B2B2B : #D0D0D0;
-            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: #00000066;
+            background: Theme.popup; border-radius: Metrics.radius-lg;
+            border-width: 1px; border-color: Theme.popup-line;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
             clip: true;
             Flickable {
                 content-height: root.rows * 30px + 24px;
@@ -308,7 +285,7 @@ export component PresetDropdown inherits Rectangle {
                     }
                     Rectangle { height: 6px; Rectangle { y: 3px; height: 1px; background: Theme.divider; } }
                     for b in FxState.builtin: PresetRow {
-                        text: b; icon: PresetIcon.of(b); selected: b == FxState.preset;
+                        text: b; icon: Icons.preset(b); selected: b == FxState.preset;
                         clicked => { FxState.preset-action("select", b, ""); pop.close(); }
                     }
                 }
@@ -335,10 +312,9 @@ export component Equalizer inherits VerticalLayout {
             accepted(t) => { FxState.preset-action("rename", root.renaming, t); root.renaming = ""; }
             init => { self.text = root.renaming; }
         }
-        Rectangle {
-            width: 64px; height: 32px; border-radius: 6px; background: sa.has-hover ? Theme.accent-bright : Theme.accent;
-            Text { text: "Rename"; color: Theme.bg-b2; font-size: 12px; font-weight: 600; }
-            sa := TouchArea { mouse-cursor: pointer; clicked => { FxState.preset-action("rename", root.renaming, rn.text); root.renaming = ""; } }
+        PrimaryButton {
+            size: ButtonSize.sm; min-w: 64px; text: "Rename";
+            clicked => { FxState.preset-action("rename", root.renaming, rn.text); root.renaming = ""; }
         }
     }
     FilterBox {
@@ -359,13 +335,13 @@ export component Equalizer inherits VerticalLayout {
             spacing: 2px;
             for l[i] in root.labels: VerticalLayout {
                 horizontal-stretch: 1; spacing: 6px;
-                Text { text: l; color: Theme.fg-a3; font-size: 9px; horizontal-alignment: center; overflow: elide; }
-                ValueBox { group: "eq"; index: i; value: FxState.eq[i]; unit: ""; height: 22px; font-size: 10px; }
+                Text { text: l; color: Theme.fg-a3; font-size: Metrics.font-micro; horizontal-alignment: center; overflow: elide; }
+                ValueBox { group: "eq"; index: i; value: FxState.eq[i]; unit: ""; height: 22px; font-size: Metrics.font-micro; }
             }
         }
         HorizontalLayout {
             alignment: end;
-            Text { text: "dB · preamp 12 dB = unity"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; vertical-alignment: center; }
+            Text { text: "dB · preamp 12 dB = unity"; color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-stretch: 1; vertical-alignment: center; }
             ResetLink { clicked => { FxState.reset("eq"); } }
         }
     }
@@ -378,7 +354,7 @@ component ToggleRow inherits HorizontalLayout {
     in property <bool> on;
     callback toggled();
     spacing: 8px; height: 30px;
-    Text { text: root.label; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+    Text { text: root.label; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
     Toggle { on: root.on; toggled => { root.toggled(); } }
 }
 
@@ -389,9 +365,9 @@ component ColorRow inherits HorizontalLayout {
     in property <int> index;
     in property <color> swatch;
     spacing: 8px; height: 30px;
-    Text { text: root.label; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+    Text { text: root.label; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
     hx := TextField { width: 84px; text: root.hex; accepted(t) => { FxState.set-color(root.index, t); } }
-    Rectangle { y: 4px; width: 22px; height: 22px; border-radius: 4px; background: root.swatch; }
+    Rectangle { y: 4px; width: 22px; height: 22px; border-radius: Metrics.radius-sm; background: root.swatch; }
     Toggle { on: root.on; toggled => { FxState.set("color", root.index, root.on ? 0 : 1); } }
 }
 
@@ -402,7 +378,7 @@ component EffectHeader inherits HorizontalLayout {
     callback toggled();
     callback reset();
     spacing: 8px;
-    Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: 14px; vertical-alignment: center; horizontal-stretch: 1; }
+    Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-base; vertical-alignment: center; horizontal-stretch: 1; }
     ResetLink { y: 3px; clicked => { root.reset(); } }
     Toggle { on: root.on; toggled => { root.toggled(); } }
 }
@@ -413,7 +389,7 @@ export component VideoFilters inherits VerticalLayout {
     in-out property <bool> color-open;
     spacing: 12px;
     HorizontalLayout {
-        Text { text: "Adjustments"; color: Theme.fg-1; font-weight: 600; font-size: 14px; horizontal-stretch: 1; vertical-alignment: center; }
+        Text { text: "Adjustments"; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-base; horizontal-stretch: 1; vertical-alignment: center; }
         ResetLink { clicked => { FxState.reset("video"); } }
     }
     FilterBox {
@@ -428,7 +404,7 @@ export component VideoFilters inherits VerticalLayout {
         FxSlider { label: "Film Grain Variance"; group: "video"; index: 7; minimum: 0; maximum: 100; step: 1; decimals: 0; value: FxState.video[7]; }
     }
     HorizontalLayout {
-        Text { text: "Crop"; color: Theme.fg-1; font-weight: 600; font-size: 14px; horizontal-stretch: 1; vertical-alignment: center; }
+        Text { text: "Crop"; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-base; horizontal-stretch: 1; vertical-alignment: center; }
         ResetLink { clicked => { FxState.reset("crop"); } }
     }
     FilterBox {
@@ -438,7 +414,7 @@ export component VideoFilters inherits VerticalLayout {
             for side in 2: HorizontalLayout {
                 horizontal-stretch: 1; spacing: 6px;
                 property <int> idx: row * 2 + side;
-                Text { text: ["Top", "Bottom", "Left", "Right"][idx]; color: Theme.fg-a2; font-size: 12px; vertical-alignment: center; width: 44px; }
+                Text { text: ["Top", "Bottom", "Left", "Right"][idx]; color: Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; width: 44px; }
                 ValueBox { horizontal-stretch: 1; group: "crop"; index: idx; value: FxState.crop[idx]; unit: " px"; }
             }
             Rectangle {
@@ -453,7 +429,7 @@ export component VideoFilters inherits VerticalLayout {
         }
     }
     HorizontalLayout {
-        Text { text: "Colors & effects"; color: Theme.fg-1; font-weight: 600; font-size: 14px; horizontal-stretch: 1; vertical-alignment: center; }
+        Text { text: "Colors & effects"; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-base; horizontal-stretch: 1; vertical-alignment: center; }
         ResetLink { clicked => { FxState.reset("color"); } }
     }
     FilterBox {

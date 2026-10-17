@@ -1,0 +1,68 @@
+// Shared list pieces: section headers, status badges, value chips and a
+// hoverable list row.
+import { Theme, Metrics } from "theme.slint";
+
+// Section heading. Default: a bold title inside panels; `caps`: the small
+// spaced-out uppercase label used above groups (About, Settings).
+export component SectionHeader inherits Text {
+    in property <bool> caps;
+    color: root.caps ? Theme.fg-a3 : Theme.fg-1;
+    font-size: root.caps ? Metrics.font-sm : Metrics.font-base;
+    font-weight: 600;
+    letter-spacing: root.caps ? 0.6px : 0;
+}
+
+export enum BadgeTone { neutral, accent, ok, warn, err, info }
+
+// Small rounded status pill ("Exact match", "HI", "Machine").
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <BadgeTone> tone: BadgeTone.neutral;
+    height: 20px; width: bt.preferred-width + 14px; border-radius: self.height / 2;
+    background: root.tone == BadgeTone.accent ? Theme.accent.with-alpha(0.22)
+        : root.tone == BadgeTone.warn ? Theme.warn-bg.with-alpha(0.25)
+        : root.tone == BadgeTone.ok ? Theme.ok-bg.with-alpha(0.25)
+        : root.tone == BadgeTone.err ? Theme.err-bg.with-alpha(0.25)
+        : root.tone == BadgeTone.info ? Theme.info-bg.with-alpha(0.25)
+        : Theme.bg-a1;
+    bt := Text {
+        text: root.text; font-size: Metrics.font-xs; font-weight: 600;
+        horizontal-alignment: center; vertical-alignment: center;
+        color: root.tone == BadgeTone.accent ? Theme.accent-bright
+            : root.tone == BadgeTone.warn ? Theme.warn
+            : root.tone == BadgeTone.ok ? Theme.ok
+            : root.tone == BadgeTone.err ? Theme.err
+            : root.tone == BadgeTone.info ? Theme.info
+            : Theme.fg-a2;
+    }
+}
+
+// Read-only monospace value next to a control ("1.25×").
+export component ValueChip inherits Rectangle {
+    in property <string> text;
+    height: 26px; width: max(52px, bt.preferred-width + 18px); border-radius: Metrics.radius-md; background: Theme.field;
+    bt := Text { text: root.text; color: Theme.fg-2; font-family: "DM Mono"; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+// One clickable row in a list or menu: hover/selected background, children
+// laid out by the caller.
+export component ListRow inherits Rectangle {
+    in property <bool> selected;
+    in property <bool> enabled: true;
+    in property <length> row-height: Metrics.row-h;
+    out property <bool> hovered: ta.has-hover;
+    callback clicked();
+    callback right-clicked(length, length);
+    height: root.row-height;
+    border-radius: Metrics.radius-sm;
+    background: root.selected ? Theme.accent-bg : ta.has-hover && root.enabled ? Theme.bg-a1 : transparent;
+    opacity: root.enabled ? 1 : 0.4;
+    ta := TouchArea {
+        enabled: root.enabled; mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) { root.right-clicked(self.mouse-x, self.mouse-y); }
+        }
+    }
+    @children
+}

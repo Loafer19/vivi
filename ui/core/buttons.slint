@@ -1,0 +1,92 @@
+// Shared buttons. One base draws every text button so heights, rounding,
+// colours and the disabled state are the same in every dialog.
+//   PrimaryButton   accent fill (the dialog's main action)
+//   SecondaryButton neutral fill
+//   FlatButton      no fill until hovered
+//   IconButton      square icon-only button (player bar, toolbars)
+// Sizes: sm 30px (dense dialogs), md 34px (default), lg 38px (onboarding).
+import { Theme, Metrics, Icon } from "theme.slint";
+
+export enum ButtonSize { sm, md, lg }
+export enum ButtonKind { secondary, primary, flat }
+
+export component ButtonBase inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <ButtonKind> kind: ButtonKind.secondary;
+    in property <ButtonSize> size: ButtonSize.md;
+    in property <bool> enabled: true;
+    // Minimum width, so short labels ("OK") don't make tiny buttons.
+    in property <length> min-w: 0;
+    callback clicked();
+    property <bool> has-icon: root.icon.width > 0;
+    property <length> pad: Metrics.space-4;
+    property <bool> primary: root.kind == ButtonKind.primary;
+    height: root.size == ButtonSize.sm ? 30px : root.size == ButtonSize.lg ? 38px : 34px;
+    min-width: max(root.min-w, row.preferred-width + 2 * root.pad);
+    preferred-width: self.min-width;
+    horizontal-stretch: 0;
+    border-radius: Metrics.radius-md;
+    opacity: root.enabled ? 1 : 0.4;
+    background: root.primary ? (ta.has-hover && root.enabled ? Theme.accent-bright : Theme.accent)
+        : root.kind == ButtonKind.flat ? (ta.has-hover && root.enabled ? Theme.field-raised : transparent)
+        : (ta.has-hover && root.enabled ? Theme.divider : Theme.bg-a1);
+    animate background { duration: 100ms; }
+    row := HorizontalLayout {
+        alignment: center; spacing: Metrics.space-2;
+        if root.has-icon: Icon {
+            source: root.icon; width: Metrics.icon-sm; height: root.height;
+            tint: root.primary ? Theme.bg-b2 : Theme.fg-1;
+        }
+        Text {
+            text: root.text; vertical-alignment: center; horizontal-alignment: center;
+            font-size: root.size == ButtonSize.sm ? Metrics.font-sm : Metrics.font-md;
+            font-weight: root.primary ? 600 : 500;
+            color: root.primary ? Theme.bg-b2 : Theme.fg-1;
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled; mouse-cursor: pointer;
+        accessible-role: button; accessible-label: root.text;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component PrimaryButton inherits ButtonBase { kind: ButtonKind.primary; }
+export component SecondaryButton inherits ButtonBase { kind: ButtonKind.secondary; }
+export component FlatButton inherits ButtonBase { kind: ButtonKind.flat; }
+
+// Icon-only button. `size` sm is the dense player bar (28x26, play 36x24),
+// md the regular one (36x32, play 44x36). `primary` is the accent play button.
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> primary: false;
+    in property <bool> active: false;
+    in property <string> tip;
+    in property <ButtonSize> size: ButtonSize.md;
+    callback clicked();
+    property <bool> compact: root.size == ButtonSize.sm;
+    width: compact ? (primary ? 36px : 28px) : (primary ? 44px : 36px);
+    height: compact ? (primary ? 24px : 26px) : (primary ? 36px : 32px);
+    border-radius: Metrics.radius-md;
+    clip: true;
+    background: primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent)
+                        : (ta.has-hover ? Theme.bg-a1 : transparent);
+    HorizontalLayout {
+        alignment: center;
+        Icon {
+            source: root.icon;
+            y: (root.height - self.height) / 2;
+            width: root.compact ? (root.primary ? 16px : 18px) : (root.primary ? 22px : 20px);
+            height: self.width;
+            tint: root.primary ? Theme.bg-b2 : (root.active ? Theme.accent : (ta.has-hover ? Theme.fg-1 : Theme.fg-2));
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+        accessible-role: button;
+        accessible-label: root.tip;
+    }
+    if root.tip != "": Tooltip { text: @markdown("\{root.tip}"); }
+}

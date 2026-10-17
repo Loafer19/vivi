@@ -1,0 +1,214 @@
+// Every icon lookup by key (was KindIcon, VizIcons, PluginIcons, PresetIcon, MenuIcons).
+export global Icons {
+    // Library item kind → icon.
+    public pure function kind(kind: string) -> image {
+        if kind == "add" { return @image-url("../../assets/icons/add.svg"); }
+        if kind == "songs" { return @image-url("../../assets/icons/songs.svg"); }
+        if kind == "album" { return @image-url("../../assets/icons/album.svg"); }
+        if kind == "artist" { return @image-url("../../assets/icons/artist.svg"); }
+        if kind == "genre" { return @image-url("../../assets/icons/genre.svg"); }
+        if kind == "streaming" { return @image-url("../../assets/icons/streaming.svg"); }
+        if kind == "folder" { return @image-url("../../assets/icons/folder.svg"); }
+        if kind == "audio" { return @image-url("../../assets/icons/music.svg"); }
+        if kind == "group" { return @image-url("../../assets/icons/album.svg"); }
+        if kind == "playlist" { return @image-url("../../assets/icons/playlist.svg"); }
+        return @image-url("../../assets/icons/video.svg");
+    }
+
+    // Visualizer mode index → two-tone layers (0 = Disabled has none).
+    pure public function viz(i: int) -> image {
+        if (i == 1) { return @image-url("../../assets/icons/layers/spectometer-twotone-b.svg"); }
+        if (i == 2) { return @image-url("../../assets/icons/layers/scope-twotone-b.svg"); }
+        if (i == 3) { return @image-url("../../assets/icons/layers/spectrum-twotone-b.svg"); }
+        if (i == 4) { return @image-url("../../assets/icons/layers/waveform-twotone-b.svg"); }
+        if (i == 5) { return @image-url("../../assets/icons/disc.svg"); }
+        if (i == 6) { return @image-url("../../assets/icons/genre.svg"); }
+        if (i == 7) { return @image-url("../../assets/icons/music.svg"); }
+        @image-url("")
+    }
+    pure public function viz-accent(i: int) -> image {
+        if (i == 1) { return @image-url("../../assets/icons/layers/spectometer-twotone-a.svg"); }
+        if (i == 2) { return @image-url("../../assets/icons/layers/scope-twotone-a.svg"); }
+        if (i == 3) { return @image-url("../../assets/icons/layers/spectrum-twotone-a.svg"); }
+        if (i == 4) { return @image-url("../../assets/icons/layers/waveform-twotone-a.svg"); }
+        @image-url("")
+    }
+    pure public function viz-dim(i: int) -> image {
+        if (i == 1) { return @image-url("../../assets/icons/layers/spectometer-twotone-d.svg"); }
+        if (i == 2) { return @image-url("../../assets/icons/layers/scope-twotone-d.svg"); }
+        if (i == 3) { return @image-url("../../assets/icons/layers/spectrum-twotone-d.svg"); }
+        if (i == 4) { return @image-url("../../assets/icons/layers/waveform-twotone-d.svg"); }
+        @image-url("")
+    }
+
+    // Plugin manifest icon key (src/plugins Manifest::icon) → icon.
+    pure public function plugin(key: string) -> image {
+        if (key == "visualizer") { return @image-url("../../assets/icons/spectrum-twotone.svg"); }
+        if (key == "skip") { return @image-url("../../assets/icons/next.svg"); }
+        if (key == "lyrics") { return @image-url("../../assets/icons/music.svg"); }
+        if (key == "subtitles") { return @image-url("../../assets/icons/subtitles.svg"); }
+        if (key == "script") { return @image-url("../../assets/icons/file.svg"); }
+        if (key == "loop") { return @image-url("../../assets/icons/repeat-right.svg"); }
+        if (key == "stats") { return @image-url("../../assets/icons/spectometer-twotone.svg"); }
+        if (key == "tag") { return @image-url("../../assets/icons/edit.svg"); }
+        if (key == "free-music") { return @image-url("../../assets/icons/album.svg"); }
+        if (key == "streams") { return @image-url("../../assets/icons/streaming.svg"); }
+        if (key == "discord") { return @image-url("../../assets/icons/profile.svg"); }
+        if (key == "remote") { return @image-url("../../assets/icons/capture-device.svg"); }
+        if (key == "scrobble") { return @image-url("../../assets/icons/favorite-twotone.svg"); }
+        if (key == "night") { return @image-url("../../assets/icons/volume-high.svg"); }
+        if (key == "eq") { return @image-url("../../assets/icons/eq.svg"); }
+        if (key == "chapters") { return @image-url("../../assets/icons/chapters-twotone.svg"); }
+        @image-url("../../assets/icons/plugins.svg")
+    }
+
+    // Equalizer preset name → icon.
+    pure public function preset(n: string) -> image {
+        return n == "Classical" ? @image-url("../../assets/icons/eq-classical.svg")
+            : n == "Club" ? @image-url("../../assets/icons/eq-club.svg")
+            : n == "Dance" ? @image-url("../../assets/icons/eq-dance.svg")
+            : n == "Full bass" ? @image-url("../../assets/icons/eq-full_bass.svg")
+            : n == "Full bass & treble" ? @image-url("../../assets/icons/eq-full_bass_and_treble.svg")
+            : n == "Full treble" ? @image-url("../../assets/icons/eq-full_treble.svg")
+            : n == "Headphones" ? @image-url("../../assets/icons/eq-headphones.svg")
+            : n == "Large hall" ? @image-url("../../assets/icons/eq-large_hall.svg")
+            : n == "Live" ? @image-url("../../assets/icons/eq-live.svg")
+            : n == "Party" ? @image-url("../../assets/icons/eq-party.svg")
+            : n == "Pop" ? @image-url("../../assets/icons/eq-pop.svg")
+            : n == "Reggae" ? @image-url("../../assets/icons/eq-reggae.svg")
+            : n == "Rock" ? @image-url("../../assets/icons/eq-rock.svg")
+            : n == "Ska" ? @image-url("../../assets/icons/eq-ska.svg")
+            : n == "Soft" ? @image-url("../../assets/icons/eq-soft.svg")
+            : n == "Soft rock" ? @image-url("../../assets/icons/eq-soft_rock.svg")
+            : n == "Techno" ? @image-url("../../assets/icons/eq-techno.svg")
+            : @image-url("../../assets/icons/remove.svg");
+    }
+
+    // Menu row icon name (src/menus.rs) → two-tone layers.
+    public pure function menu(name: string) -> image {
+        if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-b.svg"); }
+        if (name == "add-file") { return @image-url("../../assets/icons/menu/add-file.svg"); }
+        if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-b.svg"); }
+        if (name == "add-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_add-subtitle-tracks-b.svg"); }
+        if (name == "add-to-playlist") { return @image-url("../../assets/icons/layers/menu_add-to-playlist-b.svg"); }
+        if (name == "add-to-queue") { return @image-url("../../assets/icons/layers/menu_add-to-queue-b.svg"); }
+        if (name == "audio") { return @image-url("../../assets/icons/layers/menu_audio-b.svg"); }
+        if (name == "convert") { return @image-url("../../assets/icons/layers/menu_convert-b.svg"); }
+        if (name == "edit-audio-tracks") { return @image-url("../../assets/icons/layers/menu_edit-audio-tracks-b.svg"); }
+        if (name == "edit-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_edit-subtitle-tracks-b.svg"); }
+        if (name == "export-playlist") { return @image-url("../../assets/icons/layers/menu_export-playlist-b.svg"); }
+        if (name == "favorite") { return @image-url("../../assets/icons/layers/menu_favorite-b.svg"); }
+        if (name == "go-to-source") { return @image-url("../../assets/icons/layers/menu_go-to-source-b.svg"); }
+        if (name == "grid-view") { return @image-url("../../assets/icons/menu/grid-view.svg"); }
+        if (name == "hide-ui") { return @image-url("../../assets/icons/layers/menu_hide-ui-b.svg"); }
+        if (name == "info") { return @image-url("../../assets/icons/layers/menu_info-b.svg"); }
+        if (name == "list-view") { return @image-url("../../assets/icons/menu/list-view.svg"); }
+        if (name == "mark-as-watched") { return @image-url("../../assets/icons/layers/menu_mark-as-watched-b.svg"); }
+        if (name == "more-settings") { return @image-url("../../assets/icons/layers/menu_more-settings-b.svg"); }
+        if (name == "next-item") { return @image-url("../../assets/icons/layers/menu_next-item-b.svg"); }
+        if (name == "open-media") { return @image-url("../../assets/icons/layers/menu_open-media-b.svg"); }
+        if (name == "play") { return @image-url("../../assets/icons/layers/menu_play-b.svg"); }
+        if (name == "playback") { return @image-url("../../assets/icons/layers/menu_playback-b.svg"); }
+        if (name == "playlist") { return @image-url("../../assets/icons/layers/menu_playlist-b.svg"); }
+        if (name == "previous-item") { return @image-url("../../assets/icons/layers/menu_previous-item-b.svg"); }
+        if (name == "properties-metadata") { return @image-url("../../assets/icons/layers/menu_properties-metadata-b.svg"); }
+        if (name == "quit-vlc") { return @image-url("../../assets/icons/layers/menu_quit-vlc-b.svg"); }
+        if (name == "record") { return @image-url("../../assets/icons/layers/menu_record-b.svg"); }
+        if (name == "resync") { return @image-url("../../assets/icons/layers/menu_resync-b.svg"); }
+        if (name == "show-in-file-explorer") { return @image-url("../../assets/icons/menu/show-in-file-explorer.svg"); }
+        if (name == "shuffle") { return @image-url("../../assets/icons/layers/menu_shuffle-b.svg"); }
+        if (name == "stop") { return @image-url("../../assets/icons/layers/menu_stop-b.svg"); }
+        if (name == "stream") { return @image-url("../../assets/icons/layers/menu_stream-b.svg"); }
+        if (name == "subtitle") { return @image-url("../../assets/icons/layers/menu_subtitle-b.svg"); }
+        if (name == "video") { return @image-url("../../assets/icons/layers/menu_video-b.svg"); }
+        if (name == "file") { return @image-url("../../assets/icons/file.svg"); }
+        if (name == "folder") { return @image-url("../../assets/icons/folder.svg"); }
+        if (name == "streaming") { return @image-url("../../assets/icons/streaming.svg"); }
+        if (name == "recent") { return @image-url("../../assets/icons/recent.svg"); }
+        if (name == "paint") { return @image-url("../../assets/icons/paint.svg"); }
+        if (name == "hotkeys") { return @image-url("../../assets/icons/hotkeys.svg"); }
+        if (name == "settings") { return @image-url("../../assets/icons/settings.svg"); }
+        if (name == "remove") { return @image-url("../../assets/icons/remove.svg"); }
+        if (name == "refresh") { return @image-url("../../assets/icons/refresh.svg"); }
+        if (name == "snapshot") { return @image-url("../../assets/icons/snapshot.svg"); }
+        if (name == "fullscreen") { return @image-url("../../assets/icons/fullscreen.svg"); }
+        if (name == "pip") { return @image-url("../../assets/icons/pip.svg"); }
+        if (name == "speed") { return @image-url("../../assets/icons/speed.svg"); }
+        if (name == "repeat") { return @image-url("../../assets/icons/repeat-right.svg"); }
+        if (name == "chapters") { return @image-url("../../assets/icons/chapters.svg"); }
+        if (name == "bookmark") { return @image-url("../../assets/icons/bookmark.svg"); }
+        if (name == "zoom") { return @image-url("../../assets/icons/zoom.svg"); }
+        if (name == "add") { return @image-url("../../assets/icons/add.svg"); }
+        if (name == "sort") { return @image-url("../../assets/icons/sort.svg"); }
+        if (name == "close") { return @image-url("../../assets/icons/close.svg"); }
+        return @image-url("../../assets/icons/layers/menu_play-b.svg");
+    }
+    public pure function menu-accent(name: string) -> image {
+        if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-a.svg"); }
+        if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-a.svg"); }
+        if (name == "add-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_add-subtitle-tracks-a.svg"); }
+        if (name == "add-to-playlist") { return @image-url("../../assets/icons/layers/menu_add-to-playlist-a.svg"); }
+        if (name == "add-to-queue") { return @image-url("../../assets/icons/layers/menu_add-to-queue-a.svg"); }
+        if (name == "audio") { return @image-url("../../assets/icons/layers/menu_audio-a.svg"); }
+        if (name == "convert") { return @image-url("../../assets/icons/layers/menu_convert-a.svg"); }
+        if (name == "edit-audio-tracks") { return @image-url("../../assets/icons/layers/menu_edit-audio-tracks-a.svg"); }
+        if (name == "edit-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_edit-subtitle-tracks-a.svg"); }
+        if (name == "export-playlist") { return @image-url("../../assets/icons/layers/menu_export-playlist-a.svg"); }
+        if (name == "favorite") { return @image-url("../../assets/icons/layers/menu_favorite-a.svg"); }
+        if (name == "go-to-source") { return @image-url("../../assets/icons/layers/menu_go-to-source-a.svg"); }
+        if (name == "hide-ui") { return @image-url("../../assets/icons/layers/menu_hide-ui-a.svg"); }
+        if (name == "info") { return @image-url("../../assets/icons/layers/menu_info-a.svg"); }
+        if (name == "mark-as-watched") { return @image-url("../../assets/icons/layers/menu_mark-as-watched-a.svg"); }
+        if (name == "more-settings") { return @image-url("../../assets/icons/layers/menu_more-settings-a.svg"); }
+        if (name == "next-item") { return @image-url("../../assets/icons/layers/menu_next-item-a.svg"); }
+        if (name == "open-media") { return @image-url("../../assets/icons/layers/menu_open-media-a.svg"); }
+        if (name == "play") { return @image-url("../../assets/icons/layers/menu_play-a.svg"); }
+        if (name == "playback") { return @image-url("../../assets/icons/layers/menu_playback-a.svg"); }
+        if (name == "playlist") { return @image-url("../../assets/icons/layers/menu_playlist-a.svg"); }
+        if (name == "previous-item") { return @image-url("../../assets/icons/layers/menu_previous-item-a.svg"); }
+        if (name == "properties-metadata") { return @image-url("../../assets/icons/layers/menu_properties-metadata-a.svg"); }
+        if (name == "quit-vlc") { return @image-url("../../assets/icons/layers/menu_quit-vlc-a.svg"); }
+        if (name == "record") { return @image-url("../../assets/icons/layers/menu_record-a.svg"); }
+        if (name == "resync") { return @image-url("../../assets/icons/layers/menu_resync-a.svg"); }
+        if (name == "shuffle") { return @image-url("../../assets/icons/layers/menu_shuffle-a.svg"); }
+        if (name == "stop") { return @image-url("../../assets/icons/layers/menu_stop-a.svg"); }
+        if (name == "stream") { return @image-url("../../assets/icons/layers/menu_stream-a.svg"); }
+        if (name == "subtitle") { return @image-url("../../assets/icons/layers/menu_subtitle-a.svg"); }
+        if (name == "video") { return @image-url("../../assets/icons/layers/menu_video-a.svg"); }
+        return @image-url("../../assets/icons/layers/empty.svg");
+    }
+    public pure function menu-dim(name: string) -> image {
+        if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-d.svg"); }
+        if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-d.svg"); }
+        if (name == "add-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_add-subtitle-tracks-d.svg"); }
+        if (name == "add-to-playlist") { return @image-url("../../assets/icons/layers/menu_add-to-playlist-d.svg"); }
+        if (name == "add-to-queue") { return @image-url("../../assets/icons/layers/menu_add-to-queue-d.svg"); }
+        if (name == "audio") { return @image-url("../../assets/icons/layers/menu_audio-d.svg"); }
+        if (name == "convert") { return @image-url("../../assets/icons/layers/menu_convert-d.svg"); }
+        if (name == "edit-audio-tracks") { return @image-url("../../assets/icons/layers/menu_edit-audio-tracks-d.svg"); }
+        if (name == "edit-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_edit-subtitle-tracks-d.svg"); }
+        if (name == "export-playlist") { return @image-url("../../assets/icons/layers/menu_export-playlist-d.svg"); }
+        if (name == "favorite") { return @image-url("../../assets/icons/layers/menu_favorite-d.svg"); }
+        if (name == "go-to-source") { return @image-url("../../assets/icons/layers/menu_go-to-source-d.svg"); }
+        if (name == "hide-ui") { return @image-url("../../assets/icons/layers/menu_hide-ui-d.svg"); }
+        if (name == "info") { return @image-url("../../assets/icons/layers/menu_info-d.svg"); }
+        if (name == "mark-as-watched") { return @image-url("../../assets/icons/layers/menu_mark-as-watched-d.svg"); }
+        if (name == "more-settings") { return @image-url("../../assets/icons/layers/menu_more-settings-d.svg"); }
+        if (name == "next-item") { return @image-url("../../assets/icons/layers/menu_next-item-d.svg"); }
+        if (name == "open-media") { return @image-url("../../assets/icons/layers/menu_open-media-d.svg"); }
+        if (name == "play") { return @image-url("../../assets/icons/layers/menu_play-d.svg"); }
+        if (name == "playback") { return @image-url("../../assets/icons/layers/menu_playback-d.svg"); }
+        if (name == "playlist") { return @image-url("../../assets/icons/layers/menu_playlist-d.svg"); }
+        if (name == "previous-item") { return @image-url("../../assets/icons/layers/menu_previous-item-d.svg"); }
+        if (name == "properties-metadata") { return @image-url("../../assets/icons/layers/menu_properties-metadata-d.svg"); }
+        if (name == "quit-vlc") { return @image-url("../../assets/icons/layers/menu_quit-vlc-d.svg"); }
+        if (name == "record") { return @image-url("../../assets/icons/layers/menu_record-d.svg"); }
+        if (name == "resync") { return @image-url("../../assets/icons/layers/menu_resync-d.svg"); }
+        if (name == "shuffle") { return @image-url("../../assets/icons/layers/menu_shuffle-d.svg"); }
+        if (name == "stop") { return @image-url("../../assets/icons/layers/menu_stop-d.svg"); }
+        if (name == "stream") { return @image-url("../../assets/icons/layers/menu_stream-d.svg"); }
+        if (name == "subtitle") { return @image-url("../../assets/icons/layers/menu_subtitle-d.svg"); }
+        if (name == "video") { return @image-url("../../assets/icons/layers/menu_video-d.svg"); }
+        return @image-url("../../assets/icons/layers/empty.svg");
+    }
+}

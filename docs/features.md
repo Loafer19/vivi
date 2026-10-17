@@ -205,7 +205,7 @@ Enable *Settings → General → Remote control* (or run `VIVI_IPC=1 vivi`), the
 `src/player.rs` — libmpv wrapper (event thread → channel) · `src/render.rs` — mpv rendered under Slint ·
 `src/viz/` — music visualizer (an mpv `af` lavfi tap on the real output, after EQ/filters, sending per-band levels with timestamps over a localhost socket and synced to `time-pos` → rustfft analysis → modes behind the `Visual` trait) ·
 `src/plugins/` — plugin registry (`Plugin` trait, manifests, config-backed enable/settings, mpv script loader) and the built-in plugins ·
-`ui/*.slint` — UI and design tokens · `assets/icons` — SVGs extracted from Figma.
+`ui/*.slint` — screens and dialogs · `ui/core/` — design tokens (`Theme` colours, `Metrics` spacing / radii / font sizes), `Icons`, `Format` and the shared components (buttons, rows, slider, modal, form controls) · `assets/icons` — SVGs extracted from Figma.
 Design notes: [docs/design/FIGMA.md](design/FIGMA.md) · research: [docs/RESEARCH.md](RESEARCH.md).
 
 ## Roadmap & status

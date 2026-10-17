@@ -1,0 +1,18 @@
+// Shared text formatting.
+export global Format {
+    // seconds → "HH:MM:SS" (with ".mmm" when ms is true)
+    pure public function hms(t: float, ms: bool) -> string {
+        let s = floor(max(t, 0));
+        let h = floor(s / 3600);
+        let m = floor(mod(s, 3600) / 60);
+        let sec = mod(s, 60);
+        let base = (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+        if (!ms) { return base; }
+        let f = round((t - s) * 1000);
+        return base + "." + (f < 10 ? "00" : f < 100 ? "0" : "") + f;
+    }
+    pure public function one(v: float) -> string {
+        let r = round(v * 10) / 10;
+        return r == round(r) ? r + ".0" : r;
+    }
+}

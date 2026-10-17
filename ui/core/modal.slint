@@ -1,0 +1,35 @@
+// One modal: a scrim over the window plus a centred card. Every dialog uses
+// it so the darkness, rounding, border and shadow are identical. Esc is
+// handled by the overlay stack in src/overlays.rs (the topmost open overlay
+// closes), so the modal only needs to report clicks on the scrim.
+import { Theme, Metrics } from "theme.slint";
+
+export component Modal inherits Rectangle {
+    in property <length> card-width: 760px;
+    in property <length> card-height: 480px;
+    // Space kept free around the card on small windows.
+    in property <length> inset: 32px;
+    // Extra space reserved at the bottom (e.g. so the control bar stays visible).
+    in property <length> lift: 0;
+    in property <brush> card-background: Theme.bg-a4;
+    in property <bool> bordered: true;
+    // Clicking the scrim reports dismissed(); off for dialogs with unsaved edits.
+    in property <bool> dismiss-on-scrim: true;
+    out property <length> card-w: card.width;
+    out property <length> card-h: card.height;
+    callback dismissed();
+    background: Theme.scrim;
+    TouchArea { clicked => { if (root.dismiss-on-scrim) { root.dismissed(); } } }
+    card := Rectangle {
+        width: min(root.card-width, root.width - root.inset);
+        height: min(root.card-height, root.height - root.inset - root.lift);
+        x: (root.width - self.width) / 2;
+        y: max(root.inset / 2, (root.height - root.lift - self.height) / 2);
+        background: root.card-background; border-radius: Metrics.radius-xl;
+        border-width: root.bordered ? 1px : 0; border-color: Theme.bg-a1;
+        drop-shadow-blur: 24px; drop-shadow-offset-y: 10px; drop-shadow-color: Theme.shadow;
+        clip: true;
+        TouchArea { }
+        @children
+    }
+}

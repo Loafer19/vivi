@@ -4,8 +4,10 @@
 // with sort/view/search icons, a #222 divider, then 32 px rows (32 px thumbnail, gap 10,
 // Inter 14; watched rows dimmer with an orange progress line; "⋯" on hover). Home shows
 // titled sections of three rows each.
-import { ScrollView, LineEdit } from "std-widgets.slint";
-import { Theme, Icon, TriIcon } from "theme.slint";
+import { ScrollView } from "std-widgets.slint";
+import { TextField } from "core/controls.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
+import { Icons } from "core/icons.slint";
 
 export struct LibItem {
     key: string,
@@ -24,21 +26,7 @@ export struct LibItem {
     icon: string,
 }
 
-global KindIcon {
-    public pure function of(kind: string) -> image {
-        if kind == "add" { return @image-url("../assets/icons/add.svg"); }
-        if kind == "songs" { return @image-url("../assets/icons/songs.svg"); }
-        if kind == "album" { return @image-url("../assets/icons/album.svg"); }
-        if kind == "artist" { return @image-url("../assets/icons/artist.svg"); }
-        if kind == "genre" { return @image-url("../assets/icons/genre.svg"); }
-        if kind == "streaming" { return @image-url("../assets/icons/streaming.svg"); }
-        if kind == "folder" { return @image-url("../assets/icons/folder.svg"); }
-        if kind == "audio" { return @image-url("../assets/icons/music.svg"); }
-        if kind == "group" { return @image-url("../assets/icons/album.svg"); }
-        if kind == "playlist" { return @image-url("../assets/icons/playlist.svg"); }
-        return @image-url("../assets/icons/video.svg");
-    }
-}
+
 
 
 
@@ -48,34 +36,34 @@ component Tile inherits Rectangle {
     in property <bool> grid: true;
     callback open();
     callback menu(length, length);
-    border-radius: Theme.radius-lg;
+    border-radius: Metrics.radius-md;
     background: ta.has-hover ? Theme.bg-a1 : transparent;
     property <length> tw: grid ? self.width - 12px : 96px;
     property <length> th: grid ? (self.width - 12px) * 9 / 16 : 54px;
     thumb := Rectangle {
         x: 6px; y: 6px; width: root.tw; height: root.th;
-        border-radius: Theme.radius-lg; clip: true;
+        border-radius: Metrics.radius-md; clip: true;
         background: Theme.bg-a3;
         if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: cover; }
-        if !root.it.has-thumb: Icon { source: KindIcon.of(root.it.kind); width: root.grid ? 40px : 24px; height: self.width; tint: Theme.fg-a3; }
+        if !root.it.has-thumb: Icon { source: Icons.kind(root.it.kind); width: root.grid ? 40px : 24px; height: self.width; tint: Theme.fg-a3; }
         if root.it.progress > 0: Rectangle {
-            y: parent.height - 4px; height: 4px; background: #00000080;
+            y: parent.height - 4px; height: 4px; background: Theme.media-track;
             Rectangle { x: 0; width: parent.width * root.it.progress; background: Theme.accent; }
         }
         if root.it.pinned: Rectangle {
-            x: 6px; y: 6px; width: 22px; height: 22px; border-radius: 11px; background: #000000A0;
+            x: 6px; y: 6px; width: 22px; height: 22px; border-radius: self.height / 2; background: Theme.media-chip;
             Icon { source: @image-url("../assets/icons/favorite-active.svg"); width: 14px; height: 14px; tint: Theme.accent-bright; }
         }
     }
     Text {
         x: grid ? 8px : root.tw + 20px; y: grid ? root.th + 12px : 12px;
         width: grid ? root.width - 16px : root.width - root.tw - 30px;
-        text: root.it.title; color: Theme.fg-1; overflow: elide; font-size: 14px;
+        text: root.it.title; color: Theme.fg-1; overflow: elide; font-size: Metrics.font-base;
     }
     Text {
         x: grid ? 8px : root.tw + 20px; y: grid ? root.th + 32px : 34px;
         width: grid ? root.width - 16px : root.width - root.tw - 30px;
-        text: root.it.subtitle; color: Theme.fg-a1; overflow: elide; font-size: 12px;
+        text: root.it.subtitle; color: Theme.fg-a1; overflow: elide; font-size: Metrics.font-sm;
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -121,10 +109,10 @@ component LibRow inherits Rectangle {
     property <bool> media: (it.kind == "video" || it.kind == "audio") && it.icon == "";
     property <bool> hover: ta.has-hover || more-ta.has-hover;
     if root.media || root.it.has-thumb: Rectangle {
-        x: 0; width: 32px; height: 32px; border-radius: 2px; clip: true;
-        background: #303030;
+        x: 0; width: 32px; height: 32px; border-radius: Metrics.radius-xs; clip: true;
+        background: Theme.field-raised;
         if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: cover; }
-        if !root.it.has-thumb: Icon { source: KindIcon.of(root.it.kind); width: 16px; height: 16px; tint: Theme.fg-a3; }
+        if !root.it.has-thumb: Icon { source: Icons.kind(root.it.kind); width: 16px; height: 16px; tint: Theme.fg-a3; }
         if root.it.progress > 0 || root.it.watched: Rectangle {
             x: 0; y: parent.height - 2px; height: 2px;
             width: parent.width * (root.it.watched ? 1 : root.it.progress);
@@ -133,13 +121,13 @@ component LibRow inherits Rectangle {
     }
     if !root.media && !root.it.has-thumb: Icon {
         x: 4px; width: 24px; height: 24px;
-        source: KindIcon.of(root.it.icon != "" ? root.it.icon : root.it.kind);
+        source: Icons.kind(root.it.icon != "" ? root.it.icon : root.it.kind);
         tint: Theme.fg-a2;
     }
     Text {
         x: 42px; width: root.width - 42px - (root.hover && root.it.kind != "action" ? 34px : 0px);
         height: root.height;
-        text: root.it.title; font-size: 14px; overflow: elide; vertical-alignment: center;
+        text: root.it.title; font-size: Metrics.font-base; overflow: elide; vertical-alignment: center;
         color: root.it.watched || root.dim ? Theme.fg-a3 : Theme.fg-a2; // hover only adds "⋯" (Figma)
     }
     ta := TouchArea {
@@ -180,7 +168,7 @@ component Rows inherits VerticalLayout {
 }
 
 // Home section: "Title ›" (Inter 16) then three rows; the title opens the full list.
-component Section inherits VerticalLayout {
+component Shelf inherits VerticalLayout {
     in property <string> title;
     in property <[LibItem]> items;
     in property <int> max: 3;
@@ -192,10 +180,10 @@ component Section inherits VerticalLayout {
     spacing: 20px;
     HorizontalLayout {
         height: 24px; spacing: 4px;
-        Text { text: root.title; color: tta.has-hover ? Theme.fg-1 : Theme.fg-a1; font-size: 16px; vertical-alignment: center; horizontal-stretch: 1;
+        Text { text: root.title; color: tta.has-hover ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-lg; vertical-alignment: center; horizontal-stretch: 1;
             tta := TouchArea { mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
         if root.action-text != "": Text {
-            text: root.action-text; font-size: 14px; vertical-alignment: center;
+            text: root.action-text; font-size: Metrics.font-base; vertical-alignment: center;
             color: ata.has-hover ? Theme.fg-1 : Theme.fg-a3;
             ata := TouchArea { mouse-cursor: pointer; clicked => { root.action(); } }
         }
@@ -212,7 +200,7 @@ component RailButton inherits Rectangle {
     in property <image> active-dim;
     in property <bool> active;
     callback clicked();
-    width: 32px; height: 32px; border-radius: 4px;
+    width: 32px; height: 32px; border-radius: Metrics.radius-sm;
     background: ta.has-hover && !root.active ? Theme.bg-a1 : transparent;
     if root.active: TriIcon { base: root.active-icon; accent: root.active-accent; dim: root.active-dim; }
     if !root.active: Icon { source: root.icon; tint: ta.has-hover ? Theme.fg-1 : Theme.fg-a2; }
@@ -303,9 +291,9 @@ export component LibraryView inherits Rectangle {
                     horizontal-stretch: 1; spacing: 6px;
                     for k[i] in root.crumb-keys: HorizontalLayout {
                         spacing: 6px;
-                        if i > 0: Text { text: "▸"; color: Theme.fg-a2; font-size: 8px; vertical-alignment: center; }
+                        if i > 0: Text { text: "▸"; color: Theme.fg-a2; font-size: Metrics.font-micro; vertical-alignment: center; }
                         Text {
-                            text: root.crumb-labels[i]; font-size: 16px; overflow: elide; vertical-alignment: center;
+                            text: root.crumb-labels[i]; font-size: Metrics.font-lg; overflow: elide; vertical-alignment: center;
                             min-width: min(self.preferred-width, 140px);
                             color: cta.has-hover ? Theme.fg-1 : Theme.fg-a2;
                             cta := TouchArea { mouse-cursor: pointer; clicked => { root.navigate(k); } }
@@ -329,7 +317,7 @@ export component LibraryView inherits Rectangle {
             HorizontalLayout {
                 height: 24px; spacing: 12px;
                 Text {
-                    horizontal-stretch: 1; vertical-alignment: center; font-size: 14px; color: Theme.fg-a3;
+                    horizontal-stretch: 1; vertical-alignment: center; font-size: Metrics.font-base; color: Theme.fg-a3;
                     text: root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
                 }
                 HeadIcon {
@@ -345,10 +333,10 @@ export component LibraryView inherits Rectangle {
                     clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }
             }
-            if root.searching: LineEdit {
-                placeholder-text: "Search library"; text <=> root.query;
+            if root.searching: TextField {
+                placeholder: "Search library"; text <=> root.query;
                 edited(t) => { root.search(t); }
-                init => { self.focus(); }
+                init => { self.focus-input(); }
             }
             Rectangle { height: 1px; background: Theme.bg-a1; }
             ScrollView {
@@ -360,24 +348,24 @@ export component LibraryView inherits Rectangle {
                         if root.count == 0 && root.recent-items.length == 0: VerticalLayout {
                             spacing: 10px; padding-top: 40px;
                             HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: 72px; height: 72px; } }
-                            Text { text: "Your library is empty"; color: Theme.fg-1; font-size: 20px; horizontal-alignment: center; }
+                            Text { text: "Your library is empty"; color: Theme.fg-1; font-size: Metrics.font-xl; horizontal-alignment: center; }
                             Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; wrap: word-wrap; }
                         }
-                        if root.continue-items.length > 0: Section { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;
+                        if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;
                             title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.listen-items.length > 0: Section { title: "Listen Again"; items: root.listen-items; max: root.rows-max;
+                        if root.listen-items.length > 0: Shelf { title: "Listen Again"; items: root.listen-items; max: root.rows-max;
                             title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.folder-items.length > 0: Section { title: "Frequently Visited Folders"; items: root.folder-items; max: root.rows-max;
+                        if root.folder-items.length > 0: Shelf { title: "Frequently Visited Folders"; items: root.folder-items; max: root.rows-max;
                             title-clicked => { root.navigate("video"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.list-items.length > 0: Section { title: "Frequently Visited Playlists"; items: root.list-items; max: root.rows-max;
+                        if root.list-items.length > 0: Shelf { title: "Frequently Visited Playlists"; items: root.list-items; max: root.rows-max;
                             title-clicked => { root.navigate("playlists"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.artist-items.length > 0: Section { title: "Frequently Listened Artists"; items: root.artist-items; max: root.rows-max;
+                        if root.artist-items.length > 0: Shelf { title: "Frequently Listened Artists"; items: root.artist-items; max: root.rows-max;
                             title-clicked => { root.navigate("music:artists"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.pinned-items.length > 0: Section { title: "Favorites"; items: root.pinned-items; max: root.rows-max;
+                        if root.pinned-items.length > 0: Shelf { title: "Favorites"; items: root.pinned-items; max: root.rows-max;
                             open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.items.length > 0: Section { title: "Recently Added"; items: root.items; max: root.rows-max;
+                        if root.items.length > 0: Shelf { title: "Recently Added"; items: root.items; max: root.rows-max;
                             title-clicked => { root.navigate("video"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
-                        if root.recent-items.length > 0: Section { title: "Recently Played"; items: root.recent-items; max: root.rows-max; action-text: "Clear";
+                        if root.recent-items.length > 0: Shelf { title: "Recently Played"; items: root.recent-items; max: root.rows-max; action-text: "Clear";
                             title-clicked => { root.navigate("recent"); } action => { root.clear-recent(); }
                             open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                     }

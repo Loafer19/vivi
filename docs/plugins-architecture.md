@@ -115,7 +115,7 @@ author = "Vivi"
 kind = "mpv-lua"                  # mpv-lua | mpv-js (wasm reserved)
 entry = "night-mode.lua"          # file name = mpv script name = id
 min_vivi = "0.8.0"                # oldest compatible Vivi
-icon = "night"                    # Settings icon key (ui/settings.slint PluginIcons)
+icon = "night"                    # Settings icon key (ui/core/icons.slint Icons.plugin)
 lucide = "moon"                   # docs site icon
 permissions = []                  # network | filesystem | subprocess
 default_enabled = true            # optional

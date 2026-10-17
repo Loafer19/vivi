@@ -119,7 +119,7 @@ pub struct Manifest {
     pub description: String,
     pub version: String,
     pub author: String,
-    /// Icon key mapped to an SVG in `ui/settings.slint` (`PluginIcons`).
+    /// Icon key mapped to an SVG in `ui/core/icons.slint` (`Icons.plugin`).
     pub icon: String,
     pub settings: Vec<SettingSpec>,
     pub default_enabled: bool,

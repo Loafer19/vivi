@@ -10,6 +10,10 @@
 ### Changed
 - **Esc closes the top-most open overlay** — menus, shortcuts, info, onboarding, Customize, tag review, Find Lyrics, music / streams dialog, Add Subtitles, QR, Settings, New Playlist, Network Stream, side panel, library, karaoke — and only then leaves the miniplayer, then fullscreen. It also works while a text field in a dialog has focus.
 
+- **Consistent UI**: every colour, corner radius and font size in the UI now comes from design tokens (`ui/core/theme.slint`: `Theme` status / scrim / shadow / on-media / stage colours and a `Metrics` scale for spacing, radii, fonts, icons and row heights). Odd values are snapped to the scale (e.g. 15 px text → 16 px, 5 px corners → 6 px).
+- One set of shared components in `ui/core/`: Primary / Secondary / Flat / Icon buttons with size variants, section headers, badges, value chips, list rows, one slider, one modal (same scrim darkness, rounding, border and shadow for Settings, Customize, Properties, the plugin dialogs and the playlist / stream dialogs) and the text field (now also in the side panel and the library search). One `Icons` lookup replaces five, one `Format` replaces two.
+- **Karaoke follows the theme**: the full-screen lyrics stage, its chips and the empty state are light in light mode. It reads a typed lyrics state (found / searching / missing) and the numeric offset instead of comparing display strings.
+
 ### Fixed
 - Main menu → Keyboard Shortcuts opened Settings → Playback; the library's "Edit subtitles / audio" opened Controls / Privacy instead of Subtitles / Audio.
 

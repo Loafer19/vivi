@@ -1,0 +1,51 @@
+// The one slider core: a rounded field-coloured track with an accent fill,
+// optional ticks and labels, and an accent handle. Used by settings, the side
+// panel and the audio/video effects. (The seek and volume bars in the player
+// keep their own drawing; the equalizer bands are vertical.)
+import { Theme, Metrics } from "theme.slint";
+
+export component Slider inherits Rectangle {
+    // live: report every move while dragging (side panel); otherwise only on release.
+    in property <bool> live: false;
+    in property <float> value;
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    in property <float> step: 0.1;
+    in property <[string]> labels;
+    in property <int> ticks: 9;
+    in property <bool> enabled: true;
+    callback changed(float);
+    property <float> frac: clamp((root.value - root.minimum) / max(0.0001, root.maximum - root.minimum), 0, 1);
+    property <length> track-h: 16px;
+    height: labels.length > 0 ? 40px : 22px;
+    opacity: enabled ? 1 : 0.4;
+    track := Rectangle {
+        y: 3px; height: root.track-h; border-radius: Metrics.radius-sm; background: Theme.field;
+        Rectangle { x: 0; width: parent.width * root.frac; border-radius: Metrics.radius-sm; background: Theme.accent.mix(Theme.field, 25%); }
+        for t in root.ticks: Rectangle {
+            x: parent.width * (t + 1) / (root.ticks + 1); y: 5px;
+            width: 1px; height: parent.height - 10px; background: Theme.divider;
+        }
+        Rectangle {
+            x: clamp(parent.width * root.frac - 4px, 0, parent.width - 8px); y: -3px;
+            width: 8px; height: parent.height + 6px; border-radius: self.width / 2; background: Theme.accent;
+        }
+        ta := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            function apply() {
+                let raw = root.minimum + clamp(self.mouse-x / self.width, 0, 1) * (root.maximum - root.minimum);
+                root.changed(round(raw / root.step) * root.step);
+            }
+            pointer-event(e) => {
+                if (e.kind == PointerEventKind.up || (root.live && e.kind == PointerEventKind.down)) { self.apply(); }
+            }
+            moved => { if (root.live && self.pressed) { self.apply(); } }
+        }
+    }
+    for l[i] in root.labels: Text {
+        x: root.labels.length < 2 ? 0 : (root.width - self.width) * i / (root.labels.length - 1);
+        y: root.track-h + 9px;
+        text: l; font-size: Metrics.font-xs; color: Theme.fg-a3;
+    }
+}

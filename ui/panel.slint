@@ -2,16 +2,15 @@
 // 400px wide. Two tab groups: Playback / Video / Audio / Subtitles (quick settings)
 // and Queue / Bookmarks / Chapters / Library (lists). Tab ids: 0 subs, 1 audio,
 // 2 video, 3 playback, 4 queue, 5 library, 6 bookmarks, 7 chapters.
-import { ScrollView, LineEdit } from "std-widgets.slint";
-import { Theme, Icon } from "theme.slint";
-import { Field, Toggle, AccentSlider, Segmented, TextField, Dropdown } from "controls.slint";
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Toggle, Slider, Segmented, TextField, Dropdown } from "core/controls.slint";
 import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
+import { Format } from "core/format.slint";
+import { SecondaryButton, ButtonSize } from "core/buttons.slint";
+import { SectionHeader, ValueChip } from "core/rows.slint";
 
 export struct Item { key: string, label: string, selected: bool }
-
-component Section inherits Text {
-    color: Theme.fg-1; font-weight: 600; font-size: 14px;
-}
 
 // A clickable list of options with a check mark on the selected one.
 component OptionList inherits VerticalLayout {
@@ -22,7 +21,7 @@ component OptionList inherits VerticalLayout {
     if items.length == 0: Text { text: root.empty-text; color: Theme.fg-a3; }
     for it in items: Rectangle {
         height: 32px;
-        border-radius: Theme.radius;
+        border-radius: Metrics.radius-sm;
         background: ta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg : transparent);
         HorizontalLayout {
             padding-left: 10px; padding-right: 8px; spacing: 8px;
@@ -52,37 +51,20 @@ component SliderRow inherits VerticalLayout {
         Text { text: root.label; color: Theme.fg-a1; horizontal-stretch: 1; }
         Text {
             text: (root.decimals == 0 ? round(root.value) : round(root.value * 100) / 100) + root.unit;
-            color: Theme.fg-1; font-family: "DM Mono"; font-size: 13px;
+            color: Theme.fg-1; font-family: "DM Mono"; font-size: Metrics.font-md;
         }
         Rectangle { width: 8px; }
         Rectangle {
-            width: 18px; height: 18px; border-radius: 3px;
+            width: 18px; height: 18px; border-radius: Metrics.radius-sm;
             background: rta.has-hover ? Theme.bg-a1 : transparent;
             Icon { source: @image-url("../assets/icons/refresh.svg"); width: 14px; height: 14px; tint: Theme.fg-a3; }
             rta := TouchArea { clicked => { root.value = root.default-value; root.changed(root.value); } }
         }
     }
-    Rectangle {
-        height: 18px;
-        property <float> frac: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
-        Rectangle {
-            y: 6px; height: 6px; border-radius: 3px; background: Theme.divider;
-            Rectangle { x: 0; height: 6px; border-radius: 3px; width: parent.width * frac; background: Theme.accent; }
-        }
-        Rectangle {
-            x: parent.width * frac - 7px; y: 2px; width: 14px; height: 14px; border-radius: 7px;
-            background: ta.pressed || ta.has-hover ? Theme.accent-bright : Theme.fg-1;
-        }
-        ta := TouchArea {
-            mouse-cursor: pointer;
-            function apply() {
-                let raw = root.minimum + clamp(self.mouse-x / self.width, 0, 1) * (root.maximum - root.minimum);
-                root.value = round(raw / root.step) * root.step;
-                root.changed(root.value);
-            }
-            pointer-event(e) => { if (e.kind == PointerEventKind.down) { self.apply(); } }
-            moved => { if (self.pressed) { self.apply(); } }
-        }
+    Slider {
+        value: root.value; minimum: root.minimum; maximum: root.maximum; step: root.step;
+        ticks: 0; live: true;
+        changed(v) => { root.value = v; root.changed(v); }
     }
 }
 
@@ -98,9 +80,9 @@ component Tab inherits Rectangle {
     HorizontalLayout {
         alignment: center; spacing: 6px;
         Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: root.active ? Theme.accent : Theme.fg-a3; }
-        if !root.compact: Text { text: root.label; font-size: 13px; vertical-alignment: center; color: root.active ? Theme.fg-1 : Theme.fg-a2; }
+        if !root.compact: Text { text: root.label; font-size: Metrics.font-md; vertical-alignment: center; color: root.active ? Theme.fg-1 : Theme.fg-a2; }
     }
-    Rectangle { y: parent.height - 2px; height: 2px; width: parent.width - 12px; x: 6px; border-radius: 1px; background: root.active ? Theme.accent : transparent; }
+    Rectangle { y: parent.height - 2px; height: 2px; width: parent.width - 12px; x: 6px; border-radius: self.height / 2; background: root.active ? Theme.accent : transparent; }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
@@ -110,7 +92,7 @@ component Group inherits VerticalLayout {
     in property <bool> first;
     spacing: 10px; padding-top: first ? 2px : 6px;
     if !root.first: Rectangle { height: 1px; background: Theme.divider.with-alpha(0.5); }
-    Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: 14px; }
+    Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-base; }
     @children
 }
 
@@ -120,41 +102,20 @@ component Line inherits HorizontalLayout {
     in property <string> hint;
     spacing: 10px; min-height: 36px;
     VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 1px;
-        Text { text: root.label; color: Theme.fg-a1; font-size: 13px; overflow: elide; }
-        if root.hint != "": Text { text: root.hint; color: Theme.fg-a3; font-size: 11px; overflow: elide; }
+        Text { text: root.label; color: Theme.fg-a1; font-size: Metrics.font-md; overflow: elide; }
+        if root.hint != "": Text { text: root.hint; color: Theme.fg-a3; font-size: Metrics.font-xs; overflow: elide; }
     }
     VerticalLayout { alignment: center; @children }
-}
-
-// Small value pill (e.g. "1.00×", "-0.40 s").
-component Badge inherits Rectangle {
-    in property <string> text;
-    height: 26px; width: max(52px, bt.preferred-width + 18px); border-radius: 5px; background: Field.fill;
-    bt := Text { text: root.text; color: Theme.fg-2; font-family: "DM Mono"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
 }
 
 // Footer button that opens the full Settings window on a category.
 component AdvancedLink inherits Rectangle {
     callback clicked();
-    height: 36px; border-radius: 6px;
+    height: 36px; border-radius: Metrics.radius-md;
     background: ta.has-hover ? Theme.bg-a1 : transparent;
     HorizontalLayout { alignment: center; spacing: 8px;
         Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: @image-url("../assets/icons/settings.svg"); tint: Theme.fg-a2; }
-        Text { text: "Open Advanced Settings"; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; }
-    }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
-}
-
-component Button inherits Rectangle {
-    in property <string> text;
-    in property <image> icon;
-    callback clicked();
-    height: 32px; border-radius: Theme.radius;
-    background: ta.has-hover ? Theme.divider : Theme.bg-a1;
-    HorizontalLayout {
-        alignment: center; spacing: 8px;
-        Icon { source: root.icon; width: 18px; height: 32px; }
-        Text { text: root.text; color: Theme.fg-1; vertical-alignment: center; }
+        Text { text: "Open Advanced Settings"; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; }
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
@@ -167,12 +128,12 @@ component QueueRow inherits Rectangle {
     callback move(int, int);
     callback remove(int);
     height: 36px;
-    border-radius: Theme.radius;
+    border-radius: Metrics.radius-sm;
     background: ta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg : transparent);
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.play(root.index); } }
     HorizontalLayout {
         padding-left: 10px; padding-right: 4px; spacing: 6px;
-        Text { text: (root.index + 1) + "."; color: Theme.fg-a3; vertical-alignment: center; font-family: "DM Mono"; font-size: 12px; }
+        Text { text: (root.index + 1) + "."; color: Theme.fg-a3; vertical-alignment: center; font-family: "DM Mono"; font-size: Metrics.font-sm; }
         Text {
             horizontal-stretch: 1;
             text: it.label; overflow: elide; vertical-alignment: center;
@@ -199,8 +160,8 @@ component ColorField inherits HorizontalLayout {
     callback accepted(string);
     spacing: 6px; width: 170px;
     TextField { horizontal-stretch: 1; text <=> root.value; placeholder: "#FFFFFF"; accepted(t) => { root.accepted(t); } }
-    Rectangle { width: 26px; height: 26px; y: 3px; border-radius: 4px; border-width: 1px; border-color: Theme.divider;
-        background: root.value == "#000000" ? #000000 : root.value == "#FFFFFF" ? #FFFFFF : root.value == "#FFFF00" ? #FFFF00 : Theme.fg-2; }
+    Rectangle { width: 26px; height: 26px; y: 3px; border-radius: Metrics.radius-sm; border-width: 1px; border-color: Theme.divider;
+        background: root.value == "#000000" ? black : root.value == "#FFFFFF" ? white : root.value == "#FFFF00" ? yellow : Theme.fg-2; }
 }
 
 // Collapsible "Show preset" card (Figma "Default Preset").
@@ -208,17 +169,17 @@ component PresetCard inherits Rectangle {
     in property <string> name;
     callback save();
     property <bool> open;
-    border-radius: 6px; background: Field.fill; clip: true;
+    border-radius: Metrics.radius-md; background: Theme.field; clip: true;
     VerticalLayout {
         Rectangle { height: 40px;
             HorizontalLayout { padding-left: 12px; padding-right: 10px;
-                Text { text: "Show Preset"; color: Theme.fg-2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+                Text { text: "Show Preset"; color: Theme.fg-2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
                 Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; tint: Theme.fg-a2;
                     source: root.open ? @image-url("../assets/icons/chevron-up.svg") : @image-url("../assets/icons/chevron-down.svg"); } }
             TouchArea { mouse-cursor: pointer; clicked => { root.open = !root.open; } } }
         if root.open: VerticalLayout { padding: 12px; padding-top: 0; spacing: 10px;
-            Text { text: "Saves delays, subtitle size/position and track languages for “" + root.name + "”. Applied automatically to other episodes."; color: Theme.fg-a3; wrap: word-wrap; font-size: 12px; }
-            Button { text: "Save preset for this show"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.save(); } } }
+            Text { text: "Saves delays, subtitle size/position and track languages for “" + root.name + "”. Applied automatically to other episodes."; color: Theme.fg-a3; wrap: word-wrap; font-size: Metrics.font-sm; }
+            SecondaryButton { size: ButtonSize.sm; text: "Save preset for this show"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.save(); } } }
     }
 }
 
@@ -231,11 +192,11 @@ component ListHeader inherits HorizontalLayout {
     callback minus();
     callback plus();
     height: 36px; spacing: 4px;
-    Text { text: root.text; color: Theme.fg-a2; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
-    if root.show-minus: Rectangle { width: 30px; border-radius: 4px; background: ma.has-hover ? Theme.bg-a1 : transparent;
+    Text { text: root.text; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
+    if root.show-minus: Rectangle { width: 30px; border-radius: Metrics.radius-sm; background: ma.has-hover ? Theme.bg-a1 : transparent;
         Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/remove.svg"); tint: Theme.fg-a2; }
         ma := TouchArea { mouse-cursor: pointer; clicked => { root.minus(); } } }
-    Rectangle { width: 30px; border-radius: 4px; background: pa.has-hover ? Theme.bg-a1 : transparent;
+    Rectangle { width: 30px; border-radius: Metrics.radius-sm; background: pa.has-hover ? Theme.bg-a1 : transparent;
         Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-a2; }
         pa := TouchArea { mouse-cursor: pointer; clicked => { root.plus(); } } }
 }
@@ -247,30 +208,18 @@ component TimeRow inherits Rectangle {
     in property <string> time;
     in property <bool> current;
     callback clicked();
-    height: 38px; border-radius: Theme.radius;
+    height: 38px; border-radius: Metrics.radius-sm;
     background: ta.has-hover ? Theme.bg-a1 : (current ? Theme.accent-bg.with-alpha(0.5) : transparent);
     HorizontalLayout {
         padding-left: 10px; padding-right: 10px; spacing: 12px;
-        if root.number != "": Text { width: 22px; text: root.number; color: Theme.accent; font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; }
+        if root.number != "": Text { width: 22px; text: root.number; color: Theme.accent; font-family: "DM Mono"; font-size: Metrics.font-md; vertical-alignment: center; }
         Text { text: root.title; horizontal-stretch: 1; overflow: elide; vertical-alignment: center; color: root.current ? Theme.accent-bright : Theme.fg-2; }
-        Text { text: root.time; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
+        Text { text: root.time; color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; }
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
-global TimeFmt {
-    // seconds → "HH:MM:SS" (with ".mmm" when ms is true)
-    pure public function hms(t: float, ms: bool) -> string {
-        let s = floor(max(t, 0));
-        let h = floor(s / 3600);
-        let m = floor(mod(s, 3600) / 60);
-        let sec = mod(s, 60);
-        let base = (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
-        if (!ms) { return base; }
-        let f = round((t - s) * 1000);
-        return base + "." + (f < 10 ? "00" : f < 100 ? "0" : "") + f;
-    }
-}
+
 
 export component SidePanel inherits Rectangle {
     in-out property <int> tab: 0;
@@ -314,6 +263,8 @@ export component SidePanel inherits Rectangle {
     in property <bool> karaoke-open;
     in property <string> lyrics-source;
     in property <string> lyrics-offset;
+    in property <float> lyrics-offset-s;
+    in property <float> subs-offset-s;
     in property <bool> lyrics-can-save;
     in property <bool> lyrics-manual;
     callback lyrics(string, string);
@@ -402,14 +353,14 @@ export component SidePanel inherits Rectangle {
                     Group { first: true; title: "Speed";
                         HorizontalLayout { spacing: 6px;
                             for v in [0.5, 1, 1.25, 1.5, 2]: Rectangle {
-                                height: 28px; horizontal-stretch: 1; border-radius: 5px;
-                                background: abs(root.speed - v) < 0.001 ? Theme.accent.mix(Field.fill, 30%) : (sa.has-hover ? Field.raised : Field.fill);
-                                Text { text: v + "×"; font-size: 12px; color: abs(root.speed - v) < 0.001 ? Theme.accent : Theme.fg-a2; }
+                                height: 28px; horizontal-stretch: 1; border-radius: Metrics.radius-md;
+                                background: abs(root.speed - v) < 0.001 ? Theme.accent.mix(Theme.field, 30%) : (sa.has-hover ? Theme.field-raised : Theme.field);
+                                Text { text: v + "×"; font-size: Metrics.font-sm; color: abs(root.speed - v) < 0.001 ? Theme.accent : Theme.fg-a2; }
                                 sa := TouchArea { mouse-cursor: pointer; clicked => { root.speed = v; root.set-prop("speed", v); } }
                             }
-                            Badge { text: round(root.speed * 100) / 100 + "×"; }
+                            ValueChip { text: round(root.speed * 100) / 100 + "×"; }
                         }
-                        AccentSlider {
+                        Slider {
                             value: root.speed; minimum: 0.25; maximum: 2; step: 0.05; ticks: 6;
                             labels: ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
                             changed(v) => { root.speed = v; root.set-prop("speed", v); }
@@ -430,30 +381,30 @@ export component SidePanel inherits Rectangle {
                             Dropdown { width: 170px; options: ["Off", "15 min", "30 min", "60 min", "End of file"]; value: root.sleep-state == "" ? "Off" : "On";
                                 selected(i, o) => { root.sleep(i == 0 ? 0 : i == 1 ? 15 : i == 2 ? 30 : i == 3 ? 60 : -1); } } }
                         Line { label: "A-B Loop"; hint: root.ab-state;
-                            Button { width: 110px; text: "Set A / B"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } } }
+                            SecondaryButton { size: ButtonSize.sm; width: 110px; text: "Set A / B"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } } }
                     }
                     if root.lyrics-enabled: Group { title: "Lyrics";
                         Line { label: "Karaoke View"; hint: "Full-screen lyrics · L";
                             Toggle { on: root.karaoke-open; toggled => { root.lyrics("karaoke", root.karaoke-open ? "off" : "on"); } } }
                         Line { label: "Timing Offset"; hint: "Saved per track · [ ] ±0.1 s, Shift ±0.5 s";
                             HorizontalLayout { spacing: 4px;
-                                for d in [-0.5, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: oa.has-hover ? Field.raised : Field.fill;
-                                    Text { text: d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                for d in [-0.5, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: oa.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: d; font-size: Metrics.font-xs; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
                                     oa := TouchArea { mouse-cursor: pointer; clicked => { root.lyrics("offset", d); } } }
-                                Rectangle { width: 64px; height: 26px; border-radius: 5px; background: Field.fill;
-                                    Text { text: root.lyrics-offset; font-family: "DM Mono"; font-size: 12px; color: root.lyrics-offset == "0.0 s" ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
+                                Rectangle { width: 64px; height: 26px; border-radius: Metrics.radius-md; background: Theme.field;
+                                    Text { text: root.lyrics-offset; font-family: "DM Mono"; font-size: Metrics.font-sm; color: root.lyrics-offset-s == 0 ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
                                     TouchArea { mouse-cursor: pointer; double-clicked => { root.lyrics("offset", "reset"); } } }
-                                for d in [0.1, 0.5]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: ob.has-hover ? Field.raised : Field.fill;
-                                    Text { text: "+" + d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                for d in [0.1, 0.5]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: ob.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: "+" + d; font-size: Metrics.font-xs; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
                                     ob := TouchArea { mouse-cursor: pointer; clicked => { root.lyrics("offset", d); } } }
                             } }
                         Line { label: "Source"; hint: root.lyrics-source;
                             HorizontalLayout { spacing: 6px;
-                                if root.lyrics-manual: Button { width: 86px; text: "Reset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.lyrics("forget", ""); } }
-                                Button { width: 110px; text: "Search…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.lyrics("search-open", ""); } } } }
+                                if root.lyrics-manual: SecondaryButton { size: ButtonSize.sm; width: 86px; text: "Reset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.lyrics("forget", ""); } }
+                                SecondaryButton { size: ButtonSize.sm; width: 110px; text: "Search…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.lyrics("search-open", ""); } } } }
                         if root.lyrics-can-save: HorizontalLayout { spacing: 8px;
-                            Button { horizontal-stretch: 1; text: "Save as .lrc"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.lyrics("save-lrc", ""); } }
-                            Button { horizontal-stretch: 1; text: "Embed in tags"; icon: @image-url("../assets/icons/music.svg"); clicked => { root.lyrics("embed", ""); } } }
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Save as .lrc"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.lyrics("save-lrc", ""); } }
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Embed in tags"; icon: @image-url("../assets/icons/music.svg"); clicked => { root.lyrics("embed", ""); } } }
                     }
                     AdvancedLink { clicked => { root.open-settings(4); } }
                 }
@@ -461,7 +412,7 @@ export component SidePanel inherits Rectangle {
                 if root.tab == 2: VerticalLayout {
                     spacing: 6px; alignment: start;
                     Group { first: true; title: "Geometry";
-                        Text { text: "Flip"; color: Theme.fg-a1; font-size: 13px; }
+                        Text { text: "Flip"; color: Theme.fg-a1; font-size: Metrics.font-md; }
                         Segmented { options: ["None", "Horizontal", "Vertical"]; value: root.flip;
                             selected(o) => {
                                 root.flip = o;
@@ -539,38 +490,38 @@ export component SidePanel inherits Rectangle {
                         }
                         OptionList { items: root.sub-tracks; empty-text: "No subtitle tracks"; pick(it) => { root.set-prop("sid", it.key); } }
                         HorizontalLayout { spacing: 8px;
-                            Button { horizontal-stretch: 1; text: "Add file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
-                            if root.subs-enabled: Button { horizontal-stretch: 1; text: "Find online…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.find-subs(); } }
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Add file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
+                            if root.subs-enabled: SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Find online…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.find-subs(); } }
                         }
                         if root.subs-has-pick: Line { label: "OpenSubtitles Pick"; hint: root.subs-pick-label;
-                            Button { width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }
+                            SecondaryButton { size: ButtonSize.sm; width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }
                     }
                     if root.subs-enabled: Group { title: "Offset";
                         Line { label: "Offset"; hint: "Saved per file";
                             HorizontalLayout { spacing: 4px;
-                                for d in [-1, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: soa.has-hover ? Field.raised : Field.fill;
-                                    Text { text: d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                for d in [-1, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: soa.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: d; font-size: Metrics.font-xs; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
                                     soa := TouchArea { mouse-cursor: pointer; clicked => { root.subs("offset", d); } } }
-                                Rectangle { width: 64px; height: 26px; border-radius: 5px; background: Field.fill;
-                                    Text { text: root.subs-offset; font-family: "DM Mono"; font-size: 12px; color: root.subs-offset == "0.0 s" ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
+                                Rectangle { width: 64px; height: 26px; border-radius: Metrics.radius-md; background: Theme.field;
+                                    Text { text: root.subs-offset; font-family: "DM Mono"; font-size: Metrics.font-sm; color: root.subs-offset-s == 0 ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
                                     TouchArea { mouse-cursor: pointer; double-clicked => { root.subs("offset", "reset"); } } }
-                                for d in [0.1, 1]: Rectangle { width: 40px; height: 26px; border-radius: 5px; background: sob.has-hover ? Field.raised : Field.fill;
-                                    Text { text: "+" + d; font-size: 11px; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                for d in [0.1, 1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: sob.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: "+" + d; font-size: Metrics.font-xs; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
                                     sob := TouchArea { mouse-cursor: pointer; clicked => { root.subs("offset", d); } } }
                             } }
-                        Text { text: "Z / X ±0.1 s, Shift ±1 s · Lyrics keep [ ]"; color: Theme.fg-a3; font-size: 11px; }
+                        Text { text: "Z / X ±0.1 s, Shift ±1 s · Lyrics keep [ ]"; color: Theme.fg-a3; font-size: Metrics.font-xs; }
                         HorizontalLayout { spacing: 8px;
-                            Button { horizontal-stretch: 1; text: "Reset offset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.subs("offset", "reset"); } }
-                            Button { horizontal-stretch: 1; text: root.subs-sync ? "Auto-sync to audio" : "Auto-sync (plugin)"; icon: @image-url("../assets/icons/waveform-twotone.svg"); clicked => { root.subs("sync", ""); } }
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Reset offset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.subs("offset", "reset"); } }
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: root.subs-sync ? "Auto-sync to audio" : "Auto-sync (plugin)"; icon: @image-url("../assets/icons/waveform-twotone.svg"); clicked => { root.subs("sync", ""); } }
                         }
                     }
                     Group { title: "Synchronization";
                         SliderRow { label: "Delay"; unit: " s"; decimals: 2; minimum: -10; maximum: 10; step: 0.05;
                             value <=> root.sub-delay; changed(v) => { root.set-prop("sub-delay", v); } }
                         HorizontalLayout {
-                            Text { text: "−10 s"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; }
-                            Text { text: "0 s"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; horizontal-alignment: center; }
-                            Text { text: "+10 s"; color: Theme.fg-a3; font-size: 11px; horizontal-stretch: 1; horizontal-alignment: right; }
+                            Text { text: "−10 s"; color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-stretch: 1; }
+                            Text { text: "0 s"; color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-stretch: 1; horizontal-alignment: center; }
+                            Text { text: "+10 s"; color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-stretch: 1; horizontal-alignment: right; }
                         }
                         SliderRow { label: "Speed"; unit: "×"; decimals: 2; minimum: 0.5; maximum: 2; step: 0.01; default-value: 1;
                             value <=> root.sub-speed; changed(v) => { root.set-prop("sub-speed", v); } }
@@ -602,7 +553,7 @@ export component SidePanel inherits Rectangle {
                     }
                     if root.bookmarks.length == 0: Text { text: "No bookmarks yet — press + or Ctrl+B."; color: Theme.fg-a3; wrap: word-wrap; }
                     for it in root.bookmarks: TimeRow {
-                        title: it.label; time: TimeFmt.hms(it.key.to-float(), true);
+                        title: it.label; time: Format.hms(it.key.to-float(), true);
                         clicked => { root.seek-to(it.key); }
                     }
                 }
@@ -613,18 +564,18 @@ export component SidePanel inherits Rectangle {
                     for it[i] in root.chapters: crow := Rectangle {
                         property <bool> thumb: i < root.chapter-has-thumb.length && root.chapter-has-thumb[i];
                         height: self.thumb ? 52px : 38px;
-                        border-radius: Theme.radius;
+                        border-radius: Metrics.radius-sm;
                         background: cta.has-hover ? Theme.bg-a1 : (it.selected ? Theme.accent-bg.with-alpha(0.5) : transparent);
                         HorizontalLayout {
                             padding-left: 10px; padding-right: 10px; spacing: 12px;
-                            Text { width: 22px; text: i + 1; color: Theme.accent; font-family: "DM Mono"; font-size: 13px; vertical-alignment: center; }
+                            Text { width: 22px; text: i + 1; color: Theme.accent; font-family: "DM Mono"; font-size: Metrics.font-md; vertical-alignment: center; }
                             if crow.thumb: Rectangle {
-                                y: 6px; width: 71px; height: 40px; border-radius: 3px; clip: true; background: #000000;
+                                y: 6px; width: 71px; height: 40px; border-radius: Metrics.radius-sm; clip: true; background: Theme.video-bg;
                                 Image { width: parent.width; height: parent.height; source: root.chapter-thumbs[i]; image-fit: ImageFit.cover; }
                             }
                             Text { text: it.label; overflow: elide; vertical-alignment: center; horizontal-stretch: 1;
                                 color: it.selected ? Theme.accent-bright : Theme.fg-2; }
-                            Text { text: i < root.chapter-times.length ? root.chapter-times[i] : ""; color: Theme.fg-a3; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; }
+                            Text { text: i < root.chapter-times.length ? root.chapter-times[i] : ""; color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; }
                         }
                         cta := TouchArea { mouse-cursor: pointer; clicked => { root.set-prop("chapter", it.key); } }
                     }
@@ -632,10 +583,10 @@ export component SidePanel inherits Rectangle {
                 // ---- Compact library ----
                 if root.tab == 5: VerticalLayout {
                     spacing: 10px; alignment: start;
-                    LineEdit { placeholder-text: "Search library"; edited(t) => { root.library-search(t); } }
+                    TextField { placeholder: "Search library"; edited(t) => { root.library-search(t); } }
                     if root.library.length == 0: Text { text: "No matching files. Folders are set in Settings → Library."; color: Theme.fg-a3; wrap: word-wrap; }
                     for it in root.library: Rectangle {
-                        height: 34px; border-radius: Theme.radius;
+                        height: 34px; border-radius: Metrics.radius-sm;
                         background: lta.has-hover ? Theme.bg-a1 : transparent;
                         lta := TouchArea { mouse-cursor: pointer; clicked => { root.library-play(it.key); } }
                         HorizontalLayout {
@@ -665,16 +616,16 @@ export component SidePanel inherits Rectangle {
                             remove(n) => { root.queue-remove(n); }
                         }
                     }
-                    Section { text: "Save queue as playlist"; }
+                    SectionHeader { text: "Save queue as playlist"; }
                     HorizontalLayout {
                         spacing: 6px;
-                        name := LineEdit { placeholder-text: "Playlist name"; horizontal-stretch: 1; }
-                        Button { width: 80px; text: "Save"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.playlist-save(name.text); name.text = ""; } }
+                        name := TextField { placeholder: "Playlist name"; horizontal-stretch: 1; }
+                        SecondaryButton { size: ButtonSize.sm; width: 80px; text: "Save"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.playlist-save(name.text); name.text = ""; } }
                     }
-                    Section { text: "Playlists"; }
+                    SectionHeader { text: "Playlists"; }
                     if root.playlists.length == 0: Text { text: "No saved playlists"; color: Theme.fg-a3; }
                     for pl in root.playlists: Rectangle {
-                        height: 34px; border-radius: Theme.radius;
+                        height: 34px; border-radius: Metrics.radius-sm;
                         background: pta.has-hover ? Theme.bg-a1 : transparent;
                         pta := TouchArea { mouse-cursor: pointer; clicked => { root.playlist-load(pl.key); } }
                         HorizontalLayout {

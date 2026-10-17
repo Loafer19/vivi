@@ -3,8 +3,11 @@
 // rows built from the reusable controls in controls.slint.
 import { AboutPage } from "about.slint";
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Icon } from "theme.slint";
-import { Dropdown, Toggle, AccentSlider, Segmented, TextField, PathField, FlatButton, AdvancedBar, Field } from "controls.slint";
+import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Dropdown, Toggle, Slider, Segmented, TextField, PathField, AdvancedBar } from "core/controls.slint";
+import { Icons } from "core/icons.slint";
+import { Modal } from "core/modal.slint";
+import { FlatButton } from "core/buttons.slint";
 
 export struct SettingRow {
     id: string,
@@ -31,27 +34,7 @@ export struct SettingRow {
 }
 
 // Plugin manifest icon key → icon (see src/plugins Manifest::icon).
-global PluginIcons {
-    pure public function get(key: string) -> image {
-        if (key == "visualizer") { return @image-url("../assets/icons/spectrum-twotone.svg"); }
-        if (key == "skip") { return @image-url("../assets/icons/next.svg"); }
-        if (key == "lyrics") { return @image-url("../assets/icons/music.svg"); }
-        if (key == "subtitles") { return @image-url("../assets/icons/subtitles.svg"); }
-        if (key == "script") { return @image-url("../assets/icons/file.svg"); }
-        if (key == "loop") { return @image-url("../assets/icons/repeat-right.svg"); }
-        if (key == "stats") { return @image-url("../assets/icons/spectometer-twotone.svg"); }
-        if (key == "tag") { return @image-url("../assets/icons/edit.svg"); }
-        if (key == "free-music") { return @image-url("../assets/icons/album.svg"); }
-        if (key == "streams") { return @image-url("../assets/icons/streaming.svg"); }
-        if (key == "discord") { return @image-url("../assets/icons/profile.svg"); }
-        if (key == "remote") { return @image-url("../assets/icons/capture-device.svg"); }
-        if (key == "scrobble") { return @image-url("../assets/icons/favorite-twotone.svg"); }
-        if (key == "night") { return @image-url("../assets/icons/volume-high.svg"); }
-        if (key == "eq") { return @image-url("../assets/icons/eq.svg"); }
-        if (key == "chapters") { return @image-url("../assets/icons/chapters-twotone.svg"); }
-        @image-url("../assets/icons/plugins.svg")
-    }
-}
+
 
 // Extensions card: icon, name, version · author · source, description and ON/OFF.
 // clip + max-height keep long descriptions inside the fixed-height row.
@@ -59,7 +42,7 @@ component PluginCard inherits Rectangle {
     in property <SettingRow> setting;
     callback changed(string, string);
     property <bool> on: setting.value == "true";
-    border-radius: 8px;
+    border-radius: Metrics.radius-lg;
     background: Theme.bg-a3;
     border-width: 1px; border-color: on ? Theme.accent.with-alpha(0.35) : transparent;
     clip: true;
@@ -67,21 +50,21 @@ component PluginCard inherits Rectangle {
         padding: 12px; spacing: 12px;
         VerticalLayout { alignment: center;
             Rectangle {
-                width: 40px; height: 40px; border-radius: 8px;
-                background: on ? Theme.accent.mix(Field.fill, 25%) : Field.raised;
-                Icon { width: 22px; height: 22px; source: PluginIcons.get(setting.options[2]); tint: on ? Theme.accent : Theme.fg-a2; }
+                width: 40px; height: 40px; border-radius: Metrics.radius-lg;
+                background: on ? Theme.accent.mix(Theme.field, 25%) : Theme.field-raised;
+                Icon { width: 22px; height: 22px; source: Icons.plugin(setting.options[2]); tint: on ? Theme.accent : Theme.fg-a2; }
             }
         }
         VerticalLayout {
             horizontal-stretch: 1; alignment: center; spacing: 3px;
             HorizontalLayout { spacing: 8px;
                 Text {
-                    text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600;
+                    text: setting.title; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600;
                     overflow: elide; horizontal-stretch: 1;
                 }
                 Text {
                     text: (setting.options[0] != "" ? "v" + setting.options[0] + "  ·  " : "") + (setting.options[1] != "" ? setting.options[1] + "  ·  " : "") + setting.options[3];
-                    color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; font-family: "DM Mono";
+                    color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; font-family: "DM Mono";
                     overflow: elide;
                 }
             }
@@ -92,7 +75,7 @@ component PluginCard inherits Rectangle {
                 height: 32px; clip: true;
                 Text {
                     x: 0; y: 0; width: parent.width; height: 32px;
-                    text: setting.info; color: Theme.fg-a2; font-size: 12px;
+                    text: setting.info; color: Theme.fg-a2; font-size: Metrics.font-sm;
                     wrap: word-wrap; overflow: elide; vertical-alignment: top;
                 }
             }
@@ -110,7 +93,7 @@ component PackageCard inherits Rectangle {
     in property <SettingRow> setting;
     callback changed(string, string);
     property <bool> confirm: setting.value == "confirm";
-    border-radius: 8px;
+    border-radius: Metrics.radius-lg;
     background: Theme.bg-a3;
     border-width: 1px; border-color: confirm ? Theme.accent : transparent;
     clip: true;
@@ -118,20 +101,20 @@ component PackageCard inherits Rectangle {
         padding: 12px; spacing: 12px;
         VerticalLayout { alignment: center;
             Rectangle {
-                width: 40px; height: 40px; border-radius: 8px; background: Field.raised;
-                Icon { width: 22px; height: 22px; source: PluginIcons.get(setting.options[2]); tint: Theme.accent; }
+                width: 40px; height: 40px; border-radius: Metrics.radius-lg; background: Theme.field-raised;
+                Icon { width: 22px; height: 22px; source: Icons.plugin(setting.options[2]); tint: Theme.accent; }
             }
         }
         VerticalLayout {
             horizontal-stretch: 1; alignment: center; spacing: 3px;
             HorizontalLayout { spacing: 8px;
                 Text {
-                    text: setting.title; color: Theme.fg-1; font-size: 14px; font-weight: 600;
+                    text: setting.title; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600;
                     overflow: elide; horizontal-stretch: 1;
                 }
                 Text {
                     text: "v" + setting.options[0] + "  ·  " + setting.options[1] + "  ·  " + setting.options[5];
-                    color: Theme.fg-a3; font-size: 11px; vertical-alignment: center; font-family: "DM Mono";
+                    color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; font-family: "DM Mono";
                     overflow: elide;
                 }
             }
@@ -139,13 +122,13 @@ component PackageCard inherits Rectangle {
                 height: 32px; clip: true;
                 Text {
                     x: 0; y: 0; width: parent.width; height: 32px;
-                    text: setting.info; color: Theme.fg-a2; font-size: 12px;
+                    text: setting.info; color: Theme.fg-a2; font-size: Metrics.font-sm;
                     wrap: word-wrap; overflow: elide; vertical-alignment: top;
                 }
             }
             Text {
                 text: root.confirm ? setting.options[4] : setting.options[3] + (setting.options[4] != "" ? "  ·  " + setting.options[4] : "");
-                color: root.confirm ? Theme.fg-1 : Theme.fg-a3; font-size: 11px;
+                color: root.confirm ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-xs;
                 wrap: word-wrap; overflow: elide; height: 16px;
             }
         }
@@ -163,8 +146,8 @@ component Info inherits Rectangle {
     if ta.has-hover: Rectangle {
         x: 24px; y: -6px; z: 10;
         width: 280px; height: tip.preferred-height + 16px;
-        background: Theme.bg-a1; border-radius: Theme.radius; border-width: 1px; border-color: Theme.divider;
-        tip := Text { x: 8px; y: 8px; width: parent.width - 16px; text: root.text; wrap: word-wrap; color: Theme.fg-1; font-size: 12px; }
+        background: Theme.bg-a1; border-radius: Metrics.radius-sm; border-width: 1px; border-color: Theme.divider;
+        tip := Text { x: 8px; y: 8px; width: parent.width - 16px; text: root.text; wrap: word-wrap; color: Theme.fg-1; font-size: Metrics.font-sm; }
     }
 }
 
@@ -172,9 +155,9 @@ component Swatch inherits Rectangle {
     in property <color> swatch;
     in property <bool> selected;
     callback clicked();
-    width: 30px; height: 30px; border-radius: 4px;
-    background: selected ? Theme.accent.mix(Field.fill, 30%) : transparent;
-    Rectangle { width: 18px; height: 18px; border-radius: 2px; background: root.swatch; }
+    width: 30px; height: 30px; border-radius: Metrics.radius-sm;
+    background: selected ? Theme.accent.mix(Theme.field, 30%) : transparent;
+    Rectangle { width: 18px; height: 18px; border-radius: Metrics.radius-xs; background: root.swatch; }
     TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
@@ -186,7 +169,7 @@ component Row inherits Rectangle {
     property <length> ctl-w: min(300px, root.width * 0.45);
     height: setting.kind == "plugin" ? 76px : setting.kind == "package" ? 104px : setting.kind == "header" ? 48px : setting.kind == "advanced" ? 56px : setting.kind == "slider" && setting.labels.length > 0 ? 58px : 42px;
     if setting.kind == "header": Text {
-        x: 0; y: 20px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: 15px;
+        x: 0; y: 20px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-lg;
     }
     if setting.kind == "advanced": AdvancedBar {
         y: 8px; width: parent.width; expanded <=> root.advanced;
@@ -206,7 +189,7 @@ component Row inherits Rectangle {
         spacing: 10px; padding-top: 5px; padding-bottom: 5px;
         HorizontalLayout {
             spacing: 6px; horizontal-stretch: 1; alignment: start;
-            Text { text: setting.title; color: setting.enabled ? Theme.fg-a1 : Theme.fg-a3.with-alpha(0.6); font-size: 13px; vertical-alignment: center; overflow: elide; }
+            Text { text: setting.title; color: setting.enabled ? Theme.fg-a1 : Theme.fg-a3.with-alpha(0.6); font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
             if setting.info != "": VerticalLayout { alignment: center; Info { text: setting.info; } }
         }
         if setting.kind == "toggle": VerticalLayout { alignment: center;
@@ -216,7 +199,7 @@ component Row inherits Rectangle {
         if setting.kind == "segmented": VerticalLayout { alignment: center;
             Segmented { width: root.ctl-w; options: setting.options; value: setting.value; enabled: setting.enabled; selected(o) => { root.changed(setting.id, o); } } }
         if setting.kind == "color": VerticalLayout { alignment: center;
-            Rectangle { width: root.ctl-w; height: 34px; border-radius: 6px; background: Field.fill;
+            Rectangle { width: root.ctl-w; height: 34px; border-radius: Metrics.radius-md; background: Theme.field;
                 HorizontalLayout { padding: 2px; alignment: space-between;
                     for o[i] in setting.options: Swatch { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } } } }
         if setting.kind == "text": VerticalLayout { alignment: center;
@@ -242,12 +225,12 @@ component Row inherits Rectangle {
         if setting.kind == "slider": HorizontalLayout {
             spacing: 10px; width: root.ctl-w;
             VerticalLayout { alignment: center; horizontal-stretch: 1;
-                AccentSlider {
+                Slider {
                     value: setting.value.to-float(); minimum: setting.minimum; maximum: setting.maximum; step: setting.step;
                     labels: setting.labels; enabled: setting.enabled;
                     changed(v) => { root.changed(setting.id, v); }
                 } }
-            if setting.labels.length == 0: Text { width: 44px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-a2; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; }
+            if setting.labels.length == 0: Text { width: 44px; text: round(setting.value.to-float() * 100) / 100; color: Theme.fg-a2; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: right; }
         }
         if setting.kind == "buttons": HorizontalLayout { alignment: end; spacing: 4px;
             for l in setting.labels: VerticalLayout { alignment: center;
@@ -256,14 +239,14 @@ component Row inherits Rectangle {
             FlatButton { text: setting.value; enabled: setting.enabled; clicked => { root.changed(setting.id, "run"); } } }
         if setting.kind == "key": HorizontalLayout { spacing: 4px; alignment: end; padding-top: 4px; padding-bottom: 4px;
             Rectangle {
-                width: kt.preferred-width + 16px; border-radius: Theme.radius; background: Field.fill;
-                kt := Text { text: setting.value; color: Theme.fg-2; font-family: "DM Mono"; font-size: 12px; vertical-alignment: center; horizontal-alignment: center; }
+                width: kt.preferred-width + 16px; border-radius: Metrics.radius-sm; background: Theme.field;
+                kt := Text { text: setting.value; color: Theme.fg-2; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
             }
         }
     }
 }
 
-export component SettingsDialog inherits Rectangle {
+export component SettingsDialog inherits Modal {
     in property <[string]> categories;
     property <bool> narrow: root.width < 760px;
     in property <[SettingRow]> rows;
@@ -289,114 +272,107 @@ export component SettingsDialog inherits Rectangle {
     }
     function go(i: int) { root.search = ""; root.category = i; root.advanced = false; root.refresh(i, "", false); }
 
-    background: #000000A0;
-    TouchArea { clicked => { root.close(); } }
+    card-width: 1048px;
+    card-height: root.narrow ? root.height : 865px;
+    inset: root.narrow ? 16px : 48px;
+    dismissed => { root.close(); }
 
-    dlg := Rectangle {
-        width: root.narrow ? root.width - 16px : min(1048px, root.width - 48px);
-        height: root.narrow ? root.height - 16px : min(865px, root.height - 48px);
-        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2;
-        background: Theme.bg-a4; border-radius: 12px;
-        border-width: 1px; border-color: Theme.bg-a1;
-        clip: true;
-        TouchArea { }
-        HorizontalLayout {
-            // Sidebar: search + grouped categories (a dropdown on narrow windows)
-            if !root.narrow: Rectangle {
-                width: 240px; background: Theme.bg-b1;
-                VerticalLayout {
-                    padding: 8px; spacing: 8px;
-                    Rectangle {
-                        height: 40px; border-radius: 6px; background: Theme.bg-a3;
-                        Icon { x: 10px; width: 20px; height: 20px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
-                        TextField {
-                            x: 30px; width: parent.width - 34px; height: parent.height; background: transparent;
-                            text <=> root.search; placeholder: "Search";
-                            edited(t) => { root.refresh(root.category, t, root.advanced); }
-                        }
+    HorizontalLayout {
+        // Sidebar: search + grouped categories (a dropdown on narrow windows)
+        if !root.narrow: Rectangle {
+            width: 240px; background: Theme.bg-b1;
+            VerticalLayout {
+                padding: 8px; spacing: 8px;
+                Rectangle {
+                    height: 40px; border-radius: Metrics.radius-md; background: Theme.bg-a3;
+                    Icon { x: 10px; width: 20px; height: 20px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
+                    TextField {
+                        x: 30px; width: parent.width - 34px; height: parent.height; background: transparent;
+                        text <=> root.search; placeholder: "Search";
+                        edited(t) => { root.refresh(root.category, t, root.advanced); }
                     }
-                    Rectangle {
-                        vertical-stretch: 1; border-radius: 6px; background: Theme.bg-a3;
-                        Flickable {
-                            VerticalLayout {
-                                padding: 6px; spacing: 2px; alignment: start;
-                                for c[i] in root.categories: VerticalLayout {
-                                    spacing: 2px;
-                                    if root.group(i) != "": Text {
-                                        height: 36px; text: root.group(i); color: Theme.fg-a3; font-size: 13px;
-                                        vertical-alignment: center;
+                }
+                Rectangle {
+                    vertical-stretch: 1; border-radius: Metrics.radius-md; background: Theme.bg-a3;
+                    Flickable {
+                        VerticalLayout {
+                            padding: 6px; spacing: 2px; alignment: start;
+                            for c[i] in root.categories: VerticalLayout {
+                                spacing: 2px;
+                                if root.group(i) != "": Text {
+                                    height: 36px; text: root.group(i); color: Theme.fg-a3; font-size: Metrics.font-md;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {
+                                    height: 40px; border-radius: Metrics.radius-md;
+                                    property <bool> sel: i == root.category && root.search == "";
+                                    background: sel ? Theme.bg-a1 : (cta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
+                                    Icon { x: 10px; width: 22px; height: 22px; source: root.icons[i]; tint: parent.sel ? Theme.accent : Theme.fg-a2; }
+                                    Text {
+                                        x: 46px; text: c; vertical-alignment: center; height: parent.height; font-size: Metrics.font-base;
+                                        color: parent.sel ? Theme.fg-1 : Theme.fg-a1;
                                     }
-                                    Rectangle {
-                                        height: 40px; border-radius: 6px;
-                                        property <bool> sel: i == root.category && root.search == "";
-                                        background: sel ? Theme.bg-a1 : (cta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
-                                        Icon { x: 10px; width: 22px; height: 22px; source: root.icons[i]; tint: parent.sel ? Theme.accent : Theme.fg-a2; }
-                                        Text {
-                                            x: 46px; text: c; vertical-alignment: center; height: parent.height; font-size: 14px;
-                                            color: parent.sel ? Theme.fg-1 : Theme.fg-a1;
-                                        }
-                                        cta := TouchArea { mouse-cursor: pointer; clicked => { root.go(i); } }
-                                    }
+                                    cta := TouchArea { mouse-cursor: pointer; clicked => { root.go(i); } }
                                 }
                             }
                         }
                     }
                 }
             }
-            // Content
-            VerticalLayout {
-                if root.narrow: HorizontalLayout {
-                    padding: 8px; spacing: 8px;
-                    Dropdown {
-                        horizontal-stretch: 1;
-                        options: root.categories;
-                        value: root.categories[root.category];
-                        selected(i, c) => { root.go(i); }
-                    }
-                    TextField {
-                        horizontal-stretch: 1;
-                        text <=> root.search;
-                        placeholder: "Search";
-                        edited(t) => { root.refresh(root.category, t, root.advanced); }
-                    }
+        }
+        // Content
+        VerticalLayout {
+            if root.narrow: HorizontalLayout {
+                padding: 8px; spacing: 8px;
+                Dropdown {
+                    horizontal-stretch: 1;
+                    options: root.categories;
+                    value: root.categories[root.category];
+                    selected(i, c) => { root.go(i); }
                 }
-                Rectangle {
-                    height: 56px; background: Theme.bg-a3;
-                    HorizontalLayout {
-                        padding-left: 24px; padding-right: 12px; spacing: 10px;
-                        Text {
-                            horizontal-stretch: 1;
-                            text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category] == "About" ? "About vivi" : root.categories[root.category] + " Settings";
-                            color: Theme.fg-1; font-size: 16px; vertical-alignment: center;
-                        }
-                        VerticalLayout { alignment: center;
-                            Rectangle {
-                                width: 32px; height: 32px; border-radius: Theme.radius;
-                                background: xta.has-hover ? Theme.bg-a1 : transparent;
-                                Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
-                                xta := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
-                            } }
-                    }
+                TextField {
+                    horizontal-stretch: 1;
+                    text <=> root.search;
+                    placeholder: "Search";
+                    edited(t) => { root.refresh(root.category, t, root.advanced); }
                 }
-                property <bool> about: root.search == "" && root.categories[root.category] == "About";
-                if about: ScrollView {
-                    vertical-stretch: 1;
-                    VerticalLayout { padding-left: 24px; padding-right: 24px; padding-bottom: 24px; AboutPage { } }
-                }
-                if !about: ScrollView {
-                    vertical-stretch: 1;
-                    VerticalLayout {
-                        alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;
-                        if root.rows.length == 0: Text { height: 40px; vertical-alignment: center; text: "No matching settings."; color: Theme.fg-a3; }
-                        for r in root.rows: Row {
-                            setting: r; advanced: root.advanced;
-                            changed(id, v) => { root.changed(id, v); }
-                            advanced-toggled(e) => { root.advanced = e; root.refresh(root.category, root.search, e); }
-                        }
-                    }
-                }
-                if root.status != "": Text { height: 24px; horizontal-alignment: center; text: root.status; color: Theme.fg-a3; font-size: 12px; }
             }
+            Rectangle {
+                height: 56px; background: Theme.bg-a3;
+                HorizontalLayout {
+                    padding-left: 24px; padding-right: 12px; spacing: 10px;
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.search != "" ? "Results for “" + root.search + "”" : root.categories[root.category] == "About" ? "About vivi" : root.categories[root.category] + " Settings";
+                        color: Theme.fg-1; font-size: Metrics.font-lg; vertical-alignment: center;
+                    }
+                    VerticalLayout { alignment: center;
+                        Rectangle {
+                            width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+                            background: xta.has-hover ? Theme.bg-a1 : transparent;
+                            Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
+                            xta := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                        } }
+                }
+            }
+            property <bool> about: root.search == "" && root.categories[root.category] == "About";
+            if about: ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout { padding-left: 24px; padding-right: 24px; padding-bottom: 24px; AboutPage { } }
+            }
+            if !about: ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;
+                    if root.rows.length == 0: Text { height: 40px; vertical-alignment: center; text: "No matching settings."; color: Theme.fg-a3; }
+                    for r in root.rows: Row {
+                        setting: r; advanced: root.advanced;
+                        changed(id, v) => { root.changed(id, v); }
+                        advanced-toggled(e) => { root.advanced = e; root.refresh(root.category, root.search, e); }
+                    }
+                }
+            }
+            if root.status != "": Text { height: 24px; horizontal-alignment: center; text: root.status; color: Theme.fg-a3; font-size: Metrics.font-sm; }
         }
     }
 }
