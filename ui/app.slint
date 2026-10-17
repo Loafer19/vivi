@@ -23,9 +23,10 @@ import { Panel } from "state/panel.slint";
 import { Dialogs } from "state/dialogs.slint";
 import { Menus } from "state/menus.slint";
 import { Library } from "state/library.slint";
+import { Settings } from "state/settings.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -488,7 +489,7 @@ export component AppWindow inherits Window {
         else if (id == "mute") { root.toggle-mute(); }
         else if (id == "fullscreen") { root.toggle-fullscreen(); }
         else if (id == "bookmark") { Panel.add-bookmark(); }
-        else if (id == "settings") { Overlays.settings-open = true; root.settings-refresh(root.settings-category, "", false); }
+        else if (id == "settings") { Overlays.settings-open = true; Settings.settings-refresh(Settings.settings-category, "", false); }
         else { root.bar-action(id); }
     }
     // Responsive bottom bar: how many items fit on each side of the play controls.
@@ -543,26 +544,9 @@ export component AppWindow inherits Window {
     callback open-url(string);
 
     // Onboarding
-    in-out property <int> onboarding-step;
-    in property <[string]> accent-names;
-    in property <[color]> accent-colors;
-    in property <string> accent-name;
-    in property <[string]> onboarding-keys;
-    in property <[string]> onboarding-actions;
-    callback onboarding-done();
 
     // Settings
     // "?" overlay; rows come from the keymap (src/keymap.rs).
-    in property <[string]> shortcut-actions;
-    in property <[string]> shortcut-keys;
-    in property <[string]> settings-categories;
-    in property <[SettingRow]> settings-rows;
-    in-out property <int> settings-category: 0;
-    in property <string> settings-status;
-    in-out property <string> settings-search;
-    in-out property <bool> settings-advanced;
-    callback setting-changed(string, string);
-    callback settings-refresh(int, string, bool);
     callback ab-set(float, float);
     // Plugin range on the seekbar (`script-message vivi-range <a> <b> [label]`), e.g. Cut & Export In/Out.
     property <BarMetrics> bar: Bars.metrics(root.bar-style);
@@ -702,7 +686,7 @@ export component AppWindow inherits Window {
                 overflow: elide;
             }
             if Playback.has-media: IconButton { icon: @image-url("../assets/icons/pip.svg"); tip: "Miniplayer (P)"; clicked => { root.toggle-mini(); } }
-            IconButton { icon: @image-url("../assets/icons/settings.svg"); active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; root.settings-refresh(root.settings-category, "", false); } }
+            IconButton { icon: @image-url("../assets/icons/settings.svg"); active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.settings-refresh(Settings.settings-category, "", false); } }
             IconButton { icon: @image-url("../assets/icons/fullscreen.svg"); active: root.fullscreen; clicked => { root.toggle-fullscreen(); } }
         }
     }
@@ -744,7 +728,7 @@ export component AppWindow inherits Window {
         subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-pick-label: root.subs-pick-label; subs-sync: root.subs-sync;
         subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
         find-subs() => { root.add-subs(); }
-        open-settings(c) => { root.settings-category = c; Overlays.settings-open = true; root.settings-refresh(c, "", false); }
+        open-settings(c) => { Settings.settings-category = c; Overlays.settings-open = true; Settings.settings-refresh(c, "", false); }
         queue: Panel.queue; playlists: Panel.playlists;
         queue-play(i) => { Panel.queue-play(i); }
         queue-move(i, d) => { Panel.queue-move(i, d); }
@@ -1085,14 +1069,14 @@ export component AppWindow inherits Window {
     // ---------- Settings dialog ----------
     if Overlays.settings-open: SettingsDialog {
         width: root.width; height: root.height;
-        categories: root.settings-categories;
-        rows: root.settings-rows;
-        category <=> root.settings-category;
-        status: root.settings-status;
-        search <=> root.settings-search;
-        advanced <=> root.settings-advanced;
-        changed(id, v) => { root.setting-changed(id, v); }
-        refresh(c, q, adv) => { root.settings-refresh(c, q, adv); }
+        categories: Settings.settings-categories;
+        rows: Settings.settings-rows;
+        category <=> Settings.settings-category;
+        status: Settings.settings-status;
+        search <=> Settings.settings-search;
+        advanced <=> Settings.settings-advanced;
+        changed(id, v) => { Settings.setting-changed(id, v); }
+        refresh(c, q, adv) => { Settings.settings-refresh(c, q, adv); }
         close() => { Overlays.settings-open = false; fs.focus(); }
     }
 
@@ -1174,13 +1158,13 @@ export component AppWindow inherits Window {
     // ---------- First-run onboarding ----------
     if Overlays.onboarding-open: OnboardingDialog {
         width: root.width; height: root.height;
-        step <=> root.onboarding-step;
-        dark: Theme.dark; accent: root.accent-name;
-        accents: root.accent-names; swatches: root.accent-colors;
-        keys: root.onboarding-keys; actions: root.onboarding-actions;
-        set-theme(t) => { root.setting-changed("interface.theme", t); }
-        set-accent(a) => { root.setting-changed("interface.accent", a); }
-        finish() => { root.onboarding-done(); fs.focus(); }
+        step <=> Settings.onboarding-step;
+        dark: Theme.dark; accent: Settings.accent-name;
+        accents: Settings.accent-names; swatches: Settings.accent-colors;
+        keys: Settings.onboarding-keys; actions: Settings.onboarding-actions;
+        set-theme(t) => { Settings.setting-changed("interface.theme", t); }
+        set-accent(a) => { Settings.setting-changed("interface.accent", a); }
+        finish() => { Settings.onboarding-done(); fs.focus(); }
     }
 
     // ---------- Properties & Metadata ----------
@@ -1213,7 +1197,7 @@ export component AppWindow inherits Window {
     // ---------- Keyboard shortcuts ("?") ----------
     if Overlays.shortcuts-open: ShortcutsDialog {
         width: root.width; height: root.height;
-        actions: root.shortcut-actions; keys: root.shortcut-keys;
+        actions: Settings.shortcut-actions; keys: Settings.shortcut-keys;
         close => { Overlays.shortcuts-open = false; fs.focus(); }
     }
 

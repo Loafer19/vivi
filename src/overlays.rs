@@ -23,7 +23,7 @@ pub fn close(a: &AppWindow, o: Overlay) {
         }
         Overlay::Shortcuts => a.global::<crate::Overlays>().set_shortcuts_open(false),
         Overlay::Info => a.global::<crate::Overlays>().set_info_open(false),
-        Overlay::Onboarding => a.invoke_onboarding_done(),
+        Overlay::Onboarding => a.global::<crate::Settings>().invoke_onboarding_done(),
         Overlay::Customize => a.invoke_customize_done(false),
         Overlay::TagReview => {
             plugins::command(tagger::ID, "review-close", &[]);

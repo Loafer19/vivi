@@ -473,7 +473,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             A::Settings => {
                 a.global::<crate::Overlays>()
                     .set_settings_open(!a.global::<crate::Overlays>().get_settings_open());
-                a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
+                a.global::<crate::Settings>().invoke_settings_refresh(
+                    a.global::<crate::Settings>().get_settings_category(),
+                    "".into(),
+                    false,
+                );
             }
             A::Bookmark => a.global::<crate::Panel>().invoke_add_bookmark(),
             A::Shortcuts => a
@@ -834,9 +838,10 @@ fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         .ok()
         .and_then(|c| c.parse().ok())
     {
-        app.set_settings_category(c);
+        app.global::<crate::Settings>().set_settings_category(c);
         app.global::<crate::Overlays>().set_settings_open(true);
-        app.invoke_settings_refresh(c, "".into(), false);
+        app.global::<crate::Settings>()
+            .invoke_settings_refresh(c, "".into(), false);
     }
     if let Ok(t) = std::env::var("VIVI_PANEL") {
         app.global::<crate::Panel>()
@@ -956,9 +961,11 @@ fn open_plugin_link(app: &AppWindow, id: &str) {
     let n = 12; // Extensions
     let q: slint::SharedString = name.unwrap_or_default().into();
     app.global::<crate::Overlays>().set_settings_open(true);
-    app.set_settings_category(n);
-    app.set_settings_search(q.clone());
-    app.invoke_settings_refresh(n, q, false);
+    app.global::<crate::Settings>().set_settings_category(n);
+    app.global::<crate::Settings>()
+        .set_settings_search(q.clone());
+    app.global::<crate::Settings>()
+        .invoke_settings_refresh(n, q, false);
 }
 
 fn debug_ui(app: &AppWindow) {
@@ -967,10 +974,12 @@ fn debug_ui(app: &AppWindow) {
         let adv = var("VIVI_ADVANCED").is_some();
         let q = var("VIVI_SEARCH").unwrap_or_default();
         app.global::<crate::Overlays>().set_settings_open(true);
-        app.set_settings_category(n);
-        app.set_settings_advanced(adv);
-        app.set_settings_search(q.clone().into());
-        app.invoke_settings_refresh(n, q.into(), adv);
+        app.global::<crate::Settings>().set_settings_category(n);
+        app.global::<crate::Settings>().set_settings_advanced(adv);
+        app.global::<crate::Settings>()
+            .set_settings_search(q.clone().into());
+        app.global::<crate::Settings>()
+            .invoke_settings_refresh(n, q.into(), adv);
     }
     if let Some(p) = var("VIVI_CUSTOMIZE") {
         app.invoke_customize_profile(p.into());
@@ -1052,7 +1061,7 @@ fn debug_ui(app: &AppWindow) {
         });
     }
     if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
-        app.set_onboarding_step(n);
+        app.global::<crate::Settings>().set_onboarding_step(n);
         app.global::<crate::Overlays>().set_onboarding_open(true);
     }
 }

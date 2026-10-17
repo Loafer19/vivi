@@ -953,15 +953,19 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     }
                     "add-folder" => a.global::<crate::Library>().invoke_lib_add_folder(),
                     "edit-subs" | "edit-audio" => {
-                        a.set_settings_category(crate::settings::category(
-                            if action == "edit-subs" {
+                        a.global::<crate::Settings>().set_settings_category(
+                            crate::settings::category(if action == "edit-subs" {
                                 "Subtitles"
                             } else {
                                 "Audio"
-                            },
-                        ));
+                            }),
+                        );
                         a.global::<crate::Overlays>().set_settings_open(true);
-                        a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
+                        a.global::<crate::Settings>().invoke_settings_refresh(
+                            a.global::<crate::Settings>().get_settings_category(),
+                            "".into(),
+                            false,
+                        );
                     }
                     "resync" => a.global::<crate::Library>().invoke_lib_rescan(),
                     "info" => {

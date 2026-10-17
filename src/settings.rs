@@ -1072,7 +1072,8 @@ pub fn apply_theme(a: &AppWindow, c: &Config) {
         _ => true,
     });
     t.set_accent(hex(&c.interface.accent));
-    a.set_accent_name(c.interface.accent.clone().into());
+    a.global::<crate::Settings>()
+        .set_accent_name(c.interface.accent.clone().into());
     AUTOHIDE_SECS.store(c.interface.autohide_secs.max(1), Ordering::Relaxed);
     SHORT_SKIP.store(c.controls.short_skip.max(1), Ordering::Relaxed);
     LONG_SKIP.store(c.controls.long_skip.max(1), Ordering::Relaxed);
@@ -1483,17 +1484,21 @@ fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'sta
         A::OpenFile,
         A::Shortcuts,
     ]);
-    app.set_onboarding_actions(strings(keys.iter().map(|k| k.0)));
-    app.set_onboarding_keys(strings(keys.iter().map(|k| k.1)));
+    app.global::<crate::Settings>()
+        .set_onboarding_actions(strings(keys.iter().map(|k| k.0)));
+    app.global::<crate::Settings>()
+        .set_onboarding_keys(strings(keys.iter().map(|k| k.1)));
     app.global::<crate::Overlays>()
         .set_onboarding_open(!cfg.borrow().interface.onboarded);
     // The `?` overlay lists the whole keymap.
     let all: Vec<_> = crate::keymap::rows().collect();
-    app.set_shortcut_actions(strings(all.iter().map(|k| k.0)));
-    app.set_shortcut_keys(strings(all.iter().map(|k| k.1)));
+    app.global::<crate::Settings>()
+        .set_shortcut_actions(strings(all.iter().map(|k| k.0)));
+    app.global::<crate::Settings>()
+        .set_shortcut_keys(strings(all.iter().map(|k| k.1)));
     let w = app.as_weak();
     let cfg = cfg.clone();
-    app.on_onboarding_done(move || {
+    app.global::<crate::Settings>().on_onboarding_done(move || {
         if let Some(a) = w.upgrade() {
             a.global::<crate::Overlays>().set_onboarding_open(false);
         }
@@ -1503,16 +1508,19 @@ fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'sta
 }
 
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
-    app.set_settings_categories(ModelRc::new(VecModel::from(
-        CATEGORIES
-            .iter()
-            .map(|s| SharedString::from(*s))
-            .collect::<Vec<_>>(),
-    )));
-    app.set_accent_names(strings(ACCENTS));
-    app.set_accent_colors(ModelRc::new(VecModel::from(
-        ACCENTS.iter().map(|a| hex(a)).collect::<Vec<_>>(),
-    )));
+    app.global::<crate::Settings>()
+        .set_settings_categories(ModelRc::new(VecModel::from(
+            CATEGORIES
+                .iter()
+                .map(|s| SharedString::from(*s))
+                .collect::<Vec<_>>(),
+        )));
+    app.global::<crate::Settings>()
+        .set_accent_names(strings(ACCENTS));
+    app.global::<crate::Settings>()
+        .set_accent_colors(ModelRc::new(VecModel::from(
+            ACCENTS.iter().map(|a| hex(a)).collect::<Vec<_>>(),
+        )));
     app.set_profiles(strings(config::PROFILES));
     apply_theme(app, &cfg.borrow());
     apply_toolbar(app, &cfg.borrow());
@@ -1528,7 +1536,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
 
     let query = Rc::new(RefCell::new((0i32, String::new(), false)));
     let rows: Rc<VecModel<SettingRow>> = Rc::new(VecModel::default());
-    app.set_settings_rows(ModelRc::from(rows.clone()));
+    app.global::<crate::Settings>()
+        .set_settings_rows(ModelRc::from(rows.clone()));
     // Update rows in place when the set of rows is unchanged, so focused
     // widgets (e.g. the language text fields) are not recreated.
     let refresh = {
@@ -1562,10 +1571,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         move || {
             let res = cfg.borrow().save();
             if let Some(a) = w.upgrade() {
-                a.set_settings_status(match res {
-                    Ok(()) => format!("Saved to {}", config::path().display()).into(),
-                    Err(e) => format!("Could not save: {e}").into(),
-                });
+                a.global::<crate::Settings>()
+                    .set_settings_status(match res {
+                        Ok(()) => format!("Saved to {}", config::path().display()).into(),
+                        Err(e) => format!("Could not save: {e}").into(),
+                    });
             }
         }
     };
@@ -1580,10 +1590,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let refresh = refresh.clone();
         let query = query.clone();
-        app.on_settings_refresh(move |c, s, adv| {
-            *query.borrow_mut() = (c, s.to_string(), adv);
-            refresh();
-        });
+        app.global::<crate::Settings>()
+            .on_settings_refresh(move |c, s, adv| {
+                *query.borrow_mut() = (c, s.to_string(), adv);
+                refresh();
+            });
     }
     {
         let w = app.as_weak();
@@ -1591,247 +1602,254 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         let refresh = refresh.clone();
         let save = save.clone();
-        app.on_setting_changed(move |id, value| {
-            let Some(a) = w.upgrade() else { return };
-            let v = value.as_str();
-            let num = v.parse::<f64>().unwrap_or(0.0);
-            if log {
-                eprintln!("setting {id} = {v}");
-            }
-            if id.starts_with("plugin.") {
-                let msg = plugins::setting_changed(&id, v);
-                a.set_settings_status(msg.unwrap_or_default().into());
-                refresh();
-                return;
-            }
-            if let Some(pid) = id.strip_prefix("pkg.") {
-                plugins::packages::action(pid, v);
-                refresh();
-                return;
-            }
-            if let Some(what) = id.strip_prefix("ext.") {
-                match what {
-                    "tab" => plugins::packages::with_state(|s| {
-                        s.tab = v.into();
-                        s.status.clear();
-                    }),
-                    "check" => plugins::packages::check(true),
-                    "autocheck" => {
-                        cfg.borrow_mut()
-                            .plugins
-                            .entry(plugins::packages::GLOBAL_ID.into())
-                            .or_default()
-                            .settings
-                            .insert("autocheck".into(), v.into());
-                        save();
-                    }
-                    _ => {}
+        app.global::<crate::Settings>()
+            .on_setting_changed(move |id, value| {
+                let Some(a) = w.upgrade() else { return };
+                let v = value.as_str();
+                let num = v.parse::<f64>().unwrap_or(0.0);
+                if log {
+                    eprintln!("setting {id} = {v}");
                 }
-                refresh();
-                return;
-            }
-            if let Some(what) = id.strip_prefix("scripts.") {
-                match what {
-                    "startup" => {
-                        cfg.borrow_mut()
-                            .plugins
-                            .entry(plugins::scripts::GLOBAL_ID.into())
-                            .or_default()
-                            .settings
-                            .insert("startup".into(), v.into());
-                        save();
-                    }
-                    "folder" => {
-                        let d = config::scripts_dir();
-                        let _ = std::fs::create_dir_all(&d);
-                        open_url(&d.to_string_lossy());
-                    }
-                    "rescan" => {
-                        let n = plugins::rescan();
-                        a.set_settings_status(format!("{n} mpv scripts found").into());
-                    }
-                    "catalog" => open_url(CATALOG_URL),
-                    _ => {}
+                if id.starts_with("plugin.") {
+                    let msg = plugins::setting_changed(&id, v);
+                    a.global::<crate::Settings>()
+                        .set_settings_status(msg.unwrap_or_default().into());
+                    refresh();
+                    return;
                 }
-                refresh();
-                return;
-            }
-            let mut rescan = false;
-            {
-                let mut c = cfg.borrow_mut();
-                match id.as_str() {
-                    "interface.theme" => c.interface.theme = v.to_lowercase(),
-                    "general.language" => c.general.language = v.into(),
-                    "general.save_log" => c.general.save_log = v == "true",
-                    "general.remote_control" => c.general.remote_control = v == "true",
-                    "general.log_level" => c.general.log_level = v.into(),
-                    "general.log_file" | "video.screenshot_dir" | "recording.dir" => {
-                        let mut val = v.to_string();
-                        if v == "::browse" {
-                            let picked = if id.as_str() == "general.log_file" {
-                                rfd::FileDialog::new()
-                                    .set_title("Log file")
-                                    .set_file_name("vivi.log")
-                                    .save_file()
-                            } else {
-                                rfd::FileDialog::new()
-                                    .set_title("Choose folder")
-                                    .pick_folder()
-                            };
-                            let Some(d) = picked else { return };
-                            val = d.to_string_lossy().into_owned();
+                if let Some(pid) = id.strip_prefix("pkg.") {
+                    plugins::packages::action(pid, v);
+                    refresh();
+                    return;
+                }
+                if let Some(what) = id.strip_prefix("ext.") {
+                    match what {
+                        "tab" => plugins::packages::with_state(|s| {
+                            s.tab = v.into();
+                            s.status.clear();
+                        }),
+                        "check" => plugins::packages::check(true),
+                        "autocheck" => {
+                            cfg.borrow_mut()
+                                .plugins
+                                .entry(plugins::packages::GLOBAL_ID.into())
+                                .or_default()
+                                .settings
+                                .insert("autocheck".into(), v.into());
+                            save();
                         }
-                        match id.as_str() {
-                            "general.log_file" => c.general.log_file = val,
-                            "video.screenshot_dir" => c.video.screenshot_dir = val,
-                            _ => c.recording.dir = val,
+                        _ => {}
+                    }
+                    refresh();
+                    return;
+                }
+                if let Some(what) = id.strip_prefix("scripts.") {
+                    match what {
+                        "startup" => {
+                            cfg.borrow_mut()
+                                .plugins
+                                .entry(plugins::scripts::GLOBAL_ID.into())
+                                .or_default()
+                                .settings
+                                .insert("startup".into(), v.into());
+                            save();
                         }
-                    }
-                    "interface.accent" => c.interface.accent = v.into(),
-                    "interface.profile" => {
-                        if let Some(t) = config::profile_toolbar(v) {
-                            c.interface.toolbar = t;
-                            c.interface.bar_style = config::profile_style(v).into();
+                        "folder" => {
+                            let d = config::scripts_dir();
+                            let _ = std::fs::create_dir_all(&d);
+                            open_url(&d.to_string_lossy());
                         }
-                        c.interface.profile = v.into();
-                    }
-                    "interface.customize" => {
-                        drop(c);
-                        a.global::<crate::Overlays>().set_settings_open(false);
-                        a.invoke_customize_profile("".into());
-                        return;
-                    }
-                    "interface.onboarding" => {
-                        a.global::<crate::Overlays>().set_settings_open(false);
-                        a.set_onboarding_step(0);
-                        a.global::<crate::Overlays>().set_onboarding_open(true);
-                        return;
-                    }
-                    "interface.autohide" => c.interface.autohide_secs = num as u32,
-                    "playback.resume" => c.playback.resume = v == "true",
-                    "playback.speed" => c.playback.speed = (num * 100.0).round() / 100.0,
-                    "playback.hwdec" => c.playback.hwdec = v.into(),
-                    "audio.language" => c.audio.language = v.trim().into(),
-                    "audio.volume_max" => c.audio.volume_max = num as i64,
-                    "subtitles.language" => c.subtitles.language = v.trim().into(),
-                    "subtitles.scale" => c.subtitles.scale = (num * 10.0).round() / 10.0,
-                    "subtitles.auto_load" => c.subtitles.auto_load = v.into(),
-                    "subtitles.enabled" => c.subtitles.enabled = v == "true",
-                    "subtitles.encoding" => c.subtitles.encoding = v.into(),
-                    "subtitles.font" => c.subtitles.font = v.into(),
-                    "subtitles.bold" => c.subtitles.bold = v == "true",
-                    "subtitles.color" => c.subtitles.color = v.trim().into(),
-                    "subtitles.opacity" => c.subtitles.opacity = num as i64,
-                    "subtitles.outline" => {
-                        c.subtitles.outline = match v {
-                            "None" => 0.0,
-                            "Thin" => 1.5,
-                            "Thick" => 5.0,
-                            _ => 3.0,
+                        "rescan" => {
+                            let n = plugins::rescan();
+                            a.global::<crate::Settings>()
+                                .set_settings_status(format!("{n} mpv scripts found").into());
                         }
+                        "catalog" => open_url(CATALOG_URL),
+                        _ => {}
                     }
-                    "subtitles.outline_color" => c.subtitles.outline_color = v.trim().into(),
-                    "subtitles.shadow" => c.subtitles.shadow = v == "true",
-                    "subtitles.position" => c.subtitles.position = num as i64,
-                    "playback.repeat" => c.playback.repeat = v.into(),
-                    "playback.precise_seek" => c.playback.precise_seek = v == "true",
-                    "playback.quality" => c.playback.quality = v.into(),
-                    "controls.short_skip" => c.controls.short_skip = lead_num(v),
-                    "controls.long_skip" => c.controls.long_skip = lead_num(v),
-                    "audio.volume_step" => c.audio.volume_step = lead_num(v) as i64,
-                    "audio.enabled" => c.audio.enabled = v == "true",
-                    "audio.device" => c.audio.device = v.into(),
-                    "audio.startup_volume" => c.audio.startup_volume = num as i64,
-                    "audio.normalize" => c.audio.normalize = v == "true",
-                    "audio.delay" => c.audio.delay = (num * 100.0).round() / 100.0,
-                    "video.enabled" => c.video.enabled = v == "true",
-                    "video.stop_screensaver" => c.video.stop_screensaver = v == "true",
-                    "video.hue" => c.video.hue = num as i64,
-                    "video.brightness" => c.video.brightness = num as i64,
-                    "video.contrast" => c.video.contrast = num as i64,
-                    "video.saturation" => c.video.saturation = num as i64,
-                    "video.gamma" => c.video.gamma = num as i64,
-                    "video.reset_picture" => {
-                        let v = &mut c.video;
-                        (v.hue, v.brightness, v.contrast, v.saturation, v.gamma) = (0, 0, 0, 0, 0);
-                    }
-                    "video.deinterlace" => c.video.deinterlace = v.into(),
-                    "video.aspect" => {
-                        c.video.aspect = if v == "Automatic" {
-                            "no".into()
-                        } else {
-                            v.into()
-                        }
-                    }
-                    "video.screenshot_format" => c.video.screenshot_format = v.into(),
-                    "network.buffering" => c.network.buffering = v.into(),
-                    "network.cache" => c.network.cache = v.into(),
-                    "network.cache_secs" => c.network.cache_secs = num as i64,
-                    "network.http_proxy" => c.network.http_proxy = v.trim().into(),
-                    "network.tls_verify" => c.network.tls_verify = v == "true",
-                    "network.user_agent" => c.network.user_agent = v.into(),
-                    "performance.skip_loop_filter" => c.performance.skip_loop_filter = v.into(),
-                    "performance.threads" => c.performance.threads = num as i64,
-                    "performance.framedrop" => c.performance.framedrop = v == "true",
-                    "performance.video_sync" => c.performance.video_sync = v.into(),
-                    k if k.starts_with("stub.") => {
-                        c.stubs.insert(k.into(), v.into());
-                    }
-                    "privacy.recent" => {
-                        a.global::<crate::Library>().invoke_clear_recent();
-                        a.set_settings_status("Recent files cleared".into());
-                        return;
-                    }
-                    "privacy.watch_later" => {
-                        let _ = std::fs::remove_dir_all(store::watch_later_dir());
-                        let _ = std::fs::create_dir_all(store::watch_later_dir());
-                        a.set_settings_status("Resume positions cleared".into());
-                        return;
-                    }
-                    "library.add" => {
-                        if let Some(d) = rfd::FileDialog::new()
-                            .set_title("Add library folder")
-                            .pick_folder()
-                        {
-                            let d = d
-                                .to_string_lossy()
-                                .replace('\\', "/")
-                                .trim_end_matches('/')
-                                .to_string();
-                            if !c.library.folders.contains(&d) {
-                                c.library.folders.push(d);
+                    refresh();
+                    return;
+                }
+                let mut rescan = false;
+                {
+                    let mut c = cfg.borrow_mut();
+                    match id.as_str() {
+                        "interface.theme" => c.interface.theme = v.to_lowercase(),
+                        "general.language" => c.general.language = v.into(),
+                        "general.save_log" => c.general.save_log = v == "true",
+                        "general.remote_control" => c.general.remote_control = v == "true",
+                        "general.log_level" => c.general.log_level = v.into(),
+                        "general.log_file" | "video.screenshot_dir" | "recording.dir" => {
+                            let mut val = v.to_string();
+                            if v == "::browse" {
+                                let picked = if id.as_str() == "general.log_file" {
+                                    rfd::FileDialog::new()
+                                        .set_title("Log file")
+                                        .set_file_name("vivi.log")
+                                        .save_file()
+                                } else {
+                                    rfd::FileDialog::new()
+                                        .set_title("Choose folder")
+                                        .pick_folder()
+                                };
+                                let Some(d) = picked else { return };
+                                val = d.to_string_lossy().into_owned();
+                            }
+                            match id.as_str() {
+                                "general.log_file" => c.general.log_file = val,
+                                "video.screenshot_dir" => c.video.screenshot_dir = val,
+                                _ => c.recording.dir = val,
                             }
                         }
-                        rescan = true;
+                        "interface.accent" => c.interface.accent = v.into(),
+                        "interface.profile" => {
+                            if let Some(t) = config::profile_toolbar(v) {
+                                c.interface.toolbar = t;
+                                c.interface.bar_style = config::profile_style(v).into();
+                            }
+                            c.interface.profile = v.into();
+                        }
+                        "interface.customize" => {
+                            drop(c);
+                            a.global::<crate::Overlays>().set_settings_open(false);
+                            a.invoke_customize_profile("".into());
+                            return;
+                        }
+                        "interface.onboarding" => {
+                            a.global::<crate::Overlays>().set_settings_open(false);
+                            a.global::<crate::Settings>().set_onboarding_step(0);
+                            a.global::<crate::Overlays>().set_onboarding_open(true);
+                            return;
+                        }
+                        "interface.autohide" => c.interface.autohide_secs = num as u32,
+                        "playback.resume" => c.playback.resume = v == "true",
+                        "playback.speed" => c.playback.speed = (num * 100.0).round() / 100.0,
+                        "playback.hwdec" => c.playback.hwdec = v.into(),
+                        "audio.language" => c.audio.language = v.trim().into(),
+                        "audio.volume_max" => c.audio.volume_max = num as i64,
+                        "subtitles.language" => c.subtitles.language = v.trim().into(),
+                        "subtitles.scale" => c.subtitles.scale = (num * 10.0).round() / 10.0,
+                        "subtitles.auto_load" => c.subtitles.auto_load = v.into(),
+                        "subtitles.enabled" => c.subtitles.enabled = v == "true",
+                        "subtitles.encoding" => c.subtitles.encoding = v.into(),
+                        "subtitles.font" => c.subtitles.font = v.into(),
+                        "subtitles.bold" => c.subtitles.bold = v == "true",
+                        "subtitles.color" => c.subtitles.color = v.trim().into(),
+                        "subtitles.opacity" => c.subtitles.opacity = num as i64,
+                        "subtitles.outline" => {
+                            c.subtitles.outline = match v {
+                                "None" => 0.0,
+                                "Thin" => 1.5,
+                                "Thick" => 5.0,
+                                _ => 3.0,
+                            }
+                        }
+                        "subtitles.outline_color" => c.subtitles.outline_color = v.trim().into(),
+                        "subtitles.shadow" => c.subtitles.shadow = v == "true",
+                        "subtitles.position" => c.subtitles.position = num as i64,
+                        "playback.repeat" => c.playback.repeat = v.into(),
+                        "playback.precise_seek" => c.playback.precise_seek = v == "true",
+                        "playback.quality" => c.playback.quality = v.into(),
+                        "controls.short_skip" => c.controls.short_skip = lead_num(v),
+                        "controls.long_skip" => c.controls.long_skip = lead_num(v),
+                        "audio.volume_step" => c.audio.volume_step = lead_num(v) as i64,
+                        "audio.enabled" => c.audio.enabled = v == "true",
+                        "audio.device" => c.audio.device = v.into(),
+                        "audio.startup_volume" => c.audio.startup_volume = num as i64,
+                        "audio.normalize" => c.audio.normalize = v == "true",
+                        "audio.delay" => c.audio.delay = (num * 100.0).round() / 100.0,
+                        "video.enabled" => c.video.enabled = v == "true",
+                        "video.stop_screensaver" => c.video.stop_screensaver = v == "true",
+                        "video.hue" => c.video.hue = num as i64,
+                        "video.brightness" => c.video.brightness = num as i64,
+                        "video.contrast" => c.video.contrast = num as i64,
+                        "video.saturation" => c.video.saturation = num as i64,
+                        "video.gamma" => c.video.gamma = num as i64,
+                        "video.reset_picture" => {
+                            let v = &mut c.video;
+                            (v.hue, v.brightness, v.contrast, v.saturation, v.gamma) =
+                                (0, 0, 0, 0, 0);
+                        }
+                        "video.deinterlace" => c.video.deinterlace = v.into(),
+                        "video.aspect" => {
+                            c.video.aspect = if v == "Automatic" {
+                                "no".into()
+                            } else {
+                                v.into()
+                            }
+                        }
+                        "video.screenshot_format" => c.video.screenshot_format = v.into(),
+                        "network.buffering" => c.network.buffering = v.into(),
+                        "network.cache" => c.network.cache = v.into(),
+                        "network.cache_secs" => c.network.cache_secs = num as i64,
+                        "network.http_proxy" => c.network.http_proxy = v.trim().into(),
+                        "network.tls_verify" => c.network.tls_verify = v == "true",
+                        "network.user_agent" => c.network.user_agent = v.into(),
+                        "performance.skip_loop_filter" => c.performance.skip_loop_filter = v.into(),
+                        "performance.threads" => c.performance.threads = num as i64,
+                        "performance.framedrop" => c.performance.framedrop = v == "true",
+                        "performance.video_sync" => c.performance.video_sync = v.into(),
+                        k if k.starts_with("stub.") => {
+                            c.stubs.insert(k.into(), v.into());
+                        }
+                        "privacy.recent" => {
+                            a.global::<crate::Library>().invoke_clear_recent();
+                            a.global::<crate::Settings>()
+                                .set_settings_status("Recent files cleared".into());
+                            return;
+                        }
+                        "privacy.watch_later" => {
+                            let _ = std::fs::remove_dir_all(store::watch_later_dir());
+                            let _ = std::fs::create_dir_all(store::watch_later_dir());
+                            a.global::<crate::Settings>()
+                                .set_settings_status("Resume positions cleared".into());
+                            return;
+                        }
+                        "library.add" => {
+                            if let Some(d) = rfd::FileDialog::new()
+                                .set_title("Add library folder")
+                                .pick_folder()
+                            {
+                                let d = d
+                                    .to_string_lossy()
+                                    .replace('\\', "/")
+                                    .trim_end_matches('/')
+                                    .to_string();
+                                if !c.library.folders.contains(&d) {
+                                    c.library.folders.push(d);
+                                }
+                            }
+                            rescan = true;
+                        }
+                        "library.rescan" => rescan = true,
+                        "library.thumbnails" => c.library.thumbnails = v == "true",
+                        "library.clear_thumbs" => {
+                            let _ = std::fs::remove_dir_all(store::cache_dir().join("thumbs"));
+                            a.global::<crate::Settings>()
+                                .set_settings_status("Thumbnail cache cleared".into());
+                            return;
+                        }
+                        k if k.starts_with("library.remove:") => {
+                            let f = &k["library.remove:".len()..];
+                            c.library.folders.retain(|x| x != f);
+                            rescan = true;
+                        }
+                        k if k.starts_with("preset.delete:") => {
+                            c.presets.remove(&k["preset.delete:".len()..]);
+                        }
+                        _ => return,
                     }
-                    "library.rescan" => rescan = true,
-                    "library.thumbnails" => c.library.thumbnails = v == "true",
-                    "library.clear_thumbs" => {
-                        let _ = std::fs::remove_dir_all(store::cache_dir().join("thumbs"));
-                        a.set_settings_status("Thumbnail cache cleared".into());
-                        return;
-                    }
-                    k if k.starts_with("library.remove:") => {
-                        let f = &k["library.remove:".len()..];
-                        c.library.folders.retain(|x| x != f);
-                        rescan = true;
-                    }
-                    k if k.starts_with("preset.delete:") => {
-                        c.presets.remove(&k["preset.delete:".len()..]);
-                    }
-                    _ => return,
                 }
-            }
-            apply_theme(&a, &cfg.borrow());
-            apply_toolbar(&a, &cfg.borrow());
-            apply_player(&p, &cfg.borrow());
-            sync_panel(&a, &p);
-            save();
-            refresh();
-            if rescan {
-                a.global::<crate::Library>().invoke_lib_rescan();
-            }
-        });
+                apply_theme(&a, &cfg.borrow());
+                apply_toolbar(&a, &cfg.borrow());
+                apply_player(&p, &cfg.borrow());
+                sync_panel(&a, &p);
+                save();
+                refresh();
+                if rescan {
+                    a.global::<crate::Library>().invoke_lib_rescan();
+                }
+            });
     }
     {
         let w = app.as_weak();

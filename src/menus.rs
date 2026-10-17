@@ -554,7 +554,11 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "settings" => {
                 a.global::<crate::Overlays>().set_settings_open(true);
-                a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
+                a.global::<crate::Settings>().invoke_settings_refresh(
+                    a.global::<crate::Settings>().get_settings_category(),
+                    "".into(),
+                    false,
+                );
             }
             "shuffle-now" => p.run("playlist-shuffle"),
             "save-queue" => {
