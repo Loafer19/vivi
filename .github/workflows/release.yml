@@ -14,6 +14,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
+        run: |
+          sudo fallocate -l 10G /swapfile.vivi && sudo chmod 600 /swapfile.vivi
+          sudo mkswap /swapfile.vivi && sudo swapon /swapfile.vivi
+          free -h; swapon --show
       - name: System deps
         run: |
           sudo apt-get update
@@ -158,6 +163,11 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v7
+      - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
+        run: |
+          f="$GITHUB_WORKSPACE/../swapfile"
+          fallocate -l 10G "$f" && chmod 600 "$f" && mkswap "$f" && swapon "$f"
+          free -h; swapon --show
       # Inject the public Jamendo client id and AcoustID application key into the build env at CI time only (not committed).
       - name: Jamendo client id and AcoustID key for the Flatpak build
         env:

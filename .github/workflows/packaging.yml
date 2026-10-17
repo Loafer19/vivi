@@ -17,9 +17,16 @@ jobs:
       matrix:
         pkg: [vivi-bin, vivi-git]
     runs-on: ubuntu-24.04
-    container: archlinux:base-devel
+    container:
+      image: archlinux:base-devel
+      options: --privileged  # for swapon
     steps:
       - uses: actions/checkout@v7
+      - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
+        run: |
+          f="$GITHUB_WORKSPACE/../swapfile"
+          fallocate -l 10G "$f" && chmod 600 "$f" && mkswap "$f" && swapon "$f"
+          free -h; swapon --show
       - name: Build and namcap
         run: |
           pacman -Syu --noconfirm --needed namcap git rust
