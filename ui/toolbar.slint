@@ -300,7 +300,7 @@ export component CustomizeDialog inherits Modal {
                         text: Tools.short(id); color: Theme.fg-a2; font-size: Metrics.font-xs;
                         horizontal-alignment: center; vertical-alignment: center; overflow: elide;
                     }
-                    ata := TouchArea { mouse-cursor: pointer; clicked => { root.add(id); } }
+                    ata := TouchArea { accessible-role: button; accessible-label: "Add " + Tools.label(id); mouse-cursor: pointer; clicked => { root.add(id); } }
                     if ata.has-hover: Rectangle {
                         y: -30px; height: 24px; width: tl.preferred-width + 14px; z: 5;
                         background: Theme.bg-a1; border-radius: Metrics.radius-sm;

@@ -152,13 +152,14 @@ component Info inherits Rectangle {
 }
 
 component Swatch inherits Rectangle {
+    in property <string> label;
     in property <color> swatch;
     in property <bool> selected;
     callback clicked();
     width: 30px; height: 30px; border-radius: Metrics.radius-sm;
     background: selected ? Theme.accent.mix(Theme.field, 30%) : transparent;
     Rectangle { width: 18px; height: 18px; border-radius: Metrics.radius-xs; background: root.swatch; }
-    TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    TouchArea { accessible-role: button; accessible-label: root.label; accessible-checked: root.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 component Row inherits Rectangle {
@@ -201,7 +202,7 @@ component Row inherits Rectangle {
         if setting.kind == "color": VerticalLayout { alignment: center;
             Rectangle { width: root.ctl-w; height: 34px; border-radius: Metrics.radius-md; background: Theme.field;
                 HorizontalLayout { padding: 2px; alignment: space-between;
-                    for o[i] in setting.options: Swatch { swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } } } }
+                    for o[i] in setting.options: Swatch { label: o; swatch: setting.swatches[i]; selected: o == setting.value; clicked => { root.changed(setting.id, o); } } } } }
         if setting.kind == "text": VerticalLayout { alignment: center;
             TextField {
                 width: root.ctl-w; text: setting.value; enabled: setting.enabled; label: setting.title;
@@ -312,7 +313,7 @@ export component SettingsDialog inherits Modal {
                                         x: 46px; text: c; vertical-alignment: center; height: parent.height; font-size: Metrics.font-base;
                                         color: parent.sel ? Theme.fg-1 : Theme.fg-a1;
                                     }
-                                    cta := TouchArea { mouse-cursor: pointer; clicked => { root.go(i); } }
+                                    cta := TouchArea { accessible-role: tab; accessible-label: c; accessible-item-selected: parent.sel; mouse-cursor: pointer; clicked => { root.go(i); } }
                                 }
                             }
                         }
@@ -351,7 +352,7 @@ export component SettingsDialog inherits Modal {
                             width: 32px; height: 32px; border-radius: Metrics.radius-sm;
                             background: xta.has-hover ? Theme.bg-a1 : transparent;
                             Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
-                            xta := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } }
+                            xta := TouchArea { accessible-role: button; accessible-label: "Close settings"; mouse-cursor: pointer; clicked => { root.close(); } }
                         } }
                 }
             }

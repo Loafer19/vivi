@@ -25,7 +25,7 @@ component DialogFrame inherits Modal {
                 VerticalLayout { alignment: center;
                     Rectangle { width: 28px; height: 28px; border-radius: Metrics.radius-sm; background: cx.has-hover ? Theme.bg-a1 : transparent;
                         Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a2; }
-                        cx := TouchArea { mouse-cursor: pointer; clicked => { root.close(); } } } }
+                        cx := TouchArea { accessible-role: button; accessible-label: "Close"; mouse-cursor: pointer; clicked => { root.close(); } } } }
             }
         }
         @children
@@ -146,7 +146,7 @@ export component NewPlaylistDialog inherits Rectangle {
                         width: 28px; height: 28px; border-radius: Metrics.radius-sm; background: Theme.popup-hover;
                         Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; }
                     }
-                    ca := TouchArea { mouse-cursor: pointer; clicked => { root.pick-cover(); } }
+                    ca := TouchArea { accessible-role: button; accessible-label: "Choose cover image"; mouse-cursor: pointer; clicked => { root.pick-cover(); } }
                 }
             }
             Heading { title: "Select Files"; hint: "These files will be added to the playlist."; }
@@ -163,14 +163,14 @@ export component NewPlaylistDialog inherits Rectangle {
                         Rectangle { width: 46px; height: 24px; border-radius: Metrics.radius-sm; background: Theme.popup-hover;
                             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; } } }
                 }
-                za := TouchArea { mouse-cursor: pointer; clicked => { root.pick-files(); } }
+                za := TouchArea { accessible-role: button; accessible-label: "Add files"; mouse-cursor: pointer; clicked => { root.pick-files(); } }
                 if root.files.length > 0: VerticalLayout {
                     padding: 8px; spacing: 4px;
                     HorizontalLayout {
                         Text { text: root.files.length + (root.files.length == 1 ? " file" : " files"); color: Theme.fg-a2; font-size: Metrics.font-sm; horizontal-stretch: 1; vertical-alignment: center; }
                         Rectangle { width: 46px; height: 24px; border-radius: Metrics.radius-sm; background: aa.has-hover ? Theme.divider : (Theme.popup-hover);
                             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-2; }
-                            aa := TouchArea { mouse-cursor: pointer; clicked => { root.pick-files(); } } }
+                            aa := TouchArea { accessible-role: button; accessible-label: "Add files"; mouse-cursor: pointer; clicked => { root.pick-files(); } } }
                     }
                     ScrollView {
                         VerticalLayout {
@@ -185,7 +185,7 @@ export component NewPlaylistDialog inherits Rectangle {
                                     Text { text: f; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                                     Rectangle { width: 24px;
                                         Icon { width: 12px; height: 12px; source: @image-url("../assets/icons/close.svg"); tint: Theme.fg-a3; }
-                                        TouchArea { mouse-cursor: pointer; clicked => { root.remove-file(i); } } }
+                                        TouchArea { accessible-role: button; accessible-label: "Remove " + f; mouse-cursor: pointer; clicked => { root.remove-file(i); } } }
                                 }
                             }
                         }

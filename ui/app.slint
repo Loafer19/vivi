@@ -298,7 +298,7 @@ component OverflowRow inherits Rectangle {
     border-radius: Metrics.radius-sm;
     background: ta.has-hover ? Theme.bg-a1 : transparent;
     clip: true;
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.act(root.id); } }
+    ta := TouchArea { accessible-role: button; accessible-label: Tools.label(root.id); mouse-cursor: pointer; clicked => { root.act(root.id); } }
     HorizontalLayout {
         padding-left: 8px; spacing: 10px;
         Icon { source: Tools.icon(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
@@ -714,12 +714,12 @@ export component AppWindow inherits Window {
                 if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
                     width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
                     so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { mouse-cursor: pointer; clicked => { Notices.start-over(); } }
+                    TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; clicked => { Notices.start-over(); } }
                 }
                 Rectangle {
                     width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;
                     Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
-                    TouchArea { mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
+                    TouchArea { accessible-role: button; accessible-label: "OK"; mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
                 }
             }
         }
@@ -777,14 +777,14 @@ export component AppWindow inherits Window {
                         }
                         if ab: Text {
                             text: "‹"; color: na.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
-                            na := TouchArea { mouse-cursor: pointer; clicked => { Playback.set-ab(max(0, Playback.ab-a - 0.5), Playback.ab-b); } }
+                            na := TouchArea { accessible-role: button; accessible-label: "Loop start 0.5 s earlier"; mouse-cursor: pointer; clicked => { Playback.set-ab(max(0, Playback.ab-a - 0.5), Playback.ab-b); } }
                         }
                     }
                     if id == "duration": HorizontalLayout {
                         padding-left: 6px; padding-right: 6px; spacing: 4px;
                         if ab: Text {
                             text: "›"; color: nb.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
-                            nb := TouchArea { mouse-cursor: pointer; clicked => { Playback.set-ab(Playback.ab-a, min(Playback.duration, Playback.ab-b + 0.5)); } }
+                            nb := TouchArea { accessible-role: button; accessible-label: "Loop end 0.5 s later"; mouse-cursor: pointer; clicked => { Playback.set-ab(Playback.ab-a, min(Playback.duration, Playback.ab-b + 0.5)); } }
                         }
                         Text {
                             text: ab ? "*" + fmt(Playback.ab-b) : fmt(Playback.duration);
@@ -884,7 +884,8 @@ export component AppWindow inherits Window {
                     width: 26px; height: 22px; border-radius: Metrics.radius-sm;
                     background: qta.has-hover ? Theme.bg-a1 : transparent;
                     Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/queue.svg"); tint: root.mini-queue ? Theme.accent : Theme.fg-a2; }
-                    qta := TouchArea { mouse-cursor: pointer; clicked => { Playback.toggle-mini-queue(); } }
+                    qta := TouchArea { accessible-role: button; accessible-label: "Queue"; accessible-checked: root.mini-queue; mouse-cursor: pointer; clicked => { Playback.toggle-mini-queue(); } }
+                    Tooltip { text: @markdown("Queue"); }
                 }
             }
         }

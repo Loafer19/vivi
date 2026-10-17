@@ -177,19 +177,20 @@ component Shelf inherits VerticalLayout {
     HorizontalLayout {
         height: 24px; spacing: 4px;
         Text { text: root.title; color: tta.has-hover ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-lg; vertical-alignment: center; horizontal-stretch: 1;
-            tta := TouchArea { mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
+            tta := TouchArea { accessible-role: button; accessible-label: root.title; mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
         if root.action-text != "": Text {
             text: root.action-text; font-size: Metrics.font-base; vertical-alignment: center;
             color: ata.has-hover ? Theme.fg-1 : Theme.fg-a3;
-            ata := TouchArea { mouse-cursor: pointer; clicked => { root.action(); } }
+            ata := TouchArea { accessible-role: button; accessible-label: root.action-text + " " + root.title; mouse-cursor: pointer; clicked => { root.action(); } }
         }
         Icon { source: @image-url("../assets/icons/chevron-right.svg"); tint: cta.has-hover ? Theme.fg-1 : Theme.fg-a1;
-            cta := TouchArea { mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
+            cta := TouchArea { accessible-role: button; accessible-label: "Show all: " + root.title; mouse-cursor: pointer; clicked => { root.title-clicked(); } } }
     }
     Rows { items: root.items; max: root.max; dim: true; open(it) => { root.open(it); } menu(it, x, y) => { root.menu(it, x, y); } }
 }
 
 component RailButton inherits Rectangle {
+    in property <string> label;   // screen-reader name and hover tooltip
     in property <image> icon;
     in property <image> active-icon;
     in property <image> active-accent;
@@ -200,16 +201,19 @@ component RailButton inherits Rectangle {
     background: ta.has-hover && !root.active ? Theme.bg-a1 : transparent;
     if root.active: TriIcon { base: root.active-icon; accent: root.active-accent; dim: root.active-dim; }
     if !root.active: Icon { source: root.icon; tint: ta.has-hover ? Theme.fg-1 : Theme.fg-a2; }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; accessible-item-selected: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    if root.label != "": Tooltip { text: @markdown("\{root.label}"); }
 }
 
 component HeadIcon inherits Rectangle {
+    in property <string> label;   // screen-reader name and hover tooltip
     in property <image> icon;
     in property <bool> enabled: true;
     callback clicked();
     width: 24px; height: 24px;
     Icon { source: root.icon; tint: ta.has-hover && root.enabled ? Theme.fg-1 : Theme.fg-a2; opacity: root.enabled ? 1 : 0.3; }
-    ta := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { enabled: root.enabled; accessible-role: button; accessible-label: root.label; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    if root.label != "": Tooltip { text: @markdown("\{root.label}"); }
 }
 
 export component LibraryView inherits Rectangle {
@@ -267,13 +271,13 @@ export component LibraryView inherits Rectangle {
             width: 50px; background: Theme.bg-a4;
             VerticalLayout {
                 padding-top: 8px; padding-left: 9px; padding-right: 9px; spacing: 14px; alignment: start;
-                RailButton { icon: @image-url("../assets/icons/home.svg"); active-icon: @image-url("../assets/icons/layers/home-active-b.svg"); active-accent: @image-url("../assets/icons/layers/home-active-a.svg"); active-dim: @image-url("../assets/icons/layers/home-active-d.svg"); active: root.section == "home"; clicked => { root.navigate("home"); } }
-                RailButton { icon: @image-url("../assets/icons/videos.svg"); active-icon: @image-url("../assets/icons/layers/videos-active-b.svg"); active-accent: @image-url("../assets/icons/layers/videos-active-a.svg"); active-dim: @image-url("../assets/icons/layers/videos-active-d.svg"); active: root.section == "video"; clicked => { root.navigate("video"); } }
-                RailButton { icon: @image-url("../assets/icons/songs.svg"); active-icon: @image-url("../assets/icons/layers/songs-active-b.svg"); active-accent: @image-url("../assets/icons/layers/songs-active-a.svg"); active-dim: @image-url("../assets/icons/layers/songs-active-d.svg"); active: root.section == "music"; clicked => { root.navigate("music"); } }
-                RailButton { icon: @image-url("../assets/icons/streaming.svg"); active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "network"; clicked => { root.navigate("network"); } }
-                RailButton { icon: @image-url("../assets/icons/playlist.svg"); active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
-                RailButton { icon: @image-url("../assets/icons/recent.svg"); active-icon: @image-url("../assets/icons/recent.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
-                RailButton { icon: @image-url("../assets/icons/add.svg"); active-icon: @image-url("../assets/icons/add.svg"); clicked => { root.open-file(); } }
+                RailButton { label: "Home"; icon: @image-url("../assets/icons/home.svg"); active-icon: @image-url("../assets/icons/layers/home-active-b.svg"); active-accent: @image-url("../assets/icons/layers/home-active-a.svg"); active-dim: @image-url("../assets/icons/layers/home-active-d.svg"); active: root.section == "home"; clicked => { root.navigate("home"); } }
+                RailButton { label: "Videos"; icon: @image-url("../assets/icons/videos.svg"); active-icon: @image-url("../assets/icons/layers/videos-active-b.svg"); active-accent: @image-url("../assets/icons/layers/videos-active-a.svg"); active-dim: @image-url("../assets/icons/layers/videos-active-d.svg"); active: root.section == "video"; clicked => { root.navigate("video"); } }
+                RailButton { label: "Music"; icon: @image-url("../assets/icons/songs.svg"); active-icon: @image-url("../assets/icons/layers/songs-active-b.svg"); active-accent: @image-url("../assets/icons/layers/songs-active-a.svg"); active-dim: @image-url("../assets/icons/layers/songs-active-d.svg"); active: root.section == "music"; clicked => { root.navigate("music"); } }
+                RailButton { label: "Streams"; icon: @image-url("../assets/icons/streaming.svg"); active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "network"; clicked => { root.navigate("network"); } }
+                RailButton { label: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
+                RailButton { label: "Recently played"; icon: @image-url("../assets/icons/recent.svg"); active-icon: @image-url("../assets/icons/recent.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
+                RailButton { label: "Open file"; icon: @image-url("../assets/icons/add.svg"); active-icon: @image-url("../assets/icons/add.svg"); clicked => { root.open-file(); } }
             }
         }
         // Content
@@ -281,8 +285,8 @@ export component LibraryView inherits Rectangle {
             padding: 20px; padding-bottom: 0; spacing: 17px;
             HorizontalLayout {
                 height: 24px; spacing: 12px;
-                HeadIcon { icon: @image-url("../assets/icons/arrow-left.svg"); enabled: root.can-back; clicked => { root.history(false); } }
-                HeadIcon { icon: @image-url("../assets/icons/arrow-right.svg"); enabled: root.can-forward; clicked => { root.history(true); } }
+                HeadIcon { label: "Back"; icon: @image-url("../assets/icons/arrow-left.svg"); enabled: root.can-back; clicked => { root.history(false); } }
+                HeadIcon { label: "Forward"; icon: @image-url("../assets/icons/arrow-right.svg"); enabled: root.can-forward; clicked => { root.history(true); } }
                 // Breadcrumb ("..." for long paths comes from src/libview.rs).
                 HorizontalLayout {
                     horizontal-stretch: 1; spacing: 6px;
@@ -293,13 +297,13 @@ export component LibraryView inherits Rectangle {
                             text: root.crumb-labels[i]; font-size: Metrics.font-lg; overflow: elide; vertical-alignment: center;
                             min-width: min(self.preferred-width, 140px);
                             color: cta.has-hover ? Theme.fg-1 : Theme.fg-a2;
-                            cta := TouchArea { mouse-cursor: pointer; clicked => { root.navigate(k); } }
+                            cta := TouchArea { accessible-role: button; accessible-label: root.crumb-labels[i]; mouse-cursor: pointer; clicked => { root.navigate(k); } }
                         }
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
                 more := HeadIcon {
-                    icon: @image-url("../assets/icons/more.svg");
+                    label: "More"; icon: @image-url("../assets/icons/more.svg");
                     clicked => {
                         if (root.nav.character-count > 6 && root.crumb-keys.length > 1 && root.section == "video") {
                             root.menu-request("lib", self.absolute-position.x, self.absolute-position.y + 28px,
@@ -309,7 +313,7 @@ export component LibraryView inherits Rectangle {
                         }
                     }
                 }
-                HeadIcon { icon: @image-url("../assets/icons/open.svg"); clicked => { root.popout(); } }
+                HeadIcon { label: root.has-media ? "Back to the player" : "Open file"; icon: @image-url("../assets/icons/open.svg"); clicked => { root.popout(); } }
             }
             HorizontalLayout {
                 height: 24px; spacing: 12px;
@@ -318,15 +322,15 @@ export component LibraryView inherits Rectangle {
                     text: root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
                 }
                 HeadIcon {
-                    icon: root.sort != "name" && root.sort != "title" ? @image-url("../assets/icons/sort-active.svg") : @image-url("../assets/icons/sort.svg");
+                    label: "Sort"; icon: root.sort != "name" && root.sort != "title" ? @image-url("../assets/icons/sort-active.svg") : @image-url("../assets/icons/sort.svg");
                     clicked => { root.menu-request("sort", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
                 }
                 HeadIcon {
-                    icon: @image-url("../assets/icons/list.svg");
+                    label: "View"; icon: @image-url("../assets/icons/list.svg");
                     clicked => { root.menu-request("view", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
                 }
                 HeadIcon {
-                    icon: @image-url("../assets/icons/search.svg");
+                    label: "Search"; icon: @image-url("../assets/icons/search.svg");
                     clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }
             }

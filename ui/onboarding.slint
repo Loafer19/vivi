@@ -22,7 +22,7 @@ component ThemeCard inherits Rectangle {
         }
     }
     Text { x: 12px; y: root.height - 36px; text: root.name; color: Theme.fg-1; font-size: Metrics.font-lg; }
-    TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    TouchArea { accessible-role: button; accessible-label: root.name; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 export component OnboardingDialog inherits Modal {
@@ -55,7 +55,7 @@ export component OnboardingDialog inherits Modal {
         x: root.card-w - self.width - 16px; y: 12px; width: sk.preferred-width + 20px; height: 30px; border-radius: Metrics.radius-sm;
         background: ska.has-hover ? Theme.bg-a1 : transparent;
         sk := Text { text: "Skip"; color: Theme.fg-a1; vertical-alignment: center; horizontal-alignment: center; }
-        ska := TouchArea { mouse-cursor: pointer; clicked => { root.finish(); } }
+        ska := TouchArea { accessible-role: button; accessible-label: "Skip"; mouse-cursor: pointer; clicked => { root.finish(); } }
     }
 
     VerticalLayout {
@@ -83,7 +83,7 @@ export component OnboardingDialog inherits Modal {
                 for a[i] in root.accents: Rectangle {
                     width: root.compact ? 28px : 34px; height: self.width; border-radius: self.width / 2; background: root.swatches[i];
                     border-width: a == root.accent ? 3px : 0px; border-color: Theme.fg-1;
-                    TouchArea { mouse-cursor: pointer; clicked => { root.set-accent(a); } }
+                    TouchArea { accessible-role: button; accessible-label: "Accent colour " + a; accessible-checked: a == root.accent; mouse-cursor: pointer; clicked => { root.set-accent(a); } }
                 }
             }
             if !root.compact: Text { text: "You can change this later in Settings → Interface."; color: Theme.fg-a3; horizontal-alignment: center; }

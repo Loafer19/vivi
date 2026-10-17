@@ -32,7 +32,7 @@ export component VizDropdown inherits Rectangle {
         Text { text: root.modes[root.mode]; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
     }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    ta := TouchArea { accessible-role: combobox; accessible-label: "Visualizer"; accessible-value: root.modes[root.mode]; mouse-cursor: pointer; clicked => { pop.show(); } }
     pop := PopupWindow {
         x: 0; y: root.height + 4px;
         width: root.width;

@@ -42,7 +42,7 @@ component LinkRow inherits Rectangle {
         Text { text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
         Text { horizontal-stretch: 1; text: root.sub; color: Theme.fg-a3; font-size: Metrics.font-md; vertical-alignment: center; horizontal-alignment: right; overflow: elide; }
     }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { About.link(root.url); } }
+    ta := TouchArea { accessible-role: button; accessible-label: root.title + ": " + root.sub; mouse-cursor: pointer; clicked => { About.link(root.url); } }
 }
 
 export component AboutPage inherits VerticalLayout {
