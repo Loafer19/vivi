@@ -13,6 +13,7 @@
 - **Customize shows labelled tiles**: every item in the bottom bar and in Available items has its name under the icon (short captions such as "Back 10s"; the tooltip keeps the full name).
 - **Customize rows fade at their scrolling edges**: the bottom-bar and Available items rows fade out on whichever side has more items, so it is clear they scroll.
 - **Drag to re-order the bottom bar in Customize**: drag a placed tile left or right; an accent marker shows where it will land. The ‹ › buttons still work (and remain the keyboard path).
+- **Progress-bar styles show a preview in Customize**: each style chip draws a miniature of its bar (Compact, Classic, Waveform, Plain); the profile and style chips have screen-reader names.
 ### Changed
 - **Esc closes the top-most open overlay** — menus, shortcuts, info, onboarding, Customize, tag review, Find Lyrics, music / streams dialog, Add Subtitles, QR, Settings, New Playlist, Network Stream, side panel, library, karaoke — and only then leaves the miniplayer, then fullscreen. It also works while a text field in a dialog has focus.
 - **Consistent UI**: every colour, corner radius and font size in the UI now comes from design tokens (`ui/core/theme.slint`: `Theme` status / scrim / shadow / on-media / stage colours and a `Metrics` scale for spacing, radii, fonts, icons and row heights). Odd values are snapped to the scale (e.g. 15 px text → 16 px, 5 px corners → 6 px).

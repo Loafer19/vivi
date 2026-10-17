@@ -171,6 +171,35 @@ component Zone inherits Rectangle {
     }
 }
 
+// Miniature of a progress-bar style, drawn on its chip in Customize.
+component BarPreview inherits Rectangle {
+    in property <string> style;
+    in property <brush> ink;    // track / controls
+    in property <brush> fill;   // played part
+    width: 28px; height: 14px;
+    if root.style == "Compact": Rectangle {
+        Rectangle { x: 0; y: 5px; width: 4px; height: 4px; border-radius: 2px; background: root.ink; }
+        Rectangle { x: 7px; y: 6px; width: 14px; height: 2px; border-radius: 1px; background: root.ink; }
+        Rectangle { x: 7px; y: 6px; width: 6px; height: 2px; border-radius: 1px; background: root.fill; }
+        Rectangle { x: 24px; y: 5px; width: 4px; height: 4px; border-radius: 2px; background: root.ink; }
+    }
+    if root.style == "Classic": Rectangle {
+        Rectangle { x: 0; y: 2px; width: 28px; height: 2px; border-radius: 1px; background: root.ink; }
+        Rectangle { x: 0; y: 2px; width: 11px; height: 2px; border-radius: 1px; background: root.fill; }
+        for cx in [0px, 6px, 12px, 24px]: Rectangle { x: cx; y: 8px; width: 4px; height: 4px; border-radius: 2px; background: root.ink; }
+    }
+    if root.style == "Waveform": Rectangle {
+        for h[i] in [4px, 8px, 12px, 6px, 10px, 5px, 9px]: Rectangle {
+            x: i * 4px; y: (14px - h) / 2; width: 2px; height: h; border-radius: 1px;
+            background: i < 3 ? root.fill : root.ink;
+        }
+    }
+    if root.style == "Plain": Rectangle {
+        Rectangle { x: 0; y: 12px; width: 28px; height: 1px; background: root.ink; }
+        Rectangle { x: 0; y: 12px; width: 10px; height: 1px; background: root.fill; }
+    }
+}
+
 export component CustomizeDialog inherits Modal {
     in property <[string]> items;
     in property <[string]> styles;
@@ -202,6 +231,9 @@ export component CustomizeDialog inherits Modal {
             spacing: 8px; alignment: start;
             Text { text: "Profile"; color: Theme.fg-2; vertical-alignment: center; }
             for p in root.profiles: Rectangle {
+                accessible-role: button; accessible-label: "Profile: " + p;
+                accessible-checked: p == root.profile;
+                accessible-action-default => { root.pick-profile(p); }
                 height: 30px; width: pt.preferred-width + 22px; border-radius: Metrics.radius-md;
                 background: p == root.profile ? Theme.accent : (pta.has-hover ? Theme.divider : Theme.bg-a1);
                 pt := Text { text: p; color: p == root.profile ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center; }
@@ -216,9 +248,18 @@ export component CustomizeDialog inherits Modal {
             spacing: 8px; alignment: start;
             Text { text: "Progress bar"; color: Theme.fg-2; vertical-alignment: center; }
             for st[si] in root.styles: Rectangle {
-                height: 30px; width: stt.preferred-width + 22px; border-radius: Metrics.radius-md;
+                accessible-role: button; accessible-label: "Progress bar: " + stt.text;
+                accessible-checked: si == Bars.index(root.bar-style);
+                accessible-action-default => { root.pick-style(st); }
+                height: 30px; width: stt.preferred-width + 28px + 30px; border-radius: Metrics.radius-md;
                 background: si == Bars.index(root.bar-style) ? Theme.accent : (sta.has-hover ? Theme.divider : Theme.bg-a1);
+                BarPreview {
+                    x: 11px; y: (parent.height - self.height) / 2; style: st;
+                    ink: si == Bars.index(root.bar-style) ? Theme.bg-b2 : Theme.fg-a2;
+                    fill: si == Bars.index(root.bar-style) ? Theme.bg-b2 : Theme.accent;
+                }
                 stt := Text {
+                    x: 11px + 28px + 8px; width: self.preferred-width;
                     text: st == "Compact" ? "Compact inline" : st == "Classic" ? "Classic (full width on top)" : st == "Waveform" ? "Waveform (audio)" : "Plain thin";
                     color: si == Bars.index(root.bar-style) ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
                 }
