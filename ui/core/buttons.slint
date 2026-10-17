@@ -18,6 +18,8 @@ export component ButtonBase inherits Rectangle {
     in property <bool> enabled: true;
     // Minimum width, so short labels ("OK") don't make tiny buttons.
     in property <length> min-w: 0;
+    // Reachable with Tab (window chrome turns this off; its keys are shortcuts).
+    in property <bool> tab-focus: true;
     callback clicked();
     property <bool> has-icon: root.icon.width > 0;
     property <length> pad: Metrics.space-4;
@@ -50,6 +52,16 @@ export component ButtonBase inherits Rectangle {
         accessible-role: button; accessible-label: root.text;
         clicked => { root.clicked(); }
     }
+    kf := FocusScope {
+        enabled: root.enabled; focus-on-click: false; focus-on-tab-navigation: root.tab-focus;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle {
+        border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius;
+    }
 }
 
 export component PrimaryButton inherits ButtonBase { kind: ButtonKind.primary; }
@@ -64,6 +76,7 @@ export component IconButton inherits Rectangle {
     in property <bool> active: false;
     in property <string> tip;
     in property <ButtonSize> size: ButtonSize.md;
+    in property <bool> tab-focus: true;
     callback clicked();
     property <bool> compact: root.size == ButtonSize.sm;
     width: compact ? (primary ? 36px : 28px) : (primary ? 44px : 36px);
@@ -87,6 +100,16 @@ export component IconButton inherits Rectangle {
         clicked => { root.clicked(); }
         accessible-role: button;
         accessible-label: root.tip;
+    }
+    kf := FocusScope {
+        enabled: true; focus-on-click: false; focus-on-tab-navigation: root.tab-focus;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle {
+        border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius;
     }
     if root.tip != "": Tooltip { text: @markdown("\{root.tip}"); }
 }

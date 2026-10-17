@@ -16,6 +16,7 @@ export component Toggle inherits Rectangle {
     in property <bool> enabled: true;
     // Screen-reader name (the setting's title).
     in property <string> label;
+    in property <bool> tab-focus: true;
     callback toggled();
     width: 64px; height: 30px; border-radius: Metrics.radius-md;
     background: Theme.field;
@@ -43,6 +44,16 @@ export component Toggle inherits Rectangle {
         accessible-enabled: root.enabled;
         accessible-action-default => { root.toggled(); }
         clicked => { root.toggled(); }
+    }
+    kf := FocusScope {
+        enabled: root.enabled; focus-on-click: false; focus-on-tab-navigation: root.tab-focus;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.toggled(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle {
+        border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius;
     }
 }
 

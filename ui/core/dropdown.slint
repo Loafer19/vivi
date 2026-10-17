@@ -19,6 +19,7 @@ export component Dropdown inherits Rectangle {
     in property <string> value;
     // Screen-reader name (the setting's title).
     in property <string> label;
+    in property <bool> tab-focus: true;
     callback selected(int, string);
     height: 36px; min-width: 140px;
     border-radius: Metrics.radius-md;
@@ -33,6 +34,16 @@ export component Dropdown inherits Rectangle {
         accessible-role: combobox; accessible-label: root.label; accessible-value: root.value;
         accessible-action-default => { pop.show(); }
         clicked => { pop.show(); }
+    }
+    kf := FocusScope {
+        enabled: true; focus-on-click: false; focus-on-tab-navigation: root.tab-focus;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { pop.show(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle {
+        border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius;
     }
     pop := PopupWindow {
         x: 0; y: root.height + 4px;

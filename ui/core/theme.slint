@@ -2,6 +2,8 @@
 export global Theme {
     in-out property <bool> dark: true;
     in-out property <color> accent: #D37918;
+    // Keyboard focus ring (2px, inside the control).
+    out property <color> focus-ring: accent-bright;
     out property <color> accent-bright: dark ? accent.brighter(25%) : accent.darker(10%);
     out property <color> accent-dim: accent.darker(20%);
     out property <color> accent-bg: dark ? accent.mix(#000000, 22%) : accent.mix(#EDEDED, 30%);
@@ -89,6 +91,7 @@ export global Theme {
 
 // Spacing, radius, type and icon scale. Use these instead of literals.
 export global Metrics {
+    out property <length> focus-ring-w: 2px;
     out property <length> space-1: 4px;
     out property <length> space-2: 8px;
     out property <length> space-3: 12px;
