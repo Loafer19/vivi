@@ -1,5 +1,7 @@
 //! Settings dialog model, live application of settings and per-show presets (#16).
 
+mod schema;
+
 use crate::config::{self, Config, Preset};
 use crate::player::Player;
 use crate::plugins;
@@ -179,7 +181,7 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
     // ---------- General ----------
     r.cat("General")
         .header("Appearance")
-        .choice("general.language", "Interface language", "Language of menus and dialogs. Only English is available for now.", &c.general.language, &["English"])
+        .choice("general.language", "Interface language", "Language of menus and dialogs. Only English is available for now.", &schema::get(c, "general.language"), &["English"])
         .seg("interface.theme", "Theme", "Dark or light interface colors. System follows the GTK/desktop color scheme when it can be detected.", &cap(&c.interface.theme), &["Dark", "Light", "System"]);
     r.push(
         "interface.accent",
@@ -210,14 +212,14 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
             "general.remote_control",
             "Allow AI agents and scripts",
             "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.",
-            c.general.remote_control,
+            schema::get(c, "general.remote_control") == "true",
         )
         .header("Diagnostics")
         .toggle(
             "general.save_log",
             "Save a log",
             "Write mpv's log to a file (mpv log-file).",
-            c.general.save_log,
+            schema::get(c, "general.save_log") == "true",
         )
         .path(
             "general.log_file",
@@ -230,7 +232,7 @@ fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
             "general.log_level",
             "Log details",
             "How much detail the log file gets (mpv msg-level).",
-            &c.general.log_level,
+            &schema::get(c, "general.log_level"),
             &["Errors only", "Warnings", "Everything"],
         )
         .enabled(c.general.save_log)
@@ -1689,10 +1691,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     let mut c = cfg.borrow_mut();
                     match id.as_str() {
                         "interface.theme" => c.interface.theme = v.to_lowercase(),
-                        "general.language" => c.general.language = v.into(),
-                        "general.save_log" => c.general.save_log = v == "true",
-                        "general.remote_control" => c.general.remote_control = v == "true",
-                        "general.log_level" => c.general.log_level = v.into(),
+                        id if schema::has(id) => {
+                            schema::set(&mut c, id, v);
+                        }
                         "general.log_file" | "video.screenshot_dir" | "recording.dir" => {
                             let mut val = v.to_string();
                             if v == "::browse" {
