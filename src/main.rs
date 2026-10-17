@@ -462,12 +462,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 crate::plugins::command(plugins::subtitles::ID, "offset", &[d.to_string()]);
             }
             A::Visualizer => {
-                let n = a.get_viz_modes().row_count() as i32;
-                if !(a.global::<crate::Playback>().get_has_media() && a.get_viz_audio()) || n == 0 {
+                let n = a.global::<crate::Viz>().get_modes().row_count() as i32;
+                if !(a.global::<crate::Playback>().get_has_media()
+                    && a.global::<crate::Viz>().get_audio())
+                    || n == 0
+                {
                     forward_key(&p, s, ctrl, alt);
                     return false;
                 }
-                a.invoke_viz_select((a.get_viz_mode() + 1).rem_euclid(n));
+                a.global::<crate::Viz>()
+                    .invoke_select((a.global::<crate::Viz>().get_mode() + 1).rem_euclid(n));
             }
             A::Record => a.invoke_toggle_record(),
             A::HideUi => toggle_ui_hidden(&a),

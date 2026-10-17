@@ -31,9 +31,10 @@ import { MusicDialogState, MdCaps } from "state/music-dialog.slint";
 import { TagReview } from "state/tag-review.slint";
 import { NowPlaying } from "state/now-playing.slint";
 import { Notices } from "state/notices.slint";
+import { Viz } from "state/viz.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -333,12 +334,6 @@ export component AppWindow inherits Window {
     // text, shift, ctrl, alt; unhandled keys are forwarded to mpv scripts.
     callback key(string, bool, bool, bool) -> bool;
     // Music visualizer (src/viz): shown for audio-only media; mode 0 = Disabled.
-    in property <bool> viz-audio;
-    in property <image> viz-frame;
-    in property <string> viz-note;
-    in property <int> viz-mode;
-    in property <[string]> viz-modes: ["Disabled"];
-    callback viz-select(int);
     // Plugins (src/plugins). Fields of `plugin-command` args are joined with U+001F.
     callback plugin-command(string, string, string);
     in-out property <string> skip-label;
@@ -512,8 +507,8 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Music visualizer (audio-only media) ----------
-    if Playback.has-media && root.viz-audio && root.viz-mode > 0: VizView {
-        frame: root.viz-frame; note: root.viz-note;
+    if Playback.has-media && Viz.audio && Viz.mode > 0: VizView {
+        frame: Viz.frame; note: Viz.note;
     }
 
     // ---------- Now playing card (audio-only network streams) ----------
@@ -521,7 +516,7 @@ export component AppWindow inherits Window {
         // Centred in the space right of the docked library while that is shown.
         property <length> left: Overlays.library-open && !Library.lib-full && root.show-ui ? min(427px, root.width) : 0px;
         x: self.left + (root.width - self.left - self.width) / 2;
-        y: root.viz-mode > 0 ? 64px : (root.height - self.height) / 2;
+        y: Viz.mode > 0 ? 64px : (root.height - self.height) / 2;
         width: min(460px, root.width - self.left - 48px);
         station: NowPlaying.station; track: NowPlaying.track; info: NowPlaying.info;
         logo: NowPlaying.logo; has-logo: NowPlaying.has-logo;
@@ -530,9 +525,9 @@ export component AppWindow inherits Window {
     // ---------- Lyrics overlay (Lyrics plugin) ----------
     if Playback.has-media && Lyrics.lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
-        y: root.viz-audio && root.viz-mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
+        y: Viz.audio && Viz.mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
-        backdrop: !(root.viz-audio && root.viz-mode > 0);
+        backdrop: !(Viz.audio && Viz.mode > 0);
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
@@ -597,10 +592,10 @@ export component AppWindow inherits Window {
         }
     }
 
-    if !root.mini && Playback.has-media && root.viz-audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
+    if !root.mini && Playback.has-media && Viz.audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
         x: 12px; y: 50px;
-        modes: root.viz-modes; mode: root.viz-mode;
-        select(i) => { root.viz-select(i); }
+        modes: Viz.modes; mode: Viz.mode;
+        select(i) => { Viz.select(i); }
     }
 
     // ---------- Side panel ----------
@@ -625,8 +620,8 @@ export component AppWindow inherits Window {
         add-bookmark() => { Panel.add-bookmark(); }
         remove-bookmark() => { Panel.remove-bookmark(); }
         chapter-times: Panel.chapter-times;
-        viz-modes: root.viz-modes; viz-mode: root.viz-mode;
-        viz-select(i) => { root.viz-select(i); }
+        viz-modes: Viz.modes; viz-mode: Viz.mode;
+        viz-select(i) => { Viz.select(i); }
         lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: Lyrics.source;
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
         lyrics-offset: Lyrics.offset-label; lyrics-can-save: Lyrics.can-save; lyrics-manual: Lyrics.manual;

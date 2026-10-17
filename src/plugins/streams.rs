@@ -1321,7 +1321,7 @@ impl Streams {
         let a = cx.app;
         let path = cx.player.get("path").unwrap_or_default();
         let show = a.global::<crate::Playback>().get_has_media()
-            && a.get_viz_audio()
+            && a.global::<crate::Viz>().get_audio()
             && path.contains("://");
         if !show {
             if a.global::<crate::NowPlaying>().get_show() {

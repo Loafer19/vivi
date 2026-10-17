@@ -1,0 +1,9 @@
+// Music visualizer (src/viz): shown for audio-only media; frame, note, mode (0 = Disabled) and the mode list.
+export global Viz {
+    in-out property <bool> audio;
+    in-out property <image> frame;
+    in-out property <string> note;
+    in-out property <int> mode;
+    in-out property <[string]> modes: ["Disabled"];
+    callback select(int);
+}

@@ -68,13 +68,13 @@ impl crate::plugins::Plugin for VizPlugin {
     }
     fn enable(&mut self, cx: &crate::plugins::Ctx) {
         ENABLED.with(|e| e.set(true));
-        cx.app.set_viz_audio(
-            cx.app.global::<crate::Playback>().get_has_media() && audio_only(cx.player),
-        );
+        cx.app
+            .global::<crate::Viz>()
+            .set_audio(cx.app.global::<crate::Playback>().get_has_media() && audio_only(cx.player));
     }
     fn disable(&mut self, cx: &crate::plugins::Ctx) {
         ENABLED.with(|e| e.set(false));
-        cx.app.set_viz_audio(false);
+        cx.app.global::<crate::Viz>().set_audio(false);
     }
 }
 
@@ -93,8 +93,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     let saved = std::fs::read_to_string(mode_file()).unwrap_or_default();
     let saved = saved.trim();
     let mode = names.iter().position(|n| n.as_str() == saved).unwrap_or(3); // Spectrum
-    app.set_viz_modes(ModelRc::new(VecModel::from(names)));
-    app.set_viz_mode(mode as i32);
+    app.global::<crate::Viz>()
+        .set_modes(ModelRc::new(VecModel::from(names)));
+    app.global::<crate::Viz>().set_mode(mode as i32);
 
     let viz = Rc::new(RefCell::new(Viz {
         tap: tap::Tap::new(),
@@ -114,14 +115,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     }));
 
     let (w, v) = (app.as_weak(), viz.clone());
-    app.on_viz_select(move |i| {
+    app.global::<crate::Viz>().on_select(move |i| {
         let Some(a) = w.upgrade() else { return };
-        let n = a.get_viz_modes().row_count();
+        let n = a.global::<crate::Viz>().get_modes().row_count();
         let i = (i.max(0) as usize).min(n.saturating_sub(1));
         v.borrow_mut().mode = i;
-        a.set_viz_mode(i as i32);
-        a.set_viz_note("".into());
-        if let Some(name) = a.get_viz_modes().row_data(i) {
+        a.global::<crate::Viz>().set_mode(i as i32);
+        a.global::<crate::Viz>().set_note("".into());
+        if let Some(name) = a.global::<crate::Viz>().get_modes().row_data(i) {
             let _ = std::fs::create_dir_all(crate::store::state_dir());
             let _ = std::fs::write(mode_file(), name.as_str());
         }
@@ -240,7 +241,7 @@ impl Viz {
                 self.path = path;
                 self.track_count = tc;
                 self.audio_only = self.path.is_some() && audio_only(p);
-                a.set_viz_audio(self.audio_only);
+                a.global::<crate::Viz>().set_audio(self.audio_only);
             }
         }
         let active =
@@ -319,11 +320,12 @@ impl Viz {
         } else {
             ""
         };
-        if a.get_viz_note().as_str() != note {
-            a.set_viz_note(note.into());
+        if a.global::<crate::Viz>().get_note().as_str() != note {
+            a.global::<crate::Viz>().set_note(note.into());
         }
         let mut buf = SharedPixelBuffer::<slint::Rgba8Pixel>::new(cw as u32, ch as u32);
         self.canvas.write_rgba(buf.make_mut_slice());
-        a.set_viz_frame(slint::Image::from_rgba8(buf));
+        a.global::<crate::Viz>()
+            .set_frame(slint::Image::from_rgba8(buf));
     }
 }
