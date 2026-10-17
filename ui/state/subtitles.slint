@@ -1,0 +1,24 @@
+// Subtitles plugin: the Add Subtitles dialog (online search hits, languages, local files, preview) and the subtitle sync / pick state shown in the side panel.
+import { SubHit } from "../plugins.slint";
+import { Item } from "../panel.slint";
+export global Subtitles {
+    in-out property <bool> plugin;
+    in-out property <[SubHit]> hits;
+    in-out property <[Item]> langs;
+    in-out property <int> selected: -1;
+    in-out property <string> details;
+    in-out property <string> preview;
+    in-out property <bool> save-next;
+    in-out property <string> offset: "0.0 s";
+    in-out property <bool> has-pick;
+    in-out property <string> pick-label;
+    in-out property <bool> sync;
+    in-out property <string> status;
+    in-out property <bool> busy;
+    in-out property <string> query;
+    in-out property <string> lang;
+    in-out property <[Item]> local;
+    in-out property <string> folder;
+    in-out property <int> target;
+    in-out property <int> source;
+}

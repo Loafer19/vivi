@@ -534,7 +534,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                     .unwrap_or(0);
                 p.set("video-rotate", &((r + 90) % 360).to_string());
             }
-            "add-sub" if a.get_subs_plugin() => a.invoke_add_subs(),
+            "add-sub" if a.global::<crate::Subtitles>().get_plugin() => a.invoke_add_subs(),
             "add-sub" | "add-audio" => {
                 let sub = id == "add-sub";
                 if let Some(f) = rfd::FileDialog::new()

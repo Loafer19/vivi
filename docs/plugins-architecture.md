@@ -38,6 +38,15 @@ sends a `TagStatus` per file (tagged / renamed / skipped / failed / undone), lyr
 `ui/core/types.slint` (also `BarStyle`, `PanelTab`, `Overlay`); Rust maps its own values
 onto them at the boundary.
 
+Each built-in plugin with a UI owns one Slint global in `ui/state/` instead of
+prefixed properties on `AppWindow`: `Lyrics` (lyrics view, karaoke words, manual
+search as `search-*`) and `Subtitles` (Add Subtitles dialog, sync / pick state).
+The music dialog, tag review and now-playing card are moving to the same pattern. Plugin
+code writes them with `cx.app.global::<crate::Lyrics>().set_lines(...)`, and
+`ui/app.slint` binds the plugin's dialog properties to that global, so a new field
+touches the global, the dialog, one binding and the plugin. User actions still reach the plugin through
+`plugin-command(id, action, args)`.
+
 ### Music plugins (#63, #65, #69, #70)
 
 | Plugin | Where | Why | Keys |

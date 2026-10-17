@@ -533,7 +533,7 @@ fn handle(
                 return Err("give \"seconds\", \"delta\" or \"reset\": true".into());
             };
             let id = crate::plugins::subtitles::ID;
-            if !a.get_subs_plugin() {
+            if !a.global::<crate::Subtitles>().get_plugin() {
                 return Err("the Subtitle Search plugin is turned off".into());
             }
             crate::plugins::command(id, "offset", &[arg]);
@@ -543,10 +543,10 @@ fn handle(
             )
         }
         "sub_sync" => {
-            if !a.get_subs_plugin() {
+            if !a.global::<crate::Subtitles>().get_plugin() {
                 return Err("the Subtitle Search plugin is turned off".into());
             }
-            if !a.get_subs_sync() {
+            if !a.global::<crate::Subtitles>().get_sync() {
                 return Err("install and enable the Subtitle Auto-Sync plugin (subtitle-sync) to align subtitles to the audio".into());
             }
             crate::plugins::command(crate::plugins::subtitles::ID, "sync", &[]);

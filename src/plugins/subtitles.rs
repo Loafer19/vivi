@@ -830,10 +830,14 @@ fn compact(n: i64) -> String {
 impl SubtitleSearch {
     /// Rescan the "From Computer" folder and show it in the dialog.
     fn scan_local(&mut self, cx: &Ctx) {
-        let folder = cx.app.get_subs_target() == 1;
+        let folder = cx.app.global::<crate::Subtitles>().get_target() == 1;
         let Some(dir) = self.dir.clone() else {
-            cx.app.set_subs_folder("Choose a folder…".into());
-            cx.app.set_subs_local(ModelRc::default());
+            cx.app
+                .global::<crate::Subtitles>()
+                .set_folder("Choose a folder…".into());
+            cx.app
+                .global::<crate::Subtitles>()
+                .set_local(ModelRc::default());
             Self::status(
                 cx,
                 "Open a local file or click the folder bar to choose a folder.",
@@ -841,7 +845,9 @@ impl SubtitleSearch {
             );
             return;
         };
-        cx.app.set_subs_folder(breadcrumb(&dir).into());
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_folder(breadcrumb(&dir).into());
         self.subs = files_with(&dir, SUB_EXT);
         let items: Vec<Item> = if folder {
             self.pairs = pair_folder(&files_with(&dir, VIDEO_EXT), &self.subs);
@@ -867,7 +873,9 @@ impl SubtitleSearch {
             self.local_items()
         };
         let empty = items.is_empty();
-        cx.app.set_subs_local(ModelRc::new(VecModel::from(items)));
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_local(ModelRc::new(VecModel::from(items)));
         Self::status(
             cx,
             match (empty, folder) {
@@ -892,7 +900,7 @@ impl SubtitleSearch {
     fn save_local(&mut self, cx: &Ctx) {
         let current = cx.local_path().and_then(|p| std::fs::canonicalize(p).ok());
         let mut loaded = 0;
-        if cx.app.get_subs_target() == 0 {
+        if cx.app.global::<crate::Subtitles>().get_target() == 0 {
             for (s, _) in self.subs.iter().zip(&self.checked).filter(|(_, c)| **c) {
                 let flag = if loaded == 0 { "select" } else { "auto" };
                 cx.player.cmd("sub-add", &[&s.to_string_lossy(), flag]);
@@ -941,8 +949,8 @@ impl SubtitleSearch {
         }
     }
     fn status(cx: &Ctx, s: &str, busy: bool) {
-        cx.app.set_subs_status(s.into());
-        cx.app.set_subs_busy(busy);
+        cx.app.global::<crate::Subtitles>().set_status(s.into());
+        cx.app.global::<crate::Subtitles>().set_busy(busy);
     }
     fn set_hits(&mut self, cx: &Ctx, hits: Vec<Hit>) {
         let pick = self.pick.as_ref().map(|p| p.file_id);
@@ -973,17 +981,21 @@ impl SubtitleSearch {
                 pick: Some(h.file_id) == pick,
             })
             .collect();
-        cx.app.set_subs_hits(ModelRc::new(VecModel::from(rows)));
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_hits(ModelRc::new(VecModel::from(rows)));
         self.hits = hits;
         self.select(cx, None);
     }
     fn select(&mut self, cx: &Ctx, i: Option<usize>) {
         self.selected = i.filter(|i| *i < self.hits.len());
         cx.app
-            .set_subs_selected(self.selected.map(|i| i as i32).unwrap_or(-1));
+            .global::<crate::Subtitles>()
+            .set_selected(self.selected.map(|i| i as i32).unwrap_or(-1));
         let h = self.selected.and_then(|i| self.hits.get(i));
         cx.app
-            .set_subs_details(h.map(details).unwrap_or_default().into());
+            .global::<crate::Subtitles>()
+            .set_details(h.map(details).unwrap_or_default().into());
         // Downloaded for Preview / Load before (also in an earlier session).
         let pre = h
             .and_then(|h| {
@@ -995,7 +1007,7 @@ impl SubtitleSearch {
             .and_then(|p| std::fs::read(p).ok())
             .map(|b| preview_text(&decode(&b), 60))
             .unwrap_or_default();
-        cx.app.set_subs_preview(pre.into());
+        cx.app.global::<crate::Subtitles>().set_preview(pre.into());
     }
     /// Language chips: the common ones plus any other code in the list.
     fn show_langs(cx: &Ctx, langs: &str) {
@@ -1019,8 +1031,12 @@ impl SubtitleSearch {
                 selected: true,
             });
         }
-        cx.app.set_subs_langs(ModelRc::new(VecModel::from(items)));
-        cx.app.set_subs_lang(norm_langs(langs).into());
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_langs(ModelRc::new(VecModel::from(items)));
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_lang(norm_langs(langs).into());
     }
     fn set_langs(&mut self, cx: &Ctx, langs: &str) {
         let l = norm_langs(langs);
@@ -1037,14 +1053,16 @@ impl SubtitleSearch {
     }
     /// "English · saved next to the video" (the pick loads again next time).
     fn show_pick(cx: &Ctx, pick: Option<&Pick>, video: Option<&Path>) {
-        cx.app.set_subs_pick_label(
+        cx.app.global::<crate::Subtitles>().set_pick_label(
             pick.map(|p| pick_label(p, video))
                 .unwrap_or_default()
                 .into(),
         );
     }
     fn show_offset(cx: &Ctx, o: f64) {
-        cx.app.set_subs_offset(offset_label(o).into());
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_offset(offset_label(o).into());
         cx.app.global::<crate::Panel>().set_pv_sub_delay(o as f32);
     }
     /// Set (`save`: and remember) the offset of the playing file.
@@ -1132,7 +1150,7 @@ impl SubtitleSearch {
             };
             save_pick(&picks_file(), k, Some(p.clone()));
             self.pick = Some(p);
-            cx.app.set_subs_has_pick(true);
+            cx.app.global::<crate::Subtitles>().set_has_pick(true);
             Self::show_pick(cx, self.pick.as_ref(), cx.local_path().as_deref());
         }
         Self::status(cx, "", false);
@@ -1189,8 +1207,8 @@ impl SubtitleSearch {
             Self::status(cx, NO_KEY, false);
             return;
         }
-        let query = cx.app.get_subs_query().to_string();
-        let langs = norm_langs(&cx.app.get_subs_lang());
+        let query = cx.app.global::<crate::Subtitles>().get_query().to_string();
+        let langs = norm_langs(&cx.app.global::<crate::Subtitles>().get_lang());
         let local = cx.local_path();
         let (tx, rx) = channel::<Msg>();
         self.rx = Some(rx);
@@ -1315,7 +1333,7 @@ impl Plugin for SubtitleSearch {
         ))
     }
     fn enable(&mut self, cx: &Ctx) {
-        cx.app.set_subs_plugin(true);
+        cx.app.global::<crate::Subtitles>().set_plugin(true);
         // Tells the Subtitle Auto-Sync package that Vivi keeps the per-file offsets.
         cx.player.cmd(
             "change-list",
@@ -1323,7 +1341,7 @@ impl Plugin for SubtitleSearch {
         );
     }
     fn disable(&mut self, cx: &Ctx) {
-        cx.app.set_subs_plugin(false);
+        cx.app.global::<crate::Subtitles>().set_plugin(false);
         cx.app.global::<crate::Overlays>().set_subs_open(false);
         cx.player.cmd(
             "change-list",
@@ -1337,19 +1355,19 @@ impl Plugin for SubtitleSearch {
         match name {
             "open" => {
                 let path = cx.player.get("path").unwrap_or_default();
-                cx.app.set_subs_query(query_from_name(&path).into());
+                cx.app.global::<crate::Subtitles>().set_query(query_from_name(&path).into());
                 Self::show_langs(cx, &cx.get("languages"));
-                cx.app.set_subs_save_next(cx.flag("save-next"));
-                cx.app.set_subs_sync(Self::sync_available(cx).is_some());
+                cx.app.global::<crate::Subtitles>().set_save_next(cx.flag("save-next"));
+                cx.app.global::<crate::Subtitles>().set_sync(Self::sync_available(cx).is_some());
                 self.set_hits(cx, Vec::new());
                 self.dir = cx
                     .local_path()
                     .and_then(|p| p.parent().map(Path::to_path_buf));
                 // Without an API key only the local source works.
                 if Self::creds(cx).key.is_empty() && std::env::var_os("VIVI_SUBS").is_none() {
-                    cx.app.set_subs_source(1);
+                    cx.app.global::<crate::Subtitles>().set_source(1);
                 }
-                if cx.app.get_subs_source() == 1 {
+                if cx.app.global::<crate::Subtitles>().get_source() == 1 {
                     self.scan_local(cx);
                 } else if Self::creds(cx).key.is_empty() {
                     Self::status(cx, NO_KEY, false);
@@ -1360,7 +1378,7 @@ impl Plugin for SubtitleSearch {
             }
             "search" => self.start_search(cx),
             "lang" => {
-                let l = toggle_lang(&cx.app.get_subs_lang(), arg);
+                let l = toggle_lang(&cx.app.global::<crate::Subtitles>().get_lang(), arg);
                 self.set_langs(cx, &l);
                 self.start_search(cx);
             }
@@ -1371,10 +1389,10 @@ impl Plugin for SubtitleSearch {
             "save-next" => {
                 let on = !cx.flag("save-next");
                 cx.set("save-next", if on { "true" } else { "false" });
-                cx.app.set_subs_save_next(on);
+                cx.app.global::<crate::Subtitles>().set_save_next(on);
             }
             "mode" => {
-                if cx.app.get_subs_source() == 1 {
+                if cx.app.global::<crate::Subtitles>().get_source() == 1 {
                     self.scan_local(cx);
                 } else {
                     let key = Self::creds(cx).key;
@@ -1393,12 +1411,11 @@ impl Plugin for SubtitleSearch {
             }
             "toggle" => {
                 let Some(i) = idx else { return };
-                if cx.app.get_subs_target() == 0 {
+                if cx.app.global::<crate::Subtitles>().get_target() == 0 {
                     if let Some(c) = self.checked.get_mut(i) {
                         *c = !*c;
                     }
-                    cx.app
-                        .set_subs_local(ModelRc::new(VecModel::from(self.local_items())));
+                    cx.app.global::<crate::Subtitles>().set_local(ModelRc::new(VecModel::from(self.local_items())));
                 }
             }
             "save-local" => self.save_local(cx),
@@ -1419,7 +1436,7 @@ impl Plugin for SubtitleSearch {
                     save_pick(&picks_file(), k, None);
                 }
                 self.pick = None;
-                cx.app.set_subs_has_pick(false);
+                cx.app.global::<crate::Subtitles>().set_has_pick(false);
                 cx.toast("Subtitle pick forgotten for this file");
             }
             // z / x, side panel buttons, `vivi-sub-offset` from the Auto-Sync package.
@@ -1477,14 +1494,18 @@ impl Plugin for SubtitleSearch {
                 self.applied = None;
             }
         }
-        cx.app.set_subs_sync(Self::sync_available(cx).is_some());
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_sync(Self::sync_available(cx).is_some());
         // The remembered pick, unless mpv already loaded that file (sub-auto).
         self.pick = self
             .key
             .as_ref()
             .and_then(|k| load_picks(&picks_file()).remove(k))
             .filter(|p| Path::new(&p.path).is_file());
-        cx.app.set_subs_has_pick(self.pick.is_some());
+        cx.app
+            .global::<crate::Subtitles>()
+            .set_has_pick(self.pick.is_some());
         Self::show_pick(cx, self.pick.as_ref(), cx.local_path().as_deref());
         let loaded = Self::loaded_subs(cx);
         let mut want: Vec<PathBuf> = Vec::new();

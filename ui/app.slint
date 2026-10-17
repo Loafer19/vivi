@@ -26,9 +26,10 @@ import { Library } from "state/library.slint";
 import { Settings } from "state/settings.slint";
 import { Customize } from "state/customize.slint";
 import { Lyrics } from "state/lyrics.slint";
+import { Subtitles } from "state/subtitles.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -343,26 +344,7 @@ export component AppWindow inherits Window {
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
     // Characters per karaoke row, for wrapping the word-timed current line.
     out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
-    in property <bool> subs-plugin;
-    in property <[SubHit]> subs-hits;
-    in property <[Item]> subs-langs;
-    in property <int> subs-selected: -1;
-    in property <string> subs-details;
-    in property <string> subs-preview;
-    in property <bool> subs-save-next;
     // Per-file subtitle offset label, pick and whether Subtitle Auto-Sync is installed.
-    in property <string> subs-offset: "0.0 s";
-    in property <bool> subs-has-pick;
-    in property <string> subs-pick-label;
-    in property <bool> subs-sync;
-    in property <string> subs-status;
-    in property <bool> subs-busy;
-    in-out property <string> subs-query;
-    in-out property <string> subs-lang;
-    in property <[Item]> subs-local;
-    in property <string> subs-folder;
-    in-out property <int> subs-target;
-    in-out property <int> subs-source;
     // Shared dialog of the music plugins (Auto-tagger, Free Music); md-owner = plugin id.
     in property <string> md-owner;
     in property <string> md-title;
@@ -407,7 +389,7 @@ export component AppWindow inherits Window {
     in property <bool> np-has-logo;
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
     public function add-subs() {
-        if (root.subs-plugin) { Overlays.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
+        if (Subtitles.plugin) { Overlays.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
         else { Panel.load-sub(); }
     }
 
@@ -690,7 +672,7 @@ export component AppWindow inherits Window {
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
         lyrics-offset: Lyrics.offset-label; lyrics-can-save: Lyrics.can-save; lyrics-manual: Lyrics.manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
-        subs-enabled: root.subs-plugin; subs-offset: root.subs-offset; subs-has-pick: root.subs-has-pick; subs-pick-label: root.subs-pick-label; subs-sync: root.subs-sync;
+        subs-enabled: Subtitles.plugin; subs-offset: Subtitles.offset; subs-has-pick: Subtitles.has-pick; subs-pick-label: Subtitles.pick-label; subs-sync: Subtitles.sync;
         subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
         find-subs() => { root.add-subs(); }
         open-settings(c) => { Settings.settings-category = c; Overlays.settings-open = true; Settings.settings-refresh(c, "", false); }
@@ -1055,12 +1037,12 @@ export component AppWindow inherits Window {
     // ---------- Add Subtitles (Subtitle Search plugin) ----------
     if Overlays.subs-open: SubtitleDialog {
         width: root.width; height: root.height;
-        hits: root.subs-hits; langs: root.subs-langs; selected: root.subs-selected;
-        details: root.subs-details; preview: root.subs-preview; save-next: root.subs-save-next;
-        status: root.subs-status; busy: root.subs-busy;
-        query <=> root.subs-query; lang <=> root.subs-lang;
-        local: root.subs-local; folder: root.subs-folder;
-        target <=> root.subs-target; source <=> root.subs-source;
+        hits: Subtitles.hits; langs: Subtitles.langs; selected: Subtitles.selected;
+        details: Subtitles.details; preview: Subtitles.preview; save-next: Subtitles.save-next;
+        status: Subtitles.status; busy: Subtitles.busy;
+        query <=> Subtitles.query; lang <=> Subtitles.lang;
+        local: Subtitles.local; folder: Subtitles.folder;
+        target <=> Subtitles.target; source <=> Subtitles.source;
         cmd(n, a) => { root.plugin-command("subtitle-search", n, a); }
         close => { Overlays.subs-open = false; fs.focus(); }
     }

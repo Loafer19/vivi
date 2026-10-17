@@ -1054,8 +1054,10 @@ fn debug_ui(app: &AppWindow) {
     }
     // VIVI_SUBS=folder: "To This Folder"; =search: "From OpenSubtitles".
     if let Some(m) = var("VIVI_SUBS") {
-        app.set_subs_target(i32::from(m == "folder"));
-        app.set_subs_source(i32::from(m != "search"));
+        app.global::<crate::Subtitles>()
+            .set_target(i32::from(m == "folder"));
+        app.global::<crate::Subtitles>()
+            .set_source(i32::from(m != "search"));
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(2500), move || {
             if let Some(a) = w.upgrade() {
