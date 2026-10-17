@@ -487,9 +487,15 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
 fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
     let (head, arg) = id.split_once(':').unwrap_or((id, ""));
     match head {
-        "lib" => a.invoke_lib_menu(ctx.key.clone().into(), ctx.kind.clone().into(), arg.into()),
-        "sort" => a.invoke_lib_set_sort(arg.into()),
-        "view" => a.invoke_lib_set_grid(arg == "grid"),
+        "lib" => a.global::<crate::Library>().invoke_lib_menu(
+            ctx.key.clone().into(),
+            ctx.kind.clone().into(),
+            arg.into(),
+        ),
+        "sort" => a.global::<crate::Library>().invoke_lib_set_sort(arg.into()),
+        "view" => a
+            .global::<crate::Library>()
+            .invoke_lib_set_grid(arg == "grid"),
         "speed" => p.set("speed", arg),
         "aspect" => p.set("video-aspect-override", arg),
         "vid" | "aid" | "sid" => p.set(head, arg),
@@ -558,7 +564,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             }
             "clear-queue" => a.global::<crate::Panel>().invoke_queue_clear(),
             "open-file" => a.invoke_open_file(),
-            "open-folder" => a.invoke_open_folder(),
+            "open-folder" => a.global::<crate::Library>().invoke_open_folder(),
             "open-network" => a.global::<crate::Overlays>().set_network_open(true),
             "library" => a.global::<crate::Overlays>().set_library_open(true),
             _ => {}

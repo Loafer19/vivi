@@ -1778,7 +1778,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         c.stubs.insert(k.into(), v.into());
                     }
                     "privacy.recent" => {
-                        a.invoke_clear_recent();
+                        a.global::<crate::Library>().invoke_clear_recent();
                         a.set_settings_status("Recent files cleared".into());
                         return;
                     }
@@ -1829,7 +1829,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             save();
             refresh();
             if rescan {
-                a.invoke_lib_rescan();
+                a.global::<crate::Library>().invoke_lib_rescan();
             }
         });
     }

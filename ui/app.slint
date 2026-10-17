@@ -22,9 +22,10 @@ import { Playback } from "state/playback.slint";
 import { Panel } from "state/panel.slint";
 import { Dialogs } from "state/dialogs.slint";
 import { Menus } from "state/menus.slint";
+import { Library } from "state/library.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -449,12 +450,9 @@ export component AppWindow inherits Window {
         : Overlays.library-open && Playback.has-media ? Overlay.library
         : Overlays.karaoke-open && Playback.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
         : Overlay.none;
-    in property <[Item]> recent;
     in property <string> resume-text;
     // Only the resume message (this text) offers "Start over"; other toasts just have OK.
     in property <string> resume-offer;
-    callback open-recent(string);
-    callback clear-recent();
     callback start-over();
     callback dismiss-resume();
 
@@ -511,36 +509,12 @@ export component AppWindow inherits Window {
 
     // Library
     // QR dialog of a plugin (vivi-qr).
-    in property <[LibItem]> lib-items;
-    in property <[LibItem]> lib-continue;
-    in property <[LibItem]> lib-recent;
-    in property <[LibItem]> lib-pinned;
-    in property <[LibItem]> lib-listen;
-    in property <[LibItem]> lib-folders;
-    in property <[LibItem]> lib-lists;
-    in property <[LibItem]> lib-artists;
-    in property <bool> lib-can-back;
-    in property <bool> lib-can-forward;
     // Library as the full home screen (vs. the 427 px sidebar while playing).
-    in-out property <bool> lib-full;
     // Properties & Metadata dialog
     // "Hide UI" from the main menu (Ctrl+\): bars stay hidden until toggled back.
     in-out property <bool> ui-hidden;
     callback stop();
     callback toggle-record();
-    callback open-folder();
-    callback lib-history(bool);
-    callback lib-add-folder();
-    callback lib-create-playlist();
-    in property <string> lib-nav: "home";
-    in property <[string]> lib-crumb-keys;
-    in property <[string]> lib-crumb-labels;
-    in property <string> lib-sort: "name";
-    in property <bool> lib-grid: true;
-    in property <int> lib-count;
-    in property <bool> lib-scanning;
-    in property <bool> ytdlp;
-    in-out property <string> lib-query;
     // Menus (built in src/menus.rs): main right-click menu, library context menus,
     // sort and view options. menu-kind "" = closed.
     // Miniplayer: compact always-on-top window (391x339, 391x690 with the queue).
@@ -566,14 +540,6 @@ export component AppWindow inherits Window {
     callback queue-sort();
     property <int> mini-q-sel: -1;
     changed mini-margin => { Panel.set-prop("video-margin-ratio-top", root.mini-margin); }
-    callback lib-refresh();
-    callback lib-rescan();
-    callback lib-navigate(string);
-    callback lib-search(string);
-    callback lib-set-sort(string);
-    callback lib-set-grid(bool);
-    callback lib-open(string, string);
-    callback lib-menu(string, string, string);
     callback open-url(string);
 
     // Onboarding
@@ -663,7 +629,7 @@ export component AppWindow inherits Window {
     // ---------- Now playing card (audio-only network streams) ----------
     if Playback.has-media && root.np-show && !root.mini: NowPlayingCard {
         // Centred in the space right of the docked library while that is shown.
-        property <length> left: Overlays.library-open && !root.lib-full && root.show-ui ? min(427px, root.width) : 0px;
+        property <length> left: Overlays.library-open && !Library.lib-full && root.show-ui ? min(427px, root.width) : 0px;
         x: self.left + (root.width - self.left - self.width) / 2;
         y: root.viz-mode > 0 ? 64px : (root.height - self.height) / 2;
         width: min(460px, root.width - self.left - 48px);
@@ -692,29 +658,29 @@ export component AppWindow inherits Window {
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
     if !Playback.has-media || Overlays.library-open: LibraryView {
-        property <bool> docked: Playback.has-media && !root.lib-full;
+        property <bool> docked: Playback.has-media && !Library.lib-full;
         // The docked library hides with the other controls during playback.
         visible: !self.docked || root.show-ui;
         sidebar: self.docked;
         x: 0; y: 40px;
         width: self.docked ? min(427px, root.width) : root.width;
         height: root.height - 40px - (self.docked ? root.bar-h : 0px);
-        items: root.lib-items; continue-items: root.lib-continue; recent-items: root.lib-recent; pinned-items: root.lib-pinned;
-        listen-items: root.lib-listen; folder-items: root.lib-folders; list-items: root.lib-lists; artist-items: root.lib-artists;
-        nav: root.lib-nav; crumb-keys: root.lib-crumb-keys; crumb-labels: root.lib-crumb-labels;
-        sort: root.lib-sort; grid: root.lib-grid; count: root.lib-count; scanning: root.lib-scanning; has-media: Playback.has-media;
-        can-back: root.lib-can-back; can-forward: root.lib-can-forward;
-        query <=> root.lib-query;
-        navigate(k) => { root.lib-query = ""; root.lib-navigate(k); }
-        history(f) => { root.lib-query = ""; root.lib-history(f); }
-        search(q) => { root.lib-search(q); }
-        open(k, kind) => { root.lib-open(k, kind); }
+        items: Library.lib-items; continue-items: Library.lib-continue; recent-items: Library.lib-recent; pinned-items: Library.lib-pinned;
+        listen-items: Library.lib-listen; folder-items: Library.lib-folders; list-items: Library.lib-lists; artist-items: Library.lib-artists;
+        nav: Library.lib-nav; crumb-keys: Library.lib-crumb-keys; crumb-labels: Library.lib-crumb-labels;
+        sort: Library.lib-sort; grid: Library.lib-grid; count: Library.lib-count; scanning: Library.lib-scanning; has-media: Playback.has-media;
+        can-back: Library.lib-can-back; can-forward: Library.lib-can-forward;
+        query <=> Library.lib-query;
+        navigate(k) => { Library.lib-query = ""; Library.lib-navigate(k); }
+        history(f) => { Library.lib-query = ""; Library.lib-history(f); }
+        search(q) => { Library.lib-search(q); }
+        open(k, kind) => { Library.lib-open(k, kind); }
         menu-request(kind, x, y, c) => { Menus.menu-request(kind, x, y, c); }
         open-file() => { root.open-file(); }
         open-network() => { Overlays.network-open = true; }
-        clear-recent() => { root.clear-recent(); }
+        clear-recent() => { Library.clear-recent(); }
         popout() => {
-            if (Playback.has-media) { root.lib-full = !root.lib-full; } else { root.open-file(); }
+            if (Playback.has-media) { Library.lib-full = !Library.lib-full; } else { root.open-file(); }
         }
     }
 
@@ -791,8 +757,8 @@ export component AppWindow inherits Window {
         preset-name: Panel.preset-name;
         library: Panel.panel-lib;
         library-search(q) => { Panel.panel-lib-search(q); }
-        library-play(k) => { root.lib-open(k, "video"); }
-        library-enqueue(k) => { root.lib-menu(k, "video", "enqueue"); }
+        library-play(k) => { Library.lib-open(k, "video"); }
+        library-enqueue(k) => { Library.lib-menu(k, "video", "enqueue"); }
         sub-delay <=> Panel.pv-sub-delay;
         sub-scale <=> Panel.pv-sub-scale;
         sub-pos <=> Panel.pv-sub-pos;
@@ -1098,7 +1064,7 @@ export component AppWindow inherits Window {
     // ---------- Network stream ----------
     if Overlays.network-open: NetworkStreamDialog {
         width: root.width; height: root.height;
-        ytdlp: root.ytdlp; history: Dialogs.net-history; error: Dialogs.net-error;
+        ytdlp: Library.ytdlp; history: Dialogs.net-history; error: Dialogs.net-error;
         urls <=> Dialogs.net-urls; name <=> Dialogs.net-name;
         submit(u, n) => { Dialogs.network-submit(u, n); }
         close() => { Overlays.network-open = false; Dialogs.net-error = ""; fs.focus(); }

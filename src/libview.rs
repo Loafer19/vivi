@@ -549,15 +549,24 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             listen.clone(),
         ])
     });
-    app.set_lib_listen(ModelRc::from(listen.clone()));
-    app.set_lib_folders(ModelRc::from(folders.clone()));
-    app.set_lib_lists(ModelRc::from(lists.clone()));
-    app.set_lib_artists(ModelRc::from(artists.clone()));
-    app.set_lib_items(ModelRc::from(items.clone()));
-    app.set_lib_continue(ModelRc::from(cont.clone()));
-    app.set_lib_recent(ModelRc::from(recent.clone()));
-    app.set_lib_pinned(ModelRc::from(pinned.clone()));
-    app.set_ytdlp(library::ytdlp_available());
+    app.global::<crate::Library>()
+        .set_lib_listen(ModelRc::from(listen.clone()));
+    app.global::<crate::Library>()
+        .set_lib_folders(ModelRc::from(folders.clone()));
+    app.global::<crate::Library>()
+        .set_lib_lists(ModelRc::from(lists.clone()));
+    app.global::<crate::Library>()
+        .set_lib_artists(ModelRc::from(artists.clone()));
+    app.global::<crate::Library>()
+        .set_lib_items(ModelRc::from(items.clone()));
+    app.global::<crate::Library>()
+        .set_lib_continue(ModelRc::from(cont.clone()));
+    app.global::<crate::Library>()
+        .set_lib_recent(ModelRc::from(recent.clone()));
+    app.global::<crate::Library>()
+        .set_lib_pinned(ModelRc::from(pinned.clone()));
+    app.global::<crate::Library>()
+        .set_ytdlp(library::ytdlp_available());
 
     let thumbs = (cfg.borrow().library.thumbnails && library::ffmpeg_available()).then(|| {
         library::thumb_worker(move |path, file| {
@@ -623,14 +632,22 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             }
             l.items.set_vec(v);
             l.home(&c);
-            a.set_lib_nav(l.nav.clone().into());
-            a.set_lib_crumb_keys(strings(crumbs.iter().map(|c| c.0.clone())));
-            a.set_lib_crumb_labels(strings(crumbs.into_iter().map(|c| c.1)));
-            a.set_lib_sort(c.library.sort.clone().into());
-            a.set_lib_grid(c.library.view != "list");
-            a.set_lib_count(l.media.len() as i32);
-            a.set_lib_can_back(!l.back.is_empty());
-            a.set_lib_can_forward(!l.fwd.is_empty());
+            a.global::<crate::Library>()
+                .set_lib_nav(l.nav.clone().into());
+            a.global::<crate::Library>()
+                .set_lib_crumb_keys(strings(crumbs.iter().map(|c| c.0.clone())));
+            a.global::<crate::Library>()
+                .set_lib_crumb_labels(strings(crumbs.into_iter().map(|c| c.1)));
+            a.global::<crate::Library>()
+                .set_lib_sort(c.library.sort.clone().into());
+            a.global::<crate::Library>()
+                .set_lib_grid(c.library.view != "list");
+            a.global::<crate::Library>()
+                .set_lib_count(l.media.len() as i32);
+            a.global::<crate::Library>()
+                .set_lib_can_back(!l.back.is_empty());
+            a.global::<crate::Library>()
+                .set_lib_can_forward(!l.fwd.is_empty());
             drop(l);
             a.global::<crate::Panel>()
                 .invoke_panel_lib_search("".into());
@@ -644,7 +661,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         Rc::new(move || {
             let roots = cfg.borrow().library.folders.clone();
             if let Some(a) = w.upgrade() {
-                a.set_lib_scanning(true);
+                a.global::<crate::Library>().set_lib_scanning(true);
             }
             let w = w.clone();
             let db = db.clone();
@@ -654,14 +671,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     .and_then(|mut c| library::scan(&mut c, &roots).map(|n| (n, library::all(&c))));
                 let _ = slint::invoke_from_event_loop(move || {
                     let Some(a) = w.upgrade() else { return };
-                    a.set_lib_scanning(false);
+                    a.global::<crate::Library>().set_lib_scanning(false);
                     match res {
                         Ok((n, media)) => {
                             if log {
                                 eprintln!("library scan: {n} files in {:?}", t.elapsed());
                             }
                             LOADED.with(|l| *l.borrow_mut() = Some(media));
-                            a.invoke_lib_refresh();
+                            a.global::<crate::Library>().invoke_lib_refresh();
                         }
                         Err(e) => eprintln!("vivi: library scan failed: {e}"),
                     }
@@ -673,7 +690,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let lib = lib.clone();
         let render = render.clone();
-        app.on_lib_refresh(move || {
+        app.global::<crate::Library>().on_lib_refresh(move || {
             if let Some(m) = LOADED.with(|l| l.borrow_mut().take()) {
                 lib.borrow_mut().media = m;
             }
@@ -683,7 +700,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let lib = lib.clone();
         let render = render.clone();
-        app.on_lib_navigate(move |key| {
+        app.global::<crate::Library>().on_lib_navigate(move |key| {
             {
                 let mut l = lib.borrow_mut();
                 if l.nav != key.as_str() {
@@ -699,26 +716,27 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let lib = lib.clone();
         let render = render.clone();
-        app.on_lib_history(move |forward| {
-            {
-                let mut l = lib.borrow_mut();
-                let next = if forward { l.fwd.pop() } else { l.back.pop() };
-                let Some(next) = next else { return };
-                let prev = std::mem::replace(&mut l.nav, next);
-                if forward {
-                    l.back.push(prev);
-                } else {
-                    l.fwd.push(prev);
+        app.global::<crate::Library>()
+            .on_lib_history(move |forward| {
+                {
+                    let mut l = lib.borrow_mut();
+                    let next = if forward { l.fwd.pop() } else { l.back.pop() };
+                    let Some(next) = next else { return };
+                    let prev = std::mem::replace(&mut l.nav, next);
+                    if forward {
+                        l.back.push(prev);
+                    } else {
+                        l.fwd.push(prev);
+                    }
+                    l.search.clear();
                 }
-                l.search.clear();
-            }
-            render();
-        });
+                render();
+            });
     }
     {
         let lib = lib.clone();
         let render = render.clone();
-        app.on_lib_search(move |q| {
+        app.global::<crate::Library>().on_lib_search(move |q| {
             lib.borrow_mut().search = q.to_string();
             render();
         });
@@ -726,7 +744,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let cfg = cfg.clone();
         let render = render.clone();
-        app.on_lib_set_sort(move |s| {
+        app.global::<crate::Library>().on_lib_set_sort(move |s| {
             cfg.borrow_mut().library.sort = s.to_string();
             let _ = cfg.borrow().save();
             render();
@@ -735,7 +753,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let cfg = cfg.clone();
         let render = render.clone();
-        app.on_lib_set_grid(move |g| {
+        app.global::<crate::Library>().on_lib_set_grid(move |g| {
             cfg.borrow_mut().library.view = if g { "grid" } else { "list" }.into();
             let _ = cfg.borrow().save();
             render();
@@ -745,40 +763,45 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let p = player.clone();
         let w = app.as_weak();
         let lib = lib.clone();
-        app.on_lib_open(move |key, kind| {
-            let Some(a) = w.upgrade() else { return };
-            match kind.as_str() {
-                "action" => match key.as_str() {
-                    "action:add-folder" => a.invoke_lib_add_folder(),
-                    "action:network" => a.global::<crate::Overlays>().set_network_open(true),
-                    "action:create-playlist" => a.invoke_lib_create_playlist(),
-                    k => a.invoke_lib_navigate(k.into()),
-                },
-                "folder" | "group" => a.invoke_lib_navigate(key),
-                "playlist" => a.global::<crate::Panel>().invoke_playlist_load(key),
-                _ => {
-                    // Play the item and queue the rest of the current list after it.
-                    p.open(&key);
-                    let l = lib.borrow();
-                    let rest: Vec<String> = l
-                        .items
-                        .iter()
-                        .skip_while(|r| r.key != key)
-                        .skip(1)
-                        .filter(|r| r.kind == "audio" && kind == "audio")
-                        .map(|r| r.key.to_string())
-                        .collect();
-                    for r in rest {
-                        p.enqueue(&r);
+        app.global::<crate::Library>()
+            .on_lib_open(move |key, kind| {
+                let Some(a) = w.upgrade() else { return };
+                match kind.as_str() {
+                    "action" => match key.as_str() {
+                        "action:add-folder" => a.global::<crate::Library>().invoke_lib_add_folder(),
+                        "action:network" => a.global::<crate::Overlays>().set_network_open(true),
+                        "action:create-playlist" => {
+                            a.global::<crate::Library>().invoke_lib_create_playlist()
+                        }
+                        k => a.global::<crate::Library>().invoke_lib_navigate(k.into()),
+                    },
+                    "folder" | "group" => a.global::<crate::Library>().invoke_lib_navigate(key),
+                    "playlist" => a.global::<crate::Panel>().invoke_playlist_load(key),
+                    _ => {
+                        // Play the item and queue the rest of the current list after it.
+                        p.open(&key);
+                        let l = lib.borrow();
+                        let rest: Vec<String> = l
+                            .items
+                            .iter()
+                            .skip_while(|r| r.key != key)
+                            .skip(1)
+                            .filter(|r| r.kind == "audio" && kind == "audio")
+                            .map(|r| r.key.to_string())
+                            .collect();
+                        for r in rest {
+                            p.enqueue(&r);
+                        }
+                        // The docked sidebar stays next to the video; the full view closes.
+                        if a.global::<crate::Library>().get_lib_full()
+                            || !a.global::<crate::Playback>().get_has_media()
+                        {
+                            a.global::<crate::Overlays>().set_library_open(false);
+                        }
+                        a.global::<crate::Library>().set_lib_full(false);
                     }
-                    // The docked sidebar stays next to the video; the full view closes.
-                    if a.get_lib_full() || !a.global::<crate::Playback>().get_has_media() {
-                        a.global::<crate::Overlays>().set_library_open(false);
-                    }
-                    a.set_lib_full(false);
                 }
-            }
-        });
+            });
     }
     {
         let p = player.clone();
@@ -786,164 +809,173 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         let render = render.clone();
         let lib = lib.clone();
-        app.on_lib_menu(move |key, kind, action| {
-            let Some(a) = w.upgrade() else { return };
-            let path = key.strip_prefix("video:").unwrap_or(&key).to_string();
-            match action.as_str() {
-                "play" => a.invoke_lib_open(key, kind),
-                "enqueue" => {
-                    if a.global::<crate::Playback>().get_has_media() {
-                        p.enqueue(&path);
-                    } else {
-                        p.open(&path);
-                    }
-                    a.set_resume_text(format!("Added “{}” to the queue", name_of(&path)).into());
-                }
-                "pin" | "unpin" => {
-                    {
-                        let mut c = cfg.borrow_mut();
-                        c.library.pinned.retain(|x| x != &path);
-                        if action == "pin" {
-                            c.library.pinned.push(path);
-                        }
-                    }
-                    let _ = cfg.borrow().save();
-                    render();
-                }
-                "forget" => {
-                    store::forget_position(&path);
-                    render();
-                }
-                "watched" => {
-                    let is = cfg.borrow().library.watched.contains(&path)
-                        || lib
-                            .borrow()
-                            .media
-                            .iter()
-                            .any(|m| m.path == path && library::progress(m) >= 0.95);
-                    {
-                        let mut c = cfg.borrow_mut();
-                        c.library.watched.retain(|x| x != &path);
-                        if !is {
-                            c.library.watched.push(path.clone());
-                        }
-                    }
-                    if is {
-                        store::forget_position(&path);
-                    }
-                    let _ = cfg.borrow().save();
-                    render();
-                }
-                "reveal" => reveal(&path),
-                "source" => {
-                    if let Some(d) = Path::new(&path).parent() {
-                        a.invoke_lib_navigate(format!("video:{}", d.to_string_lossy()).into());
-                    }
-                }
-                "sub" | "audio" => {
-                    let sub = action == "sub";
-                    let mut dlg = rfd::FileDialog::new().set_title(if sub {
-                        "Add subtitle tracks"
-                    } else {
-                        "Add audio tracks"
-                    });
-                    if let Some(d) = Path::new(&path).parent() {
-                        dlg = dlg.set_directory(d);
-                    }
-                    if let Some(files) = dlg.pick_files() {
-                        let files: Vec<String> = files
-                            .iter()
-                            .map(|f| f.to_string_lossy().into_owned())
-                            .collect();
-                        if p.get("path").as_deref() != Some(path.as_str()) {
+        app.global::<crate::Library>()
+            .on_lib_menu(move |key, kind, action| {
+                let Some(a) = w.upgrade() else { return };
+                let path = key.strip_prefix("video:").unwrap_or(&key).to_string();
+                match action.as_str() {
+                    "play" => a.global::<crate::Library>().invoke_lib_open(key, kind),
+                    "enqueue" => {
+                        if a.global::<crate::Playback>().get_has_media() {
+                            p.enqueue(&path);
+                        } else {
                             p.open(&path);
                         }
-                        PENDING
-                            .with(|q| q.borrow_mut().extend(files.into_iter().map(|f| (sub, f))));
-                        flush_pending(&p);
+                        a.set_resume_text(
+                            format!("Added “{}” to the queue", name_of(&path)).into(),
+                        );
                     }
-                }
-                "shuffle" => {
-                    a.invoke_lib_open(key, kind);
-                    let p = p.clone();
-                    slint::Timer::single_shot(std::time::Duration::from_millis(400), move || {
-                        p.run("playlist-shuffle")
-                    });
-                }
-                "export" => {
-                    let name = Path::new(&path).file_name().map(|n| n.to_owned());
-                    let mut dlg = rfd::FileDialog::new().set_title("Export playlist");
-                    if let Some(n) = name {
-                        dlg = dlg.set_file_name(n.to_string_lossy());
-                    }
-                    if let Some(to) = dlg.save_file() {
-                        match std::fs::copy(&path, &to) {
-                            Ok(_) => {
-                                a.set_resume_text(format!("Exported to {}", to.display()).into())
+                    "pin" | "unpin" => {
+                        {
+                            let mut c = cfg.borrow_mut();
+                            c.library.pinned.retain(|x| x != &path);
+                            if action == "pin" {
+                                c.library.pinned.push(path);
                             }
-                            Err(e) => eprintln!("vivi: export playlist: {e}"),
+                        }
+                        let _ = cfg.borrow().save();
+                        render();
+                    }
+                    "forget" => {
+                        store::forget_position(&path);
+                        render();
+                    }
+                    "watched" => {
+                        let is = cfg.borrow().library.watched.contains(&path)
+                            || lib
+                                .borrow()
+                                .media
+                                .iter()
+                                .any(|m| m.path == path && library::progress(m) >= 0.95);
+                        {
+                            let mut c = cfg.borrow_mut();
+                            c.library.watched.retain(|x| x != &path);
+                            if !is {
+                                c.library.watched.push(path.clone());
+                            }
+                        }
+                        if is {
+                            store::forget_position(&path);
+                        }
+                        let _ = cfg.borrow().save();
+                        render();
+                    }
+                    "reveal" => reveal(&path),
+                    "source" => {
+                        if let Some(d) = Path::new(&path).parent() {
+                            a.global::<crate::Library>().invoke_lib_navigate(
+                                format!("video:{}", d.to_string_lossy()).into(),
+                            );
                         }
                     }
-                }
-                "delete" => {
-                    a.global::<crate::Panel>().invoke_playlist_delete(key);
-                    render();
-                }
-                "addpl" | "newpl" => {}
-                x if x.starts_with("addpl:") => {
-                    let pl = &x["addpl:".len()..];
-                    use std::io::Write;
-                    let res = std::fs::OpenOptions::new()
-                        .append(true)
-                        .open(pl)
-                        .and_then(|mut f| writeln!(f, "{path}"));
-                    match res {
-                        Ok(()) => a.set_resume_text(
-                            format!("Added to “{}”", store::display_name(pl)).into(),
-                        ),
-                        Err(e) => eprintln!("vivi: add to playlist: {e}"),
+                    "sub" | "audio" => {
+                        let sub = action == "sub";
+                        let mut dlg = rfd::FileDialog::new().set_title(if sub {
+                            "Add subtitle tracks"
+                        } else {
+                            "Add audio tracks"
+                        });
+                        if let Some(d) = Path::new(&path).parent() {
+                            dlg = dlg.set_directory(d);
+                        }
+                        if let Some(files) = dlg.pick_files() {
+                            let files: Vec<String> = files
+                                .iter()
+                                .map(|f| f.to_string_lossy().into_owned())
+                                .collect();
+                            if p.get("path").as_deref() != Some(path.as_str()) {
+                                p.open(&path);
+                            }
+                            PENDING.with(|q| {
+                                q.borrow_mut().extend(files.into_iter().map(|f| (sub, f)))
+                            });
+                            flush_pending(&p);
+                        }
                     }
-                    render();
-                }
-                "add-file" => {
-                    if let Some(files) = rfd::FileDialog::new()
-                        .set_title("Add files to the queue")
-                        .set_directory(&path)
-                        .pick_files()
-                    {
-                        for (i, f) in files.iter().enumerate() {
-                            let f = f.to_string_lossy();
-                            if i == 0 && !a.global::<crate::Playback>().get_has_media() {
-                                p.open(&f);
+                    "shuffle" => {
+                        a.global::<crate::Library>().invoke_lib_open(key, kind);
+                        let p = p.clone();
+                        slint::Timer::single_shot(
+                            std::time::Duration::from_millis(400),
+                            move || p.run("playlist-shuffle"),
+                        );
+                    }
+                    "export" => {
+                        let name = Path::new(&path).file_name().map(|n| n.to_owned());
+                        let mut dlg = rfd::FileDialog::new().set_title("Export playlist");
+                        if let Some(n) = name {
+                            dlg = dlg.set_file_name(n.to_string_lossy());
+                        }
+                        if let Some(to) = dlg.save_file() {
+                            match std::fs::copy(&path, &to) {
+                                Ok(_) => a.set_resume_text(
+                                    format!("Exported to {}", to.display()).into(),
+                                ),
+                                Err(e) => eprintln!("vivi: export playlist: {e}"),
+                            }
+                        }
+                    }
+                    "delete" => {
+                        a.global::<crate::Panel>().invoke_playlist_delete(key);
+                        render();
+                    }
+                    "addpl" | "newpl" => {}
+                    x if x.starts_with("addpl:") => {
+                        let pl = &x["addpl:".len()..];
+                        use std::io::Write;
+                        let res = std::fs::OpenOptions::new()
+                            .append(true)
+                            .open(pl)
+                            .and_then(|mut f| writeln!(f, "{path}"));
+                        match res {
+                            Ok(()) => a.set_resume_text(
+                                format!("Added to “{}”", store::display_name(pl)).into(),
+                            ),
+                            Err(e) => eprintln!("vivi: add to playlist: {e}"),
+                        }
+                        render();
+                    }
+                    "add-file" => {
+                        if let Some(files) = rfd::FileDialog::new()
+                            .set_title("Add files to the queue")
+                            .set_directory(&path)
+                            .pick_files()
+                        {
+                            for (i, f) in files.iter().enumerate() {
+                                let f = f.to_string_lossy();
+                                if i == 0 && !a.global::<crate::Playback>().get_has_media() {
+                                    p.open(&f);
+                                } else {
+                                    p.enqueue(&f);
+                                }
+                            }
+                        }
+                    }
+                    "add-folder" => a.global::<crate::Library>().invoke_lib_add_folder(),
+                    "edit-subs" | "edit-audio" => {
+                        a.set_settings_category(crate::settings::category(
+                            if action == "edit-subs" {
+                                "Subtitles"
                             } else {
-                                p.enqueue(&f);
-                            }
-                        }
+                                "Audio"
+                            },
+                        ));
+                        a.global::<crate::Overlays>().set_settings_open(true);
+                        a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
                     }
+                    "resync" => a.global::<crate::Library>().invoke_lib_rescan(),
+                    "info" => {
+                        let (title, rows) = info(&lib.borrow(), &key, &kind);
+                        a.global::<crate::Dialogs>().set_info_title(title.into());
+                        a.global::<crate::Dialogs>()
+                            .set_info_keys(strings(rows.iter().map(|r| r.0.to_string())));
+                        a.global::<crate::Dialogs>()
+                            .set_info_values(strings(rows.into_iter().map(|r| r.1)));
+                        a.global::<crate::Overlays>().set_info_open(true);
+                    }
+                    _ => {}
                 }
-                "add-folder" => a.invoke_lib_add_folder(),
-                "edit-subs" | "edit-audio" => {
-                    a.set_settings_category(crate::settings::category(if action == "edit-subs" {
-                        "Subtitles"
-                    } else {
-                        "Audio"
-                    }));
-                    a.global::<crate::Overlays>().set_settings_open(true);
-                    a.invoke_settings_refresh(a.get_settings_category(), "".into(), false);
-                }
-                "resync" => a.invoke_lib_rescan(),
-                "info" => {
-                    let (title, rows) = info(&lib.borrow(), &key, &kind);
-                    a.global::<crate::Dialogs>().set_info_title(title.into());
-                    a.global::<crate::Dialogs>()
-                        .set_info_keys(strings(rows.iter().map(|r| r.0.to_string())));
-                    a.global::<crate::Dialogs>()
-                        .set_info_values(strings(rows.into_iter().map(|r| r.1)));
-                    a.global::<crate::Overlays>().set_info_open(true);
-                }
-                _ => {}
-            }
-        });
+            });
     }
     {
         let p = player.clone();
@@ -998,12 +1030,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
 
     {
         let rescan = rescan.clone();
-        app.on_lib_rescan(move || rescan());
+        app.global::<crate::Library>()
+            .on_lib_rescan(move || rescan());
     }
     {
         let cfg = cfg.clone();
         let rescan = rescan.clone();
-        app.on_lib_add_folder(move || {
+        app.global::<crate::Library>().on_lib_add_folder(move || {
             let Some(d) = rfd::FileDialog::new()
                 .set_title("Add a folder to the library")
                 .pick_folder()
@@ -1023,12 +1056,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     }
     {
         let w = app.as_weak();
-        app.on_lib_create_playlist(move || {
-            // Figma "New Playlist" dialog (src/dialogs.rs saves it).
-            if let Some(a) = w.upgrade() {
-                a.global::<crate::Overlays>().set_new_playlist_open(true);
-            }
-        });
+        app.global::<crate::Library>()
+            .on_lib_create_playlist(move || {
+                // Figma "New Playlist" dialog (src/dialogs.rs saves it).
+                if let Some(a) = w.upgrade() {
+                    a.global::<crate::Overlays>().set_new_playlist_open(true);
+                }
+            });
     }
     render();
     rescan();

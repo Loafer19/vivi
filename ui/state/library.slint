@@ -1,0 +1,40 @@
+// Library: home sections, the browsed folder / view (path, crumbs, sort, grid), search and scan state, and its actions.
+import { LibItem } from "../library.slint";
+import { Item } from "../panel.slint";
+export global Library {
+    in-out property <[LibItem]> lib-items;
+    in-out property <[LibItem]> lib-continue;
+    in-out property <[LibItem]> lib-recent;
+    in-out property <[LibItem]> lib-pinned;
+    in-out property <[LibItem]> lib-listen;
+    in-out property <[LibItem]> lib-folders;
+    in-out property <[LibItem]> lib-lists;
+    in-out property <[LibItem]> lib-artists;
+    in-out property <bool> lib-can-back;
+    in-out property <bool> lib-can-forward;
+    in-out property <bool> lib-full;
+    in-out property <string> lib-nav: "home";
+    in-out property <[string]> lib-crumb-keys;
+    in-out property <[string]> lib-crumb-labels;
+    in-out property <string> lib-sort: "name";
+    in-out property <bool> lib-grid: true;
+    in-out property <int> lib-count;
+    in-out property <bool> lib-scanning;
+    in-out property <string> lib-query;
+    in-out property <bool> ytdlp;
+    in-out property <[Item]> recent;
+    callback lib-history(bool);
+    callback lib-add-folder();
+    callback lib-create-playlist();
+    callback lib-refresh();
+    callback lib-rescan();
+    callback lib-navigate(string);
+    callback lib-search(string);
+    callback lib-set-sort(string);
+    callback lib-set-grid(bool);
+    callback lib-open(string, string);
+    callback lib-menu(string, string, string);
+    callback open-recent(string);
+    callback clear-recent();
+    callback open-folder();
+}

@@ -153,11 +153,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             on_file_loaded(&a, &player, log);
                             libview::flush_pending(&player);
                             // The docked library sidebar stays; the full library closes.
-                            if a.get_lib_full() {
+                            if a.global::<crate::Library>().get_lib_full() {
                                 a.global::<crate::Overlays>().set_library_open(false);
-                                a.set_lib_full(false);
+                                a.global::<crate::Library>().set_lib_full(false);
                             }
-                            a.invoke_lib_refresh();
+                            a.global::<crate::Library>().invoke_lib_refresh();
                             let dur: f64 = player.mpv.get_property("duration").unwrap_or(0.0);
                             preview::start(
                                 &a,
@@ -372,7 +372,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
         let p = player.clone();
-        app.on_open_folder(move || {
+        app.global::<crate::Library>().on_open_folder(move || {
             let Some(d) = rfd::FileDialog::new()
                 .set_title("Open folder")
                 .pick_folder()
@@ -976,11 +976,12 @@ fn debug_ui(app: &AppWindow) {
         app.invoke_customize_profile(p.into());
     }
     if let Some(n) = var("VIVI_LIB") {
-        app.invoke_lib_navigate(n.into());
+        app.global::<crate::Library>().invoke_lib_navigate(n.into());
     }
     if let Some(q) = var("VIVI_LIBQ") {
-        app.set_lib_query(q.clone().into());
-        app.invoke_lib_search(q.into());
+        app.global::<crate::Library>()
+            .set_lib_query(q.clone().into());
+        app.global::<crate::Library>().invoke_lib_search(q.into());
     }
     if let Some(u) = var("VIVI_URL") {
         // After the render context exists (files must not load before it).
@@ -1080,7 +1081,7 @@ fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
             .map(|x| x.to_string_lossy().into_owned())
             .unwrap_or(path);
         store::push_recent(&abs);
-        a.set_recent(recent_items());
+        a.global::<crate::Library>().set_recent(recent_items());
     }
     let p = p.clone();
     let w = a.as_weak();
@@ -1108,7 +1109,7 @@ fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
 }
 
 fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
-    app.set_recent(recent_items());
+    app.global::<crate::Library>().set_recent(recent_items());
     app.global::<crate::Panel>().set_playlists(playlist_items());
 
     let p = player.clone();
@@ -1180,12 +1181,13 @@ fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) {
             }
         });
     let p = player.clone();
-    app.on_open_recent(move |path| p.open(&path));
+    app.global::<crate::Library>()
+        .on_open_recent(move |path| p.open(&path));
     let weak = app.as_weak();
-    app.on_clear_recent(move || {
+    app.global::<crate::Library>().on_clear_recent(move || {
         store::clear_recent();
         if let Some(a) = weak.upgrade() {
-            a.set_recent(recent_items());
+            a.global::<crate::Library>().set_recent(recent_items());
         }
     });
     let p = player.clone();
