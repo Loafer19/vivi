@@ -447,14 +447,13 @@ impl Lib {
             }
         }
         let cont: Vec<LibItem> = cont.iter().take(12).map(|m| self.item(m, cfg)).collect();
-        let recent: Vec<LibItem> = store::recent()
+        // Same entries as the Recent view: files that still exist, folders, playlists,
+        // streams, web videos and Free Music tracks, each with its type label.
+        let recent: Vec<LibItem> = store::recent_entries()
             .iter()
-            .filter(|p| Path::new(p).exists())
+            .filter(|e| store::url_host(&e.target).is_some() || Path::new(&e.target).exists())
             .take(12)
-            .map(|p| {
-                let m = self.find(p);
-                self.item(&m, cfg)
-            })
+            .map(|e| self.recent_item(e, cfg))
             .collect();
         let pinned: Vec<LibItem> = cfg
             .library
