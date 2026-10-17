@@ -1284,8 +1284,10 @@ fn is_cover(img: &slint::Image) -> bool {
 
 impl FreeMusic {
     fn ui(cx: &Ctx, status: &str, busy: bool) {
-        cx.app.set_md_status(status.into());
-        cx.app.set_md_busy(busy);
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_status(status.into());
+        cx.app.global::<crate::MusicDialogState>().set_busy(busy);
     }
     fn folder(cx: &Ctx) -> PathBuf {
         let f = cx.get("folder");
@@ -1316,8 +1318,12 @@ impl FreeMusic {
             self.base.clear();
             self.tracks.clear();
             self.sel = None;
-            cx.app.set_md_detail("".into());
-            cx.app.set_md_copy("".into());
+            cx.app
+                .global::<crate::MusicDialogState>()
+                .set_detail("".into());
+            cx.app
+                .global::<crate::MusicDialogState>()
+                .set_copy("".into());
         } else {
             self.base = self.tracks.clone();
         }
@@ -1478,9 +1484,13 @@ impl FreeMusic {
                 selected: sel.as_ref() == Some(&t.id),
             })
             .collect();
-        cx.app.set_md_tracks(ModelRc::new(VecModel::from(rows)));
-        cx.app.set_md_results(ModelRc::new(VecModel::from(items)));
-        cx.app.set_md_has_more(
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_tracks(ModelRc::new(VecModel::from(rows)));
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_results(ModelRc::new(VecModel::from(items)));
+        cx.app.global::<crate::MusicDialogState>().set_has_more(
             self.pending.is_empty() && self.more.values().any(|m| *m) && !self.tracks.is_empty(),
         );
         self.want_covers();
@@ -1529,8 +1539,10 @@ impl FreeMusic {
             acts.push("Copy credit".into());
             acts.push("Web page".into());
         }
-        cx.app.set_md_actions(ModelRc::new(VecModel::from(acts)));
-        cx.app.set_md_secondary(
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_actions(ModelRc::new(VecModel::from(acts)));
+        cx.app.global::<crate::MusicDialogState>().set_secondary(
             match self.selected() {
                 Some(t) if t.download.is_empty() => "Preview only",
                 _ => "Download",
@@ -1555,10 +1567,14 @@ impl FreeMusic {
             f("length", &LENGTHS, self.q.len),
             f("sort", &SORTS, self.q.sort),
         ];
-        cx.app.set_md_filters(ModelRc::new(VecModel::from(v)));
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_filters(ModelRc::new(VecModel::from(v)));
         let chips: Vec<SharedString> = CHIPS.iter().map(|c| c.0.into()).collect();
-        cx.app.set_md_chips(ModelRc::new(VecModel::from(chips)));
-        cx.app.set_md_chip(
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_chips(ModelRc::new(VecModel::from(chips)));
+        cx.app.global::<crate::MusicDialogState>().set_chip(
             self.q
                 .chip
                 .filter(|_| self.q.album.is_none() && self.q.artist.is_none())
@@ -1566,7 +1582,9 @@ impl FreeMusic {
                 .unwrap_or("")
                 .into(),
         );
-        cx.app.set_md_title(self.title_text().into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_title(self.title_text().into());
     }
 
     fn title_text(&self) -> String {
@@ -1621,22 +1639,37 @@ impl FreeMusic {
 
     fn select(&mut self, cx: &Ctx, t: &Track) {
         self.sel = Some(t.id.clone());
-        cx.app.set_md_detail(self.detail(t, cx).into());
-        cx.app.set_md_copy(t.attribution().into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_detail(self.detail(t, cx).into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_copy(t.attribution().into());
         self.buttons(cx);
     }
 
     fn open(&mut self, cx: &Ctx) {
         let a = cx.app;
         cx.app.global::<crate::Overlays>().set_settings_open(false);
-        a.set_md_owner(ID.into());
-        a.set_md_placeholder("Search songs, artists, albums, genres…".into());
-        a.set_md_search_label("Search".into());
-        a.set_md_primary("Play".into());
+        a.global::<crate::MusicDialogState>().set_owner(ID.into());
+        a.global::<crate::MusicDialogState>()
+            .set_caps(crate::MdCaps {
+                logos: false,
+                chips: true,
+                rich: true,
+            });
+        a.global::<crate::MusicDialogState>()
+            .set_placeholder("Search songs, artists, albums, genres…".into());
+        a.global::<crate::MusicDialogState>()
+            .set_search_label("Search".into());
+        a.global::<crate::MusicDialogState>()
+            .set_primary("Play".into());
         let src: Vec<SharedString> = SOURCES.iter().map(|s| (*s).into()).collect();
-        a.set_md_sources(ModelRc::new(VecModel::from(src)));
-        a.set_md_source(SOURCES[self.q.source].into());
-        a.set_md_detail("".into());
+        a.global::<crate::MusicDialogState>()
+            .set_sources(ModelRc::new(VecModel::from(src)));
+        a.global::<crate::MusicDialogState>()
+            .set_source(SOURCES[self.q.source].into());
+        a.global::<crate::MusicDialogState>().set_detail("".into());
         a.global::<crate::Overlays>().set_md_open(true);
         self.back.clear();
         self.title.clear();
@@ -1645,7 +1678,8 @@ impl FreeMusic {
         if self.q.text.trim().is_empty() && self.q.chip.is_none() {
             self.q.chip = Some(0);
         }
-        a.set_md_query(self.q.text.clone().into());
+        a.global::<crate::MusicDialogState>()
+            .set_query(self.q.text.clone().into());
         self.q.page = 0;
         self.filters(cx);
         self.run(cx);
@@ -1653,8 +1687,12 @@ impl FreeMusic {
 
     /// Read the query box and the source dropdown into `self.q` and search page 0.
     fn search(&mut self, cx: &Ctx) {
-        let text = cx.app.get_md_query().to_string();
-        let src = cx.app.get_md_source();
+        let text = cx
+            .app
+            .global::<crate::MusicDialogState>()
+            .get_query()
+            .to_string();
+        let src = cx.app.global::<crate::MusicDialogState>().get_source();
         self.q.source = SOURCES.iter().position(|s| *s == src.as_str()).unwrap_or(0);
         self.q.text = text;
         self.q.page = 0;
@@ -1878,7 +1916,7 @@ impl Plugin for FreeMusic {
     fn disable(&mut self, cx: &Ctx) {
         self.gen += 1;
         self.pending.clear();
-        if cx.app.get_md_owner() == ID {
+        if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             cx.app.global::<crate::Overlays>().set_md_open(false);
         }
     }
@@ -1905,7 +1943,9 @@ impl Plugin for FreeMusic {
             "search" => self.search(cx),
             // `query <words…>`: fill the search box and search (scripts, screenshots).
             "query" => {
-                cx.app.set_md_query(args.join(" ").into());
+                cx.app
+                    .global::<crate::MusicDialogState>()
+                    .set_query(args.join(" ").into());
                 self.search(cx);
             }
             // Typing: search after a short pause (see `tick`).
@@ -1927,7 +1967,9 @@ impl Plugin for FreeMusic {
                 if self.q.chip.is_some_and(|c| c < 3) {
                     // Popular / New / Featured are lists, not text searches.
                     self.q.text.clear();
-                    cx.app.set_md_query("".into());
+                    cx.app
+                        .global::<crate::MusicDialogState>()
+                        .set_query("".into());
                 }
                 self.search(cx);
             }
@@ -2012,12 +2054,11 @@ impl Plugin for FreeMusic {
         }
     }
     fn tick(&mut self, cx: &Ctx) {
-        if self
-            .typed
-            .is_some_and(|t| t.elapsed() >= DEBOUNCE && cx.app.get_md_owner() == ID)
-        {
+        if self.typed.is_some_and(|t| {
+            t.elapsed() >= DEBOUNCE && cx.app.global::<crate::MusicDialogState>().get_owner() == ID
+        }) {
             self.typed = None;
-            let q = cx.app.get_md_query();
+            let q = cx.app.global::<crate::MusicDialogState>().get_query();
             if q.trim().chars().count() >= 2 && q.trim() != self.q.text.trim() {
                 self.search(cx);
             }
@@ -2083,12 +2124,12 @@ impl Plugin for FreeMusic {
             self.remerge();
             self.feed_radio(cx);
             self.covers_dirty = false;
-            if cx.app.get_md_owner() == ID {
+            if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
                 self.show(cx);
             }
             status = true;
         } else if self.covers_dirty
-            && cx.app.get_md_owner() == ID
+            && cx.app.global::<crate::MusicDialogState>().get_owner() == ID
             && cx.app.global::<crate::Overlays>().get_md_open()
         {
             self.covers_dirty = false;
@@ -2097,7 +2138,7 @@ impl Plugin for FreeMusic {
         if self.dl_active.is_some() {
             status = true;
         }
-        if status && cx.app.get_md_owner() == ID {
+        if status && cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             self.status(cx);
         }
     }

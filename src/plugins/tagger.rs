@@ -1426,23 +1426,34 @@ impl AutoTagger {
     }
 
     fn ui(cx: &Ctx, status: &str, busy: bool) {
-        cx.app.set_md_status(status.into());
-        cx.app.set_md_busy(busy);
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_status(status.into());
+        cx.app.global::<crate::MusicDialogState>().set_busy(busy);
     }
 
     fn open(&mut self, cx: &Ctx, target: String) {
         let a = cx.app;
-        a.set_md_owner(ID.into());
-        a.set_md_title("Auto-tagger".into());
-        a.set_md_placeholder("File or folder to tag".into());
-        a.set_md_search_label("Identify".into());
-        a.set_md_primary("Review changes…".into());
-        a.set_md_secondary("Review all files…".into());
-        a.set_md_sources(ModelRc::new(VecModel::from(
-            Vec::<slint::SharedString>::new(),
-        )));
-        a.set_md_query(target.into());
-        a.set_md_detail("".into());
+        a.global::<crate::MusicDialogState>().set_owner(ID.into());
+        a.global::<crate::MusicDialogState>()
+            .set_caps(crate::MdCaps::default());
+        a.global::<crate::MusicDialogState>()
+            .set_title("Auto-tagger".into());
+        a.global::<crate::MusicDialogState>()
+            .set_placeholder("File or folder to tag".into());
+        a.global::<crate::MusicDialogState>()
+            .set_search_label("Identify".into());
+        a.global::<crate::MusicDialogState>()
+            .set_primary("Review changes…".into());
+        a.global::<crate::MusicDialogState>()
+            .set_secondary("Review all files…".into());
+        a.global::<crate::MusicDialogState>()
+            .set_sources(ModelRc::new(VecModel::from(
+                Vec::<slint::SharedString>::new(),
+            )));
+        a.global::<crate::MusicDialogState>()
+            .set_query(target.into());
+        a.global::<crate::MusicDialogState>().set_detail("".into());
         a.global::<crate::Overlays>().set_md_open(true);
         self.rows.clear();
         self.show_rows(cx, None);
@@ -1484,7 +1495,9 @@ impl AutoTagger {
                 }
             })
             .collect();
-        cx.app.set_md_results(ModelRc::new(VecModel::from(items)));
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_results(ModelRc::new(VecModel::from(items)));
     }
 
     fn detail(&self, i: usize) -> String {
@@ -1858,17 +1871,26 @@ impl AutoTagger {
         self.cancel = Arc::new(AtomicBool::new(false));
         let a = cx.app;
         a.global::<crate::Overlays>().set_settings_open(false);
-        a.set_md_owner(ID.into());
-        a.set_md_title("Auto-tagger".into());
-        a.set_md_placeholder("File or folder to tag".into());
-        a.set_md_search_label("Identify".into());
-        a.set_md_primary("Review changes…".into());
-        a.set_md_secondary("Review all files…".into());
-        a.set_md_sources(ModelRc::new(VecModel::from(
-            Vec::<slint::SharedString>::new(),
-        )));
-        a.set_md_query(path.as_str().into());
-        a.set_md_detail("".into());
+        a.global::<crate::MusicDialogState>().set_owner(ID.into());
+        a.global::<crate::MusicDialogState>()
+            .set_caps(crate::MdCaps::default());
+        a.global::<crate::MusicDialogState>()
+            .set_title("Auto-tagger".into());
+        a.global::<crate::MusicDialogState>()
+            .set_placeholder("File or folder to tag".into());
+        a.global::<crate::MusicDialogState>()
+            .set_search_label("Identify".into());
+        a.global::<crate::MusicDialogState>()
+            .set_primary("Review changes…".into());
+        a.global::<crate::MusicDialogState>()
+            .set_secondary("Review all files…".into());
+        a.global::<crate::MusicDialogState>()
+            .set_sources(ModelRc::new(VecModel::from(
+                Vec::<slint::SharedString>::new(),
+            )));
+        a.global::<crate::MusicDialogState>()
+            .set_query(path.as_str().into());
+        a.global::<crate::MusicDialogState>().set_detail("".into());
         a.global::<crate::Overlays>().set_md_open(true);
         self.batch = false;
         self.rows.clear();
@@ -1896,7 +1918,13 @@ impl AutoTagger {
         self.cancel.store(true, Ordering::Relaxed);
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = self.cancel.clone();
-        let target = PathBuf::from(cx.app.get_md_query().trim().to_string());
+        let target = PathBuf::from(
+            cx.app
+                .global::<crate::MusicDialogState>()
+                .get_query()
+                .trim()
+                .to_string(),
+        );
         let key = Self::secret(
             cx,
             "acoustid-key",
@@ -1907,7 +1935,9 @@ impl AutoTagger {
         self.rx = Some(rx);
         self.rows.clear();
         self.show_rows(cx, None);
-        cx.app.set_md_detail("".into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_detail("".into());
         self.batch = target.is_dir();
         if self.batch {
             Self::ui(cx, "Scanning folder…", true);
@@ -2170,7 +2200,7 @@ impl Plugin for AutoTagger {
     fn disable(&mut self, cx: &Ctx) {
         self.cancel.store(true, Ordering::Relaxed);
         self.rx = None;
-        if cx.app.get_md_owner() == ID {
+        if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             cx.app.global::<crate::Overlays>().set_md_open(false);
         }
     }
@@ -2215,7 +2245,9 @@ impl Plugin for AutoTagger {
             "acoustid" => self.external(cx, args),
             "select" => {
                 if let Some(i) = idx() {
-                    cx.app.set_md_detail(self.detail(i).into());
+                    cx.app
+                        .global::<crate::MusicDialogState>()
+                        .set_detail(self.detail(i).into());
                 }
             }
             "primary" => self.review(cx, idx().into_iter().collect()),
@@ -2304,7 +2336,9 @@ impl Plugin for AutoTagger {
         while let Ok(m) = rx.try_recv() {
             match m {
                 Msg::Status(s) => {
-                    cx.app.set_md_status(s.as_str().into());
+                    cx.app
+                        .global::<crate::MusicDialogState>()
+                        .set_status(s.as_str().into());
                     cx.app.set_tr_status(s.into());
                 }
                 Msg::Row(r) => {
@@ -2329,7 +2363,9 @@ impl Plugin for AutoTagger {
                     };
                     Self::ui(cx, &s, false);
                     if !self.rows.is_empty() {
-                        cx.app.set_md_detail(self.detail(0).into());
+                        cx.app
+                            .global::<crate::MusicDialogState>()
+                            .set_detail(self.detail(0).into());
                     }
                     self.rx = None;
                     // Screenshots/tests: go straight to the review of the best match.
@@ -2341,7 +2377,9 @@ impl Plugin for AutoTagger {
                 Msg::Done(s) => {
                     Self::ui(cx, &s, false);
                     if self.batch && !self.rows.is_empty() {
-                        cx.app.set_md_detail(self.detail(0).into());
+                        cx.app
+                            .global::<crate::MusicDialogState>()
+                            .set_detail(self.detail(0).into());
                     }
                     self.rx = None;
                     return;

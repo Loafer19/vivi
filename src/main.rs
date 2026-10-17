@@ -1010,7 +1010,7 @@ fn debug_ui(app: &AppWindow) {
         slint::Timer::single_shot(Duration::from_millis(2000), move || {
             plugins::command(&id, "open", &[]);
             if let (Some(a), Some(q)) = (w.upgrade(), q) {
-                a.set_md_query(q.into());
+                a.global::<crate::MusicDialogState>().set_query(q.into());
                 plugins::command(&id, "search", &[]);
             }
         });

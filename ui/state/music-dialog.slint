@@ -1,0 +1,33 @@
+// Shared dialog of the music plugins (Auto-tagger, Free Music, Network Streams): owner plugin id, what the owner supports (caps), and the dialog's content.
+import { Item } from "../panel.slint";
+import { FmRow, MdFilter } from "../plugins.slint";
+// What the owning plugin's dialog uses; the plugin sets it together with `owner`.
+export struct MdCaps {
+    logos: bool,   // per-row logos (Network Streams)
+    chips: bool,   // chip row and row actions
+    rich: bool,    // Free Music track rows, filters, "more" paging and edit-triggered search
+}
+export global MusicDialogState {
+    in-out property <MdCaps> caps;
+    in-out property <string> owner;
+    in-out property <string> title;
+    in-out property <[Item]> results;
+    in-out property <[image]> logos;
+    in-out property <string> status;
+    in-out property <bool> busy;
+    in-out property <string> detail;
+    in-out property <string> placeholder;
+    in-out property <string> search-label;
+    in-out property <string> primary;
+    in-out property <string> secondary;
+    in-out property <[string]> sources;
+    in-out property <string> source;
+    in-out property <string> query;
+    in-out property <[string]> chips;
+    in-out property <string> chip;
+    in-out property <[string]> actions;
+    in-out property <[FmRow]> tracks;
+    in-out property <[MdFilter]> filters;
+    in-out property <string> copy;
+    in-out property <bool> has-more;
+}

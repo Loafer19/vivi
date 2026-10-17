@@ -27,9 +27,10 @@ import { Settings } from "state/settings.slint";
 import { Customize } from "state/customize.slint";
 import { Lyrics } from "state/lyrics.slint";
 import { Subtitles } from "state/subtitles.slint";
+import { MusicDialogState, MdCaps } from "state/music-dialog.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -344,15 +345,6 @@ export component AppWindow inherits Window {
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
     // Characters per karaoke row, for wrapping the word-timed current line.
     out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
-    // Per-file subtitle offset label, pick and whether Subtitle Auto-Sync is installed.
-    // Shared dialog of the music plugins (Auto-tagger, Free Music); md-owner = plugin id.
-    in property <string> md-owner;
-    in property <string> md-title;
-    in property <[Item]> md-results;
-    in property <[image]> md-logos; // optional row logos (Network Streams)
-    in property <string> md-status;
-    in property <bool> md-busy;
-    in property <string> md-detail;
     in property <[TagFile]> tr-files;
     in property <string> tr-status;
     in property <bool> tr-busy;
@@ -361,20 +353,6 @@ export component AppWindow inherits Window {
     in property <bool> tr-summary-ok;
     in property <[TagResult]> tr-results;
     in property <bool> tr-can-undo;
-    in property <string> md-placeholder;
-    in property <string> md-search-label;
-    in property <string> md-primary;
-    in property <string> md-secondary;
-    in property <[string]> md-sources;
-    in-out property <string> md-source;
-    in-out property <string> md-query;
-    in property <[string]> md-chips;
-    in property <string> md-chip;
-    in property <[string]> md-actions;
-    in property <[FmRow]> md-tracks;    // Free Music rows
-    in property <[MdFilter]> md-filters;
-    in property <string> md-copy;
-    in property <bool> md-has-more;
     // Network stream loading overlay (core, see loading.rs).
     in property <bool> loading-show;
     in property <bool> loading-buffering;
@@ -1050,25 +1028,25 @@ export component AppWindow inherits Window {
     // ---------- Auto-tagger / Free Music ----------
     if Overlays.md-open: MusicDialog {
         width: root.width; height: root.height;
-        title: root.md-title; results: root.md-results; logos: root.md-owner == "network-streams" ? root.md-logos : []; status: root.md-status; busy: root.md-busy;
-        detail: root.md-detail; placeholder: root.md-placeholder; search-label: root.md-search-label;
-        primary-text: root.md-primary; secondary-text: root.md-secondary; sources: root.md-sources;
-        source <=> root.md-source; query <=> root.md-query;
-        chips: root.md-owner == "network-streams" || root.md-owner == "free-music" ? root.md-chips : []; chip: root.md-chip;
-        actions: root.md-owner == "network-streams" || root.md-owner == "free-music" ? root.md-actions : [];
-        rich: root.md-owner == "free-music"; tracks: root.md-owner == "free-music" ? root.md-tracks : [];
-        filters: root.md-owner == "free-music" ? root.md-filters : []; copy-text: root.md-copy;
-        has-more: root.md-owner == "free-music" && root.md-has-more;
-        filter(n, v) => { root.plugin-command(root.md-owner, "filter", n + "\u{1f}" + v); }
-        more => { root.plugin-command(root.md-owner, "more", ""); }
-        edited => { if root.md-owner == "free-music" { root.plugin-command(root.md-owner, "edited", ""); } }
-        chip-clicked(c) => { root.plugin-command(root.md-owner, "chip", c); }
-        action(n, i) => { root.plugin-command(root.md-owner, "act:" + n, i); }
-        search => { root.plugin-command(root.md-owner, "search", ""); }
-        select(i) => { root.plugin-command(root.md-owner, "select", i); }
-        primary(i) => { root.plugin-command(root.md-owner, "primary", i); }
-        secondary(i) => { root.plugin-command(root.md-owner, "secondary", i); }
-        close => { Overlays.md-open = false; root.plugin-command(root.md-owner, "close", ""); fs.focus(); }
+        title: MusicDialogState.title; results: MusicDialogState.results; logos: MusicDialogState.caps.logos ? MusicDialogState.logos : []; status: MusicDialogState.status; busy: MusicDialogState.busy;
+        detail: MusicDialogState.detail; placeholder: MusicDialogState.placeholder; search-label: MusicDialogState.search-label;
+        primary-text: MusicDialogState.primary; secondary-text: MusicDialogState.secondary; sources: MusicDialogState.sources;
+        source <=> MusicDialogState.source; query <=> MusicDialogState.query;
+        chips: MusicDialogState.caps.chips ? MusicDialogState.chips : []; chip: MusicDialogState.chip;
+        actions: MusicDialogState.caps.chips ? MusicDialogState.actions : [];
+        rich: MusicDialogState.caps.rich; tracks: MusicDialogState.caps.rich ? MusicDialogState.tracks : [];
+        filters: MusicDialogState.caps.rich ? MusicDialogState.filters : []; copy-text: MusicDialogState.copy;
+        has-more: MusicDialogState.caps.rich && MusicDialogState.has-more;
+        filter(n, v) => { root.plugin-command(MusicDialogState.owner, "filter", n + "\u{1f}" + v); }
+        more => { root.plugin-command(MusicDialogState.owner, "more", ""); }
+        edited => { if MusicDialogState.caps.rich { root.plugin-command(MusicDialogState.owner, "edited", ""); } }
+        chip-clicked(c) => { root.plugin-command(MusicDialogState.owner, "chip", c); }
+        action(n, i) => { root.plugin-command(MusicDialogState.owner, "act:" + n, i); }
+        search => { root.plugin-command(MusicDialogState.owner, "search", ""); }
+        select(i) => { root.plugin-command(MusicDialogState.owner, "select", i); }
+        primary(i) => { root.plugin-command(MusicDialogState.owner, "primary", i); }
+        secondary(i) => { root.plugin-command(MusicDialogState.owner, "secondary", i); }
+        close => { Overlays.md-open = false; root.plugin-command(MusicDialogState.owner, "close", ""); fs.focus(); }
     }
 
     // ---------- Find Lyrics (Lyrics plugin) ----------

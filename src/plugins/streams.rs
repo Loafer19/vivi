@@ -761,8 +761,10 @@ pub struct Streams {
 
 impl Streams {
     fn ui(cx: &Ctx, status: &str, busy: bool) {
-        cx.app.set_md_status(status.into());
-        cx.app.set_md_busy(busy);
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_status(status.into());
+        cx.app.global::<crate::MusicDialogState>().set_busy(busy);
     }
     fn reload_favs(&mut self) {
         self.favs = load_list("saved.json").into_iter().map(|s| s.url).collect();
@@ -815,13 +817,16 @@ impl Streams {
             self.category_chips = false;
             Vec::new()
         };
-        cx.app.set_md_chips(ModelRc::new(VecModel::from(chips)));
         cx.app
-            .set_md_chip(if self.chip.is_empty() && !self.category_chips {
+            .global::<crate::MusicDialogState>()
+            .set_chips(ModelRc::new(VecModel::from(chips)));
+        cx.app.global::<crate::MusicDialogState>().set_chip(
+            if self.chip.is_empty() && !self.category_chips {
                 "All".into()
             } else {
                 self.chip.as_str().into()
-            });
+            },
+        );
     }
     /// Start fetching logos of the first rows that are not cached yet.
     fn load_row_logos(&mut self) {
@@ -855,7 +860,9 @@ impl Streams {
             .iter()
             .map(|s| self.logos.get(&s.logo).cloned().unwrap_or_default())
             .collect();
-        cx.app.set_md_logos(ModelRc::new(VecModel::from(logos)));
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_logos(ModelRc::new(VecModel::from(logos)));
         let now = super::epg::now();
         let items: Vec<Item> = self
             .list
@@ -879,7 +886,9 @@ impl Streams {
                 }
             })
             .collect();
-        cx.app.set_md_results(ModelRc::new(VecModel::from(items)));
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_results(ModelRc::new(VecModel::from(items)));
     }
     /// Secondary button and the extra actions for the current selection.
     fn buttons(&self, cx: &Ctx) {
@@ -892,7 +901,9 @@ impl Streams {
             (_, Some(s)) if !picker && self.favs.contains(&s.url) => "Unfavorite",
             _ => "Favorite",
         };
-        cx.app.set_md_secondary(t.into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_secondary(t.into());
         let mut acts: Vec<SharedString> = Vec::new();
         if sel.is_some() && !picker {
             acts.push("Add to queue".into());
@@ -904,10 +915,12 @@ impl Streams {
         if self.mode == M3U && !self.loaded_src.is_empty() && !self.all.is_empty() {
             acts.push("Add to My playlists".into());
         }
-        cx.app.set_md_actions(ModelRc::new(VecModel::from(acts)));
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_actions(ModelRc::new(VecModel::from(acts)));
     }
     fn mode(cx: &Ctx) -> usize {
-        let s = cx.app.get_md_source();
+        let s = cx.app.global::<crate::MusicDialogState>().get_source();
         SOURCES.iter().position(|x| *x == s.as_str()).unwrap_or(0)
     }
     fn local(&mut self, cx: &Ctx, mode: usize) {
@@ -922,7 +935,9 @@ impl Streams {
         });
         self.apply_view(cx);
         self.want_epg(cx);
-        cx.app.set_md_detail("".into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_detail("".into());
         let what = if mode == SAVED { "favorite" } else { "recent" };
         Self::ui(
             cx,
@@ -947,7 +962,9 @@ impl Streams {
         self.list.clear();
         self.chip.clear();
         self.show(cx);
-        cx.app.set_md_detail("".into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_detail("".into());
     }
     /// Request guides for the channels shown (playlist `url-tvg` + the EPG setting).
     fn want_epg(&mut self, cx: &Ctx) {
@@ -1005,7 +1022,9 @@ impl Streams {
     }
     fn open_playlist(&mut self, cx: &Ctx, name: &str, key: String) {
         self.clear(cx);
-        cx.app.set_md_query("".into());
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_query("".into());
         self.filtered_by.clear();
         Self::ui(cx, &format!("Loading {name}…"), true);
         self.note = Some(format!(
@@ -1400,7 +1419,7 @@ impl Plugin for Streams {
     fn disable(&mut self, cx: &Ctx) {
         self.rx = None;
         cx.app.set_np_show(false);
-        if cx.app.get_md_owner() == ID {
+        if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             cx.app.global::<crate::Overlays>().set_md_open(false);
         }
     }
@@ -1415,16 +1434,28 @@ impl Plugin for Streams {
             "open" => {
                 let a = cx.app;
                 a.global::<crate::Overlays>().set_settings_open(false);
-                a.set_md_owner(ID.into());
-                a.set_md_title("Network Streams".into());
-                a.set_md_placeholder(placeholder(Self::mode(cx)).into());
+                a.global::<crate::MusicDialogState>().set_owner(ID.into());
+                a.global::<crate::MusicDialogState>()
+                    .set_caps(crate::MdCaps {
+                        logos: true,
+                        chips: true,
+                        rich: false,
+                    });
+                a.global::<crate::MusicDialogState>()
+                    .set_title("Network Streams".into());
+                a.global::<crate::MusicDialogState>()
+                    .set_placeholder(placeholder(Self::mode(cx)).into());
                 self.last_source.clear(); // the next tick sets placeholder and button
-                a.set_md_search_label("Go".into());
-                a.set_md_primary("Play".into());
+                a.global::<crate::MusicDialogState>()
+                    .set_search_label("Go".into());
+                a.global::<crate::MusicDialogState>()
+                    .set_primary("Play".into());
                 let src: Vec<SharedString> = SOURCES.iter().map(|s| (*s).into()).collect();
-                a.set_md_sources(ModelRc::new(VecModel::from(src)));
-                if !SOURCES.contains(&a.get_md_source().as_str()) {
-                    a.set_md_source(SOURCES[0].into());
+                a.global::<crate::MusicDialogState>()
+                    .set_sources(ModelRc::new(VecModel::from(src)));
+                if !SOURCES.contains(&a.global::<crate::MusicDialogState>().get_source().as_str()) {
+                    a.global::<crate::MusicDialogState>()
+                        .set_source(SOURCES[0].into());
                 }
                 a.global::<crate::Overlays>().set_md_open(true);
                 std::thread::spawn(|| prune_logos(64 * 1024 * 1024));
@@ -1444,7 +1475,12 @@ impl Plugin for Streams {
                     return;
                 }
                 self.reload_favs();
-                let q = cx.app.get_md_query().trim().to_string();
+                let q = cx
+                    .app
+                    .global::<crate::MusicDialogState>()
+                    .get_query()
+                    .trim()
+                    .to_string();
                 self.loaded_src.clear();
                 if live_filter(mode) {
                     // Go = (re)load the picker; typing filters it.
@@ -1525,7 +1561,9 @@ impl Plugin for Streams {
                 }
                 self.chip = if c == "All" { String::new() } else { c };
                 self.apply_view(cx);
-                cx.app.set_md_detail("".into());
+                cx.app
+                    .global::<crate::MusicDialogState>()
+                    .set_detail("".into());
                 Self::ui(
                     cx,
                     &format!("{} of {}", self.list.len(), self.all.len()),
@@ -1549,7 +1587,9 @@ impl Plugin for Streams {
                     if cx.player.get("path").as_deref() == Some(s.url.as_str()) {
                         d += &format!("\n\n— Playing —\n{}", now_info(|p| cx.player.get(p)));
                     }
-                    cx.app.set_md_detail(d.into());
+                    cx.app
+                        .global::<crate::MusicDialogState>()
+                        .set_detail(d.into());
                 }
             }
             "primary" => {
@@ -1616,7 +1656,14 @@ impl Plugin for Streams {
                     _ => {}
                 }
             }
-            "secondary" if cx.app.get_md_secondary().as_str() == "Choose file…" => {
+            "secondary"
+                if cx
+                    .app
+                    .global::<crate::MusicDialogState>()
+                    .get_secondary()
+                    .as_str()
+                    == "Choose file…" =>
+            {
                 let Some(f) = rfd::FileDialog::new()
                     .set_title("Import a playlist")
                     .add_filter("Playlists", &["m3u", "m3u8"])
@@ -1624,7 +1671,9 @@ impl Plugin for Streams {
                 else {
                     return;
                 };
-                cx.app.set_md_query(f.to_string_lossy().as_ref().into());
+                cx.app
+                    .global::<crate::MusicDialogState>()
+                    .set_query(f.to_string_lossy().as_ref().into());
                 self.command(cx, "search", &[]);
             }
             "secondary" => {
@@ -1643,7 +1692,9 @@ impl Plugin for Streams {
                     save_list(file, &self.all);
                     self.reload_favs();
                     self.apply_view(cx);
-                    cx.app.set_md_detail("".into());
+                    cx.app
+                        .global::<crate::MusicDialogState>()
+                        .set_detail("".into());
                     Self::ui(cx, &format!("Removed {}", s.name), false);
                 } else if s.source == PICK {
                     if let Some(src) = s.url.strip_prefix(PL) {
@@ -1687,14 +1738,18 @@ impl Plugin for Streams {
     }
     fn tick(&mut self, cx: &Ctx) {
         self.poll = self.poll.wrapping_add(1);
-        if cx.app.global::<crate::Overlays>().get_md_open() && cx.app.get_md_owner() == ID {
-            let src = cx.app.get_md_source();
+        if cx.app.global::<crate::Overlays>().get_md_open()
+            && cx.app.global::<crate::MusicDialogState>().get_owner() == ID
+        {
+            let src = cx.app.global::<crate::MusicDialogState>().get_source();
             if src.as_str() != self.last_source {
                 self.last_source = src.to_string();
                 let m = Self::mode(cx);
-                cx.app.set_md_placeholder(placeholder(m).into());
+                cx.app
+                    .global::<crate::MusicDialogState>()
+                    .set_placeholder(placeholder(m).into());
                 if self.mode != m {
-                    cx.app.set_md_secondary(
+                    cx.app.global::<crate::MusicDialogState>().set_secondary(
                         if m == M3U {
                             "Choose file…"
                         } else {
@@ -1709,7 +1764,11 @@ impl Plugin for Streams {
             && !self.all.is_empty()
             && cx.app.global::<crate::Overlays>().get_md_open()
         {
-            let q = cx.app.get_md_query().to_string();
+            let q = cx
+                .app
+                .global::<crate::MusicDialogState>()
+                .get_query()
+                .to_string();
             if q != self.filtered_by {
                 self.filtered_by = q.clone();
                 self.apply_view(cx);
@@ -1777,7 +1836,11 @@ impl Plugin for Streams {
                 self.all = v;
                 self.chip.clear();
                 if live_filter(self.mode) {
-                    self.filtered_by = cx.app.get_md_query().to_string();
+                    self.filtered_by = cx
+                        .app
+                        .global::<crate::MusicDialogState>()
+                        .get_query()
+                        .to_string();
                 }
                 self.apply_view(cx);
                 self.want_epg(cx);

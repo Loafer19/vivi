@@ -35,7 +35,11 @@ pub fn close(a: &AppWindow, o: Overlay) {
         }
         Overlay::MusicDialog => {
             a.global::<crate::Overlays>().set_md_open(false);
-            plugins::command(&a.get_md_owner(), "close", &[]);
+            plugins::command(
+                &a.global::<crate::MusicDialogState>().get_owner(),
+                "close",
+                &[],
+            );
         }
         Overlay::Subtitles => a.global::<crate::Overlays>().set_subs_open(false),
         Overlay::Qr => a.global::<crate::Overlays>().set_qr_open(false),
