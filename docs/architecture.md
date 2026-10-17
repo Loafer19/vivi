@@ -46,6 +46,30 @@ distribution and the package format are in [plugins-architecture.md](plugins-arc
 * Feature components: `panel.slint`, `library.slint`, `settings.slint`, `toolbar.slint`,
   `plugins.slint`, `dialogs.slint`, `filters.slint`, `menu.slint`, `viz.slint`, ...
 
+## Accessibility and keyboard
+
+* Slint's `accessibility` feature is on: AccessKit exposes the UI over AT-SPI (D-Bus,
+  through zbus) on Linux. It needs no extra system libraries.
+* Shared controls in `ui/core/` (buttons, toggle, segmented, dropdown, slider, rows) set
+  `accessible-role`, `accessible-label` and their checked/value state, and take a `label`
+  where the visible text is not the name.
+* Every other clickable `TouchArea` names itself: `accessible-role` (button, tab,
+  list-item, checkbox, slider, combobox) plus `accessible-label`; rows add
+  `accessible-item-selected`, and double-click actions also get `accessible-action-default`.
+  Icon-only buttons also show a `Tooltip` with the same text.
+* Focusable controls wrap a `FocusScope` (Space/Enter activate) and draw the ring from
+  `Theme.focus-ring` / `Metrics.focus-ring-w`. Window chrome sets `tab-focus: false`
+  because its keys are shortcuts. In the main view Tab is a player key; when a dialog
+  is open it moves focus instead (`dialog-open`).
+* Blockers (scrims, "swallow clicks" areas) and the video surface stay unnamed.
+
+## Screenshot hooks
+
+Debug builds (or `VIVI_SCREENSHOT=1`) read env vars in `src/app/debug.rs` to open a UI
+state directly: `VIVI_SETTINGS=<n>`, `VIVI_PANEL=<n>`, `VIVI_CUSTOMIZE=<profile>`,
+`VIVI_LIB`, `VIVI_URL`, `VIVI_MUSIC`, `VIVI_STREAM_ERROR=<url>` (the failed-stream
+banner with Retry / Copy), and others listed there.
+
 ## Conventions
 
 * No colour, radius or font size literals outside `ui/core/theme.slint`.
