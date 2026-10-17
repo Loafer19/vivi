@@ -158,6 +158,7 @@ impl Lib {
                 );
                 it.icon = match e.kind {
                     K::Music | K::Audio => "songs",
+                    K::Web => "web",
                     _ => "streaming",
                 }
                 .into();
@@ -903,6 +904,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     }
                     "forget" => {
                         store::forget_position(&path);
+                        render();
+                    }
+                    "clear-recent" | "refresh-recent" => {
+                        if action == "clear-recent" {
+                            store::clear_recent();
+                        }
+                        a.global::<crate::Library>()
+                            .set_recent_files(crate::app::session::recent_items());
                         render();
                     }
                     "forget-recent" => {

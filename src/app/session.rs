@@ -44,6 +44,55 @@ pub(crate) fn recent_items() -> slint::ModelRc<Item> {
     )
 }
 
+/// Thumbnail of a web video for Recent, fetched in the background: YouTube's own still
+/// for YouTube ids, otherwise the `thumbnail` field from yt-dlp. Cached under
+/// `web-thumbs/`; the entry then points at the local file and the views re-render.
+fn fetch_web_thumb(a: &AppWindow, target: String) {
+    let w = a.as_weak();
+    std::thread::spawn(move || {
+        let dir = store::cache_dir().join("web-thumbs");
+        let base = dir.join(crate::plugins::network_streams::hash_name(&target));
+        let cached = ["jpg", "png"]
+            .iter()
+            .map(|e| base.with_extension(e))
+            .find(|p| p.is_file());
+        let path = cached.or_else(|| {
+            let url = match store::youtube_id(&target) {
+                Some(id) => format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg"),
+                None => {
+                    let out = std::process::Command::new("yt-dlp")
+                        .args(["--no-playlist", "--skip-download", "--print", "thumbnail"])
+                        .arg(&target)
+                        .stderr(std::process::Stdio::null())
+                        .output()
+                        .ok()?;
+                    let u = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    u.starts_with("http").then_some(u)?
+                }
+            };
+            let b = crate::plugins::web::get_bytes(&url, 4 * 1024 * 1024)
+                .ok()
+                .flatten()?;
+            // Slint picks the decoder from the extension; other formats are skipped.
+            let ext = match b.as_slice() {
+                [0x89, b'P', b'N', b'G', ..] => "png",
+                [0xFF, 0xD8, ..] => "jpg",
+                _ => return None,
+            };
+            std::fs::create_dir_all(&dir).ok()?;
+            let p = base.with_extension(ext);
+            std::fs::write(&p, b).ok()?;
+            Some(p)
+        });
+        let Some(path) = path else { return };
+        store::set_recent_image(&target, &path.to_string_lossy());
+        let _ = w.upgrade_in_event_loop(|a| {
+            a.global::<crate::Library>()
+                .invoke_menu("".into(), "".into(), "refresh-recent".into());
+        });
+    });
+}
+
 /// Remember the file in Recent and offer "Start over" when mpv resumed mid-file.
 pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
     if let Some(path) = p.get("path") {
@@ -62,6 +111,9 @@ pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
             if !t.trim().is_empty() && t != store::display_name(&abs) && t != abs {
                 e.title = t;
             }
+        }
+        if matches!(e.kind, store::RecentKind::Web) && e.image.is_empty() {
+            fetch_web_thumb(a, e.target.clone());
         }
         store::push_recent_entry(e);
         a.global::<crate::Library>()
@@ -175,11 +227,11 @@ pub(crate) fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) 
     app.global::<crate::Library>()
         .on_open_recent(move |path| p.open(&path));
     let weak = app.as_weak();
+    // The library controller clears and re-renders the views (home shelf, Recent view).
     app.global::<crate::Library>().on_clear_recent(move || {
-        store::clear_recent();
         if let Some(a) = weak.upgrade() {
             a.global::<crate::Library>()
-                .set_recent_files(recent_items());
+                .invoke_menu("".into(), "".into(), "clear-recent".into());
         }
     });
     let p = player.clone();

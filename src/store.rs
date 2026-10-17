@@ -90,7 +90,7 @@ impl RecentKind {
             Self::Folder => "folder",
             Self::Playlist => "playlist",
             Self::Stream => "streaming",
-            Self::Web => "stream",
+            Self::Web => "web",
         }
     }
     /// Type of a target when the opener did not say: folders, playlist files, yt-dlp
@@ -307,6 +307,42 @@ pub fn push_recent_entry(e: RecentEntry) {
     let _ = write_recent(&list);
 }
 
+/// Set the picture of an existing entry (e.g. a web video thumbnail fetched later).
+pub fn set_recent_image(target: &str, image: &str) {
+    let mut list = recent_entries();
+    if let Some(e) = list.iter_mut().find(|e| e.target == target) {
+        e.image = image.to_string();
+        let _ = write_recent(&list);
+    }
+}
+
+/// YouTube video id of a watch / short / youtu.be URL.
+pub fn youtube_id(url: &str) -> Option<String> {
+    let host = url_host(url)?;
+    let after = url.split_once("://")?.1;
+    let rest = &after[after.find(['/', '?']).unwrap_or(after.len())..];
+    let id = if host == "youtu.be" {
+        rest.trim_start_matches('/')
+            .split(['?', '&', '/', '#'])
+            .next()
+    } else if host == "youtube.com" || host.ends_with(".youtube.com") {
+        if let Some(q) = rest.split_once("v=") {
+            q.1.split(['&', '#']).next()
+        } else {
+            rest.strip_prefix("/shorts/")
+                .or_else(|| rest.strip_prefix("/embed/"))
+                .and_then(|r| r.split(['?', '/', '#']).next())
+        }
+    } else {
+        None
+    }?;
+    (id.len() == 11
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+    .then(|| id.to_string())
+}
+
 /// Drop one entry.
 pub fn remove_recent(target: &str) {
     let mut list = recent_entries();
@@ -479,5 +515,24 @@ mod recent_tests {
         }
         assert_eq!(l.len(), MAX_RECENT);
         assert_eq!(l[0].target, "/f79.mkv");
+    }
+
+    #[test]
+    fn youtube_ids() {
+        let id = |u: &str| youtube_id(u);
+        assert_eq!(
+            id("https://www.youtube.com/watch?v=aqz-KE-bpKQ").as_deref(),
+            Some("aqz-KE-bpKQ")
+        );
+        assert_eq!(
+            id("https://youtu.be/aqz-KE-bpKQ?t=3").as_deref(),
+            Some("aqz-KE-bpKQ")
+        );
+        assert_eq!(
+            id("https://youtube.com/shorts/aqz-KE-bpKQ").as_deref(),
+            Some("aqz-KE-bpKQ")
+        );
+        assert_eq!(id("https://vimeo.com/123"), None);
+        assert_eq!(id("https://www.youtube.com/watch?v=short"), None);
     }
 }

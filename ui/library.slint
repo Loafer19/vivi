@@ -61,7 +61,8 @@ component Tile inherits Rectangle {
         border-radius: Metrics.radius-md; clip: true;
         background: Theme.bg-a3;
         if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: cover; }
-        if !root.it.has-thumb: Icon { source: Icons.kind(root.it.kind); width: root.grid ? 40px : 24px; height: self.width; tint: Theme.fg-a3; }
+        // Recent entries use their own type icon (stream, folder, playlist, web video).
+        if !root.it.has-thumb: Icon { source: Icons.kind(root.it.badge != "" && root.it.icon != "" ? root.it.icon : root.it.kind); width: root.grid ? 40px : 24px; height: self.width; tint: Theme.fg-a3; }
         if root.it.progress > 0: Rectangle {
             y: parent.height - 4px; height: 4px; background: Theme.media-track;
             Rectangle { x: 0; width: parent.width * root.it.progress; background: Theme.accent; }
