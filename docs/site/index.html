@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vivi — fast, lightweight media player</title>
-<meta name="description" content="Vivi is a fast, lightweight desktop media player written in Rust on top of mpv, with plugins, a music visualizer and a Figma-based dark UI.">
+<title>Vivi — a fast, light, clean media player</title>
+<meta name="description" content="Vivi is a fast, light and clean desktop media player written in Rust on top of mpv: a 15 MB download with an auto-tagger, karaoke lyrics, a waveform seekbar, free music and plugins.">
 <meta name="theme-color" content="#0e0e0e">
 <meta property="og:title" content="Vivi media player">
 <meta property="og:image" content="https://loafer19.github.io/vivi/img/player.png">
@@ -17,21 +17,28 @@
   <nav>
     <a href="https://plugins.viviplayer.app/"><i data-lucide="puzzle"></i>Plugins</a>
     <a href="ai-agents.html"><i data-lucide="bot"></i><span class="wide">AI agents</span><span class="narrow">MCP</span></a>
-    <a href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
+    <a href="compare.html"><i data-lucide="scale"></i>Compare</a>
+    <a class="hide-xs" href="https://github.com/Loafer19/vivi"><i data-lucide="git-fork"></i>GitHub</a>
     <a class="dl" href="https://github.com/Loafer19/vivi/releases/latest"><i data-lucide="download"></i>Download</a>
   </nav>
 </div></header>
 <main>
 <section class="hero">
-  <h1>A media player that <span>gets out of the way</span></h1>
-  <p>Vivi is a fast, lightweight desktop player for Linux, written in Rust on top of mpv.
-  Clean by default, deeply customizable when you want it.</p>
+  <h1>Fast. Light. <span>Clean.</span></h1>
+  <p>Vivi is a desktop media player written in Rust on top of mpv. It opens in about a second,
+  stays out of the way while you watch, and is surprisingly good at music.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/Loafer19/vivi/releases/latest"><i data-lucide="download"></i>Download</a>
     <a class="btn ghost" href="#install"><i data-lucide="terminal"></i>One-line install</a>
-    <a class="btn ghost" href="https://plugins.viviplayer.app/"><i data-lucide="puzzle"></i>Browse plugins</a>
   </div>
-  <p class="meta">Free and open source · MIT · Linux, Windows, macOS</p>
+  <ul class="stats" aria-label="Measured on the v0.11.1 Linux release">
+    <li><b>14.8 MB</b><span>Linux download</span></li>
+    <li><b>35.7 MB</b><span>installed</span></li>
+    <li><b>~1 s</b><span>to first window</span></li>
+    <li><b>MIT</b><span>free and open source</span></li>
+  </ul>
+  <p class="meta">v0.11.1, Linux x86_64 tarball; installed size excludes the system libmpv.
+  <a href="compare.html#numbers">How we measured</a> · Linux, Windows, macOS</p>
 </section>
 <div class="demo">
   <video class="shot" autoplay muted loop playsinline preload="none" poster="video/vivi-demo.jpg" width="1280" height="720"
@@ -42,17 +49,68 @@
   </video>
 </div>
 
+<h2 id="music">Made for your music, too</h2>
+<p class="lead">Most video players treat audio as an afterthought. Vivi ships the tools a music library needs.</p>
+<div class="feat">
+  <div class="txt"><div class="ic"><i data-lucide="tags"></i></div><h3>Auto-tagger</h3>
+    <p>Identifies songs by audio fingerprint on AcoustID, or by tags and file name on MusicBrainz. Results from several sources are merged and ranked by confidence; you review every field, pick a cover and embed synced lyrics. Every write is backed up and can be undone.</p></div>
+  <figure><a href="img/tagger-review.webp"><img class="shot" src="img/tagger-review.webp" alt="Auto-tagger review: current and proposed tags side by side with source badges" loading="lazy" decoding="async" width="1280" height="800"></a></figure>
+</div>
+<div class="feat rev">
+  <div class="txt"><div class="ic"><i data-lucide="mic-vocal"></i></div><h3>Karaoke lyrics</h3>
+    <p>Press <kbd>L</kbd> for a full-screen lyrics view with the current line large and a word-by-word highlight. Synced lyrics come from <code>.lrc</code> files, your tags or LRCLIB; nudge the timing with <kbd>[</kbd> <kbd>]</kbd> and save it per track.</p></div>
+  <figure><a href="img/lyrics-karaoke.webp"><img class="shot" src="img/lyrics-karaoke.webp" alt="Full-screen karaoke lyrics with a word-by-word highlight" loading="lazy" decoding="async" width="1280" height="800"></a></figure>
+</div>
+<div class="feat">
+  <div class="txt"><div class="ic"><i data-lucide="audio-waveform"></i></div><h3>Waveform seekbar</h3>
+    <p>For audio files the progress bar can draw the track's waveform, so you can see the quiet intro, the drop and the outro before you seek. Chapters and A-B loop ranges show up on the bar too.</p></div>
+  <figure class="ph" role="img" aria-label="Screenshot placeholder: waveform progress bar">
+    <svg class="wave" viewBox="0 0 240 40" preserveAspectRatio="none" aria-hidden="true"><rect class="p" x="0" y="15.2" width="2" height="9.5" rx="1"/><rect class="p" x="3" y="14.4" width="2" height="11.3" rx="1"/><rect class="p" x="6" y="15.2" width="2" height="9.6" rx="1"/><rect class="p" x="9" y="14.8" width="2" height="10.3" rx="1"/><rect class="p" x="12" y="12.4" width="2" height="15.2" rx="1"/><rect class="p" x="15" y="15.1" width="2" height="9.7" rx="1"/><rect class="p" x="18" y="11.3" width="2" height="17.4" rx="1"/><rect class="p" x="21" y="14.1" width="2" height="11.7" rx="1"/><rect class="p" x="24" y="11.3" width="2" height="17.4" rx="1"/><rect class="p" x="27" y="14.8" width="2" height="10.3" rx="1"/><rect class="p" x="30" y="14.1" width="2" height="11.8" rx="1"/><rect class="p" x="33" y="15.1" width="2" height="9.8" rx="1"/><rect class="p" x="36" y="7.8" width="2" height="24.5" rx="1"/><rect class="p" x="39" y="11.7" width="2" height="16.5" rx="1"/><rect class="p" x="42" y="13.5" width="2" height="13.1" rx="1"/><rect class="p" x="45" y="13.5" width="2" height="13.0" rx="1"/><rect class="p" x="48" y="7.6" width="2" height="24.8" rx="1"/><rect class="p" x="51" y="7.5" width="2" height="25.1" rx="1"/><rect class="p" x="54" y="11.7" width="2" height="16.6" rx="1"/><rect class="p" x="57" y="13.8" width="2" height="12.4" rx="1"/><rect class="p" x="60" y="14.6" width="2" height="10.8" rx="1"/><rect class="p" x="63" y="15.8" width="2" height="8.4" rx="1"/><rect class="p" x="66" y="13.8" width="2" height="12.5" rx="1"/><rect class="p" x="69" y="13.4" width="2" height="13.3" rx="1"/><rect class="p" x="72" y="14.8" width="2" height="10.4" rx="1"/><rect class="p" x="75" y="14.5" width="2" height="10.9" rx="1"/><rect class="p" x="78" y="13.7" width="2" height="12.6" rx="1"/><rect class="p" x="81" y="10.4" width="2" height="19.3" rx="1"/><rect class="p" x="84" y="14.3" width="2" height="11.4" rx="1"/><rect class="p" x="87" y="12.6" width="2" height="14.8" rx="1"/><rect class="p" x="90" y="14.4" width="2" height="11.2" rx="1"/><rect class="p" x="93" y="14.2" width="2" height="11.6" rx="1"/><rect class="p" x="96" y="15.2" width="2" height="9.5" rx="1"/><rect class="p" x="99" y="15.8" width="2" height="8.4" rx="1"/><rect x="102" y="14.9" width="2" height="10.3" rx="1"/><rect x="105" y="15.6" width="2" height="8.8" rx="1"/><rect x="108" y="15.3" width="2" height="9.3" rx="1"/><rect x="111" y="14.7" width="2" height="10.6" rx="1"/><rect x="114" y="15.4" width="2" height="9.3" rx="1"/><rect x="117" y="14.6" width="2" height="10.8" rx="1"/><rect x="120" y="15.1" width="2" height="9.7" rx="1"/><rect x="123" y="15.7" width="2" height="8.5" rx="1"/><rect x="126" y="15.6" width="2" height="8.9" rx="1"/><rect x="129" y="14.5" width="2" height="11.0" rx="1"/><rect x="132" y="16.0" width="2" height="8.1" rx="1"/><rect x="135" y="14.6" width="2" height="10.8" rx="1"/><rect x="138" y="13.7" width="2" height="12.7" rx="1"/><rect x="141" y="15.6" width="2" height="8.8" rx="1"/><rect x="144" y="15.9" width="2" height="8.3" rx="1"/><rect x="147" y="14.8" width="2" height="10.5" rx="1"/><rect x="150" y="15.2" width="2" height="9.7" rx="1"/><rect x="153" y="15.9" width="2" height="8.2" rx="1"/><rect x="156" y="13.0" width="2" height="14.0" rx="1"/><rect x="159" y="14.2" width="2" height="11.7" rx="1"/><rect x="162" y="14.4" width="2" height="11.3" rx="1"/><rect x="165" y="13.5" width="2" height="13.0" rx="1"/><rect x="168" y="11.9" width="2" height="16.3" rx="1"/><rect x="171" y="14.9" width="2" height="10.2" rx="1"/><rect x="174" y="15.6" width="2" height="8.8" rx="1"/><rect x="177" y="11.4" width="2" height="17.2" rx="1"/><rect x="180" y="13.7" width="2" height="12.6" rx="1"/><rect x="183" y="13.6" width="2" height="12.8" rx="1"/><rect x="186" y="14.1" width="2" height="11.7" rx="1"/><rect x="189" y="10.5" width="2" height="18.9" rx="1"/><rect x="192" y="11.7" width="2" height="16.7" rx="1"/><rect x="195" y="13.5" width="2" height="12.9" rx="1"/><rect x="198" y="9.9" width="2" height="20.2" rx="1"/><rect x="201" y="6.2" width="2" height="27.6" rx="1"/><rect x="204" y="8.8" width="2" height="22.3" rx="1"/><rect x="207" y="14.8" width="2" height="10.4" rx="1"/><rect x="210" y="8.8" width="2" height="22.4" rx="1"/><rect x="213" y="13.1" width="2" height="13.8" rx="1"/><rect x="216" y="6.5" width="2" height="26.9" rx="1"/><rect x="219" y="3.6" width="2" height="32.9" rx="1"/><rect x="222" y="14.3" width="2" height="11.5" rx="1"/><rect x="225" y="12.5" width="2" height="15.0" rx="1"/><rect x="228" y="10.8" width="2" height="18.4" rx="1"/><rect x="231" y="11.6" width="2" height="16.9" rx="1"/><rect x="234" y="11.2" width="2" height="17.6" rx="1"/><rect x="237" y="15.3" width="2" height="9.3" rx="1"/></svg>
+    <span>Waveform seekbar · screenshot coming soon</span></figure>
+</div>
+<div class="feat rev">
+  <div class="txt"><div class="ic"><i data-lucide="music"></i></div><h3>Free Music</h3>
+    <p>Search and browse Creative Commons and public-domain music from Jamendo, the Internet Archive and the Free Music Archive in one list, with licence filters. Downloads keep the tags, cover, licence and attribution.</p></div>
+  <figure class="ph" role="img" aria-label="Screenshot placeholder: Free Music browser">
+    <i data-lucide="music"></i><span>Free Music browser · screenshot coming soon</span></figure>
+</div>
+<div class="feat">
+  <div class="txt"><div class="ic"><i data-lucide="sliders-vertical"></i></div><h3>Customize Player</h3>
+    <p>Every element of the bottom bar is movable: re-order, remove or add buttons, times, spaces and the seekbar itself. Pick one of four progress bar styles: <b>Compact</b>, <b>Classic</b>, <b>Waveform</b> or <b>Plain</b>. The bar under the dialog is a live preview; Minimal, Default and Power profiles get you started.</p></div>
+  <figure><a href="img/customize.webp"><img class="shot" src="img/customize.webp" alt="Customize Player dialog with profiles, progress bar styles and movable bar items" loading="lazy" decoding="async" width="1280" height="720"></a></figure>
+</div>
+
+<h2 id="also">And also</h2>
+<div class="grid two">
+  <a class="card link" href="https://plugins.viviplayer.app/"><div class="ic"><i data-lucide="puzzle"></i></div><h3>Plugins &amp; marketplace <i data-lucide="arrow-right"></i></h3>
+    <p>Install and update plugins from Settings → Extensions → Browse: Discord presence, phone remote, YouTube downloads, SponsorBlock, ListenBrainz, subtitle auto-sync and more. Any mpv Lua or JavaScript script works too.</p></a>
+  <a class="card link" href="ai-agents.html"><div class="ic"><i data-lucide="bot"></i></div><h3>AI agents over MCP <i data-lucide="arrow-right"></i></h3>
+    <p>The optional <code>vivi-mcp</code> server lets Claude, Cursor and other agents control playback, queue and subtitles over a private local socket.</p></a>
+</div>
+
+<h2 id="keyboard">Keyboard-first</h2>
+<p class="lead">Everything has a shortcut, and one keymap drives the menus, Settings and onboarding hints.</p>
+<div class="keys">
+  <div><kbd>Space</kbd><span>Play / pause</span></div>
+  <div><kbd>F</kbd><span>Fullscreen</span></div>
+  <div><kbd>P</kbd><span>Miniplayer</span></div>
+  <div><kbd>L</kbd><span>Karaoke lyrics</span></div>
+  <div><kbd>V</kbd><span>Next visualizer</span></div>
+  <div><kbd>R</kbd><span>Record</span></div>
+  <div><kbd>?</kbd><span>All shortcuts <small>next release</small></span></div>
+  <div><kbd>Esc</kbd><span>Close the top dialog <small>next release</small></span></div>
+</div>
+
 <h2 id="features">Everything you need, nothing in the way</h2>
 <p class="lead">Everything mpv plays, in a dark UI based on the Figma “VLC Redesign”.</p>
 <div class="grid">
   <div class="card"><div class="ic"><i data-lucide="play"></i></div><h3>Plays everything</h3><p>libmpv with hardware decoding on Wayland and X11, subtitles, chapters, A-B loop, speed and filters.</p></div>
   <div class="card"><div class="ic"><i data-lucide="library"></i></div><h3>Library</h3><p>Continue Watching, music by artist and album, folders, playlists, network streams and thumbnails.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="audio-waveform"></i></div><h3>Music visualizer</h3><p>Spectrum, scope, waveform, radial, particle and pitch visuals, with synced lyrics on top.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="puzzle"></i></div><h3>Plugins</h3><p>Skip intros, karaoke lyrics, subtitle search and more in one click, plus any mpv Lua or JavaScript script.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="captions"></i></div><h3>Subtitle search</h3><p>OpenSubtitles by file hash first, then by name or IMDb id; per-file offsets with <kbd>Z</kbd> / <kbd>X</kbd>.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="radio-tower"></i></div><h3>Streams &amp; IPTV</h3><p>Internet radio, iptv-org TV, SomaFM, M3U playlists and YouTube via yt-dlp.</p></div>
   <div class="card"><div class="ic"><i data-lucide="history"></i></div><h3>Remembers</h3><p>Resume positions, per-show presets for delays and track languages, recent files.</p></div>
-  <div class="card"><div class="ic"><i data-lucide="bot"></i></div><h3>AI agents</h3><p>Optional <a href="ai-agents.html">MCP server</a> lets Claude, Cursor and others control playback over a private local socket.</p></div>
+  <div class="card"><div class="ic"><i data-lucide="audio-waveform"></i></div><h3>Music visualizer</h3><p>Spectrum, scope, waveform, radial, particle and pitch visuals fed from what mpv actually plays.</p></div>
 </div>
-
 <h2 id="screenshots">Screenshots</h2>
 <p class="lead">Captured from the release build. Click to open full size.</p>
 <div class="gallery">
@@ -66,13 +124,14 @@
   <figure><a href="img/network.png"><img class="shot" src="img/network.webp" alt="Open Network Stream dialog" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Network streams</figcaption></figure>
 </div>
 
-<h2 id="plugins">Plugins</h2>
-<p class="lead">Install and toggle them in Settings → Extensions. <a href="https://plugins.viviplayer.app/">Browse the marketplace <i data-lucide="arrow-right"></i></a> or <a href="https://plugins.viviplayer.app/dev/">write your own</a>.</p>
-<div class="gallery">
-  <figure><a href="img/extensions.png"><img class="shot" src="img/extensions.webp" alt="Settings → Extensions" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Extensions</figcaption></figure>
-  <figure><a href="img/lyrics.png"><img class="shot" src="img/lyrics.webp" alt="Synced lyrics over the visualizer" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Lyrics</figcaption></figure>
-  <figure><a href="img/skip-intro.png"><img class="shot" src="img/skip-intro.webp" alt="Skip Intro button" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Skip Intro</figcaption></figure>
-  <figure><a href="img/add-subtitles.png"><img class="shot" src="img/add-subtitles.webp" alt="Add Subtitles dialog" loading="lazy" decoding="async" width="1280" height="720"></a><figcaption>Subtitle Search</figcaption></figure>
+<h2 id="download">Downloads</h2>
+<p class="lead">Free for Linux, Windows and macOS. Sizes are for v0.11.1.</p>
+<div class="dls">
+  <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>Linux tarball</h3><p>x86_64 · 14.8 MB · needs libmpv</p></a>
+  <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>Flatpak</h3><p>x86_64 · 12.6 MB · Flathub runtime</p></a>
+  <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>AppImage</h3><p>x86_64 · 45.6 MB · libmpv bundled</p></a>
+  <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>Windows 10/11</h3><p>x86_64 zip · 57.8 MB · libmpv included</p></a>
+  <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>macOS</h3><p>Apple Silicon zip · 38.8 MB · unsigned, best effort</p></a>
 </div>
 
 <h2 id="install">Install</h2>
@@ -89,7 +148,7 @@ cargo build --release &amp;&amp; ./target/release/vivi</code></pre>
 <p class="lead">AppImage, tarball, Windows and macOS builds are on the <a href="https://github.com/Loafer19/vivi/releases">releases page</a>.</p>
 <p class="note">Work in progress: not every frame of the Figma design is ported yet. Progress is tracked in the <a href="https://github.com/Loafer19/vivi/milestones">milestones</a>.</p>
 </main>
-<footer>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
+<footer><a href="compare.html">Compare players</a> · <a href="ai-agents.html">AI agents</a> · <a href="https://plugins.viviplayer.app/">Plugins</a><br>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC) ·
 screenshots and demo video show <a href="https://durian.blender.org">Sintel</a> (© Blender Foundation, CC BY 3.0) and
