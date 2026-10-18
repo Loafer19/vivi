@@ -41,6 +41,7 @@
 - **Karaoke follows the theme**: the full-screen lyrics stage, its chips and the empty state are light in light mode. It reads a typed lyrics state (found / searching / missing) and the numeric offset instead of comparing display strings.
 
 ### Fixed
+- **Hover × on Recent grid tiles opened the item instead of removing it** (most visible on folders, which navigated into the folder). The × now sits above the tile's click area and removes the entry by its stored target.
 - **Side panel library list showed files twice**: the same file reached through a symlink or overlapping library folders, or copied into two library folders, is now listed once.
 - **Seek track and volume slider were not vertically aligned** in the inline bar styles: the Compact and Plain tracks and the volume wedge sat about 3 px above the button row, and in Waveform the wedge was 3.5 px above the waveform's centre. The seek track and wedge are now centred on the button row in Compact, Waveform and Plain, so they share one vertical centre (new `Metrics.bar-track-h` / `bar-wave-h` tokens).
 - Main menu → Keyboard Shortcuts opened Settings → Playback; the library's "Edit subtitles / audio" opened Controls / Privacy instead of Subtitles / Audio.

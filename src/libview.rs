@@ -915,6 +915,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         render();
                     }
                     "forget-recent" => {
+                        // The hover × passes the stored target; the context menu passes the
+                        // library key ("video:<folder>" for folders).
+                        store::remove_recent(&key);
                         store::remove_recent(&path);
                         a.global::<crate::Library>()
                             .set_recent_files(crate::app::session::recent_items());

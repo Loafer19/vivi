@@ -68,16 +68,6 @@ component Tile inherits Rectangle {
             Rectangle { x: 0; width: parent.width * root.it.progress; background: Theme.accent; }
         }
         if root.grid && root.it.badge != "": TypeBadge { x: parent.width - self.width - 6px; y: parent.height - self.height - 6px; text: root.it.badge; bg: Theme.media-chip; fg: Theme.on-media; }
-        Rectangle {
-            visible: root.it.recent-key != "" && (ta.has-hover || xta.has-hover);
-            x: parent.width - self.width - 6px; y: 6px; width: 24px; height: 24px; border-radius: self.height / 2;
-            background: xta.has-hover ? Theme.media-chip.darker(0.5) : Theme.media-chip;
-            Icon { source: @image-url("../assets/icons/close.svg"); width: 14px; height: 14px; tint: Theme.on-media; }
-            xta := TouchArea {
-                accessible-role: button; accessible-label: "Remove from Recent: " + root.it.title;
-                mouse-cursor: pointer; clicked => { root.forget(); }
-            }
-        }
         if root.it.pinned: Rectangle {
             x: 6px; y: 6px; width: 22px; height: 22px; border-radius: self.height / 2; background: Theme.media-chip;
             Icon { source: @image-url("../assets/icons/favorite-active.svg"); width: 14px; height: 14px; tint: Theme.accent-bright; }
@@ -101,6 +91,17 @@ component Tile inherits Rectangle {
             if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) {
                 root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
             }
+        }
+    }
+    // Recent entries: remove with the × (after `ta` so it sits on top of the tile's click area).
+    Rectangle {
+        visible: root.it.recent-key != "" && (ta.has-hover || xta.has-hover);
+        x: thumb.x + thumb.width - self.width - 6px; y: thumb.y + 6px; width: 24px; height: 24px; border-radius: self.height / 2;
+        background: xta.has-hover ? Theme.media-chip.darker(0.5) : Theme.media-chip;
+        Icon { source: @image-url("../assets/icons/close.svg"); width: 14px; height: 14px; tint: Theme.on-media; }
+        xta := TouchArea {
+            accessible-role: button; accessible-label: "Remove from Recent: " + root.it.title;
+            mouse-cursor: pointer; clicked => { root.forget(); }
         }
     }
 }

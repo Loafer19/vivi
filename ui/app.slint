@@ -570,7 +570,7 @@ export component AppWindow inherits Window {
         open-network() => { Overlays.network-open = true; }
         add-folders() => { Settings.category = 8; Overlays.settings-open = true; Settings.refresh(8, "", false); }
         clear-recent() => { Library.clear-recent(); }
-        forget-recent(it) => { Library.menu(it.key, it.kind, "forget-recent"); }
+        forget-recent(it) => { Library.menu(it.recent-key, it.kind, "forget-recent"); }
         popout() => {
             if (Playback.has-media) { Library.full = !Library.full; } else { Playback.open-file(); }
         }
