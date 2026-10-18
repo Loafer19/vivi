@@ -717,7 +717,7 @@ export component AppWindow inherits Window {
         y: Viz.audio && Viz.mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
         backdrop: !(Viz.audio && Viz.mode > 0);
-        live: Lyrics.live; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); }
+        live: Lyrics.live; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); } activity => { root.activity(); }
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
