@@ -233,13 +233,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             s.status.clear();
                         }),
                         "check" => plugins::packages::check(true),
-                        "autocheck" => {
+                        "autocheck" | crate::notify::KEY => {
                             cfg.borrow_mut()
                                 .plugins
                                 .entry(plugins::packages::GLOBAL_ID.into())
                                 .or_default()
                                 .settings
-                                .insert("autocheck".into(), v.into());
+                                .insert(what.into(), v.into());
                             save();
                         }
                         _ => {}

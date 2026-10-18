@@ -219,6 +219,11 @@ impl Ctx<'_> {
     pub fn toast(&self, msg: &str) {
         toast(self.app, msg);
     }
+    /// A desktop notification (`notify` contribution point): only for plugins that
+    /// declare `notify` and while the user allows it; otherwise the toast.
+    pub fn notify(&self, title: &str, body: &str) {
+        notify_or_toast(self.app, &self.cfg.borrow(), self.manifest, title, body);
+    }
     /// Local path of the playing file, if it is a file.
     pub fn local_path(&self) -> Option<std::path::PathBuf> {
         let p = std::path::PathBuf::from(self.player.get("path")?);
@@ -550,6 +555,16 @@ fn toast_text(args: &[String]) -> Option<&str> {
     }
 }
 
+/// Desktop notification for plugin `m` when it contributes `notify` and the option is
+/// on (and a notification service exists); otherwise a toast.
+fn notify_or_toast(a: &AppWindow, c: &Config, m: &Manifest, title: &str, body: &str) {
+    let declared = m.contributes.iter().any(|x| x.point == contrib::NOTIFY);
+    if declared && crate::notify::enabled(c) && crate::notify::send(title, body) {
+        return;
+    }
+    toast(a, &crate::notify::toast_text(title, body));
+}
+
 /// A `script-message` broadcast reached Vivi's mpv client.
 pub fn client_message(args: &[String]) {
     use protocol::ScriptMessage as M;
@@ -567,6 +582,16 @@ pub fn client_message(args: &[String]) {
             with(|r| {
                 if let Some(a) = r.app.upgrade() {
                     crate::dialogs::show_qr(&a, title, text, caption);
+                }
+            });
+        }
+        Some(M::Notify { id, title, body }) => {
+            with(|r| {
+                let Some(a) = r.app.upgrade() else { return };
+                let c = r.cfg.borrow();
+                match r.scripts.iter().find(|s| s.manifest.id == id) {
+                    Some(s) => notify_or_toast(&a, &c, &s.manifest, title, body),
+                    None => toast(&a, &crate::notify::toast_text(title, body)),
                 }
             });
         }

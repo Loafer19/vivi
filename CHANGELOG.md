@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Desktop notifications from extensions** (`notify`): Free Music tells you when a download finishes or fails with a system notification on Linux (`org.freedesktop.Notifications`); packages can send `vivi-notify`. Turn it off in Settings → Extensions → Options (messages then show in the player).
 - **Plugin buttons in the bottom bar**: Customize Player lists buttons from your extensions (Karaoke lyrics view, Mark intro / credits, Search subtitles online, and any package that contributes `controlbar.button`) after the built-in items; none is on until you add it, and a button hides while its plugin is off.
 - **Home widgets**: plugins that contribute `home.widget` get a card under *Widgets* on Home (Network Streams: Radio stations, Free Music: Discover free music); show / hide and reorder them from the plugin's gear view in Extensions.
 - **Command palette** (`Ctrl+K`): type to fuzzy-search every player action (with its shortcut), Extensions / Customize / Open Network Stream, the sources and every plugin command (`palette.command`); Up / Down / Page Up / Page Down select, Enter runs, Esc closes. Rows are list items for screen readers. `Ctrl+K` used to be a second Play / pause key (`K` and Space still are).

@@ -75,6 +75,13 @@ pub enum ScriptMessage<'a> {
         text: &'a str,
         caption: &'a str,
     },
+    /// `vivi-notify <plugin id> <title> [body]`: a desktop notification from a package
+    /// that contributes `notify` (a toast when it does not, or notifications are off).
+    Notify {
+        id: &'a str,
+        title: &'a str,
+        body: &'a str,
+    },
     /// `vivi-toast <text> [seconds]` with non-blank text (trimmed).
     Toast(&'a str),
 }
@@ -106,6 +113,11 @@ impl<'a> ScriptMessage<'a> {
                 title,
                 text,
                 caption: rest.first().copied().unwrap_or(""),
+            },
+            ["vivi-notify", id, title, rest @ ..] if !title.trim().is_empty() => M::Notify {
+                id,
+                title: title.trim(),
+                body: rest.first().copied().unwrap_or(""),
             },
             ["vivi-toast", text, ..] if !text.trim().is_empty() => M::Toast(text.trim()),
             _ => return None,
@@ -178,6 +190,15 @@ mod tests {
             },
         );
         is(&["vivi-toast", " hi ", "3"], M::Toast("hi"));
+        is(
+            &["vivi-notify", "p", "Done", "a.mp3"],
+            M::Notify {
+                id: "p",
+                title: "Done",
+                body: "a.mp3",
+            },
+        );
+        assert_eq!(p(&["vivi-notify", "p", " "]), None);
         assert_eq!(p(&["vivi-toast", "  "]), None);
         assert_eq!(p(&["vivi-setting", "p", "k"]), None);
         assert_eq!(p(&["other", "x"]), None);

@@ -17,6 +17,7 @@ mod menus;
 mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
+mod notify;
 mod overlays;
 mod palette;
 mod peaks;

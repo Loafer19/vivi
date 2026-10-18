@@ -843,6 +843,7 @@ impl Plugin for FreeMusic {
         .source("open")
         .contribute(contrib::PALETTE_COMMAND, "Find free music", "open")
         .contribute(contrib::HOME_WIDGET, "Discover free music", "open")
+        .contribute(contrib::NOTIFY, "Download finished or failed", "")
         .setting(SettingSpec::secret(
             "jamendo-client-id",
             "Jamendo client ID",
@@ -1074,13 +1075,14 @@ impl Plugin for FreeMusic {
                         Ok(p) => {
                             self.dl_done += 1;
                             self.dl_last = format!("Saved {}", p.display());
-                            cx.toast(&format!(
-                                "Downloaded “{title}” with licence and attribution"
-                            ));
+                            cx.notify(
+                                "Download finished",
+                                &format!("“{title}” saved with licence and attribution"),
+                            );
                         }
                         Err(e) => {
                             self.dl_last = format!("“{title}” failed: {e}");
-                            cx.toast(&self.dl_last.clone());
+                            cx.notify("Download failed", &self.dl_last.clone());
                         }
                     }
                     self.next_download(cx);

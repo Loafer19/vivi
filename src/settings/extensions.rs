@@ -71,6 +71,12 @@ pub(crate) fn extensions_page(r: &mut Rows) {
         "Download the plugin catalog at most once a day when Vivi starts. Nothing else is sent.",
         auto,
     );
+    r.toggle(
+        &format!("ext.{}", crate::notify::KEY),
+        "Desktop notifications from extensions",
+        "Plugins that can notify (for example when a download finishes) show a system notification. Off: the message shows in the player instead.",
+        crate::notify::enabled(r.c),
+    );
     let startup = plugins::scripts::load_on_startup(r.c);
     r.toggle(
         "scripts.startup",
