@@ -478,48 +478,70 @@ fn all_scripts(entries: &[Entry]) -> Vec<scripts::Script> {
     v
 }
 
-/// mpv `script-opts` value for a package setting (mp.options wants yes/no booleans).
-fn script_opt(id: &str, key: &str, value: &str) -> String {
+/// mpv `script-opts` entries for a package setting (mp.options wants yes/no booleans).
+///
+/// `mp.options.read_options(o, "youtube")` takes every `youtube-*` key, so the
+/// `youtube-music-folder` of a `youtube-music` package would reach the `youtube` script
+/// as `music-folder`. Script-opts keys are global, so the host avoids the clash: a
+/// package id with dashes also gets its options under the id with underscores
+/// (`youtube_music-folder`, mpv's own script name, which no other id can be a dashed
+/// prefix of, since ids have no underscores), and the dashed form is only set while no
+/// other script's id plus `-` is a prefix of it. Packages read
+/// `read_options(o, id:gsub("-", "_"))` to be safe; older ones that use the dashed id keep
+/// working while there is no clash.
+fn script_opts<'a>(
+    id: &str,
+    key: &str,
+    value: &str,
+    others: impl IntoIterator<Item = &'a str>,
+) -> Vec<String> {
     let v = match value {
         "true" => "yes",
         "false" => "no",
         v => v,
     };
-    format!("{id}-{key}={}", v.replace(',', " "))
+    let v = v.replace(',', " ");
+    let safe = id.replace('-', "_");
+    let clash = others
+        .into_iter()
+        .any(|o| o != id && id.strip_prefix(o).is_some_and(|r| r.starts_with('-')));
+    let mut out = Vec::new();
+    if !clash {
+        out.push(format!("{id}-{key}={v}"));
+    }
+    if safe != id || clash {
+        out.push(format!("{safe}-{key}={v}"));
+    }
+    out
 }
 
 impl Registry {
+    /// Set a package option in mpv's `script-opts` (see [`script_opts`]).
+    fn set_opt(&self, id: &str, key: &str, value: &str) {
+        let ids = self.scripts.iter().map(|s| s.manifest.id.as_str());
+        for o in script_opts(id, key, value, ids) {
+            self.player
+                .cmd("change-list", &["script-opts", "append", &o]);
+        }
+    }
+
     /// Load an mpv script once (packages get their settings as script-opts first).
     fn load_script(&mut self, s: &scripts::Script) {
         if !self.loaded.insert(s.manifest.id.clone()) {
             return;
         }
         if s.manifest.origin == Origin::Package {
-            let c = self.cfg.borrow();
+            let c = self.cfg.borrow().clone();
             for st in &s.manifest.settings {
                 if matches!(st.kind, SettingKind::Action(_)) {
                     continue;
                 }
                 let v = setting_value(&c, &s.manifest, &st.key);
-                self.player.cmd(
-                    "change-list",
-                    &[
-                        "script-opts",
-                        "append",
-                        &script_opt(&s.manifest.id, &st.key, &v),
-                    ],
-                );
+                self.set_opt(&s.manifest.id, &st.key, &v);
             }
             // Where the package lives (helpers are in `<pkgdir>/bin`).
             if let Some(dir) = s.path.parent() {
-                self.player.cmd(
-                    "change-list",
-                    &[
-                        "script-opts",
-                        "append",
-                        &format!("{}-pkgdir={}", s.manifest.id, dir.display()),
-                    ],
-                );
+                self.set_opt(&s.manifest.id, "pkgdir", &dir.display().to_string());
             }
         }
         let path = s.path.to_string_lossy();
@@ -697,10 +719,7 @@ fn store_setting(id: &str, key: &str, value: &str) {
             .settings
             .insert(key.into(), value.into());
         save(&r.cfg);
-        r.player.cmd(
-            "change-list",
-            &["script-opts", "append", &script_opt(id, key, value)],
-        );
+        r.set_opt(id, key, value);
     });
     crate::settings::refresh_ui();
 }
@@ -1060,10 +1079,7 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                     .settings
                     .insert(key.into(), value.into());
                 save(&r.cfg);
-                r.player.cmd(
-                    "change-list",
-                    &["script-opts", "append", &script_opt(id, key, value)],
-                );
+                r.set_opt(id, key, value);
                 return None;
             }
             let on = value == "true";
@@ -1078,6 +1094,7 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                 if r.loaded.contains(id) {
                     format!("{} is already running", s.manifest.name)
                 } else {
+                    eprintln!("vivi: script {id}: enabled, loading it now");
                     r.load_script(&s);
                     format!("Loaded {}", s.manifest.name)
                 }
@@ -1143,6 +1160,28 @@ fn save(cfg: &Rc<RefCell<Config>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_opts_do_not_leak_into_prefix_ids() {
+        let ids = ["youtube", "youtube-music", "offline-downloads"];
+        // The longer id is not set under `youtube-…`, which the `youtube` script would read.
+        assert_eq!(
+            script_opts("youtube-music", "folder", "/m", ids),
+            ["youtube_music-folder=/m"]
+        );
+        assert_eq!(script_opts("youtube", "url", "u", ids), ["youtube-url=u"]);
+        // No clash: the dashed form (older packages) plus the underscore one.
+        assert_eq!(
+            script_opts("offline-downloads", "on", "true", ids),
+            ["offline-downloads-on=yes", "offline_downloads-on=yes"]
+        );
+        assert_eq!(
+            script_opts("youtube-music", "x", "a,b", ["youtube-music"]),
+            ["youtube-music-x=a b", "youtube_music-x=a b"]
+        );
+        // "you" is not a dashed prefix of "youtube-music".
+        assert_eq!(script_opts("youtube-music", "x", "1", ["you"]).len(), 2);
+    }
 
     #[test]
     fn defaults_and_overrides() {

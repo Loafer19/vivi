@@ -349,7 +349,12 @@ default = "Medium"
 
 Settings become mpv `script-opts` (`<id>-<key>=<value>`; toggles as `yes`/`no`) that the
 script reads with `mp.options.read_options(o, "<id>", on_update)`. Changes in Settings are
-applied live with `change-list script-opts append`. An `action` setting sends
+applied live with `change-list script-opts append`. Script-opts keys are global and
+mp.options takes every `<identifier>-*` key, so a package whose id has dashes also gets
+them as `<id with _>-<key>` (`youtube_music-folder`), and the dashed form is left out
+when another script's id plus `-` is a prefix of the package id (`youtube` would
+otherwise read `youtube-music-folder` as its own `music-folder`). New packages should
+read `mp.options.read_options(o, ("<id>"):gsub("-", "_"), on_update)` (Vivi 0.13+). An `action` setting sends
 `script-message-to <script> <key>` (mpv names the script after the entry file with `-`
 replaced by `_`, e.g. `ab_loop`).
 
