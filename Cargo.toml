@@ -50,3 +50,5 @@ lto = false
 codegen-units = 16
 incremental = false
 debug = 0
+# Tests always build with unwind; matching it lets `cargo test --profile ci` reuse the build's deps.
+panic = "unwind"
