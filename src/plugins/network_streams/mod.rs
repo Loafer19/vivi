@@ -19,7 +19,7 @@ use crate::Item;
 use serde::{Deserialize, Serialize};
 use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 
 mod library;
@@ -197,14 +197,14 @@ pub struct NetworkStreams {
     /// Station picked in the browser, for the now-playing card.
     playing: Option<Stream>,
     np_url: String,
-    logo_task: crate::util::Task<(String, Option<PathBuf>)>,
+    logo_task: crate::util::Task<(String, Option<LogoImg>)>,
     poll: u32,
     /// Unfiltered results; `list` is its view (group chip + live filter + favorites first).
     all: Vec<Stream>,
     filtered_by: String,
     /// Row logos (by logo URL) and their background loader.
     logos: std::collections::HashMap<String, slint::Image>,
-    row_logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
+    row_logo_rx: Option<Receiver<(String, Option<LogoImg>)>>,
     logos_dirty: bool,
     /// Active group chip ("" = all).
     chip: String,
@@ -306,8 +306,8 @@ impl NetworkStreams {
         self.row_logo_rx = Some(rx);
         std::thread::spawn(move || {
             for l in want {
-                let p = fetch_logo(&l);
-                if tx.send((l, p)).is_err() {
+                let img = fetch_logo(&l).and_then(|p| decode_logo(&p, LOGO_MAX));
+                if tx.send((l, img)).is_err() {
                     break;
                 }
             }
@@ -516,22 +516,136 @@ fn known_station(url: &str) -> Option<Stream> {
         .find(|s| s.url == url)
 }
 
-/// Station logo already in the cache (no download).
-pub(crate) fn cached_logo(url: &str) -> Option<PathBuf> {
-    let p = crate::store::cache_dir()
-        .join("stream-logos")
-        .join(hash_name(url));
-    p.is_file().then_some(p)
+/// Largest logo side kept in the cache; logos are shown at 40-96 px.
+pub(crate) const LOGO_MAX: u32 = 128;
+
+fn logo_dir() -> PathBuf {
+    crate::store::cache_dir().join("stream-logos")
 }
 
-/// Download a station logo into the cache (once); `None` when it cannot be fetched.
+/// What downloaded logo bytes are, from their first bytes (servers often send HTML error
+/// pages or icons with an image content type).
+#[derive(Debug, PartialEq)]
+pub(crate) enum LogoKind {
+    /// PNG or JPEG: decoded, shrunk to [`LOGO_MAX`] and stored as PNG.
+    Raster,
+    Svg,
+    /// Anything else (HTML, ICO, GIF, WebP, ...): not stored.
+    Other,
+}
+
+pub(crate) fn sniff_logo(b: &[u8]) -> LogoKind {
+    if b.starts_with(b"\x89PNG\r\n\x1a\n") || b.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return LogoKind::Raster;
+    }
+    let head = String::from_utf8_lossy(&b[..b.len().min(1024)]).to_ascii_lowercase();
+    if head.contains("<svg") {
+        LogoKind::Svg
+    } else {
+        LogoKind::Other
+    }
+}
+
+/// Write logo bytes next to `base` (the extension-less cache name) with the extension of
+/// their real format; raster logos are shrunk to [`LOGO_MAX`]. `None` = not an image.
+fn store_logo(base: &Path, b: &[u8]) -> Option<PathBuf> {
+    match sniff_logo(b) {
+        LogoKind::Raster => {
+            let img = image::load_from_memory(b).ok()?;
+            let img = if img.width() > LOGO_MAX || img.height() > LOGO_MAX {
+                img.thumbnail(LOGO_MAX, LOGO_MAX)
+            } else {
+                img
+            };
+            let out = base.with_extension("png");
+            let tmp = base.with_extension("tmp");
+            img.to_rgba8()
+                .save_with_format(&tmp, image::ImageFormat::Png)
+                .ok()?;
+            std::fs::rename(&tmp, &out).ok()?;
+            Some(out)
+        }
+        LogoKind::Svg => {
+            let out = base.with_extension("svg");
+            std::fs::write(&out, b).ok()?;
+            Some(out)
+        }
+        LogoKind::Other => None,
+    }
+}
+
+/// Station logo already in the cache (no download, no decoding).
+pub(crate) fn cached_logo(url: &str) -> Option<PathBuf> {
+    let base = logo_dir().join(hash_name(url));
+    ["png", "svg"]
+        .iter()
+        .map(|e| base.with_extension(e))
+        .find(|p| p.is_file())
+}
+
+/// Older versions saved logos as they came, without an extension, so Slint could not tell
+/// their format and every one failed to load. Convert those once (shrinking raster logos)
+/// and delete the ones that are not images. Returns how many logos became usable.
+pub(crate) fn migrate_logo_cache() -> usize {
+    let Ok(rd) = std::fs::read_dir(logo_dir()) else {
+        return 0;
+    };
+    let mut n = 0;
+    for p in rd.flatten().map(|e| e.path()) {
+        if p.extension().is_some() || !p.is_file() {
+            continue;
+        }
+        if let Ok(b) = std::fs::read(&p) {
+            n += usize::from(store_logo(&p, &b).is_some());
+        }
+        let _ = std::fs::remove_file(&p);
+    }
+    n
+}
+
+/// A cached logo decoded off the UI thread; [`LogoImg::into_image`] (UI thread) is cheap.
+pub(crate) enum LogoImg {
+    Pixels(slint::SharedPixelBuffer<slint::Rgba8Pixel>),
+    Svg(PathBuf),
+}
+
+impl LogoImg {
+    pub(crate) fn into_image(self) -> Option<slint::Image> {
+        match self {
+            Self::Pixels(b) => Some(slint::Image::from_rgba8(b)),
+            Self::Svg(p) => slint::Image::load_from_path(&p).ok(),
+        }
+    }
+}
+
+/// Decode a cached logo or picture (call from a worker thread), shrunk to fit `max` px.
+pub(crate) fn decode_logo(p: &Path, max: u32) -> Option<LogoImg> {
+    if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg")) {
+        return Some(LogoImg::Svg(p.to_path_buf()));
+    }
+    let img = image::open(p).ok()?;
+    let img = if img.width() > max || img.height() > max {
+        img.thumbnail(max, max)
+    } else {
+        img
+    };
+    let img = img.into_rgba8();
+    Some(LogoImg::Pixels(slint::SharedPixelBuffer::clone_from_slice(
+        img.as_raw(),
+        img.width(),
+        img.height(),
+    )))
+}
+
+/// Download a station logo into the cache (once); `None` when it cannot be fetched or
+/// is not an image.
 fn fetch_logo(url: &str) -> Option<PathBuf> {
-    let dir = crate::store::cache_dir().join("stream-logos");
-    let p = dir.join(hash_name(url));
-    let miss = p.with_extension("none");
-    if p.is_file() {
+    if let Some(p) = cached_logo(url) {
         return Some(p);
     }
+    let dir = logo_dir();
+    let base = dir.join(hash_name(url));
+    let miss = base.with_extension("none");
     // Broken logo URLs are remembered for a week instead of being retried every time.
     if std::fs::metadata(&miss)
         .and_then(|m| m.modified())
@@ -542,16 +656,14 @@ fn fetch_logo(url: &str) -> Option<PathBuf> {
         return None;
     }
     std::fs::create_dir_all(&dir).ok()?;
-    match web::get_bytes(url, 2 * 1024 * 1024) {
-        Ok(Some(b)) if !b.is_empty() => {
-            std::fs::write(&p, b).ok()?;
-            Some(p)
-        }
-        _ => {
-            let _ = std::fs::write(&miss, b"");
-            None
-        }
+    let stored = match web::get_bytes(url, 2 * 1024 * 1024) {
+        Ok(Some(b)) if !b.is_empty() => store_logo(&base, &b),
+        _ => None,
+    };
+    if stored.is_none() {
+        let _ = std::fs::write(&miss, b"");
     }
+    stored
 }
 
 /// Short stable file name for a URL.
@@ -618,7 +730,9 @@ impl NetworkStreams {
             a.global::<crate::NowPlaying>().set_station(name.into());
             if let Some(logo) = st.map(|s| s.logo).filter(|l| l.starts_with("http")) {
                 let u = path.clone();
-                self.logo_task = crate::util::Task::spawn(move || (u, fetch_logo(&logo)));
+                self.logo_task = crate::util::Task::spawn(move || {
+                    (u, fetch_logo(&logo).and_then(|p| decode_logo(&p, LOGO_MAX)))
+                });
             }
         }
         let g = |k: &str| cx.player.get(k).filter(|v| !v.trim().is_empty());
@@ -1051,9 +1165,7 @@ impl Plugin for NetworkStreams {
         if let Some(rx) = &self.row_logo_rx {
             let mut got = false;
             while let Ok((url, p)) = rx.try_recv() {
-                let img = p
-                    .and_then(|p| slint::Image::load_from_path(&p).ok())
-                    .unwrap_or_default();
+                let img = p.and_then(LogoImg::into_image).unwrap_or_default();
                 self.logos.insert(url, img);
                 got = true;
             }
@@ -1084,7 +1196,7 @@ impl Plugin for NetworkStreams {
         }
         if let Some((url, path)) = self.logo_task.poll() {
             if url == self.np_url {
-                match path.and_then(|p| slint::Image::load_from_path(&p).ok()) {
+                match path.and_then(LogoImg::into_image) {
                     Some(img) => {
                         cx.app.global::<crate::NowPlaying>().set_logo(img);
                         cx.app.global::<crate::NowPlaying>().set_has_logo(true);
@@ -1131,6 +1243,35 @@ impl Plugin for NetworkStreams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn logos_are_sniffed_shrunk_and_migrated() {
+        assert_eq!(
+            sniff_logo(b"<html><body>404</body></html>"),
+            LogoKind::Other
+        );
+        assert_eq!(
+            sniff_logo(b"<?xml version=\"1.0\"?><svg xmlns=\"\"/>"),
+            LogoKind::Svg
+        );
+        assert_eq!(sniff_logo(&[0xFF, 0xD8, 0xFF, 0xE0]), LogoKind::Raster);
+        let dir = std::env::temp_dir().join(format!("vivi-logos-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(600, 300, image::Rgba([200, 10, 10, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        assert_eq!(sniff_logo(&png), LogoKind::Raster);
+        let out = store_logo(&dir.join("a"), &png).unwrap();
+        assert_eq!(out, dir.join("a.png"));
+        assert_eq!(image::image_dimensions(&out).unwrap(), (128, 64));
+        assert!(store_logo(&dir.join("b"), b"<html>").is_none());
+        let Some(LogoImg::Pixels(px)) = decode_logo(&out, 32) else {
+            panic!("png logo did not decode");
+        };
+        assert_eq!((px.width(), px.height()), (32, 16));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn m3u_iptv() {

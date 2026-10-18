@@ -6,7 +6,7 @@ use crate::player::Player;
 use crate::{store, AppWindow, Item, LibItem};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -104,9 +104,14 @@ impl Lib {
                 crate::plugins::network_streams::cached_logo(&e.image)
                     .or_else(|| crate::plugins::free_music::cached_cover(&e.image))
             };
-            if let Some(i) = img.and_then(|p| slint::Image::load_from_path(&p).ok()) {
-                it.thumb = i;
-                it.has_thumb = true;
+            if let Some(p) = img {
+                // Decoded on a worker; rows keyed by the file get it when it is ready.
+                let key = p.to_string_lossy().into_owned();
+                it.thumb_key = key.as_str().into();
+                if let Some(i) = picture(&key) {
+                    it.thumb = i;
+                    it.has_thumb = true;
+                }
             }
         }
         it
@@ -642,25 +647,22 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     let thumbs = (cfg.borrow().library.thumbnails && library::ffmpeg_available()).then(|| {
         library::thumb_worker(move |path, file| {
             let _ = slint::invoke_from_event_loop(move || {
-                let Some(img) = library::load_thumb(&file) else {
-                    return;
-                };
-                MODELS.with(|ms| {
-                    for m in ms.borrow().iter() {
-                        for i in 0..m.row_count() {
-                            if let Some(mut r) =
-                                m.row_data(i).filter(|r| r.thumb_key.as_str() == path)
-                            {
-                                r.thumb = img.clone();
-                                r.has_thumb = true;
-                                m.set_row_data(i, r);
-                            }
-                        }
-                    }
-                });
+                if let Some(img) = library::load_thumb(&file) {
+                    set_thumb(&path, &img);
+                }
             });
         })
     });
+
+    // Station logos cached by older versions (no file extension, never loadable).
+    {
+        let w = app.as_weak();
+        std::thread::spawn(move || {
+            if crate::plugins::network_streams::migrate_logo_cache() > 0 {
+                let _ = w.upgrade_in_event_loop(|a| a.global::<crate::Library>().invoke_refresh());
+            }
+        });
+    }
 
     let db = library::db_path();
     let media = library::open_db(&db)
@@ -1306,4 +1308,58 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
 
 thread_local! {
     static LOADED: RefCell<Option<Vec<Media>>> = const { RefCell::new(None) };
+    /// Recent pictures (station logos, covers, web thumbnails) by file, decoded once per
+    /// run on a worker thread; `None` while decoding or when the file is not an image.
+    static PICS: RefCell<HashMap<String, Option<slint::Image>>> = RefCell::default();
+    static PIC_TX: RefCell<Option<std::sync::mpsc::Sender<String>>> = const { RefCell::new(None) };
+}
+
+/// Show `img` on every library row whose `thumb_key` is `key`.
+fn set_thumb(key: &str, img: &slint::Image) {
+    MODELS.with(|ms| {
+        for m in ms.borrow().iter() {
+            for i in 0..m.row_count() {
+                if let Some(mut r) = m.row_data(i).filter(|r| r.thumb_key.as_str() == key) {
+                    r.thumb = img.clone();
+                    r.has_thumb = true;
+                    m.set_row_data(i, r);
+                }
+            }
+        }
+    });
+}
+
+/// The decoded picture for `path` if it is ready. Otherwise queues it once for the
+/// decoder thread (shrunk to the thumbnail size), which fills the rows keyed by `path`.
+fn picture(path: &str) -> Option<slint::Image> {
+    if let Some(v) = PICS.with(|p| p.borrow().get(path).cloned()) {
+        return v;
+    }
+    PICS.with(|p| p.borrow_mut().insert(path.to_string(), None));
+    PIC_TX.with(|t| {
+        let mut t = t.borrow_mut();
+        let tx = t.get_or_insert_with(|| {
+            let (tx, rx) = std::sync::mpsc::channel::<String>();
+            let _ = std::thread::Builder::new()
+                .name("vivi-pictures".into())
+                .spawn(move || {
+                    while let Ok(p) = rx.recv() {
+                        let img = crate::plugins::network_streams::decode_logo(
+                            Path::new(&p),
+                            library::THUMB_W,
+                        );
+                        let _ = slint::invoke_from_event_loop(move || {
+                            let Some(img) = img.and_then(|i| i.into_image()) else {
+                                return;
+                            };
+                            PICS.with(|c| c.borrow_mut().insert(p.clone(), Some(img.clone())));
+                            set_thumb(&p, &img);
+                        });
+                    }
+                });
+            tx
+        });
+        let _ = tx.send(path.to_string());
+    });
+    None
 }
