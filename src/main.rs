@@ -39,6 +39,27 @@ use std::time::Duration;
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --version / --help answer before any window, mpv or thread starts.
+    let (cli, links) = match app::cli::parse(std::env::args().skip(1)) {
+        app::cli::Cli::Version => {
+            println!("{}", app::cli::version());
+            return Ok(());
+        }
+        app::cli::Cli::Help => {
+            print!("{}", app::cli::USAGE);
+            return Ok(());
+        }
+        app::cli::Cli::Run {
+            files,
+            links,
+            unknown,
+        } => {
+            for u in unknown {
+                eprintln!("vivi: unknown option {u} (ignored; see vivi --help)");
+            }
+            (files, links)
+        }
+    };
     app::startup::init()?;
 
     let app = AppWindow::new()?;
@@ -62,9 +83,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // First CLI file opens once rendering is ready; further files are queued.
     // vivi://plugin/<id> (marketplace "Open in Vivi") opens the plugin in Extensions → Browse.
-    let (links, cli): (Vec<String>, Vec<String>) = std::env::args()
-        .skip(1)
-        .partition(|a| a.starts_with("vivi://"));
     if let Some(id) = links.iter().find_map(|a| plugins::packages::deep_link(a)) {
         open_plugin_link(&app, &id);
     }
