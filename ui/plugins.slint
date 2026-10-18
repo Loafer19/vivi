@@ -44,22 +44,25 @@ component SyncLine inherits Rectangle {
     in property <string> name: root.label; // screen-reader text
     callback activated();
     callback moved(); // pointer moved over the line: keep the player chrome shown
+    // Player chrome shown: when it auto-hides the pointer is hidden, so is the hover.
+    in property <bool> chrome: true;
+    property <bool> hover: ta.has-hover && root.chrome;
     border-radius: Metrics.radius-lg;
-    background: ta.has-hover ? Theme.stage-chip-hover : transparent;
+    background: root.hover ? Theme.stage-chip-hover : transparent;
     animate background { duration: 120ms; }
     HorizontalLayout {
         padding-left: 12px; padding-right: 12px; padding-top: 3px; padding-bottom: 3px;
         Text {
             visible: root.label != "";
             text: root.label; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center;
-            font-size: root.size; font-weight: root.weight; color: root.fg; opacity: ta.has-hover || kf.has-focus ? 1 : root.dim;
+            font-size: root.size; font-weight: root.weight; color: root.fg; opacity: root.hover || kf.has-focus ? 1 : root.dim;
             min-height: root.size * 0.9;
         }
     }
     ta := TouchArea {
         accessible-role: button; accessible-label: "Sync lyrics to this line: " + root.name;
         accessible-action-default => { root.activated(); }
-        mouse-cursor: pointer; clicked => { root.activated(); }
+        mouse-cursor: root.chrome ? MouseCursor.pointer : MouseCursor.none; clicked => { root.activated(); }
         changed mouse-x => { root.moved(); }
         changed mouse-y => { root.moved(); }
     }
@@ -97,6 +100,7 @@ export component LyricsView inherits Rectangle {
     in property <bool> live;
     callback cmd(string, string);
     callback activity(); // pointer moved over a line
+    in property <bool> chrome: true; // player chrome shown (hover hides with it)
     property <length> line-h: root.size * 1.7;
     property <int> visible-lines: root.plain ? 8 : 5;
     // Dim the picture behind the lyrics (off over the visualizer).
@@ -131,7 +135,7 @@ export component LyricsView inherits Rectangle {
                 x: (root.width - self.width) / 2; width: min(root.width, 760px);
                 y: (i - root.index + 2) * root.line-h; height: root.line-h;
                 animate y { duration: 260ms; easing: ease-out; }
-                name: l; activated => { root.cmd("sync-line", i); } moved => { root.activity(); }
+                name: l; activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
             }
         }
     }
@@ -144,7 +148,7 @@ export component LyricsView inherits Rectangle {
             for l[i] in root.lines: SyncLine {
                 label: l == "" ? " " : l; size: root.size * 0.8; weight: 500; fg: Theme.on-media; dim: 0.85;
                 name: l == "" ? "instrumental" : l;
-                activated => { root.cmd("sync-line", i); } moved => { root.activity(); }
+                activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
             }
         }
     }
@@ -1222,7 +1226,7 @@ export component KaraokeView inherits Rectangle {
                         : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
                     animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
                     name: l == "" ? "instrumental" : l;
-                    activated => { root.cmd("sync-line", i); } moved => { root.activity(); }
+                    activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
                 }
             }
         }
@@ -1235,7 +1239,7 @@ export component KaraokeView inherits Rectangle {
                 for l[i] in root.lines: SyncLine {
                     label: l == "" ? "♪" : l; size: root.small * 1.05;
                     name: l == "" ? "instrumental" : l;
-                    activated => { root.cmd("sync-line", i); } moved => { root.activity(); }
+                    activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
                 }
             }
         }

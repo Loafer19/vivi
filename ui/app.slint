@@ -679,8 +679,9 @@ export component AppWindow inherits Window {
         key-pressed(e) => {
             root.activity();
             if (root.key(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt)) { return accept; }
-            // Tab moves focus only inside an open dialog.
-            if (e.text == Key.Tab || e.text == Key.Backtab) { return root.dialog-open ? reject : accept; }
+            // Tab moves focus only inside an open dialog, or to the lines of live-stream
+            // lyrics (to sync them with Enter).
+            if (e.text == Key.Tab || e.text == Key.Backtab) { return root.dialog-open || (Lyrics.live && Lyrics.lines.length > 0) ? reject : accept; }
             reject
         }
     }
@@ -722,7 +723,7 @@ export component AppWindow inherits Window {
         y: Viz.audio && Viz.mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
         backdrop: !(Viz.audio && Viz.mode > 0);
-        live: Lyrics.live; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); } activity => { root.activity(); }
+        live: Lyrics.live; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); } activity => { root.activity(); } chrome: root.show-ui;
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
