@@ -32,6 +32,57 @@ export component SkipButton inherits Rectangle {
     ta := TouchArea { accessible-role: button; accessible-label: root.text; width: parent.width - 34px; x: 0; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
+// A lyrics line of a live stream: click it, or focus it (Tab) and press Enter / Space,
+// when it is being sung to sync the lyrics to it. `label` "" = hit area only (drawn over
+// the animated karaoke lines).
+component SyncLine inherits Rectangle {
+    in property <string> label;
+    in property <length> size: 16px;
+    in property <int> weight: 600;
+    in property <color> fg: Theme.stage-fg;
+    in property <float> dim: 0.86;
+    in property <string> name: root.label; // screen-reader text
+    callback activated();
+    border-radius: Metrics.radius-lg;
+    background: ta.has-hover ? Theme.stage-chip-hover : transparent;
+    animate background { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; padding-top: 3px; padding-bottom: 3px;
+        Text {
+            visible: root.label != "";
+            text: root.label; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center;
+            font-size: root.size; font-weight: root.weight; color: root.fg; opacity: ta.has-hover || kf.has-focus ? 1 : root.dim;
+            min-height: root.size * 0.9;
+        }
+    }
+    ta := TouchArea {
+        accessible-role: button; accessible-label: "Sync lyrics to this line: " + root.name;
+        accessible-action-default => { root.activated(); }
+        mouse-cursor: pointer; clicked => { root.activated(); }
+    }
+    kf := FocusScope {
+        focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+}
+
+// "Click the line being sung to sync": the hint of a live stream's unsynced list.
+component SyncHint inherits Rectangle {
+    in property <color> fg: Theme.stage-fg;
+    in property <color> chip: Theme.stage-chip;
+    width: ht.preferred-width + 28px; height: 28px; border-radius: self.height / 2;
+    background: root.chip;
+    ht := Text {
+        text: "Live stream · click the line being sung to sync";
+        color: root.fg.with-alpha(0.72); font-size: Metrics.font-sm; font-weight: 600;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+}
+
 // Karaoke lyrics: the current line in the accent color, neighbours fading out; the
 // block scrolls smoothly as lines change. Drawn over video or the visualizer.
 export component LyricsView inherits Rectangle {
@@ -39,6 +90,9 @@ export component LyricsView inherits Rectangle {
     in property <int> index: -1;
     in property <length> size: 22px;
     in property <bool> plain;
+    // Live stream with synced lyrics: lines can be clicked to sync (see SyncLine).
+    in property <bool> live;
+    callback cmd(string, string);
     property <length> line-h: root.size * 1.7;
     property <int> visible-lines: root.plain ? 8 : 5;
     // Dim the picture behind the lyrics (off over the visualizer).
@@ -66,9 +120,33 @@ export component LyricsView inherits Rectangle {
             opacity: i == root.index ? 1 : max(0.15, 0.7 - self.d * 0.2);
             animate opacity, color { duration: 200ms; }
         }
+        // Live stream: click another line to re-sync.
+        if root.live: Rectangle {
+            for l[i] in root.lines: SyncLine {
+                visible: abs(i - root.index) <= 2;
+                x: (root.width - self.width) / 2; width: min(root.width, 760px);
+                y: (i - root.index + 2) * root.line-h; height: root.line-h;
+                animate y { duration: 260ms; easing: ease-out; }
+                name: l; activated => { root.cmd("sync-line", i); }
+            }
+        }
     }
+    // Live stream, not synced yet: every line clickable, with the hint on top.
+    if root.plain && root.live: Flickable {
+        x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
+        content-height: lcol.preferred-height;
+        lcol := VerticalLayout {
+            padding-top: 12px + 36px; padding-bottom: 12px; padding-left: 8px; padding-right: 8px;
+            for l[i] in root.lines: SyncLine {
+                label: l == "" ? " " : l; size: root.size * 0.8; weight: 500; fg: Theme.on-media; dim: 0.85;
+                name: l == "" ? "instrumental" : l;
+                activated => { root.cmd("sync-line", i); }
+            }
+        }
+    }
+    if root.plain && root.live: SyncHint { x: (parent.width - self.width) / 2; y: 10px; fg: Theme.on-media; chip: Theme.media-chip; }
     // Plain lyrics (no timing): every line, scroll with the wheel or by dragging.
-    if root.plain: Flickable {
+    if root.plain && !root.live: Flickable {
         x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
         content-height: col.preferred-height;
         col := VerticalLayout {
@@ -1025,6 +1103,10 @@ export component KaraokeView inherits Rectangle {
     in property <[string]> lines;
     in property <int> index: -1;
     in property <bool> plain;
+    // Live stream with synced lyrics: lines are clickable to sync (the offset stepper
+    // fine-tunes it once synced).
+    in property <bool> live;
+    property <bool> can-offset: !(root.live && root.plain);
     in property <[KWord]> words;
     in property <int> rows;
     in property <string> title;
@@ -1123,9 +1205,39 @@ export component KaraokeView inherits Rectangle {
                     }
                 }
             }
+            // Live stream: click another line to re-sync (hit areas over the lines).
+            if root.live: Rectangle {
+                for l[i] in root.lines: SyncLine {
+                    property <int> d: i - root.index;
+                    property <bool> cur: i == root.index;
+                    visible: abs(self.d) <= 6;
+                    x: root.side - 12px; width: area.width - 2 * root.side + 24px;
+                    height: self.cur ? root.cur-h : root.pitch;
+                    y: self.cur ? area.mid - root.cur-h / 2
+                        : self.d < 0 ? area.mid - root.cur-h / 2 + self.d * root.pitch
+                        : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
+                    animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
+                    name: l == "" ? "instrumental" : l;
+                    activated => { root.cmd("sync-line", i); }
+                }
+            }
         }
+        // Live stream, not synced yet: every line, clickable, under the hint.
+        if root.plain && root.live: Flickable {
+            x: root.side - 12px; width: area.width - 2 * root.side + 24px;
+            content-height: lcol.preferred-height;
+            lcol := VerticalLayout {
+                padding-top: 24px + 40px; padding-bottom: 48px; spacing: 2px;
+                for l[i] in root.lines: SyncLine {
+                    label: l == "" ? "♪" : l; size: root.small * 1.05;
+                    name: l == "" ? "instrumental" : l;
+                    activated => { root.cmd("sync-line", i); }
+                }
+            }
+        }
+        if root.plain && root.live: SyncHint { x: (parent.width - self.width) / 2; y: 12px; }
         // Plain lyrics: the whole text, scroll with the wheel or by dragging.
-        if root.plain: Flickable {
+        if root.plain && !root.live: Flickable {
             x: root.side; width: area.width - 2 * root.side;
             content-height: pcol.preferred-height;
             pcol := VerticalLayout {
@@ -1173,17 +1285,18 @@ export component KaraokeView inherits Rectangle {
             VerticalLayout { alignment: center;
                 Rectangle {
                     height: 34px; width: orow.preferred-width; border-radius: self.height / 2; background: Theme.stage-chip;
+                    opacity: root.can-offset ? 1 : 0.4;
                     border-width: 1px; border-color: Theme.stage-chip-line;
                     orow := HorizontalLayout {
                         Rectangle { width: 40px; border-radius: self.height / 2; background: m.has-hover ? Theme.stage-chip-hover : transparent;
                             Text { text: "−"; color: Theme.stage-fg; font-size: Metrics.font-h3; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-                            m := TouchArea { accessible-role: button; accessible-label: "Lyrics offset −0.1 s"; mouse-cursor: pointer; clicked => { root.cmd("offset", "-0.1"); } } }
+                            m := TouchArea { enabled: root.can-offset; accessible-role: button; accessible-label: "Lyrics offset −0.1 s"; mouse-cursor: pointer; clicked => { root.cmd("offset", "-0.1"); } } }
                         Rectangle { width: 76px;
                             Text { text: root.offset; color: root.offset-s == 0 ? Theme.stage-fg.with-alpha(0.69) : Theme.accent; font-family: "DM Mono"; font-size: Metrics.font-md; horizontal-alignment: center; vertical-alignment: center; }
-                            TouchArea { accessible-role: button; accessible-label: "Lyrics offset " + root.offset + " (double-click to reset)"; accessible-action-default => { root.cmd("offset", "reset"); } mouse-cursor: pointer; double-clicked => { root.cmd("offset", "reset"); } } }
+                            TouchArea { enabled: root.can-offset; accessible-role: button; accessible-label: "Lyrics offset " + root.offset + " (double-click to reset)"; accessible-action-default => { root.cmd("offset", "reset"); } mouse-cursor: pointer; double-clicked => { root.cmd("offset", "reset"); } } }
                         Rectangle { width: 40px; border-radius: self.height / 2; background: p.has-hover ? Theme.stage-chip-hover : transparent;
                             Text { text: "+"; color: Theme.stage-fg; font-size: Metrics.font-h3; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-                            p := TouchArea { accessible-role: button; accessible-label: "Lyrics offset +0.1 s"; mouse-cursor: pointer; clicked => { root.cmd("offset", "0.1"); } } }
+                            p := TouchArea { enabled: root.can-offset; accessible-role: button; accessible-label: "Lyrics offset +0.1 s"; mouse-cursor: pointer; clicked => { root.cmd("offset", "0.1"); } } }
                     }
                 }
             }
@@ -1205,7 +1318,9 @@ export component KaraokeView inherits Rectangle {
     Text {
         visible: root.chrome;
         y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
-        text: "L  close   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   Ctrl L  search";
+        text: root.live && root.plain ? "Click or Enter on the line being sung to sync   ·   L  close   ·   Ctrl L  search"
+            : root.live ? "Click a line to re-sync   ·   [  ]  fine-tune ±0.1 s   ·   Shift  ±0.5 s   ·   L  close"
+            : "L  close   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   Ctrl L  search";
         color: Theme.stage-fg.with-alpha(0.33); font-size: Metrics.font-sm;
     }
 }

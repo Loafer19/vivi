@@ -4,6 +4,9 @@ export global Lyrics {
     in-out property <[string]> lines;
     in-out property <int> index: -1;
     in-out property <bool> plain;
+    // Radio with synced lyrics: lines can be clicked (or Enter) to sync them to now
+    // ("sync-line"); `plain` is the unsynced list until the first click.
+    in-out property <bool> live;
     in-out property <float> size: 22;
     in-out property <bool> enabled;
     in-out property <[KWord]> words;

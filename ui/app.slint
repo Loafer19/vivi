@@ -717,12 +717,13 @@ export component AppWindow inherits Window {
         y: Viz.audio && Viz.mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
         backdrop: !(Viz.audio && Viz.mode > 0);
+        live: Lyrics.live; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); }
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
     if Playback.has-media && Overlays.karaoke-open && !Overlays.library-open && !root.mini: KaraokeView {
         width: root.width; height: root.height;
-        lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain;
+        lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain; live: Lyrics.live;
         words: Lyrics.words; rows: Lyrics.rows; big: root.karaoke-big;
         chrome: root.show-ui; activity => { root.activity(); }
         title: Lyrics.title; artist: Lyrics.artist; source: Lyrics.source;

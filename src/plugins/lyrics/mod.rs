@@ -15,10 +15,12 @@
 //!
 //! Network streams (radio): whenever the stream title (`icy-title`, else `media-title`,
 //! usually "Artist - Title") changes, it is parsed and looked up on LRCLIB; ads, jingles
-//! and station IDs are skipped and results are cached (memory + disk). Plain lyrics are
-//! shown as a scrollable block, since the song's start time is unknown. Optionally
-//! ("Radio lyrics: Approximate sync") synced lyrics are timed from the moment the title
-//! changed, shifted by a manual offset.
+//! and station IDs are skipped and results are cached (memory + disk). The song's start
+//! time is unknown, so lyrics are shown as a scrollable list. Synced lyrics can be synced
+//! by hand: clicking (or Enter on) the line being sung anchors that line's timestamp to
+//! the current stream time ([`Anchor`]); from then on they highlight and scroll like any
+//! karaoke, fine-tuned with the same offset control (not saved). A new stream title
+//! drops the anchor.
 
 use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use slint::ComponentHandle;
@@ -74,8 +76,9 @@ pub struct Lyrics {
     path: Option<String>,
     /// Some while a network stream plays.
     radio: Option<Radio>,
-    /// Synced lines are timed from the title change (radio, approximate sync).
-    radio_synced: bool,
+    /// Radio with synced lyrics: lines can be clicked to sync them (see [`Anchor`]).
+    live: bool,
+    anchor: Anchor,
     /// Lyrics being shown and where they come from.
     current: Option<Found>,
     track: Option<Track>,
@@ -91,10 +94,12 @@ pub struct Lyrics {
 impl Lyrics {
     fn show(&mut self, cx: &Ctx, lrc: Option<Lrc>) {
         self.index = None;
-        self.radio_synced = false;
+        self.live = false;
+        self.anchor.clear();
         self.word_line = None;
         self.words = None;
         cx.app.global::<crate::Lyrics>().set_plain(false);
+        cx.app.global::<crate::Lyrics>().set_live(false);
         cx.app
             .global::<crate::Lyrics>()
             .set_words(ModelRc::new(VecModel::<crate::KWord>::default()));
@@ -144,7 +149,36 @@ impl Lyrics {
 
     fn plain(&self) -> bool {
         self.current.as_ref().is_some_and(|c| !c.synced())
-            || self.radio.is_some() && !self.radio_synced
+            || self.radio.is_some() && !self.anchor.synced()
+    }
+
+    /// Radio, synced lyrics just shown: start as the unsynced, clickable list.
+    fn radio_list(&mut self, cx: &Ctx) {
+        self.live = true;
+        self.anchor.clear();
+        self.offset = 0.0;
+        cx.app.global::<crate::Lyrics>().set_plain(true);
+        cx.app.global::<crate::Lyrics>().set_live(true);
+    }
+
+    /// The user marked line `i` as being sung now (radio): anchor and start highlighting.
+    fn sync_line(&mut self, cx: &Ctx, i: usize) {
+        let Some(line_t) = self
+            .lrc
+            .as_ref()
+            .filter(|_| self.live)
+            .and_then(|l| l.lines.get(i))
+            .map(|l| l.0)
+        else {
+            return;
+        };
+        let now: f64 = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
+        self.anchor.set(now, line_t);
+        self.offset = 0.0;
+        self.index = None;
+        self.word_line = None;
+        cx.app.global::<crate::Lyrics>().set_plain(false);
+        self.update_info(cx);
     }
 
     /// Source, offset and track labels for the karaoke view and the side panel.
@@ -311,8 +345,15 @@ impl Lyrics {
     }
 
     fn set_offset(&mut self, cx: &Ctx, o: f64) {
+        if self.radio.is_some() && !self.anchor.synced() {
+            if self.live {
+                cx.toast("Click the line being sung to sync the lyrics first");
+            }
+            return;
+        }
         self.offset = clamp_offset(o);
-        if !self.key.is_empty() {
+        // Radio: the offset fine-tunes this listen's sync only.
+        if !self.key.is_empty() && self.radio.is_none() {
             save_offset(&offsets_file(), &self.key, self.offset);
         }
         self.update_info(cx);
@@ -561,9 +602,11 @@ impl Lyrics {
         let synced = f.synced();
         self.show_found(cx, Some(f));
         if synced && self.radio.is_some() {
-            self.radio_synced = cx.get("radio-mode") == "Approximate sync";
-            if !self.radio_synced {
-                // Radio without approximate sync: plain block.
+            if click_sync(&cx.get("radio-mode")) {
+                self.radio_list(cx);
+                self.update_info(cx);
+            } else {
+                // Radio, "Plain lyrics": plain block.
                 let cur = self.current.clone();
                 let lines = self.lrc.as_ref().map(|l| l.texts()).unwrap_or_default();
                 self.show(
@@ -674,7 +717,6 @@ impl Lyrics {
             return;
         }
         r.title = raw.clone();
-        r.since = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
         r.task.cancel();
         let station = cx
             .player
@@ -769,9 +811,9 @@ impl Lyrics {
             .filter(|l| !l.lines.is_empty());
         let text = it.best_text().unwrap_or_default();
         match synced {
-            Some(l) if cx.get("radio-mode") == "Approximate sync" => {
+            Some(l) if click_sync(&cx.get("radio-mode")) => {
                 self.show(cx, Some(l));
-                self.radio_synced = true;
+                self.radio_list(cx);
             }
             _ => {
                 let lines: Vec<(f64, String)> =
@@ -818,15 +860,8 @@ impl Plugin for Lyrics {
         .setting(SettingSpec::choice(
             "radio-mode",
             "Radio lyrics",
-            "Network streams: lyrics are looked up when the stream title changes. The song's start is unknown, so synced lyrics can only be timed approximately from the title change.",
-            &["Plain lyrics", "Approximate sync", "Off"],
-        ))
-        .setting(SettingSpec::text(
-            "radio-offset",
-            "Radio sync offset (seconds)",
-            "Approximate sync only: positive shows lines later, negative earlier.",
-            "0",
-            "0",
+            "Network streams: lyrics are looked up when the stream title changes. The song's start is unknown, so they start as a list; with synced lyrics, click the line being sung to sync them.",
+            &["Click a line to sync", "Plain lyrics", "Off"],
         ))
         .setting(SettingSpec::choice(
             "size",
@@ -893,6 +928,11 @@ impl Plugin for Lyrics {
                     }
                 }
             },
+            "sync-line" => {
+                if let Some(i) = idx {
+                    self.sync_line(cx, i);
+                }
+            }
             "search-open" => self.search_open(cx),
             "search" => self.search_run(cx),
             "search-select" => {
@@ -939,11 +979,15 @@ impl Plugin for Lyrics {
         if self.lrc.is_none() || self.plain() {
             return; // plain lyrics: nothing to highlight
         }
-        let mut t: f64 = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
-        if let (Some(r), true) = (&self.radio, self.radio_synced) {
-            t -= r.since + parse_offset(&cx.get("radio-offset"));
-        }
-        t -= self.offset;
+        let now: f64 = cx.player.mpv.get_property("time-pos").unwrap_or(0.0);
+        let t = if self.radio.is_some() {
+            match self.anchor.lyrics_time(now, self.offset) {
+                Some(t) => t,
+                None => return,
+            }
+        } else {
+            now - self.offset
+        };
         let Some(l) = &self.lrc else { return };
         let i = l.index_at(t + 0.15);
         if i != self.index {
@@ -1156,9 +1200,53 @@ mod tests {
         assert_eq!(p("www.radio.fm - best hits"), None);
         assert_eq!(p("Just a title"), None);
         assert_eq!(p(" - "), None);
-        assert_eq!(parse_offset("-2.5"), -2.5);
-        assert_eq!(parse_offset("3s"), 3.0);
-        assert_eq!(parse_offset("x"), 0.0);
+    }
+
+    #[test]
+    fn radio_anchor() {
+        let mut a = Anchor::default();
+        assert!(!a.synced());
+        assert_eq!(a.lyrics_time(100.0, 0.0), None, "unsynced: no time");
+        // Tuned in an hour ago; the line at 0:42 is being sung now.
+        a.set(3600.0, 42.0);
+        assert!(a.synced());
+        assert_eq!(a.lyrics_time(3600.0, 0.0), Some(42.0));
+        assert_eq!(
+            a.lyrics_time(3610.0, 0.0),
+            Some(52.0),
+            "runs with the stream"
+        );
+        // Fine-tune: +0.5 s shows lines later (lyrics time earlier), like file offsets.
+        assert_eq!(a.lyrics_time(3610.0, 0.5), Some(51.5));
+        assert_eq!(a.lyrics_time(3610.0, -0.5), Some(52.5));
+        // The clicked line is the highlighted one right away.
+        let l = Lrc::parse("[00:30.00]A\n[00:42.00]B\n[00:50.00]C");
+        let t = a.lyrics_time(3600.0, 0.0).unwrap();
+        assert_eq!(l.index_at(t + 0.15), Some(1));
+        // Clicking another line re-anchors.
+        a.set(3620.0, 50.0);
+        assert_eq!(a.lyrics_time(3620.0, 0.0), Some(50.0));
+        a.clear();
+        assert!(!a.synced());
+        // Setting values: everything but plain / off syncs by click (old values too).
+        assert!(click_sync("Click a line to sync"));
+        assert!(click_sync("Approximate sync"));
+        assert!(!click_sync("Plain lyrics") && !click_sync("Off"));
+    }
+
+    #[test]
+    fn radio_anchor_fixture() {
+        // Dummy LRC (tests/fixtures): tuned in mid-song, the 4th line is clicked at 1234.5 s.
+        let l = Lrc::parse(include_str!("../../../tests/fixtures/radio-dummy.lrc"));
+        let mut a = Anchor::default();
+        a.set(1234.5, l.lines[3].0);
+        let at = |now: f64, off: f64| a.lyrics_time(now, off).and_then(|t| l.index_at(t + 0.15));
+        assert_eq!(at(1234.5, 0.0), Some(3));
+        assert_eq!(at(1238.5, 0.0), Some(4), "next line 4 s later");
+        // The stream runs 0.5 s ahead of the lyrics: −0.5 s brings the next line in sooner.
+        assert_eq!(at(1238.0, 0.0), Some(3));
+        assert_eq!(at(1238.0, -0.5), Some(4));
+        assert_eq!(at(1238.5, 0.5), Some(3));
     }
 
     #[test]

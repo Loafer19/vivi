@@ -152,22 +152,45 @@ pub(crate) fn plain_lines(it: &LrclibItem) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Seconds from the "Radio sync offset" setting (positive = lyrics later).
-pub(crate) fn parse_offset(s: &str) -> f64 {
-    s.trim()
-        .trim_end_matches('s')
-        .trim()
-        .replace(',', ".")
-        .parse()
-        .unwrap_or(0.0)
+/// Manual sync of synced lyrics on a live stream. The song's start is unknown (you can
+/// tune in mid-song, stations change the title late), so the lyrics start as a list and
+/// the user clicks the line being sung: that line's timestamp is taken as "now".
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct Anchor {
+    /// Stream time (`time-pos`) at which the song's lyrics time is 0.
+    base: Option<f64>,
+}
+
+impl Anchor {
+    pub(crate) fn synced(&self) -> bool {
+        self.base.is_some()
+    }
+    /// The line at `line_t` (lyrics time) is being sung at stream time `now`.
+    /// Clicking another line later simply re-anchors.
+    pub(crate) fn set(&mut self, now: f64, line_t: f64) {
+        self.base = Some(now - line_t);
+    }
+    /// Back to the unsynced list (new song).
+    pub(crate) fn clear(&mut self) {
+        self.base = None;
+    }
+    /// Lyrics time at stream time `now`, minus the user's fine-tune `offset` (positive =
+    /// lines later, like the per-track offset); None while unsynced.
+    pub(crate) fn lyrics_time(&self, now: f64, offset: f64) -> Option<f64> {
+        self.base.map(|b| now - b - offset)
+    }
+}
+
+/// Whether the *Radio lyrics* setting lets synced lyrics be synced by clicking a line
+/// (anything but "Plain lyrics" / "Off"; the old "Approximate sync" value maps here).
+pub(crate) fn click_sync(mode: &str) -> bool {
+    !matches!(mode, "Plain lyrics" | "Off")
 }
 
 #[derive(Default)]
 pub(crate) struct Radio {
     /// Raw stream title last seen.
     pub(crate) title: String,
-    /// `time-pos` when it changed (approximate song start).
-    pub(crate) since: f64,
     /// Lookup key ("artist\u{1f}title") whose result is displayed / awaited.
     pub(crate) key: String,
     /// Parsed (artist, title) of the current song.
