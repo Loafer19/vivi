@@ -893,15 +893,35 @@ export component KaraokeView inherits Rectangle {
     in property <bool> can-save;
     in property <bool> manual;
     in property <length> big: 48px;
+    // Player chrome shown (follows the UI auto-hide): header, hint and cursor hide with it.
+    in property <bool> chrome: true;
     callback cmd(string, string);
+    callback activity(); // pointer moved: reset the auto-hide timer
     property <length> small: root.big * 0.55;
     property <length> pitch: root.small * 1.85;
     property <length> line-h: root.big * 1.28;
-    property <length> cur-h: root.line-h * (root.rows > 0 ? root.rows : 2) + 12px;
+    // Height kept for the current line is the same for every line (two rows), so nothing
+    // shifts when a line wraps at the smallest size.
+    property <length> cur-h: root.line-h * max(2, root.rows) + 12px;
     property <length> side: max(40px, root.width * 0.08);
+    // Shrink-to-fit: the current line uses the large size only when it fits on one row,
+    // otherwise the largest size that does, down to the size of the other lines.
+    property <length> avail: root.width - 2 * root.side;
+    property <length> fit: root.index >= 0 && root.index < root.lines.length
+        ? max(root.small, min(root.big, root.big * (root.avail / max(1px, measure.preferred-width)) * 0.98))
+        : root.big;
+    measure := Text {
+        visible: false;
+        text: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
+        font-size: root.big; font-weight: 800;
+    }
     background: Theme.stage;
     clip: true;
-    TouchArea { }   // swallow clicks on the backdrop
+    TouchArea {   // swallow clicks on the backdrop; moves show the chrome again
+        mouse-cursor: root.chrome ? MouseCursor.default : MouseCursor.none;
+        changed mouse-x => { root.activity(); }
+        changed mouse-y => { root.activity(); }
+    }
     // Soft accent glow behind the current line.
     Rectangle {
         y: root.height * 0.18; height: root.height * 0.64;
@@ -924,7 +944,7 @@ export component KaraokeView inherits Rectangle {
                     : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
                 animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
                 text: l == "" ? "♪" : l;
-                font-size: self.cur ? root.big : root.small;
+                font-size: self.cur ? root.fit : root.small;
                 animate font-size { duration: 320ms; easing: ease-out; }
                 font-weight: self.cur ? 800 : 600;
                 wrap: word-wrap; overflow: elide;
@@ -943,10 +963,10 @@ export component KaraokeView inherits Rectangle {
                     for w in root.words: Rectangle {
                         property <bool> on: w.row == r;
                         visible: self.on;
-                        width: self.on ? base.preferred-width + (w.gap ? root.big * 0.27 : 0px) : 0px;
+                        width: self.on ? base.preferred-width + (w.gap ? root.fit * 0.27 : 0px) : 0px;
                         base := Text {
                             x: 0; y: 0; width: self.preferred-width; height: root.line-h;
-                            text: w.text; font-size: root.big; font-weight: 800;
+                            text: w.text; font-size: root.fit; font-weight: 800;
                             color: Theme.stage-fg; opacity: 0.4; vertical-alignment: center;
                         }
                         Rectangle {
@@ -955,7 +975,7 @@ export component KaraokeView inherits Rectangle {
                             animate width { duration: 110ms; easing: linear; }
                             Text {
                                 x: 0; y: 0; width: base.preferred-width; height: root.line-h;
-                                text: w.text; font-size: root.big; font-weight: 800;
+                                text: w.text; font-size: root.fit; font-weight: 800;
                                 color: Theme.accent; vertical-alignment: center;
                             }
                         }
@@ -992,8 +1012,9 @@ export component KaraokeView inherits Rectangle {
         }
     }
 
-    // Header: track on the left, actions on the right.
+    // Header: track on the left, actions on the right (hidden with the player chrome).
     Rectangle {
+        visible: root.chrome;
         y: 40px; height: 72px;
         background: @linear-gradient(180deg, Theme.stage 0%, Theme.stage.with-alpha(0) 100%);
         HorizontalLayout {
@@ -1041,6 +1062,7 @@ export component KaraokeView inherits Rectangle {
     }
     // Shortcut hint above the player controls.
     Text {
+        visible: root.chrome;
         y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
         text: "L  close   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   Ctrl L  search";
         color: Theme.stage-fg.with-alpha(0.33); font-size: Metrics.font-sm;

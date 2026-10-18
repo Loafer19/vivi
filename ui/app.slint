@@ -514,8 +514,10 @@ export component AppWindow inherits Window {
     // Plain (unsynced) lyrics, e.g. radio: a scrollable block without highlight.
     // Full-screen karaoke view and manual search (Lyrics plugin).
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
-    // Characters per karaoke row, for wrapping the word-timed current line.
-    out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.6)));
+    // Characters per karaoke row, for wrapping the word-timed current line; counted at the
+    // smallest size the view shrinks a line to (0.55 × big), so a line only wraps when it
+    // cannot fit one row even then.
+    out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.55 * 0.6)));
     // Network stream loading overlay (core, see loading.rs).
     // Now-playing card for audio-only network streams (Network Streams plugin).
     // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
@@ -707,6 +709,7 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain;
         words: Lyrics.words; rows: Lyrics.rows; big: root.karaoke-big;
+        chrome: root.show-ui; activity => { root.activity(); }
         title: Lyrics.title; artist: Lyrics.artist; source: Lyrics.source;
         state: Lyrics.state; offset-s: Lyrics.offset;
         offset: Lyrics.offset-label; can-save: Lyrics.can-save; manual: Lyrics.manual;
