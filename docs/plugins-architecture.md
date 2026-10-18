@@ -7,7 +7,7 @@ Status: implemented in v0.9.0. Developer-facing guide: <https://plugins.viviplay
 ## Goals
 
 * Keep the app small (well under 100 MB) and the core fast; not every feature is built in.
-* Users install, update, roll back and remove plugins from Settings → Extensions without
+* Users install, update, roll back and remove plugins from the Extensions window (All / Marketplace tab) without
   leaving the app, and see what a plugin may do before installing it.
 * Publishing a plugin is "add a folder, bump a version, push"; CI does the rest.
 * No UI blocking: all network and disk work runs on background threads.
@@ -76,6 +76,95 @@ touches the global, the dialog, one binding and the plugin. User actions still r
 `plugin-command(id, action, args)`. After this split `AppWindow` itself only carries window
 input (`key`, `activity`), `plugin-command` and a few layout values computed from the
 window size (for example `karaoke-big` / `karaoke-cols`); everything else is a global.
+
+## Contribution points (where a plugin shows up)
+
+Code: `src/plugins/contrib.rs` (points, `Role`, defaults), `plugins::contributions` /
+`plugins::run` (registry), `src/extwin.rs` (Extensions window, sidebar Sources),
+`src/menus.rs` (menus). One API for every surface: a plugin declares a **role** and a list
+of **contributions**; each surface asks the registry for the entries of enabled plugins at
+its point and runs the chosen one.
+
+* **Role**: `source` (a content browser: Network Streams, Free Music, YouTube, YouTube
+  Music, …; listed under *Sources* in the Extensions window) or `feature` (the default:
+  embedded in existing UI).
+* **Contribution**: `point`, `label` (defaults to the plugin name), `command`, optional
+  `icon` (an `Icons.plugin` key; defaults to the plugin's icon). Choosing it runs
+  `command`: `Plugin::command(cx, command, args)` for built-in plugins,
+  `script-message-to <script> <command> [args…]` for packages (use the key of an `action`
+  setting so the same action also works from Settings). An empty command opens the
+  plugin's tab in the Extensions window.
+
+| Point | Surface | Status | Args |
+| --- | --- | --- | --- |
+| `sidebar.source` | Library icon rail + Home *Sources* row; user can hide / reorder (gear → Sidebar) | done | none |
+| `menu.subtitles` | Subtitle menu (right-click → Subtitle), before *Subtitle Settings…* | done | none |
+| `menu.audio` | Audio menu | done | none |
+| `menu.video` | Video menu | done | none |
+| `context.item` | Right-click on a library file / folder (audio, video, folder kinds) | done | item key (path) |
+| `context.player` | Right-click on the player → *Plugins* submenu | done | none |
+| `palette.command` | Command palette (Ctrl+K) | planned | none |
+| `drawer.panel` | Player side drawer (right slide-out) | planned | none |
+| `home.widget` | Block on Home | planned | none |
+| `controlbar.button` | Element in Customize Player (off by default) | planned | none |
+| `tray.item` | Tray menu | planned | none |
+| `notify` | Desktop notifications (respecting a setting) | planned | none |
+
+Unknown points are ignored with a log line, so a manifest written for a newer Vivi still
+loads. The Extensions window lists each plugin's points under *Where it shows up*.
+
+Built-in plugins use the manifest builder:
+
+```rust
+Manifest::builtin(ID, "YouTube Music", "…", "streams")
+    .source("open")                                   // sidebar.source → command "open"
+    .contribute(contrib::PALETTE_COMMAND, "YouTube Music: search", "open")
+    .contribute(contrib::CONTEXT_PLAYER, "Start radio from this song", "radio")
+```
+
+`source(cmd)` sets the role and adds the `sidebar.source` entry; the command usually sets
+`MusicDialogState.owner` / `caps` and opens the shared plugin dialog (see Network Streams).
+Opened from the Extensions window's *Open* button, the window closes first.
+
+Packages declare the same in `manifest.toml`:
+
+```toml
+role = "source"            # optional: source | feature (default feature)
+
+[[contributes]]            # optional, any number
+point = "sidebar.source"
+label = "YouTube"
+command = ""               # "" opens the plugin's Extensions tab
+
+[[contributes]]
+point = "menu.subtitles"
+label = "Auto-sync subtitles"
+command = "sync"           # an action setting key → script-message-to <script> sync
+```
+
+**Backward compatibility**: when a package manifest has neither field, Vivi uses
+`contrib::known_defaults(id)` for catalog packages released before 0.13 (YouTube is a
+source; Subtitle Auto-Sync → `menu.subtitles`; Equalizer → `menu.audio`; Scene Chapters →
+`menu.video`; A-B Loop, Cut & Export, AcoustID, SponsorBlock, Offline Downloads →
+`context.player`; …), and any other plugin is a feature with no entries (Extensions window
+only). A manifest that sets `contributes = []` opts out of the defaults. mpv user scripts
+are features.
+
+**Sidebar order / hiding** is host state, not plugin settings: `[plugins.<id>]
+settings."ui.hidden" = "true"` hides a source, `[plugins.vivi-sources] settings.order =
+"a,b"` orders them (`plugins::arrange_source`).
+
+### Extensions window
+
+`ui/extensions.slint` + global `Extensions` (`ui/state/extensions.slint`), filled by
+`src/extwin.rs`. Tabs: *All / Marketplace* (the former Settings → Extensions rows:
+Installed / Browse, reusing `settings::extensions`) then one tab per plugin, sources first.
+A plugin tab's overview shows the description, load status, *Open* for sources, *Where it
+shows up* and its `action` settings as buttons; the gear in the header switches to its
+settings (the Settings `Row` component; changes go through `Settings.setting-changed`, so
+`plugin.*`, `pkg.*`, `ext.*`, `scripts.*` and `src.*` rows share one handler). Open it
+from Rust with `extwin::open(app, id, gear)`; a plugin opens its own settings with
+`plugins::run(id, "", &[])`.
 
 ### Music plugins (#63, #65, #69, #70)
 

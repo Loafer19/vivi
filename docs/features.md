@@ -144,6 +144,7 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | Ctrl+Q | Quit |
 | Ctrl+O | Open file |
 | Ctrl+, | Settings |
+| Ctrl+E | Extensions |
 | Ctrl+B | Add bookmark |
 | ? | Keyboard shortcuts |
 | Esc | Close the top dialog or panel, then leave miniplayer / fullscreen |
@@ -153,7 +154,7 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | Drop files | Open files or add them to the queue |
 
 ## Plugins
-Turn plugins on or off and change their settings in **Settings → Extensions** (`Ctrl+,`). Each card has an ON/OFF toggle, and a plugin's settings appear below its card while it is on. The state is saved in `~/.config/vivi/config.toml` under `[plugins.<id>]`.
+Turn plugins on or off and change their settings in the **Extensions** window (`Ctrl+E`, the plugin icon at the bottom of the sidebar, or Settings → Extensions → Open Extensions): one tab per plugin with what it does, where it shows up and its actions, an ON/OFF switch and a gear for its settings, plus **All / Marketplace** to install, update and remove plugins. Source plugins (Network Streams, Free Music, YouTube) are also listed under **Sources** in the sidebar and on Home; hide or reorder them in their settings (gear). Feature plugins add entries where they belong, e.g. Subtitle Search adds *Search online…* to the Subtitles menu. The state is saved in `~/.config/vivi/config.toml` under `[plugins.<id>]`.
 
 | Plugin | What it does |
 |---|---|

@@ -5,6 +5,7 @@
 use crate::config::Config;
 use crate::keymap::{self, Action as A};
 use crate::player::Player;
+use crate::plugins::{self, contrib};
 use crate::{store, AppWindow, MenuItem};
 use slint::{ComponentHandle, ModelRc, VecModel};
 use std::cell::RefCell;
@@ -65,6 +66,22 @@ pub fn sort_key(s: &str) -> &str {
     }
 }
 
+/// Rows plugins contribute at `point` (see `plugins::contrib`): id `plug:<plugin>|<command>`.
+fn plugin_rows(point: &str, icon: &str) -> Vec<MenuItem> {
+    plugins::contributions(point)
+        .into_iter()
+        .map(|e| row(&format!("plug:{}|{}", e.id, e.command), &e.label, icon, ""))
+        .collect()
+}
+
+/// `rows` with the first one starting a new group (menu divider).
+fn grouped(mut rows: Vec<MenuItem>) -> Vec<MenuItem> {
+    if let Some(f) = rows.first_mut() {
+        *f = div(f.clone());
+    }
+    rows
+}
+
 fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
     let paused = p.get("pause").as_deref() == Some("yes");
     let rec = p.get("stream-record").is_some_and(|s| !s.is_empty());
@@ -105,6 +122,7 @@ fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
             &keymap::hint(A::HideUi),
         )),
         div(sub("playback", "Playback", "playback")),
+        sub("plugins", "Plugins", "plugins"),
         sub("video", "Video", "video"),
         sub("audio", "Audio", "audio"),
         sub("subtitle", "Subtitle", "subtitle"),
@@ -193,6 +211,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 "fullscreen",
                 &keymap::hint(A::Fullscreen),
             ));
+            v.extend(grouped(plugin_rows(contrib::MENU_VIDEO, "video")));
             v.push(row("panel:2", "Video Adjustments…", "paint", ""));
             v
         }
@@ -204,6 +223,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 p.get("mute").as_deref() == Some("yes"),
             )));
             v.push(row("add-audio", "Add Audio Track…", "add-audio-tracks", ""));
+            v.extend(plugin_rows(contrib::MENU_AUDIO, "audio"));
             v.push(row("panel:1", "Audio Settings…", "audio", ""));
             v
         }
@@ -220,6 +240,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 "add-subtitle-tracks",
                 "",
             )));
+            v.extend(plugin_rows(contrib::MENU_SUBTITLES, "subtitle"));
             v.push(row("panel:0", "Subtitle Settings…", "subtitle", ""));
             v
         }
@@ -239,6 +260,17 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 &keymap::hint(A::Settings),
             ),
         ],
+        // Right-click on the player: plugin actions (`context.player`), then Extensions.
+        "plugins" => {
+            let mut v = plugin_rows(contrib::CONTEXT_PLAYER, "plugins");
+            v.push(div(row(
+                "extensions",
+                "Extensions…",
+                "plugins",
+                &keymap::hint(A::Extensions),
+            )));
+            v
+        }
         "playlist" => vec![
             row("panel:4", "Show Queue", "playlist", ""),
             row("shuffle-now", "Shuffle Queue", "shuffle", ""),
@@ -449,7 +481,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                 let Some(a) = w.upgrade() else { return };
                 let c = c.to_string();
                 let v = match kind.as_str() {
-                    "main" => main_menu(&a, &p),
+                    "main" => {
+                        // Player menu: plugin entries get no item argument.
+                        *ctx.borrow_mut() = Ctx::default();
+                        main_menu(&a, &p)
+                    }
                     "recent" => recent_menu(),
                     "lib" => {
                         let f: Vec<&str> = c.split('\n').collect();
@@ -458,7 +494,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                             key: g(0).into(),
                             kind: g(1).into(),
                         };
-                        lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1")
+                        let mut v =
+                            lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1");
+                        // `context.item`: plugin actions for files and folders.
+                        if matches!(g(1), "audio" | "video" | "folder") {
+                            v.extend(grouped(plugin_rows(contrib::CONTEXT_ITEM, "plugins")));
+                        }
+                        v
                     }
                     "sort" => {
                         let cur = cfg.borrow().library.sort.clone();
@@ -538,6 +580,16 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             arg.into(),
         ),
         "sort" => a.global::<crate::Library>().invoke_set_sort(arg.into()),
+        // Plugin contribution: the library item's key is the argument of `context.item`.
+        "plug" => {
+            let (pid, cmd) = arg.split_once('|').unwrap_or((arg, ""));
+            let args = if ctx.key.is_empty() {
+                Vec::new()
+            } else {
+                vec![ctx.key.clone()]
+            };
+            plugins::run(pid, cmd, &args);
+        }
         "recent" => a.global::<crate::Library>().invoke_open_recent(arg.into()),
         "recent-clear" => a.global::<crate::Library>().invoke_clear_recent(),
         "view" => a.global::<crate::Library>().invoke_set_grid(arg == "grid"),
@@ -597,6 +649,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "mini" => a.global::<crate::Playback>().invoke_toggle_mini(),
             "customize" => a.global::<crate::Overlays>().set_customize_open(true),
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
+            "extensions" => crate::extwin::open(a, "", false),
             "settings" => {
                 a.global::<crate::Overlays>().set_settings_open(true);
                 a.global::<crate::Settings>().invoke_refresh(

@@ -20,7 +20,7 @@
 //! ("Radio lyrics: Approximate sync") synced lyrics are timed from the moment the title
 //! changed, shifted by a manual offset.
 
-use super::{Ctx, Manifest, Plugin, SettingSpec};
+use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::HashMap;
@@ -799,6 +799,9 @@ impl Plugin for Lyrics {
             "Synced lyrics as a karaoke overlay or a full-screen karaoke view with word highlight, from a .lrc file, the file's tags or LRCLIB; manual search, per-track timing offset, save as .lrc or embed.",
             "lyrics",
         )
+        .contribute(contrib::PALETTE_COMMAND, "Find lyrics", "search-open")
+        .contribute(contrib::PALETTE_COMMAND, "Karaoke lyrics view", "karaoke")
+        .contribute(contrib::CONTEXT_PLAYER, "Find lyrics…", "search-open")
         .setting(SettingSpec::toggle(
             "online",
             "Search lyrics online (LRCLIB)",

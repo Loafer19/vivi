@@ -37,6 +37,8 @@ pub enum Action {
     Quit,
     OpenFile,
     Settings,
+    /// The Extensions window.
+    Extensions,
     Bookmark,
     /// Audio-only files with the visualizer on; otherwise the key goes to mpv.
     Visualizer,
@@ -129,6 +131,7 @@ pub const BINDINGS: &[Binding] = &[
     b(A::Quit, &[T("q")], On, Any, "Quit", "Ctrl+Q"),
     b(A::OpenFile, &[T("o")], On, Any, "Open file", "Ctrl+O"),
     b(A::Settings, &[T(",")], On, Any, "Settings", "Ctrl+,"),
+    b(A::Extensions, &[T("e")], On, Any, "Extensions", "Ctrl+E"),
     b(A::Bookmark, &[T("b")], On, Any, "Add bookmark", "Ctrl+B"),
     b(A::Shortcuts, &[T("?")], Off, Any, "Keyboard shortcuts", "?"),
     b(A::Escape, &[N(Key::Escape)], Any, Any,
@@ -264,6 +267,7 @@ mod tests {
             ("q", false, false, None),
             ("o", false, true, Some(A::OpenFile)),
             (",", false, true, Some(A::Settings)),
+            ("e", false, true, Some(A::Extensions)),
             ("b", false, true, Some(A::Bookmark)),
             ("v", false, false, Some(A::Visualizer)),
             ("v", false, true, None),

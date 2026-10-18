@@ -1,0 +1,40 @@
+// Extensions: the Extensions window (one tab per plugin plus All / Marketplace, a gear
+// for the plugin's settings) and the plugin entries other surfaces show (sidebar Sources).
+// Built in src/extwin.rs from the plugin manifests and their contribution points.
+import { SettingRow } from "../settings.slint";
+
+// A plugin tab, or a sidebar source (name = label).
+export struct ExtTab { id: string, name: string, icon: string, on: bool, source: bool }
+// A button on a plugin's overview: `id` is the settings row id ("plugin.<id>.<key>").
+export struct ExtAction { id: string, title: string, label: string }
+
+export global Extensions {
+    in-out property <[ExtTab]> tabs;
+    // Selected tab: a plugin id, or "" for All / Marketplace.
+    in-out property <string> tab;
+    // Position of `tab` in `tabs` (-1 = All / Marketplace).
+    in-out property <int> index: -1;
+    // Gear: the selected plugin's settings instead of its overview.
+    in-out property <bool> gear;
+    // Settings rows of the gear view or the marketplace.
+    in-out property <[SettingRow]> rows;
+    in-out property <string> title;
+    in-out property <string> info;
+    in-out property <string> meta;
+    in-out property <string> icon;
+    in-out property <string> status;
+    in-out property <bool> on;
+    in-out property <bool> source;
+    in-out property <bool> has-settings;
+    // "Where it shows up" lines of the overview.
+    in-out property <[string]> places;
+    in-out property <[ExtAction]> actions;
+    // Sidebar → Sources (enabled, not hidden, in the user's order).
+    in-out property <[ExtTab]> sources;
+    // Open the window on a tab (plugin id or ""), optionally on its settings.
+    callback select(string, bool);
+    // Run a contribution of plugin `id` (command "" opens its tab).
+    callback run(string, string);
+    // Overview "Open" button of a source.
+    callback open-browser();
+}

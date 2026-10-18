@@ -3,7 +3,7 @@
 //! and from user-defined per-show ranges (`show = 0:30-2:00, 21:10-end; …`), which
 //! can also be marked from Settings while watching. Optionally skips automatically.
 
-use super::{Ctx, Manifest, Plugin, SettingSpec};
+use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use crate::config::show_key;
 use slint::ComponentHandle;
 
@@ -180,6 +180,7 @@ impl Plugin for SkipIntro {
             "Shows a Skip button during intros and credits found in chapter names or set per show.",
             "skip",
         )
+        .contribute(contrib::PALETTE_COMMAND, "Mark intro / credits here", "mark")
         .setting(SettingSpec::toggle(
             "auto",
             "Skip automatically",

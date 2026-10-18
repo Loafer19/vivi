@@ -33,9 +33,11 @@ import { NowPlaying } from "state/now-playing.slint";
 import { Notices } from "state/notices.slint";
 import { Viz } from "state/viz.slint";
 import { SkipIntro } from "state/skip-intro.slint";
+import { Extensions, ExtTab } from "state/extensions.slint";
+import { ExtensionsDialog } from "extensions.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro, Extensions }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -545,6 +547,7 @@ export component AppWindow inherits Window {
         : Overlays.md-open ? Overlay.music-dialog
         : Overlays.subs-open ? Overlay.subtitles
         : Overlays.qr-open ? Overlay.qr
+        : Overlays.extensions-open ? Overlay.extensions
         : Overlays.settings-open ? Overlay.settings
         : Overlays.new-playlist-open ? Overlay.new-playlist
         : Overlays.network-open ? Overlay.network
@@ -643,7 +646,7 @@ export component AppWindow inherits Window {
 
     // Rust moves focus back to the player after Esc closed an overlay.
     public function focus-main() { fs.focus(); }
-    property <bool> dialog-open: Overlays.settings-open || Overlays.customize-open || Overlays.network-open
+    property <bool> dialog-open: Overlays.settings-open || Overlays.extensions-open || Overlays.customize-open || Overlays.network-open
         || Overlays.new-playlist-open || Overlays.subs-open || Overlays.md-open || Overlays.ls-open
         || Overlays.tr-open || Overlays.onboarding-open || Overlays.qr-open || Overlays.info-open
         || Overlays.shortcuts-open;
@@ -744,6 +747,9 @@ export component AppWindow inherits Window {
         menu-request(kind, x, y, c) => { Menus.menu-request(kind, x, y, c); }
         open-file() => { Playback.open-file(); }
         open-network() => { Overlays.network-open = true; }
+        sources: Extensions.sources;
+        open-source(id) => { Extensions.run(id, "::source"); }
+        open-extensions() => { Extensions.select(Extensions.tab, false); }
         add-folders() => { Settings.category = 8; Overlays.settings-open = true; Settings.refresh(8, "", false); }
         clear-recent() => { Library.clear-recent(); }
         forget-recent(it) => { Library.menu(it.recent-key, it.kind, "forget-recent"); }
@@ -1191,6 +1197,13 @@ export component AppWindow inherits Window {
         changed(id, v) => { Settings.setting-changed(id, v); }
         refresh(c, q, adv) => { Settings.refresh(c, q, adv); }
         close() => { Overlays.settings-open = false; fs.focus(); }
+    }
+
+    // ---------- Extensions window (src/extwin.rs) ----------
+    if Overlays.extensions-open: ExtensionsDialog {
+        width: root.width; height: root.height;
+        changed(id, v) => { Settings.setting-changed(id, v); }
+        close() => { Overlays.extensions-open = false; fs.focus(); }
     }
 
     // ---------- Plugin QR code (above Settings, which opens it) ----------

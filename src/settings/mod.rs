@@ -150,6 +150,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             } else {
                 rows.set_vec(new);
             }
+            // The Extensions window and the sidebar's Sources show the same plugins.
+            crate::extwin::refresh();
         }
     };
     let save = {
@@ -200,6 +202,15 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     a.global::<crate::Settings>()
                         .set_status(msg.unwrap_or_default().into());
                     refresh();
+                    return;
+                }
+                if let Some(rest) = id.strip_prefix("src.") {
+                    crate::extwin::source_setting(rest, v);
+                    refresh();
+                    return;
+                }
+                if id.as_str() == "ext.window" {
+                    crate::extwin::open(&a, "", false);
                     return;
                 }
                 if let Some(pid) = id.strip_prefix("pkg.") {

@@ -42,6 +42,56 @@ pub(crate) fn extensions(r: &mut Rows) {
     }
 }
 
+/// Settings → Extensions: plugins live in the Extensions window now; this page links
+/// to it and keeps the global options.
+pub(crate) fn extensions_page(r: &mut Rows) {
+    r.cat("Extensions");
+    r.push(
+        "",
+        "Plugins have their own window: one tab per plugin with its actions and a gear for its settings, plus All / Marketplace to install, update, enable and disable them.",
+        "",
+        "info",
+        String::new(),
+    );
+    r.action(
+        "ext.window",
+        "Extensions window",
+        "Also in the sidebar (bottom of the icon rail) and with Ctrl+E.",
+        "Open Extensions",
+    );
+    r.header("Options");
+    let auto =
+        r.c.plugins
+            .get(plugins::packages::GLOBAL_ID)
+            .and_then(|s| s.settings.get("autocheck"))
+            .is_none_or(|v| v == "true");
+    r.toggle(
+        "ext.autocheck",
+        "Check for plugin updates daily",
+        "Download the plugin catalog at most once a day when Vivi starts. Nothing else is sent.",
+        auto,
+    );
+    let startup = plugins::scripts::load_on_startup(r.c);
+    r.toggle(
+        "scripts.startup",
+        "Load add-ons on startup",
+        "Load enabled mpv scripts and downloaded plugins when Vivi starts.",
+        startup,
+    )
+    .action(
+        "scripts.folder",
+        "Scripts folder",
+        &config::scripts_dir().display().to_string(),
+        "Open",
+    )
+    .action(
+        "scripts.rescan",
+        "Rescan scripts",
+        "Pick up scripts added since Vivi started.",
+        "Rescan",
+    );
+}
+
 pub(crate) fn plugin_rows(
     r: &mut Rows,
     m: &plugins::Manifest,

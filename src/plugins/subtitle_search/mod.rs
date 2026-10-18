@@ -20,7 +20,7 @@
 //! Lyrics keep `[` / `]`. *Auto-sync* hands the subtitle to the Subtitle Auto-Sync
 //! package (alass / ffsubsync with the shared media ffmpeg); Vivi itself ships no ffmpeg.
 
-use super::{Ctx, Manifest, Plugin, SettingSpec};
+use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use crate::{Item, SubHit};
 use slint::ComponentHandle;
 use slint::{ModelRc, VecModel};
@@ -635,6 +635,8 @@ impl Plugin for SubtitleSearch {
             "Find subtitles on OpenSubtitles (by file hash, name or IMDb id) in the Add Subtitles dialog, and keep a subtitle offset per file (z / x).",
             "subtitles",
         )
+        .contribute(contrib::MENU_SUBTITLES, "Search online…", "search-online")
+        .contribute(contrib::PALETTE_COMMAND, "Search subtitles online", "search-online")
         .setting(SettingSpec::secret(
             "api-key",
             "OpenSubtitles API key",
@@ -683,6 +685,11 @@ impl Plugin for SubtitleSearch {
         let arg = args.first().map(String::as_str).unwrap_or("");
         let idx = arg.parse::<usize>().ok();
         match name {
+            // Subtitles menu / command palette: open the dialog itself.
+            "search-online" => {
+                cx.app.global::<crate::Overlays>().set_subs_open(true);
+                self.command(cx, "open", args);
+            }
             "open" => {
                 let path = cx.player.get("path").unwrap_or_default();
                 cx.app.global::<crate::Subtitles>().set_query(query_from_name(&path).into());

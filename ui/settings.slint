@@ -162,7 +162,8 @@ component Swatch inherits Rectangle {
     TouchArea { accessible-role: button; accessible-label: root.label; accessible-checked: root.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
-component Row inherits Rectangle {
+// One settings row; also used by the Extensions window (ui/extensions.slint).
+export component Row inherits Rectangle {
     in property <SettingRow> setting;
     in-out property <bool> advanced;
     callback changed(string, string);

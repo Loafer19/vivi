@@ -10,6 +10,7 @@ import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { ListRow } from "core/rows.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
+import { ExtTab } from "state/extensions.slint";
 
 export struct LibItem {
     key: string,
@@ -262,6 +263,36 @@ component RailButton inherits Rectangle {
     if root.label != "": Tooltip { text: @markdown("\{root.label}"); }
 }
 
+// Sidebar → Sources: a plugin's content browser (manifest point `sidebar.source`).
+// Plugin icons are small single-tone glyphs (18 px) in the 32 px rail slot.
+component SourceButton inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    callback clicked();
+    width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+    background: ta.has-hover ? Theme.bg-a1 : transparent;
+    Icon { width: 18px; height: 18px; source: root.icon; tint: ta.has-hover ? Theme.fg-1 : Theme.fg-a2; }
+    ta := TouchArea { accessible-role: button; accessible-label: "Source: " + root.label; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    Tooltip { text: @markdown("\{root.label}"); }
+}
+
+// Home → Sources: icon + name chip.
+component SourceChip inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    callback clicked();
+    height: 40px; width: row.preferred-width + 28px; border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    row := HorizontalLayout {
+        x: 14px; spacing: 10px;
+        VerticalLayout { alignment: center; Icon { width: 18px; height: 18px; source: root.icon; tint: Theme.accent; } }
+        Text { text: root.label; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
+    }
+    ta := TouchArea { accessible-role: button; accessible-label: "Open " + root.label; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { focus-on-click: false; key-pressed(e) => { if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; } reject } }
+    if fs.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+}
+
 component HeadIcon inherits Rectangle {
     in property <string> label;   // screen-reader name and hover tooltip
     in property <image> icon;
@@ -294,6 +325,10 @@ export component LibraryView inherits Rectangle {
     in property <bool> can-forward;
     // Docked 427 px sidebar next to the video (Figma "Library Sidebar") vs. the full home screen.
     in property <bool> sidebar;
+    // Source plugins (Extensions.sources): rail buttons and the Home "Sources" row.
+    in property <[ExtTab]> sources;
+    callback open-source(string);
+    callback open-extensions();
     callback navigate(string);
     callback history(bool); // false = back, true = forward
     callback search(string);
@@ -337,6 +372,16 @@ export component LibraryView inherits Rectangle {
                 RailButton { label: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
                 RailButton { label: "Recently played"; icon: @image-url("../assets/icons/recent.svg"); active-icon: @image-url("../assets/icons/recent.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
                 RailButton { label: "Open file"; icon: @image-url("../assets/icons/add.svg"); active-icon: @image-url("../assets/icons/add.svg"); clicked => { root.open-file(); } }
+                if root.sources.length > 0: Rectangle { height: 1px; background: Theme.bg-a1; }
+                for s in root.sources: SourceButton { label: s.name; icon: Icons.plugin(s.icon); clicked => { root.open-source(s.id); } }
+            }
+            VerticalLayout {
+                height: self.preferred-height; y: parent.height - self.height; padding-left: 9px; padding-right: 9px; padding-bottom: 10px;
+                RailButton {
+                    label: "Extensions (Ctrl+E)"; icon: @image-url("../assets/icons/plugins.svg");
+                    active-icon: @image-url("../assets/icons/layers/plugins-active-b.svg"); active-accent: @image-url("../assets/icons/layers/plugins-active-a.svg"); active-dim: @image-url("../assets/icons/layers/plugins-active-d.svg");
+                    clicked => { root.open-extensions(); }
+                }
             }
         }
         // Content
@@ -415,6 +460,22 @@ export component LibraryView inherits Rectangle {
                                 PrimaryButton { icon: @image-url("../assets/icons/file.svg"); text: "Open file"; clicked => { root.open-file(); } }
                                 SecondaryButton { icon: @image-url("../assets/icons/streaming.svg"); text: "Open stream"; clicked => { root.open-network(); } }
                                 SecondaryButton { icon: @image-url("../assets/icons/new_folder.svg"); text: "Add folders"; clicked => { root.add-folders(); } }
+                            }
+                        }
+                        if root.sources.length > 0: VerticalLayout {
+                            spacing: 12px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text { text: "Sources"; color: Theme.fg-1; font-size: Metrics.font-lg; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                                Text {
+                                    text: "Manage"; color: mta.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center;
+                                    mta := TouchArea { accessible-role: button; accessible-label: "Manage sources in Extensions"; mouse-cursor: pointer; clicked => { root.open-extensions(); } }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 10px; alignment: start;
+                                for s in root.sources: SourceChip { label: s.name; icon: Icons.plugin(s.icon); clicked => { root.open-source(s.id); } }
                             }
                         }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;

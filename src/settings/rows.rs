@@ -649,7 +649,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         );
 
     // ---------- Extensions ----------
-    extensions(&mut r);
+    extensions_page(&mut r);
 
     r.v
 }

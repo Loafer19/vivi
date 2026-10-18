@@ -25,7 +25,7 @@
 //! (Undo renames back).
 
 use super::web;
-use super::{Ctx, Manifest, Plugin, SettingSpec};
+use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use crate::Item;
 use lofty::config::WriteOptions;
 use lofty::picture::{MimeType, Picture, PictureType};
@@ -834,6 +834,9 @@ impl Plugin for AutoTagger {
             "Identifies songs by their audio (AcoustID fingerprint) or tags, looks them up on MusicBrainz, Deezer, iTunes, Last.fm and Discogs and writes tags, hi-res covers and optional LRCLIB synced lyrics after a preview that shows each field's source. Originals are backed up.",
             "tag",
         )
+        .contribute(contrib::CONTEXT_ITEM, "Auto-tag…", "open-path")
+        .contribute(contrib::CONTEXT_PLAYER, "Auto-tag this file…", "open")
+        .contribute(contrib::PALETTE_COMMAND, "Auto-tag the playing file", "open")
         .setting(SettingSpec::secret(
             "acoustid-key",
             "AcoustID API key",
@@ -927,6 +930,12 @@ impl Plugin for AutoTagger {
                     .local_path()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_default();
+                cx.app.global::<crate::Overlays>().set_settings_open(false);
+                self.open(cx, p);
+            }
+            // `context.item`: tag the right-clicked library file or folder.
+            "open-path" => {
+                let p = args.first().cloned().unwrap_or_default();
                 cx.app.global::<crate::Overlays>().set_settings_open(false);
                 self.open(cx, p);
             }

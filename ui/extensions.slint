@@ -1,0 +1,170 @@
+// Extensions window: a vertical tab per plugin (icon + name) plus All / Marketplace.
+// A plugin tab shows what it does (overview: description, status, where it shows up,
+// its actions or an Open button for sources); the gear in the tab header switches to
+// the plugin's settings. Rows come from src/extwin.rs and reuse the Settings row.
+// Esc closes it through the overlay stack (src/overlays.rs, Overlay.extensions).
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
+import { Toggle } from "core/controls.slint";
+import { Icons } from "core/icons.slint";
+import { Modal } from "core/modal.slint";
+import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
+import { SectionHeader } from "core/rows.slint";
+import { Row, SettingRow } from "settings.slint";
+import { Extensions, ExtTab, ExtAction } from "state/extensions.slint";
+
+component TabRow inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> selected;
+    in property <bool> dim;
+    callback clicked();
+    height: 36px; border-radius: Metrics.radius-md;
+    background: selected ? Theme.bg-a1 : (ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
+    // Small glyph (16 px): single-tone.
+    Icon { x: 10px; width: 16px; height: 16px; source: root.icon; tint: root.selected ? Theme.accent : Theme.fg-a2; }
+    Text {
+        x: 36px; width: parent.width - 44px; height: parent.height; text: root.label; overflow: elide;
+        vertical-alignment: center; font-size: Metrics.font-base;
+        color: root.selected ? Theme.fg-1 : (root.dim ? Theme.fg-a3 : Theme.fg-a1);
+    }
+    ta := TouchArea { accessible-role: tab; accessible-label: root.label; accessible-item-selected: root.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Square header button with a two-tone icon (gear, close).
+component HeaderButton inherits Rectangle {
+    in property <string> label;
+    in property <image> base;
+    in property <image> accent;
+    in property <image> dim;
+    in property <bool> active;
+    callback clicked();
+    width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+    background: root.active ? Theme.bg-a1 : (ta.has-hover || fs.has-focus ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
+    TriIcon { width: 20px; height: 20px; base: root.base; accent: root.accent; dim: root.dim; tint: root.active ? Theme.fg-1 : Theme.fg-a2; }
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; accessible-checked: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope {
+        focus-on-click: false;
+        key-pressed(e) => { if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; } reject }
+    }
+    if fs.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+    Tooltip { text: @markdown("\{root.label}"); }
+}
+
+export component ExtensionsDialog inherits Modal {
+    callback changed(string, string);   // a settings row changed (routed like Settings)
+    callback close();
+    property <bool> market: Extensions.tab == "";
+    property <int> index: Extensions.tab == "" ? -1 : Extensions.index;
+    function step(d: int) {
+        // -1 is All / Marketplace, then the plugin tabs.
+        let n = clamp(root.index + d, -1, Extensions.tabs.length - 1);
+        Extensions.select(n < 0 ? "" : Extensions.tabs[n].id, false);
+    }
+
+    card-width: 1048px;
+    card-height: 780px;
+    inset: 48px;
+    dismissed => { root.close(); }
+
+    HorizontalLayout {
+        // Tabs (Up / Down move between them).
+        Rectangle {
+            width: 240px; background: Theme.bg-b1;
+            tabs := FocusScope {
+                key-pressed(e) => {
+                    if (e.text == Key.UpArrow) { root.step(-1); return accept; }
+                    if (e.text == Key.DownArrow) { root.step(1); return accept; }
+                    reject
+                }
+                init => { self.focus(); }
+                Flickable {
+                    VerticalLayout {
+                        padding: 8px; spacing: 2px; alignment: start;
+                        Text { height: 40px; text: "Extensions"; color: Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; x: 10px; }
+                        TabRow { label: "All / Marketplace"; icon: @image-url("../assets/icons/plugins.svg"); selected: root.market; clicked => { tabs.focus(); Extensions.select("", false); } }
+                        Text { height: 30px; text: "Sources"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: bottom; }
+                        for t in Extensions.tabs: VerticalLayout {
+                            if t.source: TabRow { label: t.name; icon: Icons.plugin(t.icon); dim: !t.on; selected: t.id == Extensions.tab; clicked => { tabs.focus(); Extensions.select(t.id, false); } }
+                        }
+                        Text { height: 30px; text: "Features"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: bottom; }
+                        for t in Extensions.tabs: VerticalLayout {
+                            if !t.source: TabRow { label: t.name; icon: Icons.plugin(t.icon); dim: !t.on; selected: t.id == Extensions.tab; clicked => { tabs.focus(); Extensions.select(t.id, false); } }
+                        }
+                    }
+                }
+            }
+        }
+        // Tab content
+        VerticalLayout {
+            Rectangle {
+                height: 64px; background: Theme.bg-a3;
+                HorizontalLayout {
+                    padding-left: 20px; padding-right: 12px; spacing: 12px;
+                    VerticalLayout { alignment: center;
+                        Rectangle {
+                            width: 40px; height: 40px; border-radius: Metrics.radius-lg;
+                            background: Extensions.on || root.market ? Theme.accent.mix(Theme.field, 25%) : Theme.field-raised;
+                            if root.market: TriIcon { width: 22px; height: 22px; base: @image-url("../assets/icons/layers/plugins-twotone-b.svg"); accent: @image-url("../assets/icons/layers/plugins-twotone-a.svg"); dim: @image-url("../assets/icons/layers/plugins-twotone-d.svg"); tint: Theme.fg-1; }
+                            if !root.market: Icon { width: 22px; height: 22px; source: Icons.plugin(Extensions.icon); tint: Extensions.on ? Theme.accent : Theme.fg-a2; }
+                        }
+                    }
+                    VerticalLayout {
+                        horizontal-stretch: 1; alignment: center; spacing: 2px;
+                        Text { text: root.market ? "All / Marketplace" : Extensions.title + (Extensions.gear ? " Settings" : ""); color: Theme.fg-1; font-size: Metrics.font-lg; overflow: elide; }
+                        Text { text: root.market ? "Install, update, enable and disable plugins" : Extensions.meta; color: Theme.fg-a3; font-size: Metrics.font-xs; font-family: "DM Mono"; overflow: elide; }
+                    }
+                    if !root.market: VerticalLayout { alignment: center;
+                        Toggle { on: Extensions.on; label: "Enable " + Extensions.title; toggled => { root.changed("plugin." + Extensions.tab, Extensions.on ? "false" : "true"); } } }
+                    if !root.market: VerticalLayout { alignment: center;
+                        HeaderButton {
+                            label: Extensions.gear ? "Back to " + Extensions.title : Extensions.title + " settings";
+                            active: Extensions.gear;
+                            base: @image-url("../assets/icons/layers/settings-twotone-b.svg"); accent: @image-url("../assets/icons/layers/settings-twotone-a.svg"); dim: @image-url("../assets/icons/layers/settings-twotone-d.svg");
+                            clicked => { Extensions.select(Extensions.tab, !Extensions.gear); }
+                        } }
+                    VerticalLayout { alignment: center;
+                        Rectangle {
+                            width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+                            background: xta.has-hover ? Theme.bg-a1 : transparent;
+                            Icon { source: @image-url("../assets/icons/close.svg"); width: 18px; height: 18px; }
+                            xta := TouchArea { accessible-role: button; accessible-label: "Close extensions"; mouse-cursor: pointer; clicked => { root.close(); } }
+                        } }
+                }
+            }
+            // Overview of a plugin
+            if !root.market && !Extensions.gear: ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    alignment: start; padding: 24px; spacing: 14px;
+                    Text { text: Extensions.info; color: Theme.fg-a1; font-size: Metrics.font-md; wrap: word-wrap; }
+                    if Extensions.status != "": Text { text: Extensions.status; color: Theme.fg-a3; font-size: Metrics.font-sm; wrap: word-wrap; }
+                    if Extensions.source && Extensions.on: HorizontalLayout { alignment: start;
+                        PrimaryButton { text: "Open " + Extensions.title; icon: Icons.plugin(Extensions.icon); clicked => { Extensions.open-browser(); } } }
+                    if !Extensions.on: Text { text: "Turn it on with the switch above to use it."; color: Theme.fg-a3; font-size: Metrics.font-sm; }
+                    if Extensions.places.length > 0: SectionHeader { text: "Where it shows up"; }
+                    for p in Extensions.places: Text { text: "•  " + p; color: Theme.fg-a1; font-size: Metrics.font-md; wrap: word-wrap; }
+                    if Extensions.actions.length > 0 && Extensions.on: SectionHeader { text: "Actions"; }
+                    if Extensions.on: VerticalLayout { spacing: 6px;
+                        for a in Extensions.actions: HorizontalLayout {
+                            spacing: 12px;
+                            Text { horizontal-stretch: 1; text: a.title; color: Theme.fg-a1; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
+                            SecondaryButton { text: a.label; clicked => { root.changed(a.id, "run"); } }
+                        }
+                    }
+                    if Extensions.has-settings: HorizontalLayout { alignment: start; padding-top: 6px;
+                        SecondaryButton { text: "Settings"; icon: @image-url("../assets/icons/settings.svg"); clicked => { Extensions.select(Extensions.tab, true); } } }
+                }
+            }
+            // Gear view (plugin settings) or All / Marketplace
+            if root.market || Extensions.gear: ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;
+                    if Extensions.rows.length == 0: Text { height: 40px; vertical-alignment: center; text: "This plugin has no settings."; color: Theme.fg-a3; }
+                    for r in Extensions.rows: Row { setting: r; changed(id, v) => { root.changed(id, v); } }
+                }
+            }
+        }
+    }
+}

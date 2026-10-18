@@ -10,7 +10,7 @@
 
 use super::auto_tagger::{self, Tags};
 use super::web;
-use super::{Ctx, Manifest, Plugin, SettingSpec};
+use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -840,6 +840,8 @@ impl Plugin for FreeMusic {
             "Search and browse Creative Commons and public-domain music from Jamendo, the Internet Archive and the Free Music Archive: genres, moods, licence filters, album and artist pages, play similar, and downloads with tags, cover and licence attribution.",
             "free-music",
         )
+        .source("open")
+        .contribute(contrib::PALETTE_COMMAND, "Find free music", "open")
         .setting(SettingSpec::secret(
             "jamendo-client-id",
             "Jamendo client ID",

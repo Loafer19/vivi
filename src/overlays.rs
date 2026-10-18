@@ -43,6 +43,7 @@ pub fn close(a: &AppWindow, o: Overlay) {
         }
         Overlay::Subtitles => a.global::<crate::Overlays>().set_subs_open(false),
         Overlay::Qr => a.global::<crate::Overlays>().set_qr_open(false),
+        Overlay::Extensions => a.global::<crate::Overlays>().set_extensions_open(false),
         Overlay::Settings => a.global::<crate::Overlays>().set_settings_open(false),
         Overlay::NewPlaylist => a.global::<crate::Dialogs>().invoke_new_playlist_close(),
         Overlay::Network => {

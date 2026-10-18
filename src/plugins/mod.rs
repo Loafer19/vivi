@@ -20,6 +20,7 @@
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
 pub mod auto_tagger;
+pub mod contrib;
 pub mod epg;
 pub mod free_music;
 pub mod lyrics;
@@ -125,6 +126,10 @@ pub struct Manifest {
     pub settings: Vec<SettingSpec>,
     pub default_enabled: bool,
     pub origin: Origin,
+    /// Source (content browser, listed under Sources) or feature (embedded in the UI).
+    pub role: contrib::Role,
+    /// Where the plugin shows up (see [`contrib`]).
+    pub contributes: Vec<contrib::Contribution>,
 }
 
 impl Manifest {
@@ -140,7 +145,21 @@ impl Manifest {
             settings: Vec::new(),
             default_enabled: true,
             origin: Origin::Builtin,
+            role: contrib::Role::Feature,
+            contributes: Vec::new(),
         }
+    }
+    /// A content browser: listed under Sources in the sidebar; `command` opens it.
+    pub fn source(mut self, command: &str) -> Self {
+        self.role = contrib::Role::Source;
+        let name = self.name.clone();
+        self.contribute(contrib::SIDEBAR_SOURCE, &name, command)
+    }
+    /// Show `label` at contribution point `point`; choosing it runs `command`.
+    pub fn contribute(mut self, point: &str, label: &str, command: &str) -> Self {
+        self.contributes
+            .push(contrib::Contribution::new(point, label, command));
+        self
     }
     pub fn setting(mut self, s: SettingSpec) -> Self {
         self.settings.push(s);
@@ -708,6 +727,184 @@ pub fn command(id: &str, name: &str, args: &[String]) {
     });
 }
 
+/// One entry an enabled plugin contributes to a surface (see [`contrib`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Contributed {
+    pub id: String,
+    pub name: String,
+    /// Icon key: the contribution's own or the plugin's.
+    pub icon: String,
+    pub label: String,
+    pub command: String,
+}
+
+/// Config entry holding the order of the sidebar's Sources (`order = "a,b"`).
+pub const SOURCES_ID: &str = "vivi-sources";
+/// Per-plugin setting that hides a source from the sidebar (`"true"`).
+pub const HIDDEN_KEY: &str = "ui.hidden";
+
+/// Whether the user hid source `id` from the sidebar.
+pub fn source_hidden(c: &Config, id: &str) -> bool {
+    c.plugins
+        .get(id)
+        .and_then(|s| s.settings.get(HIDDEN_KEY))
+        .is_some_and(|v| v == "true")
+}
+
+/// User order of the sidebar's Sources (ids; unknown ones go last).
+pub fn source_order(c: &Config) -> Vec<String> {
+    c.plugins
+        .get(SOURCES_ID)
+        .and_then(|s| s.settings.get("order"))
+        .map(|o| {
+            o.split(',')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Sort `v` by the user's source order, keeping manifest order for the rest.
+fn order_sources(order: &[String], v: &mut [Contributed]) {
+    v.sort_by_key(|e| order.iter().position(|o| *o == e.id).unwrap_or(usize::MAX));
+}
+
+/// Move source `id` up (`-1`) or down (`1`) in the sidebar, or hide / show it.
+pub fn arrange_source(id: &str, what: &str) {
+    let ids: Vec<String> = contributions_all(contrib::SIDEBAR_SOURCE)
+        .into_iter()
+        .map(|e| e.id)
+        .collect();
+    with(|r| {
+        let mut c = r.cfg.borrow_mut();
+        match what {
+            "hide" | "show" => {
+                c.plugins
+                    .entry(id.into())
+                    .or_default()
+                    .settings
+                    .insert(HIDDEN_KEY.into(), (what == "hide").to_string());
+            }
+            "up" | "down" => {
+                let mut order = ids.clone();
+                if let Some(i) = order.iter().position(|o| o == id) {
+                    let j = if what == "up" {
+                        i.saturating_sub(1)
+                    } else {
+                        (i + 1).min(order.len() - 1)
+                    };
+                    order.swap(i, j);
+                }
+                c.plugins
+                    .entry(SOURCES_ID.into())
+                    .or_default()
+                    .settings
+                    .insert("order".into(), order.join(","));
+            }
+            _ => return,
+        }
+        drop(c);
+        save(&r.cfg);
+    });
+}
+
+/// Contributions of every enabled plugin at `point`, hidden sources included,
+/// in the user's source order.
+pub fn contributions_all(point: &str) -> Vec<Contributed> {
+    with(|r| {
+        let c = r.cfg.borrow();
+        let mut v: Vec<Contributed> = r
+            .entries
+            .iter()
+            .filter(|e| e.active)
+            .map(|e| &e.manifest)
+            .chain(
+                r.scripts
+                    .iter()
+                    .map(|s| &s.manifest)
+                    .filter(|m| is_enabled(&c, m)),
+            )
+            .flat_map(|m| {
+                m.contributes
+                    .iter()
+                    .filter(|x| x.point == point)
+                    .map(|x| Contributed {
+                        id: m.id.clone(),
+                        name: m.name.clone(),
+                        icon: if x.icon.is_empty() {
+                            m.icon.clone()
+                        } else {
+                            x.icon.clone()
+                        },
+                        label: if x.label.is_empty() {
+                            m.name.clone()
+                        } else {
+                            x.label.clone()
+                        },
+                        command: x.command.clone(),
+                    })
+            })
+            .collect();
+        order_sources(&source_order(&c), &mut v);
+        v
+    })
+    .unwrap_or_default()
+}
+
+/// What a surface shows at `point` (hidden sources left out).
+pub fn contributions(point: &str) -> Vec<Contributed> {
+    let mut v = contributions_all(point);
+    if point == contrib::SIDEBAR_SOURCE {
+        with(|r| {
+            let c = r.cfg.borrow();
+            v.retain(|e| !source_hidden(&c, &e.id));
+        });
+    }
+    v
+}
+
+/// Run a contribution: a built-in plugin's command, a package's action
+/// (`script-message-to`), or — with an empty command — the plugin's Extensions tab.
+/// Returns false when the plugin is unknown or off.
+pub fn run(id: &str, cmd: &str, args: &[String]) -> bool {
+    enum Target {
+        Builtin,
+        Script(String, bool),
+    }
+    let t = with(|r| {
+        if r.entries.iter().any(|e| e.active && e.manifest.id == id) {
+            return Some(Target::Builtin);
+        }
+        let s = r.scripts.iter().find(|s| s.manifest.id == id)?;
+        let name = client_name(&s.path).replace('-', "_");
+        Some(Target::Script(name, r.loaded.contains(id)))
+    })
+    .flatten();
+    let Some(t) = t else { return false };
+    if cmd.is_empty() {
+        if let Some(a) = with(|r| r.app.upgrade()).flatten() {
+            crate::extwin::open(&a, id, false);
+        }
+        return true;
+    }
+    match t {
+        Target::Builtin => command(id, cmd, args),
+        Target::Script(name, loaded) => {
+            with(|r| {
+                if loaded {
+                    let mut v: Vec<&str> = vec![&name, cmd];
+                    v.extend(args.iter().map(String::as_str));
+                    r.player.cmd("script-message-to", &v);
+                } else if let Some(a) = r.app.upgrade() {
+                    toast(&a, "This plugin is not running yet: restart Vivi");
+                }
+            });
+        }
+    }
+    true
+}
+
 /// Ask an enabled plugin for a value (see [`Plugin::query`]).
 pub fn query<T: 'static>(id: &str, name: &str) -> Option<T> {
     with(|r| {
@@ -858,6 +1055,37 @@ mod tests {
         st.settings.insert("a".into(), "false".into());
         assert!(is_enabled(&c, &m));
         assert_eq!(setting_value(&c, &m, "a"), "false");
+    }
+
+    #[test]
+    fn contributions_point_at_known_places() {
+        for p in builtin() {
+            let m = p.manifest();
+            for c in &m.contributes {
+                assert!(contrib::POINTS.contains(&c.point.as_str()), "{}", m.id);
+            }
+            assert_eq!(
+                m.role == contrib::Role::Source,
+                m.contributes
+                    .iter()
+                    .any(|c| c.point == contrib::SIDEBAR_SOURCE),
+                "{}",
+                m.id
+            );
+        }
+        let mut v: Vec<Contributed> = ["a", "b", "c"]
+            .iter()
+            .map(|id| Contributed {
+                id: id.to_string(),
+                name: String::new(),
+                icon: String::new(),
+                label: String::new(),
+                command: String::new(),
+            })
+            .collect();
+        order_sources(&["c".into(), "a".into()], &mut v);
+        let ids: Vec<&str> = v.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, ["c", "a", "b"]);
     }
 
     #[test]

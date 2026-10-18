@@ -102,6 +102,7 @@ pub(crate) fn wire(
                     false,
                 );
             }
+            A::Extensions => crate::extwin::toggle(&a),
             A::Bookmark => a.global::<crate::Panel>().invoke_add_bookmark(),
             A::Shortcuts => a
                 .global::<crate::Overlays>()

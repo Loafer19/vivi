@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod desktop;
 mod dialogs;
+mod extwin;
 mod fx;
 mod images;
 mod ipc;

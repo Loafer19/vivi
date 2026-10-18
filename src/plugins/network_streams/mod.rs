@@ -14,7 +14,7 @@
 //! `$XDG_DATA_HOME/vivi/streams/{saved,recent,playlists}.json` (favorites are `saved`).
 
 use super::web;
-use super::{Ctx, Manifest, Plugin, SettingSpec};
+use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use crate::Item;
 use serde::{Deserialize, Serialize};
 use slint::ComponentHandle;
@@ -772,6 +772,9 @@ impl Plugin for NetworkStreams {
             "Internet radio (radio-browser.info, SomaFM), iptv-org TV by country and category, your own M3U/IPTV playlists that refresh themselves, favorites, groups, channel logos, an XMLTV program guide (now / next) and stream info.",
             "streams",
         )
+        .source("open")
+        .contribute(contrib::PALETTE_COMMAND, "Browse network streams", "open")
+        .contribute(contrib::CONTEXT_PLAYER, "Stream info", "info")
         .setting(SettingSpec::action(
             "open",
             "Browse streams",

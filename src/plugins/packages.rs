@@ -277,6 +277,12 @@ pub struct PkgManifest {
     /// Native helpers shipped per platform (see the module docs).
     #[serde(default)]
     pub binaries: Vec<String>,
+    /// `source` | `feature` (see `plugins::contrib`); missing = known default / feature.
+    #[serde(default)]
+    pub role: Option<String>,
+    /// `[[contributes]]` entries (point, label, command, icon).
+    #[serde(default)]
+    pub contributes: Option<Vec<super::contrib::Contribution>>,
 }
 
 /// Setting keys Vivi passes to every package itself (`<id>-pkgdir`).
@@ -330,6 +336,15 @@ impl PkgManifest {
 
     /// Plugin manifest for the registry / Settings page.
     pub fn to_manifest(&self) -> Manifest {
+        use super::contrib;
+        // Manifests without the fields get the host's defaults for that id.
+        let (def_role, def_contrib) = contrib::known_defaults(&self.id);
+        let role = self
+            .role
+            .as_deref()
+            .map(contrib::Role::parse)
+            .unwrap_or(def_role);
+        let contributes = contrib::known(self.contributes.clone().unwrap_or(def_contrib));
         Manifest {
             id: self.id.clone(),
             name: self.name.clone(),
@@ -344,6 +359,8 @@ impl PkgManifest {
             settings: self.settings.iter().filter_map(to_spec).collect(),
             default_enabled: self.default_enabled,
             origin: Origin::Package,
+            role,
+            contributes,
         }
     }
 }
@@ -925,6 +942,28 @@ pub fn action(id: &str, label: &str) {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn manifest_contributions_and_defaults() {
+        use crate::plugins::contrib::Role;
+        let base = "id = \"x\"\nname = \"X\"\nversion = \"1.0.0\"\nkind = \"mpv-lua\"\nentry = \"x.lua\"\n";
+        let m: PkgManifest = toml::from_str(base).unwrap();
+        let m = m.to_manifest();
+        assert_eq!(m.role, Role::Feature);
+        assert!(m.contributes.is_empty());
+        let t = format!("{base}role = \"source\"\n[[contributes]]\npoint = \"sidebar.source\"\n[[contributes]]\npoint = \"menu.subtitles\"\nlabel = \"Sync\"\ncommand = \"sync\"\n[[contributes]]\npoint = \"future.point\"\n");
+        let m: PkgManifest = toml::from_str(&t).unwrap();
+        let m = m.to_manifest();
+        assert_eq!(m.role, Role::Source);
+        assert_eq!(m.contributes.len(), 2);
+        assert_eq!(m.contributes[1].command, "sync");
+        // Older catalog packages get the host defaults by id; `contributes = []` opts out.
+        let yt = base.replace("\"x\"", "\"youtube\"");
+        let m: PkgManifest = toml::from_str(&yt).unwrap();
+        assert_eq!(m.to_manifest().role, Role::Source);
+        let m: PkgManifest = toml::from_str(&format!("{yt}contributes = []\n")).unwrap();
+        assert!(m.to_manifest().contributes.is_empty());
+    }
 
     fn tmp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("vivi-pkg-{name}-{}", std::process::id()));

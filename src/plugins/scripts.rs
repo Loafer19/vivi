@@ -82,6 +82,8 @@ pub fn manifest_from(stem: &str, main: &Path, src: &str) -> Manifest {
         settings: Vec::new(),
         default_enabled: true,
         origin: Origin::Script,
+        role: Default::default(),
+        contributes: Vec::new(),
     };
     for line in src.lines().take(40) {
         let l = line.trim();
