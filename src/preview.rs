@@ -1,5 +1,7 @@
 //! Seek-bar hover preview (#10): evenly spaced frames rendered in the background with the
 //! `ffmpeg` CLI (fast keyframe seeks, small RGBA frames), kept in memory for the current file.
+//! Nothing runs until the pointer first goes over the seek bar; then one worker renders the
+//! frames one ffmpeg at a time, coarse to fine, so a few spread-out frames are ready first.
 //! When the Chapter Thumbnails package (#75) has cached frames for the file, those are
 //! shown instead and no ffmpeg runs.
 
@@ -8,7 +10,6 @@ use slint::{ComponentHandle, Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecM
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 pub const FRAMES: usize = 50;
 const W: u32 = 192;
@@ -84,16 +85,29 @@ pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
     if load_cached(app, path) {
         return;
     }
-    // Placeholder frames are filled in as they arrive (index order), so the
-    // preview works for the parts that are ready.
-    let path = Arc::new(path.to_string());
+    WANTED.with(|w| *w.borrow_mut() = Some((gen, path.to_string(), duration)));
+    PENDING.with(|p| p.borrow_mut().clear());
+}
+
+/// Frame indices coarse to fine: every 16th first, then every 8th, ...
+fn order() -> Vec<usize> {
+    let mut v: Vec<usize> = (0..FRAMES).collect();
+    v.sort_by_key(|i| [16, 8, 4, 2, 1].iter().position(|s| i % s == 0));
+    v
+}
+
+/// The pointer is over the seek bar: start the worker for the current file (once).
+pub fn wanted(app: &AppWindow) {
+    let Some((gen, path, duration)) = WANTED.with(|w| w.borrow_mut().take()) else {
+        return;
+    };
+    if GENERATION.load(Ordering::SeqCst) != gen {
+        return;
+    }
     let w = app.as_weak();
-    let threads = 3;
-    for k in 0..threads {
-        let path = path.clone();
-        let w = w.clone();
+    {
         std::thread::spawn(move || {
-            for i in (k..FRAMES).step_by(threads) {
+            for i in order() {
                 if GENERATION.load(Ordering::SeqCst) != gen {
                     return;
                 }
@@ -116,7 +130,7 @@ pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
                         p[i] = Some(img);
                         // Publish once every slot has some frame: missing slots borrow the nearest ready one.
                         let ready = p.iter().filter(|x| x.is_some()).count();
-                        if ready % 10 == 0 || ready == FRAMES {
+                        if ready <= 4 || ready % 10 == 0 || ready == FRAMES {
                             let filled: Vec<Image> = (0..FRAMES)
                                 .filter_map(|j| {
                                     (0..FRAMES)
@@ -133,9 +147,23 @@ pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
             }
         });
     }
-    PENDING.with(|p| p.borrow_mut().clear());
 }
 
 thread_local! {
+    /// File waiting for the first seek-bar hover: (generation, path, duration).
+    static WANTED: std::cell::RefCell<Option<(u64, String, f64)>> = const { std::cell::RefCell::new(None) };
     static PENDING: std::cell::RefCell<Vec<Option<Image>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn frames_are_rendered_coarse_to_fine() {
+        let o = super::order();
+        assert_eq!(o.len(), super::FRAMES);
+        assert_eq!(&o[..4], &[0, 16, 32, 48]);
+        let mut s = o.clone();
+        s.sort_unstable();
+        assert_eq!(s, (0..super::FRAMES).collect::<Vec<_>>());
+    }
 }

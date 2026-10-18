@@ -21,6 +21,8 @@ export global Playback {
     in-out property <[float]> wave-peaks;
     in-out property <string> wave-path;
     in-out property <[image]> preview-frames;
+    // The pointer is over a seek bar: seek previews are generated from the first hover on.
+    callback preview-wanted();
     callback bar-action(string);
     callback toggle-play();
     callback open-file();

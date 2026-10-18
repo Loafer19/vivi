@@ -56,6 +56,12 @@ component SeekBar inherits Rectangle {
     height: 18px;
     property <float> frac: duration > 0 ? clamp(position / duration, 0, 1) : 0;
     property <float> hover-frac: clamp(ta.mouse-x / self.width, 0, 1);
+    property <bool> hovering: ta.has-hover;
+    changed hovering => {
+        if self.hovering && root.duration > 0 {
+            Playback.preview-wanted();
+        }
+    }
     property <bool> wave: root.peaks.length > 0;
     property <float> ra: root.duration > 0 && root.ab-a >= 0 ? clamp(root.ab-a / root.duration, 0, 1) : -1;
     property <float> rb: root.duration > 0 && root.ab-b >= 0 ? clamp(root.ab-b / root.duration, 0, 1) : (root.ra >= 0 ? root.frac : -1);

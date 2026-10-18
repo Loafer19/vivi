@@ -15,6 +15,14 @@ pub(crate) fn wire(
     log: bool,
 ) {
     let weak = app.as_weak();
+    {
+        let w = weak.clone();
+        app.global::<crate::Playback>().on_preview_wanted(move || {
+            if let Some(a) = w.upgrade() {
+                preview::wanted(&a);
+            }
+        });
+    }
     let player = player.clone();
     let cfg = cfg.clone();
     let timer = Box::leak(Box::new(slint::Timer::default()));
