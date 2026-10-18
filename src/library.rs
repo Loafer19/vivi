@@ -261,13 +261,9 @@ pub fn thumb_path(path: &str) -> PathBuf {
         .join(format!("{:x}.rgba", md5::compute(path.as_bytes())))
 }
 
+/// `ffmpeg` is installed (`PATH` lookup; nothing is run, so this is fine at startup).
 pub fn ffmpeg_available() -> bool {
-    std::process::Command::new("ffmpeg")
-        .arg("-version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+    crate::util::in_path("ffmpeg")
 }
 
 /// Render a 320×180 RGBA frame (video at ~10 %, or embedded cover art for audio).
@@ -360,13 +356,10 @@ pub fn thumb_worker(done: impl Fn(String, PathBuf) + Send + 'static) -> mpsc::Se
     tx
 }
 
+/// `yt-dlp` is installed (`PATH` lookup, which includes the YouTube plugin's managed
+/// copy). Running `yt-dlp --version` here cost 0.2-0.4 s of Python startup on the UI thread.
 pub fn ytdlp_available() -> bool {
-    std::process::Command::new("yt-dlp")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+    crate::util::in_path("yt-dlp")
 }
 
 #[cfg(test)]

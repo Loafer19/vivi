@@ -26,6 +26,24 @@ pub fn strings(v: impl IntoIterator<Item = impl Into<SharedString>>) -> ModelRc<
     ))
 }
 
+/// True when an executable `name` is in `PATH` (with `.exe` on Windows). A plain file
+/// lookup: nothing is spawned, so it is cheap enough for the UI thread at startup.
+pub fn in_path(name: &str) -> bool {
+    std::env::var_os("PATH")
+        .is_some_and(|p| std::env::split_paths(&p).any(|d| is_exe(&d.join(name))))
+}
+
+#[cfg(unix)]
+fn is_exe(p: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_exe(p: &std::path::Path) -> bool {
+    p.with_extension("exe").is_file() || p.is_file()
+}
+
 /// A one-shot background job: [`Task::spawn`] runs `f` on a thread, [`Task::poll`]
 /// (called from a UI timer) yields its result once. Dropping or [`Task::cancel`]ling it
 /// discards a result that has not arrived yet.
@@ -71,6 +89,13 @@ impl<T> Task<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn in_path_finds_executables_only() {
+        assert!(in_path("sh"));
+        assert!(!in_path("vivi-no-such-program-0x5f3a"));
+    }
 
     #[test]
     fn clock_formats() {
