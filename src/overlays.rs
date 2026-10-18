@@ -42,6 +42,15 @@ pub fn close(a: &AppWindow, o: Overlay) {
             );
         }
         Overlay::Subtitles => a.global::<crate::Overlays>().set_subs_open(false),
+        Overlay::Confirm => {
+            a.global::<crate::Overlays>().set_confirm_open(false);
+            let d = a.global::<crate::Dialogs>();
+            plugins::command(
+                &d.get_confirm_owner(),
+                "confirm",
+                &[d.get_confirm_key().into(), "no".into()],
+            );
+        }
         Overlay::Qr => a.global::<crate::Overlays>().set_qr_open(false),
         Overlay::Palette => a.global::<crate::Overlays>().set_palette_open(false),
         Overlay::Extensions => a.global::<crate::Overlays>().set_extensions_open(false),

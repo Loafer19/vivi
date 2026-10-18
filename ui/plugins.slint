@@ -527,7 +527,7 @@ component TrackRow inherits Rectangle {
                 bt := Text { text: root.fm.badge; color: Theme.fg-2; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
             }
         }
-        VerticalLayout { alignment: center;
+        if root.fm.lic != "": VerticalLayout { alignment: center;
             Rectangle {
                 width: max(64px, lt.preferred-width + 12px); height: 18px; border-radius: self.height / 2;
                 border-width: 1px; border-color: root.fm.free ? Theme.ok : Theme.divider;
@@ -550,6 +550,31 @@ component TrackRow inherits Rectangle {
         }
     }
     ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub; accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } z: -1; mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
+// Cover tile of the rich music dialog's grid (YouTube Music): square cover, title,
+// artist · album and the source badge.
+component CoverTile inherits Rectangle {
+    in property <FmRow> fm;
+    in property <length> cover-h;
+    callback clicked();
+    callback activated();
+    border-radius: Metrics.radius-md;
+    background: fm.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
+    Rectangle {
+        x: 8px; y: 8px; width: parent.width - 16px; height: root.cover-h; border-radius: Metrics.radius-sm; clip: true;
+        background: Theme.accent.with-alpha(0.15);
+        if root.fm.has-cover: Image { width: parent.width; height: parent.height; source: root.fm.cover; image-fit: cover; }
+        if !root.fm.has-cover: Icon { x: (parent.width - 32px) / 2; y: (parent.height - 32px) / 2; width: 32px; height: 32px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; }
+        if root.fm.badge != "": Rectangle {
+            x: 6px; y: 6px; width: tb.preferred-width + 12px; height: 18px; border-radius: self.height / 2;
+            background: Theme.bg-a3.with-alpha(0.85);
+            tb := Text { text: root.fm.badge; color: Theme.fg-1; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+    Text { x: 8px; y: root.cover-h + 14px; width: parent.width - 16px; text: root.fm.title; color: fm.selected ? Theme.accent-bright : Theme.fg-1; font-size: Metrics.font-sm; font-weight: 600; overflow: elide; }
+    Text { x: 8px; y: root.cover-h + 32px; width: parent.width - 16px; text: root.fm.sub; color: Theme.fg-a2; font-size: Metrics.font-micro; overflow: elide; }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub; accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
 }
 
 // Shared dialog of the music plugins (Auto-tagger, Free Music): optional source
@@ -674,26 +699,86 @@ export component MusicDialog inherits Modal {
             vertical-stretch: 1; padding-left: 12px; padding-right: 12px; spacing: 12px;
             Rectangle {
                 horizontal-stretch: root.rich ? 5 : 3;
-                if root.rich: sv := ScrollView {
-                    changed content-y => {
-                        if root.has-more && self.content-height > self.visible-height
-                            && -self.content-y > self.content-height - self.visible-height - 160px { root.more(); }
-                    }
-                    VerticalLayout {
-                        spacing: 2px; alignment: start;
-                        for r[i] in root.tracks: TrackRow {
-                            fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
-                            clicked => { root.selected = i; root.select(i); }
-                            activated => { root.selected = i; root.select(i); root.primary(i); }
-                            play => { root.selected = i; root.select(i); root.primary(i); }
-                            queue => { root.action("Queue", i); }
-                            download => { root.selected = i; root.select(i); root.secondary(i); }
+                // Rich rows (Free Music, YouTube Music) or cover tiles (YouTube Music, when the
+                // owner allows a grid). Same keys as below; scrolling near the end loads more.
+                if root.rich: rk := FocusScope {
+                    accessible-role: list;
+                    accessible-label: root.grid ? "Results, grid" : "Results";
+                    property <length> gap: 10px;
+                    property <length> inner: sv.width - 14px;
+                    property <int> cols: max(1, floor((self.inner + self.gap) / (160px + self.gap)));
+                    property <length> tile-w: (self.inner - (self.cols - 1) * self.gap) / self.cols;
+                    property <length> tile-h: self.tile-w - 16px + 60px;
+                    property <length> row-h: root.grid ? self.tile-h : 52px;
+                    property <length> stride: root.grid ? self.tile-h + self.gap : 54px;
+                    property <int> n: root.tracks.length;
+                    property <bool> g: root.grid;
+                    changed g => { self.reveal(root.selected); }
+                    function line(i: int) -> int { return root.grid ? floor(i / self.cols) : i; }
+                    function reveal(i: int) {
+                        if i < 0 { return; }
+                        if self.line(i) * self.stride < -sv.content-y {
+                            sv.content-y = -self.line(i) * self.stride;
+                        } else if self.line(i) * self.stride + self.row-h > -sv.content-y + sv.visible-height {
+                            sv.content-y = -(self.line(i) * self.stride + self.row-h - sv.visible-height);
                         }
-                        if root.has-more: Rectangle { height: 40px;
-                            Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
-                            TouchArea { accessible-role: button; accessible-label: "Load more"; mouse-cursor: pointer; clicked => { root.more(); } }
+                    }
+                    function go(i: int) {
+                        root.selected = max(0, min(self.n - 1, i));
+                        root.select(root.selected);
+                        self.reveal(root.selected);
+                    }
+                    key-pressed(e) => {
+                        if self.n == 0 { return reject; }
+                        if e.text == Key.DownArrow { self.go(root.selected < 0 ? 0 : root.selected + (root.grid ? self.cols : 1)); return accept; }
+                        if e.text == Key.UpArrow { self.go(root.selected < 0 ? 0 : root.selected - (root.grid ? self.cols : 1)); return accept; }
+                        if root.grid && e.text == Key.RightArrow { self.go(root.selected + 1); return accept; }
+                        if root.grid && e.text == Key.LeftArrow { self.go(root.selected < 0 ? 0 : root.selected - 1); return accept; }
+                        if e.text == Key.Home { self.go(0); return accept; }
+                        if e.text == Key.End { self.go(self.n - 1); return accept; }
+                        if e.text == Key.Return && root.selected >= 0 { root.primary(root.selected); return accept; }
+                        reject
+                    }
+                    property <length> content-h: (root.grid
+                        ? max(0, ceil(self.n / self.cols) * self.stride - self.gap)
+                        : max(0, self.n * self.stride - 2px)) + (root.has-more ? 40px : 0);
+                    sv := ScrollView {
+                        content-height: rk.content-h;
+                        changed content-y => {
+                            if root.has-more && self.content-height > self.visible-height
+                                && -self.content-y > self.content-height - self.visible-height - 160px { root.more(); }
+                        }
+                        if !root.grid: VerticalLayout {
+                            spacing: 2px; alignment: start;
+                            for r[i] in root.tracks: TrackRow {
+                                fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                clicked => { rk.focus(); root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                                play => { root.selected = i; root.select(i); root.primary(i); }
+                                queue => { root.action("Queue", i); }
+                                download => { root.selected = i; root.select(i); root.secondary(i); }
+                            }
+                            if root.has-more: Rectangle { height: 40px;
+                                Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
+                                TouchArea { accessible-role: button; accessible-label: "Load more"; mouse-cursor: pointer; clicked => { root.more(); } }
+                            }
+                        }
+                        if root.grid: Rectangle {
+                            x: 0; y: 0; width: rk.inner; height: rk.content-h;
+                            for r[i] in root.tracks: CoverTile {
+                                x: mod(i, rk.cols) * (rk.tile-w + rk.gap); y: floor(i / rk.cols) * rk.stride;
+                                width: rk.tile-w; height: rk.tile-h; cover-h: rk.tile-w - 16px;
+                                fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                clicked => { rk.focus(); root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                            }
+                            if root.has-more: Rectangle { x: 0; y: rk.content-h - 40px; width: rk.inner; height: 40px;
+                                Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
+                                TouchArea { accessible-role: button; accessible-label: "Load more"; mouse-cursor: pointer; clicked => { root.more(); } }
+                            }
                         }
                     }
+                    if rk.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: Metrics.radius-md; }
                 }
                 // Rows or tiles. Arrow keys move the selection (in the grid Up / Down move a
                 // row), Home / End jump, Enter plays; the selection is kept in view.

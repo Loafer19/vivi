@@ -4,6 +4,15 @@ export global Dialogs {
     in-out property <image> qr-code;
     in-out property <string> qr-text;
     in-out property <string> qr-caption;
+    // Plugin confirmation (src/dialogs.rs `confirm`): the answer goes to `confirm-owner`
+    // as plugin command "confirm" with `confirm-key` and "yes" / "no".
+    in-out property <string> confirm-owner;
+    in-out property <string> confirm-key;
+    in-out property <string> confirm-title;
+    in-out property <string> confirm-heading;
+    in-out property <string> confirm-text;
+    in-out property <string> confirm-ok;
+    in-out property <bool> confirm-warning;
     in-out property <[string]> net-history;
     in-out property <string> net-error;
     in-out property <string> net-urls;

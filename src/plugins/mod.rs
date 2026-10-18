@@ -23,6 +23,7 @@ pub mod auto_tagger;
 pub mod contrib;
 pub mod epg;
 pub mod free_music;
+pub mod host;
 pub mod lyrics;
 pub mod network_streams;
 pub mod packages;
@@ -614,6 +615,33 @@ pub fn client_message(args: &[String]) {
                 }
             });
         }
+        Some(m @ (M::Dialog { .. } | M::DialogClose(_) | M::Confirm { .. })) => {
+            let Some(a) = with(|r| r.app.upgrade()).flatten() else {
+                return;
+            };
+            match m {
+                M::Dialog { id, json } => match serde_json::from_str(json) {
+                    Ok(u) => host::dialog(&a, id, u),
+                    Err(e) => eprintln!("vivi: {id}: bad vivi-dialog json: {e}"),
+                },
+                M::DialogClose(id) => host::dialog_close(&a, id),
+                M::Confirm { id, key, json } => match serde_json::from_str(json) {
+                    Ok(c) => host::confirm(&a, id, key, c),
+                    Err(e) => eprintln!("vivi: {id}: bad vivi-confirm json: {e}"),
+                },
+                _ => {}
+            }
+        }
+        Some(M::MediaMeta { id, json }) => match serde_json::from_str(json) {
+            Ok(m) => host::media_meta(id, m),
+            Err(e) => eprintln!("vivi: {id}: bad vivi-media-meta json: {e}"),
+        },
+        Some(M::Protect { id, path }) => {
+            host::protect(id, path);
+        }
+        Some(M::Wipe { id, path }) => {
+            host::wipe(id, path);
+        }
         _ => {}
     }
 }
@@ -752,17 +780,26 @@ pub fn file_loaded() {
 }
 
 /// Send a command to one plugin (no-op when it is disabled).
+/// UI callbacks of a package's host dialog are forwarded to it (see [`host`]).
 pub fn command(id: &str, name: &str, args: &[String]) {
-    with(|r| {
-        let Some(a) = r.app.upgrade() else { return };
+    let builtin = with(|r| {
+        let Some(a) = r.app.upgrade() else {
+            return true;
+        };
         if let Some(e) = r
             .entries
             .iter_mut()
             .find(|e| e.active && e.manifest.id == id)
         {
             e.plugin.command(&ctx!(r, a, e), name, args);
+            return true;
         }
-    });
+        r.entries.iter().any(|e| e.manifest.id == id)
+    })
+    .unwrap_or(true);
+    if !builtin {
+        host::ui_event(id, name, args);
+    }
 }
 
 /// One entry an enabled plugin contributes to a surface (see [`contrib`]).

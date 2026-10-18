@@ -95,6 +95,22 @@ pub enum ScriptMessage<'a> {
     DownloadsShow,
     /// `vivi-toast <text> [seconds]` with non-blank text (trimmed).
     Toast(&'a str),
+    /// `vivi-dialog <id> <json>`: open / update the shared music dialog (see `host`).
+    Dialog { id: &'a str, json: &'a str },
+    /// `vivi-dialog-close <id>`.
+    DialogClose(&'a str),
+    /// `vivi-confirm <id> <key> <json>`: a confirm / warning dialog.
+    Confirm {
+        id: &'a str,
+        key: &'a str,
+        json: &'a str,
+    },
+    /// `vivi-media-meta <id> <json>`: now-playing metadata of queued URLs.
+    MediaMeta { id: &'a str, json: &'a str },
+    /// `vivi-protect <id> <path>`: owner-only permissions on a file in the package's data folder.
+    Protect { id: &'a str, path: &'a str },
+    /// `vivi-wipe <id> <path>`: overwrite and delete a file in the package's data folder.
+    Wipe { id: &'a str, path: &'a str },
 }
 
 impl<'a> ScriptMessage<'a> {
@@ -134,6 +150,12 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-download-remove", id, job] => M::DownloadRemove { id, job },
             ["vivi-downloads-show", ..] => M::DownloadsShow,
             ["vivi-toast", text, ..] if !text.trim().is_empty() => M::Toast(text.trim()),
+            ["vivi-dialog", id, json] => M::Dialog { id, json },
+            ["vivi-dialog-close", id] => M::DialogClose(id),
+            ["vivi-confirm", id, key, json] => M::Confirm { id, key, json },
+            ["vivi-media-meta", id, json] => M::MediaMeta { id, json },
+            ["vivi-protect", id, path] => M::Protect { id, path },
+            ["vivi-wipe", id, path] => M::Wipe { id, path },
             _ => return None,
         })
     }
@@ -229,5 +251,43 @@ mod tests {
         assert_eq!(p(&["vivi-toast", "  "]), None);
         assert_eq!(p(&["vivi-setting", "p", "k"]), None);
         assert_eq!(p(&["other", "x"]), None);
+        is(
+            &["vivi-dialog", "p", "{}"],
+            M::Dialog {
+                id: "p",
+                json: "{}",
+            },
+        );
+        is(&["vivi-dialog-close", "p"], M::DialogClose("p"));
+        is(
+            &["vivi-confirm", "p", "k", "{}"],
+            M::Confirm {
+                id: "p",
+                key: "k",
+                json: "{}",
+            },
+        );
+        is(
+            &["vivi-media-meta", "p", "{}"],
+            M::MediaMeta {
+                id: "p",
+                json: "{}",
+            },
+        );
+        is(
+            &["vivi-protect", "p", "/x"],
+            M::Protect {
+                id: "p",
+                path: "/x",
+            },
+        );
+        is(
+            &["vivi-wipe", "p", "/x"],
+            M::Wipe {
+                id: "p",
+                path: "/x",
+            },
+        );
+        assert_eq!(p(&["vivi-dialog", "p"]), None);
     }
 }

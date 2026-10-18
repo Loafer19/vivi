@@ -705,6 +705,9 @@ impl NetworkStreams {
     fn now_playing(&mut self, cx: &Ctx) {
         let a = cx.app;
         let path = cx.player.get("path").unwrap_or_default();
+        if super::host::has_meta(&path) {
+            return; // a package described this URL: the host fills the card
+        }
         let show = a.global::<crate::Playback>().get_has_media()
             && a.global::<crate::Viz>().get_audio()
             && path.contains("://");

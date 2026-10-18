@@ -204,6 +204,40 @@ unconditionally and keep its own UI as a fallback. Vivi sets the mpv property
 `user-data/vivi/downloads` to `1` when the panel exists; Offline Downloads checks it and
 only drops its own queue page then.
 
+### Host API for packages (dialogs, covers, now playing, private files)
+
+Code: `src/plugins/host.rs`, messages in `src/plugins/protocol.rs`. Scripts cannot draw
+Slint, so Vivi draws for them: a package sends `script-message` broadcasts and gets the
+user's answers back. All payloads are JSON (mpv Lua: `utils.format_json`); unknown
+fields are ignored and every field is optional, so packages written for a newer Vivi
+still load. Packages that never send these messages are unaffected.
+
+| Message | Effect |
+| --- | --- |
+| `vivi-dialog <id> <json>` | Open (`"open": true`) or update the shared music dialog owned by `id`. Fields: `title`, `placeholder`, `search_label`, `query`, `sources` + `source` (dropdown), `chips` + `chip`, `actions` (buttons), `filters` (`[{name, options, value}]` dropdowns), `rows`, `status`, `busy`, `detail` (side pane text), `primary` / `secondary` (button labels), `has_more` (infinite scroll), `grid_toggle` (offer list / grid), `grid`, `copy`. A row is `{title, sub, badge, chip, chip_ok, dur, cover, dl, selected}`; `cover` is an http(s) URL or a local path, downloaded into the image cache (`<cache>/plugin-covers`) and decoded at row (48 px) or tile (256 px) size. The grid shows square cover tiles. Updates for a dialog that another plugin took over are dropped until the next `open`. |
+| `vivi-dialog-close <id>` | Close it if `id` still owns it. |
+| `vivi-confirm <id> <key> <json>` | Warning / confirm dialog `{title, heading, text, ok}` (Enter confirms, Esc cancels). |
+| `vivi-media-meta <id> <json>` | `{url, title, artist, album, cover, info}` or `{"items": [...]}` for URLs the package queued: Vivi shows them on the now-playing card (cover, title, artist · album, `info` · codec · bitrate) while one of them plays as audio, and uses the cover in Recent. At most 5000 URLs are kept. |
+| `vivi-protect <id> <path>` | `chmod 0600` (0700 for a folder) on a file inside the package's data folder `<data>/plugin-data/<id>` (credentials). Paths outside it are ignored. No-op on Windows. |
+| `vivi-wipe <id> <path>` | Overwrite a file in that folder with zeros, then delete it (sign out). |
+
+Answers arrive as `script-message-to <script> vivi-ui <json>` with
+`{"event", "args", "query", "source", "chip", "grid"}`; `event` is one of `search`,
+`edited` (query typed), `select` / `primary` / `secondary` (`args[0]` = row index),
+`act:<action>` (`args[0]` = row index), `chip`, `filter` (`[name, value]`), `more`,
+`view` (`grid` / `list`), `close`, and `confirm` (`[key, "yes" | "no"]`). They are
+forwarded only to a package that opened a dialog or confirm in this run.
+
+Downloads go to the shared Downloads panel with `vivi-download` (see above).
+
+Playback stays in the package: it queues URLs with mpv's
+`loadfile <url> append-play -1 <options>` (mpv 0.38+ takes the index; older mpv does not)
+and per-file options such as `force-media-title=…` and `ytdl-raw-options=cookies=%N%<file>`
+(`%N%` quoting keeps commas and `=` intact). yt-dlp is found in `PATH`, which includes the
+YouTube & yt-dlp package's managed copy (`plugin-data/youtube/bin`); Vivi itself never
+needs it at startup. Contribution points (`sidebar.source`, `palette.command`,
+`context.player`, …) come from `[[contributes]]` in the manifest, see above.
+
 ### Extensions window
 
 `ui/extensions.slint` + global `Extensions` (`ui/state/extensions.slint`), filled by

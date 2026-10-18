@@ -325,6 +325,28 @@ pub fn show_qr(a: &AppWindow, title: &str, text: &str, caption: &str) {
     a.global::<crate::Overlays>().set_qr_open(true);
 }
 
+/// Ask the user to confirm something for plugin `owner`; the answer arrives as plugin
+/// command `confirm <key> yes|no` (also "no" when the dialog is closed with Esc / ×).
+pub fn confirm(
+    a: &AppWindow,
+    owner: &str,
+    key: &str,
+    title: &str,
+    heading: &str,
+    text: &str,
+    ok: &str,
+) {
+    let d = a.global::<crate::Dialogs>();
+    d.set_confirm_owner(owner.into());
+    d.set_confirm_key(key.into());
+    d.set_confirm_title(title.into());
+    d.set_confirm_heading(heading.into());
+    d.set_confirm_text(text.into());
+    d.set_confirm_ok(ok.into());
+    d.set_confirm_warning(true);
+    a.global::<crate::Overlays>().set_confirm_open(true);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

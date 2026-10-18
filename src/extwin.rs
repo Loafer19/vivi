@@ -298,7 +298,14 @@ pub fn refresh() {
             g.set_icon(m.icon.as_str().into());
             g.set_on(plugins::is_enabled(&c, m));
             g.set_source(m.role == contrib::Role::Source && !source_command(&m.id).is_empty());
-            g.set_status(plugins::script_status(&m.id).unwrap_or_default().into());
+            // Packages report through script messages; built-ins answer a "status" query
+            // (e.g. who is signed in).
+            let status = plugins::script_status(&m.id).or_else(|| {
+                (m.origin == Origin::Builtin && plugins::is_enabled(&c, m))
+                    .then(|| plugins::query::<String>(&m.id, "status"))
+                    .flatten()
+            });
+            g.set_status(status.unwrap_or_default().into());
             let dep = (m.origin == Origin::Package)
                 .then(|| plugins::packages::deprecation(&m.id))
                 .flatten();

@@ -150,7 +150,14 @@ pub(crate) fn installed(r: &mut Rows, updates: &[plugins::packages::Entry]) {
     let busy = packages::with_state(|s| s.busy.clone());
     r.header("Built-in");
     for m in all.iter().filter(|m| m.origin == Origin::Builtin) {
-        plugin_rows(r, m, "Built-in", |_| {});
+        plugin_rows(r, m, "Built-in", |r| {
+            // Live state a plugin reports (e.g. YouTube Music: who is signed in).
+            if let Some(s) = plugins::query::<String>(&m.id, "status") {
+                if plugins::is_enabled(r.c, m) {
+                    r.push("", &s, "", "info", String::new());
+                }
+            }
+        });
     }
     r.header("Downloaded");
     if pk.is_empty() {

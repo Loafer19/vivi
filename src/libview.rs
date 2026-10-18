@@ -107,6 +107,7 @@ impl Lib {
             } else {
                 crate::plugins::network_streams::cached_logo(&e.image)
                     .or_else(|| crate::plugins::free_music::cached_cover(&e.image))
+                    .or_else(|| crate::plugins::host::cached_cover(&e.image))
             };
             if let Some(p) = img {
                 // Decoded on a worker; rows keyed by the file get it when it is ready.

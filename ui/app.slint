@@ -9,7 +9,7 @@ import { SettingsDialog, SettingRow } from "settings.slint";
 import { CustomizeDialog, Tools } from "toolbar.slint";
 import { OnboardingDialog } from "onboarding.slint";
 import { LibraryView, LibItem } from "library.slint";
-import { NetworkStreamDialog, NewPlaylistDialog, QrDialog, ShortcutsDialog } from "dialogs.slint";
+import { NetworkStreamDialog, NewPlaylistDialog, QrDialog, ConfirmDialog, ShortcutsDialog } from "dialogs.slint";
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
@@ -555,6 +555,7 @@ export component AppWindow inherits Window {
         : Overlays.customize-open ? Overlay.customize
         : Overlays.tr-open ? Overlay.tag-review
         : Overlays.ls-open ? Overlay.lyrics-search
+        : Overlays.confirm-open ? Overlay.confirm
         : Overlays.md-open ? Overlay.music-dialog
         : Overlays.subs-open ? Overlay.subtitles
         : Overlays.qr-open ? Overlay.qr
@@ -660,7 +661,7 @@ export component AppWindow inherits Window {
     public function focus-main() { fs.focus(); }
     property <bool> dialog-open: Overlays.settings-open || Overlays.extensions-open || Overlays.palette-open || Overlays.customize-open || Overlays.network-open
         || Overlays.new-playlist-open || Overlays.subs-open || Overlays.md-open || Overlays.ls-open
-        || Overlays.tr-open || Overlays.onboarding-open || Overlays.qr-open || Overlays.info-open
+        || Overlays.tr-open || Overlays.onboarding-open || Overlays.qr-open || Overlays.confirm-open || Overlays.info-open
         || Overlays.shortcuts-open;
 
     // Esc reaches the keymap even while a text field inside a dialog has focus: this
@@ -1287,6 +1288,17 @@ export component AppWindow inherits Window {
         primary(i) => { root.plugin-command(MusicDialogState.owner, "primary", i); }
         secondary(i) => { root.plugin-command(MusicDialogState.owner, "secondary", i); }
         close => { Overlays.md-open = false; root.plugin-command(MusicDialogState.owner, "close", ""); fs.focus(); }
+    }
+
+    // ---------- Plugin confirmation (above Settings and the music dialog) ----------
+    if Overlays.confirm-open: ConfirmDialog {
+        width: root.width; height: root.height;
+        title: Dialogs.confirm-title; heading: Dialogs.confirm-heading; text: Dialogs.confirm-text;
+        ok-label: Dialogs.confirm-ok; warning: Dialogs.confirm-warning;
+        answer(yes) => {
+            Overlays.confirm-open = false;
+            root.plugin-command(Dialogs.confirm-owner, "confirm", Dialogs.confirm-key + "\u{1f}" + (yes ? "yes" : "no"));
+        }
     }
 
     // ---------- Find Lyrics (Lyrics plugin) ----------

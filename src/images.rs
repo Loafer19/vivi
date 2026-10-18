@@ -116,6 +116,7 @@ pub fn disk_dirs() -> Vec<PathBuf> {
         "stream-logos",
         "web-thumbs",
         "free-music-covers",
+        "plugin-covers",
     ]
     .iter()
     .map(|d| c.join(d))

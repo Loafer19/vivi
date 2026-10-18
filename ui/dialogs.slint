@@ -232,6 +232,44 @@ export component QrDialog inherits Rectangle {
     }
 }
 
+// Confirmation a plugin asks for (e.g. the YouTube Music download warning): a warning
+// icon, a title, the text, Cancel and the confirm button. Enter confirms, Esc cancels.
+export component ConfirmDialog inherits Rectangle {
+    in property <string> title;
+    in property <string> heading;
+    in property <string> text;
+    in property <string> ok-label: "OK";
+    in property <bool> warning;
+    callback answer(bool);
+    DialogFrame {
+        title: root.title; dialog-width: 480px;
+        close => { root.answer(false); }
+        fs := FocusScope {
+            init => { self.focus(); }
+            key-pressed(e) => {
+                if e.text == Key.Return { root.answer(true); return accept; }
+                reject
+            }
+            VerticalLayout {
+                padding: 20px; spacing: 14px; alignment: start;
+                HorizontalLayout { spacing: 12px;
+                    if root.warning: VerticalLayout { alignment: start;
+                        Rectangle { width: 32px; height: 32px; border-radius: 16px; background: Theme.warn-bg.with-alpha(0.22);
+                            Text { text: "!"; color: Theme.warn; font-size: Metrics.font-base; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; accessible-role: none; } } }
+                    VerticalLayout { spacing: 8px; horizontal-stretch: 1;
+                        Text { text: root.heading; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; wrap: word-wrap; }
+                        Text { text: root.text; color: Theme.fg-a2; font-size: Metrics.font-sm; wrap: word-wrap; }
+                    }
+                }
+                HorizontalLayout { alignment: end; spacing: 8px;
+                    SecondaryButton { size: ButtonSize.sm; min-w: 72px; text: "Cancel"; clicked => { root.answer(false); } }
+                    PrimaryButton { size: ButtonSize.sm; min-w: 72px; text: root.ok-label; clicked => { root.answer(true); } }
+                }
+            }
+        }
+    }
+}
+
 // One shortcut: action on the left, key chip on the right.
 component ShortcutRow inherits HorizontalLayout {
     in property <string> action;
