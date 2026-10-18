@@ -168,8 +168,9 @@ fn cover_base(url: &str) -> PathBuf {
     cover_dir().join(super::network_streams::hash_name(url))
 }
 
-/// Download `url` into the cover cache (local paths are used as they are).
-fn fetch_cover(url: &str) -> Option<PathBuf> {
+/// Download `url` into the cover cache (local paths are used as they are). Blocking: call
+/// it from a worker thread.
+pub fn fetch_cover(url: &str) -> Option<PathBuf> {
     if let Some(p) = url
         .strip_prefix("file://")
         .or(url.starts_with('/').then_some(url))

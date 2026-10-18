@@ -28,6 +28,7 @@
 - **Keyboard navigation in the streams browser**: in both views the arrow keys move the selection (Up / Down move a row in the grid), Home / End jump to the first / last station, Enter plays, and the selection is scrolled into view. The results area is in the Tab order with a focus ring, and rows and tiles are list items with the station name for screen readers.
 
 ### Changed
+- **Downloads panel**: downloads from packages showed up nowhere because `user-data/vivi/downloads` read as `"1"` (a quoted string node) in mpv Lua, so packages never saw the panel; it is now the integer 1. Rows can have a `subtitle` (artist · album) and an http(s) `artwork` URL (fetched into the cover cache); thumbnails are decoded once through the image cache instead of from disk on every refresh.
 - **One deflate implementation**: plugin packages (zip) and gzip program guides are unpacked with miniz_oxide, which the PNG and SVG decoders already link, instead of a second deflate library (zlib-rs). The binary is a little smaller; nothing else changes.
 - **Radio lyrics setting**: *Approximate sync* (synced lyrics timed from the title change) and the *Radio sync offset* setting are replaced by click-to-sync; the setting's choices are now *Click a line to sync* (default), *Plain lyrics* and *Off*.
 

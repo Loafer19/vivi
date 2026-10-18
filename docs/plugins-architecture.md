@@ -176,12 +176,13 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 | Field | Meaning |
 | --- | --- |
 | `title` | Shown in the row |
+| `subtitle` | Shown before the state on the second line (e.g. "Artist · Album") |
 | `state` | `queued`, `active` (alias `downloading`, `recording`), `paused`, `done`, `failed` (alias `cancelled`) |
 | `done`, `total` | Bytes so far / in total (0 = unknown) |
 | `progress` | 0..1 when only the share is known |
 | `speed` | Bytes per second (else measured by Vivi) |
 | `path` | The file (enables Play / Open / Show in folder when done) |
-| `artwork` | A local image file for the thumbnail |
+| `artwork` | The thumbnail: a local image file, or an http(s) URL (fetched into the plugin cover cache, so a row has its cover before the file exists) |
 | `error` | Shown when failed |
 | `detail` | Free text instead of size / ETA (e.g. "Recording · 12:30") |
 | `can_pause` | Show Pause / Resume |
@@ -201,8 +202,10 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 
 Older Vivi versions ignore the `vivi-download` messages, so a package can send them
 unconditionally and keep its own UI as a fallback. Vivi sets the mpv property
-`user-data/vivi/downloads` to `1` when the panel exists; Offline Downloads checks it and
-only drops its own queue page then.
+`user-data/vivi/downloads` to the integer `1` when the panel exists; Offline Downloads checks it and
+only drops its own queue page then. Read it with
+`tostring(mp.get_property_native("user-data/vivi/downloads", "")) == "1"`: earlier builds
+set it as a string node, which `mp.get_property` returns quoted (`"1"`).
 
 ### Host API for packages (dialogs, covers, now playing, private files)
 

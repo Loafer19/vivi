@@ -68,6 +68,8 @@ pub struct Job {
     pub plugin: String,
     pub job: String,
     pub title: String,
+    /// Second line before the state (e.g. "Artist · Album").
+    pub subtitle: String,
     pub state: State,
     /// Bytes so far / in total (0 = unknown).
     pub done: u64,
@@ -78,7 +80,8 @@ pub struct Job {
     pub speed: u64,
     /// Saved file (or the file being written).
     pub path: String,
-    /// Local image shown as the thumbnail.
+    /// Thumbnail: a local image file, or an http(s) URL fetched into the plugin cover
+    /// cache.
     pub artwork: String,
     pub error: String,
     /// Free text under the title instead of size / ETA (e.g. "Recording · 12:30").
@@ -93,6 +96,7 @@ pub struct Job {
 #[serde(default)]
 pub struct Report {
     pub title: Option<String>,
+    pub subtitle: Option<String>,
     pub state: Option<String>,
     pub done: Option<u64>,
     pub total: Option<u64>,
@@ -115,6 +119,7 @@ impl Report {
             }
         };
         set(&mut j.title, self.title);
+        set(&mut j.subtitle, self.subtitle);
         set(&mut j.path, self.path);
         set(&mut j.artwork, self.artwork);
         set(&mut j.error, self.error);
@@ -165,6 +170,35 @@ struct Store {
 thread_local! {
     static ST: RefCell<Store> = RefCell::new(Store::default());
     static UI: RefCell<Option<Ui>> = const { RefCell::new(None) };
+    /// Artwork URLs already handed to a fetch thread this run.
+    static ASKED: RefCell<std::collections::HashSet<String>> = RefCell::new(Default::default());
+}
+
+/// Redraw the rows on the next refresh tick (an artwork arrived or was decoded).
+fn mark_dirty() {
+    ST.with(|s| s.borrow_mut().dirty = true);
+}
+
+/// The local file of a job's artwork: a path (or `file://` URL) as it is; an http(s)
+/// URL from the plugin cover cache, fetched once on a worker thread (the row updates
+/// when it arrives).
+fn art_file(art: &str) -> Option<std::path::PathBuf> {
+    if art.starts_with("https://") || art.starts_with("http://") {
+        if let Some(p) = crate::plugins::host::cached_cover(art) {
+            return Some(p);
+        }
+        if ASKED.with(|a| a.borrow_mut().insert(art.to_string())) {
+            let u = art.to_string();
+            std::thread::spawn(move || {
+                if crate::plugins::host::fetch_cover(&u).is_some() {
+                    let _ = slint::invoke_from_event_loop(mark_dirty);
+                }
+            });
+        }
+        return None;
+    }
+    let p = std::path::PathBuf::from(art.strip_prefix("file://").unwrap_or(art));
+    (!art.is_empty() && p.is_file()).then_some(p)
 }
 
 fn key(plugin: &str, job: &str) -> String {
@@ -366,7 +400,11 @@ fn share(j: &Job) -> f32 {
 
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     // Packages check this before handing their queue to the panel (older Vivi: unset).
-    player.set("user-data/vivi/downloads", "1");
+    // An integer, so `mp.get_property` reads `1` (a string node would read `"1"`, with
+    // the quotes, and `== "1"` checks in packages would never see the panel).
+    if let Err(e) = player.mpv.set_property("user-data/vivi/downloads", 1i64) {
+        eprintln!("vivi: set user-data/vivi/downloads: {e:?}");
+    }
     let model: Rc<VecModel<crate::DlJob>> = Rc::new(VecModel::default());
     let g = app.global::<crate::Downloads>();
     g.set_jobs(ModelRc::from(model.clone()));
@@ -479,9 +517,12 @@ fn to_row(j: &Job, names: &[(String, String, String)]) -> crate::DlJob {
         .map_or((j.plugin.clone(), "plugins".to_string()), |(_, n, i)| {
             (n.clone(), i.clone())
         });
-    let art = (!j.artwork.is_empty())
-        .then(|| slint::Image::load_from_path(std::path::Path::new(&j.artwork)).ok())
-        .flatten();
+    // Decoded once at row size through the image cache (not from disk on every refresh).
+    let art = art_file(&j.artwork).and_then(|p| crate::images::get(&p, 88, |_| mark_dirty()));
+    let detail = match (j.subtitle.is_empty(), detail(j)) {
+        (true, d) => d,
+        (false, d) => format!("{} · {d}", j.subtitle),
+    };
     crate::DlJob {
         id: key(&j.plugin, &j.job).into(),
         title: j.title.as_str().into(),
@@ -491,7 +532,7 @@ fn to_row(j: &Job, names: &[(String, String, String)]) -> crate::DlJob {
         art: art.unwrap_or_default(),
         state: j.state.name().into(),
         progress: share(j),
-        detail: detail(j).into(),
+        detail: detail.into(),
         can_pause: j.can_pause,
         has_file: !j.path.is_empty() && j.state == State::Done,
     }
@@ -642,5 +683,29 @@ mod tests {
         assert_eq!(detail(&r[0]), "Failed · Interrupted when Vivi closed");
         assert_eq!(State::parse("recording"), Some(State::Active));
         assert_eq!(size(1_500_000), "1.5 MB");
+    }
+
+    #[test]
+    fn subtitle_and_artwork() {
+        let mut j = Job::default();
+        let r: Report = serde_json::from_str(
+            r#"{"title":"Song","subtitle":"Artist · Album","artwork":"https://i.example/c.jpg"}"#,
+        )
+        .unwrap();
+        r.apply(&mut j);
+        assert_eq!(j.subtitle, "Artist · Album");
+        assert_eq!(j.artwork, "https://i.example/c.jpg");
+        // Fields left out keep their value.
+        let r: Report = serde_json::from_str(r#"{"state":"active"}"#).unwrap();
+        r.apply(&mut j);
+        assert_eq!(j.subtitle, "Artist · Album");
+        assert_eq!(art_file(""), None);
+        assert_eq!(art_file("/no/such/cover.jpg"), None);
+        let f = std::env::temp_dir().join("vivi-dl-art-test.jpg");
+        std::fs::write(&f, b"x").unwrap();
+        let url = format!("file://{}", f.display());
+        assert_eq!(art_file(&url), Some(f.clone()));
+        assert_eq!(art_file(&f.display().to_string()), Some(f.clone()));
+        let _ = std::fs::remove_file(f);
     }
 }
