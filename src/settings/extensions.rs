@@ -295,6 +295,10 @@ pub(crate) fn browse(r: &mut Rows) {
     r.header("Available plugins");
     for e in &catalog {
         let have = inst.iter().find(|i| i.manifest.id == e.id);
+        // Deprecated plugins are only listed while installed (to uninstall them).
+        if e.deprecated.is_some() && have.is_none() {
+            continue;
+        }
         let (state, labels): (String, Vec<&str>) = if busy.as_deref() == Some(&e.id) {
             ("Downloading…".into(), vec![])
         } else if confirm.as_deref() == Some(&e.id) {
@@ -331,7 +335,10 @@ pub(crate) fn browse(r: &mut Rows) {
         r.push(
             &format!("pkg.{}", e.id),
             &e.name,
-            news.as_deref().unwrap_or(&e.description),
+            &match &e.deprecated {
+                Some(d) => format!("Deprecated: {}", d.text(&e.name)),
+                None => news.unwrap_or_else(|| e.description.clone()),
+            },
             "package",
             if confirm.as_deref() == Some(&e.id) {
                 "confirm".into()

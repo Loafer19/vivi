@@ -137,6 +137,15 @@ export component ExtensionsDialog inherits Modal {
                 vertical-stretch: 1;
                 VerticalLayout {
                     alignment: start; padding: 24px; spacing: 14px;
+                    if Extensions.deprecated != "": Rectangle {
+                        border-radius: Metrics.radius-md; background: Theme.accent-bg;
+                        HorizontalLayout {
+                            padding: 12px; spacing: 12px;
+                            Text { text: "Deprecated — " + Extensions.deprecated; color: Theme.fg-a1; font-size: Metrics.font-md; wrap: word-wrap; horizontal-stretch: 1; vertical-alignment: center; }
+                            if Extensions.replacement-label != "": VerticalLayout { alignment: center;
+                                SecondaryButton { text: Extensions.replacement-label; clicked => { Extensions.open-replacement(Extensions.replacement); } } }
+                        }
+                    }
                     Text { text: Extensions.info; color: Theme.fg-a1; font-size: Metrics.font-md; wrap: word-wrap; }
                     if Extensions.status != "": Text { text: Extensions.status; color: Theme.fg-a3; font-size: Metrics.font-sm; wrap: word-wrap; }
                     if Extensions.source && Extensions.on: HorizontalLayout { alignment: start;

@@ -742,6 +742,7 @@ pub fn toast(app: &AppWindow, msg: &str) {
 
 /// mpv loaded a new file.
 pub fn file_loaded() {
+    packages::deprecation_notice();
     with(|r| {
         let Some(a) = r.app.upgrade() else { return };
         for e in r.entries.iter_mut().filter(|e| e.active) {

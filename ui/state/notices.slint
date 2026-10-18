@@ -2,6 +2,11 @@
 export global Notices {
     in-out property <string> resume-text;
     in-out property <string> resume-offer;
+    // Optional toast button: label, the toast text it belongs to and the id passed to
+    // toast-run (e.g. a deprecated plugin's replacement, "builtin:equalizer").
+    in-out property <string> toast-action;
+    in-out property <string> toast-action-text;
+    in-out property <string> toast-action-id;
     in-out property <bool> loading-show;
     in-out property <bool> loading-buffering;
     in-out property <string> loading-name;
@@ -10,4 +15,5 @@ export global Notices {
     in-out property <bool> stream-copied;     // "Copy" was pressed for the current error
     callback start-over();
     callback dismiss-resume();
+    callback toast-run(string);
 }

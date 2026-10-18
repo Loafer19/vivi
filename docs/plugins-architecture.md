@@ -221,7 +221,7 @@ from Rust with `extwin::open(app, id, gear)`; a plugin opens its own settings wi
 | Plugin | Where | Why | Keys |
 | --- | --- | --- | --- |
 | Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz, Cover Art Archive, Deezer, iTunes Search and LRCLIB need none; Last.fm API key (genres) and Discogs token optional (#79). Candidates from all sources are merged and ranked by confidence (`rank_candidates`, `Candidate::confidence`); disagreeing values become per-field alternatives (⇄ in the review); fingerprint matches propose a sanitized, opt-in file name (`sanitize_file_name`, `rename_to`). The review shows the source of every field; synced LRCLIB lyrics are embedded when *Embed synced lyrics* is on (MP3 SYLT+USLT, FLAC/Ogg/Opus `LYRICS`, M4A `©lyr`, #80) |
-| Equalizer (`equalizer`, #74) | script | presets via mpv `equalizer`/`superequalizer` af | none |
+| Equalizer (`equalizer`, #74) | script, **deprecated** since 0.13.0 | presets via mpv `equalizer`/`superequalizer` af; replaced by the built-in Equalizer (`Alt+E` / `Alt+Shift+E`, auto pre-amp) | none |
 | Subtitle sync (`subtitle-sync`, #72) | script | alass (system or managed download) + managed media ffmpeg | none |
 | Chapter thumbnails (`chapter-thumbnails`, #75) | script + core | managed media ffmpeg; core reads the cache | none |
 | AcoustID (`acoustid`, #76) | script + tagger | fpcalc (system or Chromaprint download); results open in the tagger review with a rename proposal | AcoustID application key |
@@ -430,6 +430,13 @@ Dokploy redeploys plugins.viviplayer.app from the same push; the vivi-plugins Pa
   right away; mpv cannot unload scripts, so disable, update, rollback and uninstall take
   effect after a restart (the UI says so).
 * **Compatibility**: entries whose `min_vivi` is newer than the app show "Needs Vivi x".
+* **Deprecation**: a catalog entry (from the manifest's `[deprecated]` table) may carry
+  `"deprecated": {"since": "0.13.0", "message": "…", "replacement": "builtin:equalizer",
+  "action": "Open Equalizer"}`. Vivi then hides it from *Available plugins* unless it is
+  installed, shows the message in its Extensions tab with a button that opens the
+  replacement (`builtin:equalizer` = Audio panel → Equalizer, `plugin:<id>` = that
+  plugin's tab), and once (ids remembered in `~/.config/vivi/deprecation-notices.txt`) a
+  toast with the same button when a file plays.
 
 ## Future work
 

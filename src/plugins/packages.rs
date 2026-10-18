@@ -172,6 +172,56 @@ pub struct Entry {
     /// Version history, newest first (from `plugins/<id>/store.toml`).
     #[serde(default)]
     pub changelog: Vec<Change>,
+    /// Set when the plugin is replaced (built into Vivi or by another plugin).
+    #[serde(default)]
+    pub deprecated: Option<Deprecation>,
+}
+
+/// `deprecated` of a catalog entry (from the plugin's manifest).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Deprecation {
+    /// Vivi version that replaces it ("0.13.0").
+    #[serde(default)]
+    pub since: String,
+    #[serde(default)]
+    pub message: String,
+    /// What replaces it: `builtin:equalizer` (a core feature) or `plugin:<id>`.
+    #[serde(default)]
+    pub replacement: String,
+    /// Button that opens the replacement ("Open Equalizer").
+    #[serde(default)]
+    pub action: String,
+}
+
+impl Deprecation {
+    /// Notice text for plugin `name`.
+    pub fn text(&self, name: &str) -> String {
+        if !self.message.is_empty() {
+            return self.message.clone();
+        }
+        if self.since.is_empty() {
+            format!("{name} is deprecated.")
+        } else {
+            format!(
+                "{name} is deprecated: built into Vivi since {}.",
+                self.since
+            )
+        }
+    }
+
+    /// Whether this Vivi can open the replacement.
+    pub fn can_open(&self) -> bool {
+        self.replacement == "builtin:equalizer" || self.replacement.starts_with("plugin:")
+    }
+}
+
+/// Open what replaces a deprecated plugin (see [`Deprecation::replacement`]).
+pub fn open_replacement(a: &AppWindow, replacement: &str) {
+    if replacement == "builtin:equalizer" {
+        crate::fx::open_panel(a);
+    } else if let Some(id) = replacement.strip_prefix("plugin:") {
+        crate::extwin::open(a, id, false);
+    }
 }
 
 /// One `changelog` item of a catalog entry.
@@ -704,6 +754,91 @@ pub fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
     STATE.with(|s| f(&mut s.borrow_mut()))
 }
 
+/// Catalog deprecation of plugin `id`, if any.
+pub fn deprecation(id: &str) -> Option<Deprecation> {
+    with_state(|s| {
+        s.catalog
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.deprecated.clone())
+    })
+}
+
+/// Installed packages the catalog marks deprecated: (id, name, deprecation).
+pub fn deprecated_installed() -> Vec<(String, String, Deprecation)> {
+    let inst = installed(&root());
+    with_state(|s| {
+        s.catalog
+            .iter()
+            .filter(|e| inst.iter().any(|i| i.manifest.id == e.id))
+            .filter_map(|e| Some((e.id.clone(), e.name.clone(), e.deprecated.clone()?)))
+            .collect()
+    })
+}
+
+fn notices_file() -> PathBuf {
+    crate::config::path().with_file_name("deprecation-notices.txt")
+}
+
+/// Ids in `seen` (one per line) not yet noticed, among `ids`.
+fn unseen<'a>(seen: &str, ids: impl IntoIterator<Item = &'a str>) -> Vec<&'a str> {
+    ids.into_iter()
+        .filter(|id| !seen.lines().any(|l| l.trim() == *id))
+        .collect()
+}
+
+/// One-time toast for an installed plugin the catalog marks deprecated, with a button
+/// that opens its replacement. Called when a file loads (the toast shows over media).
+pub fn deprecation_notice() {
+    thread_local! { static DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+    if DONE.with(|d| d.get()) {
+        return;
+    }
+    let Some(a) = APP.with(|a| a.borrow().as_ref().and_then(|w| w.upgrade())) else {
+        return;
+    };
+    let dep = deprecated_installed();
+    let seen = fs::read_to_string(notices_file()).unwrap_or_default();
+    let Some(id) = unseen(&seen, dep.iter().map(|(id, _, _)| id.as_str()))
+        .first()
+        .map(|s| s.to_string())
+    else {
+        DONE.with(|d| d.set(true));
+        return;
+    };
+    DONE.with(|d| d.set(true));
+    let Some((_, name, d)) = dep.into_iter().find(|(i, _, _)| *i == id) else {
+        return;
+    };
+    let mut lines = seen;
+    lines.push_str(&id);
+    lines.push('\n');
+    if let Err(e) = crate::store::write_atomic(&notices_file(), &lines) {
+        eprintln!("vivi: save deprecation notices: {e}");
+    }
+    let msg = d.text(&name);
+    let n = a.global::<crate::Notices>();
+    n.set_resume_text(msg.as_str().into());
+    if d.can_open() {
+        let label = if d.action.is_empty() {
+            "Open"
+        } else {
+            d.action.as_str()
+        };
+        n.set_toast_action(label.into());
+        n.set_toast_action_id(d.replacement.as_str().into());
+        n.set_toast_action_text(msg.as_str().into());
+    }
+    let w = a.as_weak();
+    slint::Timer::single_shot(Duration::from_secs(15), move || {
+        if let Some(a) = w.upgrade() {
+            if a.global::<crate::Notices>().get_resume_text().as_str() == msg {
+                a.global::<crate::Notices>().set_resume_text("".into());
+            }
+        }
+    });
+}
+
 /// Catalog entries newer than the installed version.
 pub fn updates() -> Vec<Entry> {
     let inst = installed(&root());
@@ -746,6 +881,13 @@ fn status(msg: String) {
 /// Load the cached catalog and start the daily check if it is due.
 pub fn setup(app: &AppWindow, autocheck: bool) {
     APP.with(|a| *a.borrow_mut() = Some(app.as_weak()));
+    let w = app.as_weak();
+    app.global::<crate::Notices>().on_toast_run(move |id| {
+        if let Some(a) = w.upgrade() {
+            a.global::<crate::Notices>().set_resume_text("".into());
+            open_replacement(&a, &id);
+        }
+    });
     let f = cache_file();
     let age = fs::metadata(&f).and_then(|m| m.modified()).ok();
     if let Ok(s) = fs::read_to_string(&f) {
@@ -942,6 +1084,36 @@ pub fn action(id: &str, label: &str) {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn deprecated_entries() {
+        let sha = "a".repeat(64);
+        let idx = format!(
+            r#"{{"schema": 1, "plugins": [
+            {{"id": "equalizer", "name": "Equalizer", "version": "1.0.0", "kind": "package",
+              "url": "https://x/e.zip", "sha256": "{sha}",
+              "deprecated": {{"since": "0.13.0", "replacement": "builtin:equalizer",
+                              "action": "Open Equalizer"}}}},
+            {{"id": "b", "name": "B", "version": "1.0.0", "kind": "package",
+              "url": "https://x/b.zip", "sha256": "{sha}"}}]}}"#
+        );
+        let c = parse_index(&idx).unwrap();
+        let d = c[0].deprecated.clone().unwrap();
+        assert_eq!(
+            d.text("Equalizer"),
+            "Equalizer is deprecated: built into Vivi since 0.13.0."
+        );
+        assert!(d.can_open());
+        assert_eq!(c[1].deprecated, None);
+        let custom = Deprecation {
+            message: "Use X.".into(),
+            ..Default::default()
+        };
+        assert_eq!(custom.text("B"), "Use X.");
+        assert!(!custom.can_open());
+        assert_eq!(unseen("equalizer\n", ["equalizer", "b"]), ["b"]);
+        assert!(unseen(" equalizer \nb\n", ["equalizer", "b"]).is_empty());
+    }
 
     #[test]
     fn manifest_contributions_and_defaults() {

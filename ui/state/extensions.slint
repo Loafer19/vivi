@@ -31,6 +31,11 @@ export global Extensions {
     // "Where it shows up" lines of the overview.
     in-out property <[string]> places;
     in-out property <[ExtAction]> actions;
+    // Deprecation notice of the selected plugin (catalog `deprecated`), the button that
+    // opens its replacement ("" = none) and the replacement id for open-replacement.
+    in-out property <string> deprecated;
+    in-out property <string> replacement-label;
+    in-out property <string> replacement;
     // Sidebar → Sources (enabled, not hidden, in the user's order).
     in-out property <[ExtTab]> sources;
     // Home widgets of enabled plugins, in the user's order (hidden ones left out).
@@ -41,4 +46,5 @@ export global Extensions {
     callback run(string, string);
     // Overview "Open" button of a source.
     callback open-browser();
+    callback open-replacement(string);
 }

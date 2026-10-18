@@ -936,6 +936,11 @@ export component AppWindow inherits Window {
             Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
             HorizontalLayout {
                 spacing: 10px; padding-top: 10px; padding-bottom: 10px;
+                if Notices.toast-action != "" && Notices.toast-action-text == Notices.resume-text: Rectangle {
+                    width: ta-label.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
+                    ta-label := Text { text: Notices.toast-action; color: Theme.accent-bright; vertical-alignment: center; }
+                    TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; clicked => { Notices.toast-run(Notices.toast-action-id); } }
+                }
                 if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
                     width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
                     so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }

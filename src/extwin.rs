@@ -51,6 +51,12 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
         plugins::run(&id, &cmd, &[]);
     });
     let w = app.as_weak();
+    g.on_open_replacement(move |r| {
+        if let Some(a) = w.upgrade() {
+            plugins::packages::open_replacement(&a, &r);
+        }
+    });
+    let w = app.as_weak();
     g.on_open_browser(move || {
         let Some(a) = w.upgrade() else { return };
         let id = a.global::<crate::Extensions>().get_tab().to_string();
@@ -293,6 +299,22 @@ pub fn refresh() {
             g.set_on(plugins::is_enabled(&c, m));
             g.set_source(m.role == contrib::Role::Source && !source_command(&m.id).is_empty());
             g.set_status(plugins::script_status(&m.id).unwrap_or_default().into());
+            let dep = (m.origin == Origin::Package)
+                .then(|| plugins::packages::deprecation(&m.id))
+                .flatten();
+            g.set_deprecated(
+                dep.as_ref()
+                    .map(|d| d.text(&m.name))
+                    .unwrap_or_default()
+                    .into(),
+            );
+            let label = match &dep {
+                Some(d) if d.can_open() && d.action.is_empty() => "Open".to_string(),
+                Some(d) if d.can_open() => d.action.clone(),
+                _ => String::new(),
+            };
+            g.set_replacement_label(label.into());
+            g.set_replacement(dep.map(|d| d.replacement).unwrap_or_default().into());
             let mut p = places(m);
             p.push("Extensions window".into());
             g.set_places(crate::util::strings(p.iter().map(String::as_str)));
