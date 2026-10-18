@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- **Network Streams grid view**: the streams browser can show stations as a grid of logo tiles with the name under each logo (two lines, then elided; the full name in a tooltip), as an alternative to the list. Two-tone List / Grid buttons in the dialog header switch it, and the choice is remembered as the plugin's **Browser view** setting. In the grid, logos are decoded at tile size (256 px) through the shared image cache.
+- **Keyboard navigation in the streams browser**: in both views the arrow keys move the selection (Up / Down move a row in the grid), Home / End jump to the first / last station, Enter plays, and the selection is scrolled into view. The results area is in the Tab order with a focus ring, and rows and tiles are list items with the station name for screen readers.
+
+### Fixed
+- **Station names in the Network Streams list are no longer cut to a few letters**: long descriptions (SomaFM genres and blurbs) took the whole row. The description now elides first, the name keeps up to half the row, and a name that still has to elide shows in full in a tooltip. The browser also grows with the window (up to 1400 × 960 px) instead of staying 900 × 640, with a narrower details pane.
+
 ## [0.12.0] - 2026-10-18
 
 ### Added

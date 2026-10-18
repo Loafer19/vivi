@@ -600,6 +600,7 @@ impl FreeMusic {
                 logos: false,
                 chips: true,
                 rich: true,
+                grid: false,
             });
         a.global::<crate::MusicDialogState>()
             .set_placeholder("Search songs, artists, albums, genres…".into());

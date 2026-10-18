@@ -2,7 +2,7 @@
 // and the Figma "Add Subtitles" dialog (docs/design/frames/dialog-add-subtitles.png)
 // used by the Subtitle Search plugin.
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Item } from "panel.slint";
 import { Dropdown, TextField } from "core/controls.slint";
 import { Modal } from "core/modal.slint";
@@ -97,11 +97,65 @@ component SubRow inherits Rectangle {
         padding-left: 10px; padding-right: 10px; spacing: 10px;
         if root.logo.width == 0: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: item.selected ? Theme.accent : Theme.fg-a2; }
         if root.logo.width > 0: Image { y: (parent.height - 24px) / 2; width: 32px; height: 24px; source: root.logo; image-fit: contain; }
-        Text { horizontal-stretch: 1; text: root.item.key; color: Theme.fg-1; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
-        Text { text: root.item.label; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
+        nt := Text { horizontal-stretch: 1; min-width: min(self.preferred-width, root.width * 0.5); text: root.item.key; color: Theme.fg-1; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
+        Text { horizontal-stretch: 0; max-width: max(0, root.width * 0.45); text: root.item.label; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
         if item.selected: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/check-active.svg"); }
     }
     ta := TouchArea { accessible-role: list-item; accessible-label: root.item.key + ", " + root.item.label; accessible-item-selected: root.item.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+    if nt.preferred-width > nt.width + 1px: Tooltip { text: @markdown("\{root.item.key}"); }
+}
+
+// Grid tile of the station browser: the logo (or a radio icon) with the name under it
+// (two lines, then elided; the full name in the tooltip).
+component StationTile inherits Rectangle {
+    in property <Item> item;
+    in property <image> logo;
+    in property <length> logo-h;
+    callback clicked();
+    callback activated();
+    border-radius: Metrics.radius-lg;
+    background: item.selected ? Theme.accent.with-alpha(0.14) : ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    border-width: 1px; border-color: item.selected ? Theme.accent.with-alpha(0.6) : transparent;
+    Rectangle {
+        x: 8px; y: 8px; width: parent.width - 16px; height: root.logo-h;
+        border-radius: Metrics.radius-md; background: Theme.bg-b1; clip: true;
+        if root.logo.width > 0: Image { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; source: root.logo; image-fit: contain; }
+        if root.logo.width == 0: TriIcon {
+            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; width: 36px; height: 36px; tint: Theme.fg-a3;
+            base: @image-url("../assets/icons/layers/streaming-twotone-b.svg"); accent: @image-url("../assets/icons/layers/streaming-twotone-a.svg"); dim: @image-url("../assets/icons/layers/streaming-twotone-d.svg");
+        }
+    }
+    Text {
+        x: 8px; y: root.logo-h + 14px; width: parent.width - 16px; height: parent.height - root.logo-h - 20px;
+        text: root.item.key; wrap: word-wrap; overflow: elide;
+        horizontal-alignment: center; vertical-alignment: top;
+        color: Theme.fg-1; font-size: Metrics.font-sm;
+    }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.item.key + ", " + root.item.label; accessible-item-selected: root.item.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+    Tooltip { text: @markdown("\{root.item.key}"); }
+}
+
+// List / grid switch of a dialog header: a two-tone icon (18 px), the active one raised.
+component ViewButton inherits Rectangle {
+    in property <string> label;   // screen-reader name and hover tooltip
+    in property <bool> active;
+    in property <image> base;
+    in property <image> accent;
+    in property <image> dim;
+    callback clicked();
+    width: 30px; height: 30px; border-radius: Metrics.radius-sm;
+    background: root.active ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
+    TriIcon { x: 6px; y: 6px; width: 18px; height: 18px; base: root.base; accent: root.accent; dim: root.dim; tint: root.active || ta.has-hover ? Theme.fg-1 : Theme.fg-a3; opacity: root.active || ta.has-hover ? 1 : 0.6; }
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; accessible-checked: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    kf := FocusScope {
+        focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+    Tooltip { text: @markdown("\{root.label}"); }
 }
 
 // Local subtitle row of "From Computer": a subtitle file with a check (To This File) or
@@ -437,6 +491,9 @@ export component MusicDialog inherits Modal {
     in property <[MdFilter]> filters; // optional dropdown filters under the chips
     in property <string> copy-text;   // text the "Copy credit" action puts on the clipboard
     in property <bool> has-more;      // scrolling to the end asks for more
+    in property <bool> can-grid;      // list / grid toggle in the header (Network Streams)
+    in property <bool> grid;          // results as logo tiles
+    callback view(bool);              // the toggle: true = grid
     callback chip-clicked(string);
     callback filter(string, string);
     callback more();
@@ -448,8 +505,9 @@ export component MusicDialog inherits Modal {
     callback secondary(int);
     callback close();
     property <int> selected: -1;
-    card-width: root.rich ? 1060px : 900px;
-    card-height: root.rich ? 720px : 640px;
+    // The station browser grows with the window (the modal still keeps it inside).
+    card-width: root.rich ? 1060px : root.can-grid ? max(900px, min(1400px, root.width * 0.86)) : 900px;
+    card-height: root.rich ? 720px : root.can-grid ? max(640px, min(960px, root.height * 0.88)) : 640px;
     dismissed => { root.close(); }
     VerticalLayout {
         Rectangle {
@@ -457,6 +515,14 @@ export component MusicDialog inherits Modal {
             HorizontalLayout {
                 padding-left: 16px; padding-right: 8px;
                 Text { horizontal-stretch: 1; text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
+                if root.can-grid: HorizontalLayout { alignment: center; spacing: 2px; padding-right: 8px;
+                    VerticalLayout { alignment: center;
+                        ViewButton { label: "List view"; active: !root.grid; clicked => { root.view(false); }
+                            base: @image-url("../assets/icons/layers/list-twotone-b.svg"); accent: @image-url("../assets/icons/layers/list-twotone-a.svg"); dim: @image-url("../assets/icons/layers/list-twotone-d.svg"); } }
+                    VerticalLayout { alignment: center;
+                        ViewButton { label: "Grid view"; active: root.grid; clicked => { root.view(true); }
+                            base: @image-url("../assets/icons/layers/grid-twotone-b.svg"); accent: @image-url("../assets/icons/layers/grid-twotone-a.svg"); dim: @image-url("../assets/icons/layers/grid-twotone-d.svg"); } }
+                }
                 VerticalLayout { alignment: center;
                     Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: mx.has-hover ? Theme.bg-a1 : transparent;
                         Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); }
@@ -526,21 +592,79 @@ export component MusicDialog inherits Modal {
                         }
                     }
                 }
-                if !root.rich: ScrollView {
-                    VerticalLayout {
-                        spacing: 2px; alignment: start;
-                        for r[i] in root.results: SubRow {
-                            item: { key: r.key, label: r.label, selected: i == root.selected };
-                            icon: @image-url("../assets/icons/music.svg");
-                            logo: i < root.logos.length ? root.logos[i] : @image-url("");
-                            clicked => { root.selected = i; root.select(i); }
-                            activated => { root.selected = i; root.select(i); root.primary(i); }
+                // Rows or tiles. Arrow keys move the selection (in the grid Up / Down move a
+                // row), Home / End jump, Enter plays; the selection is kept in view.
+                if !root.rich: ks := FocusScope {
+                    accessible-role: list;
+                    accessible-label: root.grid ? "Results, grid" : "Results";
+                    property <length> gap: 10px;
+                    property <length> inner: rsv.width - 14px;  // room for the scroll bar
+                    property <int> cols: max(1, floor((self.inner + self.gap) / (150px + self.gap)));
+                    property <length> tile-w: (self.inner - (self.cols - 1) * self.gap) / self.cols;
+                    property <length> logo-h: self.tile-w * 0.62;
+                    property <length> tile-h: self.logo-h + 54px;
+                    property <length> row-h: root.grid ? self.tile-h : 36px;
+                    property <length> stride: root.grid ? self.tile-h + self.gap : 38px;
+                    property <bool> g: root.grid;
+                    changed g => { self.reveal(root.selected); }
+                    function reveal(i: int) {
+                        if i < 0 { return; }
+                        if (root.grid ? floor(i / self.cols) : i) * self.stride < -rsv.content-y {
+                            rsv.content-y = -(root.grid ? floor(i / self.cols) : i) * self.stride;
+                        } else if (root.grid ? floor(i / self.cols) : i) * self.stride + self.row-h > -rsv.content-y + rsv.visible-height {
+                            rsv.content-y = -((root.grid ? floor(i / self.cols) : i) * self.stride + self.row-h - rsv.visible-height);
                         }
                     }
+                    function go(i: int) {
+                        root.selected = max(0, min(root.results.length - 1, i));
+                        root.select(root.selected);
+                        self.reveal(root.selected);
+                    }
+                    key-pressed(e) => {
+                        if root.results.length == 0 { return reject; }
+                        if e.text == Key.DownArrow { self.go(root.selected < 0 ? 0 : root.selected + (root.grid ? self.cols : 1)); return accept; }
+                        if e.text == Key.UpArrow { self.go(root.selected < 0 ? 0 : root.selected - (root.grid ? self.cols : 1)); return accept; }
+                        if root.grid && e.text == Key.RightArrow { self.go(root.selected + 1); return accept; }
+                        if root.grid && e.text == Key.LeftArrow { self.go(root.selected < 0 ? 0 : root.selected - 1); return accept; }
+                        if e.text == Key.Home { self.go(0); return accept; }
+                        if e.text == Key.End { self.go(root.results.length - 1); return accept; }
+                        if e.text == Key.Return && root.selected >= 0 { root.primary(root.selected); return accept; }
+                        reject
+                    }
+                    property <length> content-h: root.grid
+                        ? max(0, ceil(root.results.length / self.cols) * self.stride - self.gap)
+                        : max(0, root.results.length * self.stride - 2px);
+                    rsv := ScrollView {
+                        // Set here: the rows / tiles are conditional, so it cannot be inferred.
+                        content-height: ks.content-h;
+                        if !root.grid: VerticalLayout {
+                            spacing: 2px; alignment: start;
+                            for r[i] in root.results: SubRow {
+                                item: { key: r.key, label: r.label, selected: i == root.selected };
+                                icon: @image-url("../assets/icons/music.svg");
+                                logo: i < root.logos.length ? root.logos[i] : @image-url("");
+                                clicked => { ks.focus(); root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                            }
+                        }
+                        if root.grid: Rectangle {
+                            x: 0; y: 0; width: ks.inner;
+                            height: ks.content-h;
+                            for r[i] in root.results: StationTile {
+                                x: mod(i, ks.cols) * (ks.tile-w + ks.gap); y: floor(i / ks.cols) * ks.stride;
+                                width: ks.tile-w; height: ks.tile-h; logo-h: ks.logo-h;
+                                item: { key: r.key, label: r.label, selected: i == root.selected };
+                                logo: i < root.logos.length ? root.logos[i] : @image-url("");
+                                clicked => { ks.focus(); root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                            }
+                        }
+                    }
+                    if ks.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: Metrics.radius-md; }
                 }
             }
             Rectangle {
-                horizontal-stretch: root.rich ? 2 : 2; max-width: root.rich ? 300px : 2000px; border-radius: Metrics.radius-lg; background: Theme.bg-a3;
+                horizontal-stretch: root.rich ? 2 : 2; max-width: root.rich ? 300px : root.can-grid ? 340px : 2000px; border-radius: Metrics.radius-lg; background: Theme.bg-a3;
                 ScrollView {
                     VerticalLayout { padding: 12px; alignment: start;
                         Text { text: root.detail == "" ? "Select a result to see the details." : root.detail; wrap: word-wrap; color: root.detail == "" ? Theme.fg-a3 : Theme.fg-1; font-size: Metrics.font-sm; }

@@ -219,6 +219,9 @@ pub struct NetworkStreams {
     /// Playlist path / URL the current M3U results came from.
     loaded_src: String,
     selected: Option<usize>,
+    /// Results shown as logo tiles (the "view" setting); row logos are then decoded at
+    /// tile size.
+    grid: bool,
 }
 
 impl NetworkStreams {
@@ -237,6 +240,26 @@ impl NetworkStreams {
             "7 days" => 7 * 86400,
             _ => 24 * 3600,
         }
+    }
+    /// Size row logos are decoded at for the current view.
+    fn logo_size(&self) -> u32 {
+        if self.grid {
+            crate::images::TILE
+        } else {
+            crate::images::ROW
+        }
+    }
+    /// Switch between rows and tiles: remember it and decode the logos again at the
+    /// size of the new view.
+    fn set_view(&mut self, cx: &Ctx, grid: bool) {
+        cx.app.global::<crate::MusicDialogState>().set_grid(grid);
+        if grid == self.grid {
+            return;
+        }
+        self.grid = grid;
+        cx.set("view", if grid { "Grid" } else { "List" });
+        self.logos.clear();
+        self.load_row_logos();
     }
     fn is_picker(&self) -> bool {
         self.all.first().is_some_and(|s| s.source == PICK)
@@ -769,6 +792,12 @@ impl Plugin for NetworkStreams {
             "",
         ))
         .setting(SettingSpec::choice(
+            "view",
+            "Browser view",
+            "Show stations as a list or as a grid of logos. The buttons in the browser's header switch it too.",
+            &["List", "Grid"],
+        ))
+        .setting(SettingSpec::choice(
             "refresh",
             "Refresh my playlists",
             "How often saved M3U playlist URLs are downloaded again. A broken link keeps the last good copy.",
@@ -799,7 +828,10 @@ impl Plugin for NetworkStreams {
                         logos: true,
                         chips: true,
                         rich: false,
+                        grid: true,
                     });
+                self.grid = cx.get("view") == "Grid";
+                a.global::<crate::MusicDialogState>().set_grid(self.grid);
                 a.global::<crate::MusicDialogState>()
                     .set_title("Network Streams".into());
                 a.global::<crate::MusicDialogState>()
@@ -826,6 +858,10 @@ impl Plugin for NetworkStreams {
                         false,
                     );
                 }
+            }
+            "view" => {
+                let grid = args.first().is_some_and(|a| a == "grid");
+                self.set_view(cx, grid);
             }
             "search" => {
                 let mode = Self::mode(cx);
@@ -1141,7 +1177,8 @@ impl Plugin for NetworkStreams {
         if let Some(rx) = &self.row_logo_rx {
             let mut got = false;
             while let Ok((url, p)) = rx.try_recv() {
-                let img = p.and_then(|p| logo_image(&p, crate::images::ROW, false, url.clone()));
+                let size = self.logo_size();
+                let img = p.and_then(|p| logo_image(&p, size, false, url.clone()));
                 self.logos.insert(url, img.unwrap_or_default());
                 got = true;
             }

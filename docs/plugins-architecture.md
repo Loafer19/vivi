@@ -66,8 +66,9 @@ prefixed properties on `AppWindow`: `Lyrics` (lyrics view, karaoke words, manual
 search as `search-*`) and `Subtitles` (Add Subtitles dialog, sync / pick state).
 `MusicDialogState` is shared by Auto-tagger, Free Music and Network Streams: the
 plugin that opens it sets `owner` (its id, for routing `plugin-command`) and `caps`,
-an `MdCaps { logos, chips, rich }` saying which parts of the dialog it uses, so the
-UI never compares plugin ids. `TagReview` holds the review dialog's files and
+an `MdCaps { logos, chips, rich, grid }` saying which parts of the dialog it uses, so the
+UI never compares plugin ids (`grid` adds the header's list / grid toggle, its state in
+`MusicDialogState.grid`). `TagReview` holds the review dialog's files and
 results; `NowPlaying` holds the radio now-playing card (station, track, info, logo). `SkipIntro` holds the Skip button's label and target. Plugin
 code writes them with `cx.app.global::<crate::Lyrics>().set_lines(...)`, and
 `ui/app.slint` binds the plugin's dialog properties to that global, so a new field
@@ -113,7 +114,8 @@ into the M3U source), cached for 24 h under `$XDG_CACHE_HOME/vivi/iptv/` with th
 copy used offline. Music adds radio-browser `/json/tags` (by station count) with
 `topvote` / `topclick`, and SomaFM `channels.json` (MP3 playlist preferred). Picker sources
 filter locally as the user types; row logos load in the background into
-`stream-logos/`. The loading spinner / error toast for network streams is core
+`stream-logos/` and are decoded through `src/images.rs` at row size (48 px) or, in the grid
+view, at tile size (256 px). The view (list / grid) is the plugin's `view` setting. The loading spinner / error toast for network streams is core
 (`src/loading.rs`, mpv `start-file`, `playback-restart`, `paused-for-cache`, `end-file`
 error). No key. Later: EPG for IPTV, podcasts (RSS).
 

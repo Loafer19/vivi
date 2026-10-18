@@ -6,10 +6,13 @@ export struct MdCaps {
     logos: bool,   // per-row logos (Network Streams)
     chips: bool,   // chip row and row actions
     rich: bool,    // Free Music track rows, filters, "more" paging and edit-triggered search
+    grid: bool,    // list / grid toggle in the header (Network Streams)
 }
 export global MusicDialogState {
     in-out property <MdCaps> caps;
     in-out property <string> owner;
+    // Results shown as logo tiles instead of rows (when caps.grid; the owner remembers it).
+    in-out property <bool> grid;
     in-out property <string> title;
     in-out property <[Item]> results;
     in-out property <[image]> logos;

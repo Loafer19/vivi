@@ -1225,6 +1225,8 @@ export component AppWindow inherits Window {
         rich: MusicDialogState.caps.rich; tracks: MusicDialogState.caps.rich ? MusicDialogState.tracks : [];
         filters: MusicDialogState.caps.rich ? MusicDialogState.filters : []; copy-text: MusicDialogState.copy;
         has-more: MusicDialogState.caps.rich && MusicDialogState.has-more;
+        can-grid: MusicDialogState.caps.grid; grid: MusicDialogState.caps.grid && MusicDialogState.grid;
+        view(g) => { MusicDialogState.grid = g; root.plugin-command(MusicDialogState.owner, "view", g ? "grid" : "list"); }
         filter(n, v) => { root.plugin-command(MusicDialogState.owner, "filter", n + "\u{1f}" + v); }
         more => { root.plugin-command(MusicDialogState.owner, "more", ""); }
         edited => { if MusicDialogState.caps.rich { root.plugin-command(MusicDialogState.owner, "edited", ""); } }
