@@ -49,8 +49,11 @@
 <tr class="sec"><th colspan="8">Footprint (measured, see below)</th></tr>
 <tr><th scope="row">Download (Linux)</th><td class="v">14.8 MB tarball</td><td>n/a (distro)</td><td>n/a (distro)</td><td>n/a</td><td>n/a</td><td>n/a</td><td>n/a</td></tr>
 <tr><th scope="row">Installed size (own files)</th><td class="v">35.7 MB</td><td>6.5 MB</td><td>19.8 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">Time to first window</th><td class="v">~1.0 s</td><td>~0.27 s</td><td>~0.15 s</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">Idle RAM (RSS)</th><td class="v">~216 MB</td><td>~202 MB</td><td>~106 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
+<tr><th scope="row">Time to first window, warm</th><td class="v">~0.38 s</td><td>~0.85 s</td><td>~0.19 s</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
+<tr><th scope="row">Time to first window, cold cache</th><td class="v">~0.84 s</td><td>~1.13 s</td><td>~0.47 s</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
+<tr><th scope="row">Memory, idle (PSS)</th><td class="v">~194 MB</td><td>~153 MB</td><td>~58 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
+<tr><th scope="row">Memory, playing 1080p (PSS)</th><td class="v">~276 MB</td><td>~361 MB</td><td>~277 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
+<tr><th scope="row">CPU, playing 1080p</th><td class="v">4.6%</td><td>16.7% <small>(software decoding by default)</small></td><td>4.4%</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
 <tr class="sec"><th colspan="8">Project</th></tr>
 <tr><th scope="row">Open source</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">–</td></tr>
 <tr><th scope="row">License</th><td class="v">MIT</td><td>GPL-2.0+ <small>(LGPL build option)</small></td><td>GPL-2.0 <small>(libVLC LGPL)</small></td><td>GPL-3.0</td><td>GPL-3.0</td><td>GPL-3.0</td><td>freeware</td></tr>
@@ -60,8 +63,8 @@
 </tbody></table></div>
 <h2 id="wins">Where the others win</h2>
 <div class="grid">
-  <div class="card"><h3>mpv</h3><p>Smaller and faster to start than Vivi in our measurement, with a huge collection of user scripts and the most configurable video output. Vivi itself is built on libmpv.</p></div>
-  <div class="card"><h3>VLC</h3><p>Lowest memory and fastest start in our test, runs on nearly every platform including mobile, and plays discs and devices that Vivi does not target.</p></div>
+  <div class="card"><h3>mpv</h3><p>Smaller on disk and lighter when idle than Vivi in our measurement, with a huge collection of user scripts and the most configurable video output. Vivi itself is built on libmpv.</p></div>
+  <div class="card"><h3>VLC</h3><p>Lowest idle memory and fastest start in our test, runs on nearly every platform including mobile, and plays discs and devices that Vivi does not target.</p></div>
   <div class="card"><h3>foobar2000</h3><p>Long audio-focused polish: gapless playback, ReplayGain, CD ripping, transcoding, DSP effects and a large component ecosystem. Not open source, and no video.</p></div>
   <div class="card"><h3>IINA</h3><p>A truly native macOS app with trackpad gestures, Picture in Picture and Live Text. Vivi's macOS build is unsigned and best effort.</p></div>
   <div class="card"><h3>MPC-HC</h3><p>A mature Windows classic built on the DirectShow / LAV filter ecosystem.</p></div>
@@ -69,11 +72,11 @@
 </div>
 
 <h2 id="numbers">How we measured</h2>
-<p class="lead">Size, start time and memory were measured by us on one machine under identical conditions on 17 Oct 2026. Numbers appear only where we measured them.</p>
+<p class="lead">Size was measured on 17 Oct 2026; start time, memory and CPU on one desktop under identical conditions on 18 Oct 2026. Numbers appear only where we measured them.</p>
 <ul class="src">
   <li><b>Download</b>: size of <code>vivi-v0.11.1-linux-x86_64.tar.gz</code> on the GitHub release (14,816,584 bytes). mpv and VLC on Linux come from distribution packages, so there is no single download to compare.</li>
   <li><b>Installed size</b>: Vivi = the files the installer copies (<code>vivi</code>, <code>vivi-mcp</code>, desktop file and icons), excluding the system libmpv. mpv and VLC = the <code>Installed-Size</code> of their Debian 13 packages (mpv + libmpv2; vlc, vlc-bin, vlc-plugin-base, vlc-plugin-qt, libvlc5, libvlccore9), excluding shared libraries such as FFmpeg and Qt.</li>
-  <li><b>Time to first window</b> and <b>idle RAM</b>: Debian 13 x86_64, Xvfb virtual display with software OpenGL (no GPU), a fresh empty home directory per run, nothing opened, warm disk cache. Time runs from launch until the first visible window appears (polled every 20 ms); RSS is read from <code>/proc</code> 8 s later. Median of 5 runs. Vivi 0.11.1 release binary, mpv 0.40.0 (<code>--idle --force-window --no-config</code>), VLC 3.0.24 (Qt interface). Software rendering inflates memory for OpenGL apps, so expect different absolute numbers on a desktop with a GPU.</li>
+  <li><b>Start time, memory and CPU</b>: Arch Linux, Hyprland (Wayland), NVIDIA RTX 3060 Ti, 12-core CPU, 16 GB RAM; each player with its normal configuration on that PC. Vivi = release build of commit <code>c6a6264</code> (0.11.1 + master), mpv 0.41 (<code>--idle --force-window=yes</code>), VLC 3.0.23 (Qt interface). Time runs from launch to the first Wayland surface attach (<code>WAYLAND_DEBUG=1</code>, polled every 20 ms); VLC 3 draws through XWayland, so for VLC it is the time until its window is mapped (<code>hyprctl clients</code>). Warm = median of 3 runs; cold = after <code>echo 3 &gt; /proc/sys/vm/drop_caches</code>. Memory is PSS of the main process from <code>/proc/PID/smaps_rollup</code> 3 s after the window appears, idle (nothing opened) or playing a local 1080p H.264 clip; CPU is the average over 10 s of that playback (100% = one core). Vivi and VLC decode on the GPU there; mpv uses software decoding unless <code>hwdec</code> is set.</li>
   <li>MPC-HC, IINA and foobar2000 do not run natively on Linux and Celluloid was not tested, so no numbers are shown for them.</li>
 </ul>
 
