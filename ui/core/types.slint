@@ -5,6 +5,9 @@ import { Metrics } from "theme.slint";
 // Progress bar style (config `[interface] bar_style`, see src/config.rs).
 export enum BarStyle { compact, classic, waveform, plain }
 
+// Volume control style (config `[interface] volume_style`, see src/config.rs).
+export enum VolumeStyle { cone, bar, popup, percent }
+
 // Geometry of the bottom control bar for one style.
 export struct BarMetrics {
     classic: bool,       // full-width seekbar on its own row above the buttons
@@ -30,6 +33,10 @@ export global Bars {
             gap: 2px, reserve: 460px, slot: 32px, volume-min-window: 820px };
     }
     // Position in the Customize style list (same order as config::BAR_STYLES).
+    // Position in the Customize volume list (same order as config::VOLUME_STYLES).
+    pure public function volume-index(s: VolumeStyle) -> int {
+        s == VolumeStyle.cone ? 0 : s == VolumeStyle.bar ? 1 : s == VolumeStyle.popup ? 2 : 3
+    }
     pure public function index(s: BarStyle) -> int {
         s == BarStyle.compact ? 0 : s == BarStyle.classic ? 1 : s == BarStyle.waveform ? 2 : 3
     }

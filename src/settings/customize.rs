@@ -38,6 +38,7 @@ pub(crate) fn customize(
                     let mut c = cfg.borrow_mut();
                     c.interface.toolbar = t;
                     c.interface.bar_style = config::profile_style(&p).into();
+                    c.interface.volume_style = config::profile_volume(&p).into();
                     c.interface.profile = p.to_string();
                 }
                 apply_toolbar(&a, &cfg.borrow());
@@ -73,6 +74,17 @@ pub(crate) fn customize(
             let Some(a) = w.upgrade() else { return };
             let mut c = cfg.borrow_mut();
             c.interface.bar_style = st.to_string();
+            c.interface.profile = profile_of(&c.interface);
+            apply_toolbar(&a, &c);
+        });
+    }
+    {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        app.global::<crate::Customize>().on_pick_volume(move |st| {
+            let Some(a) = w.upgrade() else { return };
+            let mut c = cfg.borrow_mut();
+            c.interface.volume_style = config::volume_style_name(&st).into();
             c.interface.profile = profile_of(&c.interface);
             apply_toolbar(&a, &c);
         });

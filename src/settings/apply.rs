@@ -256,6 +256,10 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
     a.global::<crate::Customize>()
         .set_bar_styles(strings(config::BAR_STYLES));
     a.global::<crate::Customize>()
+        .set_vol_style(volume_style(&c.interface.volume_style));
+    a.global::<crate::Customize>()
+        .set_vol_styles(strings(config::VOLUME_STYLES));
+    a.global::<crate::Customize>()
         .set_profile(c.interface.profile.clone().into());
     a.global::<crate::Customize>().set_available(strings(
         config::TOOL_ITEMS
@@ -274,6 +278,7 @@ pub fn profile_of(i: &config::Interface) -> String {
         .find(|p| {
             config::profile_toolbar(p).as_ref() == Some(&i.toolbar)
                 && config::profile_style(p) == i.bar_style
+                && config::profile_volume(p) == i.volume_style
         })
         .map_or("Custom".into(), |p| p.to_string())
 }

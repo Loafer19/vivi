@@ -54,6 +54,8 @@ pub struct Interface {
     pub mini_window: Option<[i32; 4]>,
     /// Progress bar style: "Compact" | "Classic" | "Waveform" | "Plain" (see `BAR_STYLES`).
     pub bar_style: String,
+    /// Volume control style: "Cone" | "Bar" | "Popup" | "Percent" (see `VOLUME_STYLES`).
+    pub volume_style: String,
     /// 0.11.0 settings, read once and folded into `toolbar` / `bar_style` by `migrate`.
     #[serde(skip_serializing)]
     pub bar_layout: Option<String>,
@@ -321,6 +323,7 @@ impl Default for Interface {
             onboarded: false,
             mini_window: None,
             bar_style: "Compact".into(),
+            volume_style: "Cone".into(),
             bar_layout: None,
             skip_buttons: None,
             waveform: None,
@@ -527,6 +530,23 @@ pub fn bar_style_name(s: &str) -> &'static str {
         .unwrap_or("Compact")
 }
 
+/// Volume control styles: the cone wedge, a flat slider like the seek track, an icon
+/// with a pop-up vertical slider, and an icon with the percentage.
+pub const VOLUME_STYLES: [&str; 4] = ["Cone", "Bar", "Popup", "Percent"];
+
+/// The canonical [`VOLUME_STYLES`] name, ignoring case; unknown values fall back to "Cone".
+pub fn volume_style_name(s: &str) -> &'static str {
+    VOLUME_STYLES
+        .into_iter()
+        .find(|b| b.eq_ignore_ascii_case(s.trim()))
+        .unwrap_or("Cone")
+}
+
+/// Volume style that goes with a built-in profile (all keep the cone for now).
+pub fn profile_volume(_name: &str) -> &'static str {
+    "Cone"
+}
+
 pub const PROFILES: [&str; 3] = ["Minimal", "Default", "Power"];
 
 /// Built-in toolbar layouts.
@@ -640,6 +660,7 @@ pub fn migrate_toolbar(i: &mut Interface) {
     i.skip_buttons = None;
     i.waveform = None;
     i.bar_style = bar_style_name(&i.bar_style).into();
+    i.volume_style = volume_style_name(&i.volume_style).into();
 }
 
 #[cfg(test)]
@@ -679,6 +700,23 @@ mod toolbar_tests {
         migrate_toolbar(&mut d);
         assert_eq!(d.toolbar, profile_toolbar("Default").unwrap());
         assert_eq!(d.bar_style, "Waveform");
+    }
+
+    #[test]
+    fn volume_style_names_are_case_insensitive() {
+        assert_eq!(volume_style_name("popup"), "Popup");
+        assert_eq!(volume_style_name(" PERCENT "), "Percent");
+        assert_eq!(volume_style_name("bogus"), "Cone");
+        assert_eq!(volume_style_name(""), "Cone");
+        let mut i = Interface {
+            volume_style: "bar".into(),
+            ..Default::default()
+        };
+        migrate_toolbar(&mut i);
+        assert_eq!(i.volume_style, "Bar");
+        // Older configs have no volume_style: serde default → Cone.
+        let i: Interface = toml::from_str("bar_style = \"Plain\"").unwrap();
+        assert_eq!(i.volume_style, "Cone");
     }
 
     #[test]

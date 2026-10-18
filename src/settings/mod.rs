@@ -289,6 +289,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             if let Some(t) = config::profile_toolbar(v) {
                                 c.interface.toolbar = t;
                                 c.interface.bar_style = config::profile_style(v).into();
+                                c.interface.volume_style = config::profile_volume(v).into();
                             }
                             c.interface.profile = v.into();
                         }
@@ -404,6 +405,16 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 eprintln!("preset saved: {key} {:?}", cfg.borrow().presets.get(&key));
             }
         });
+    }
+}
+
+/// Config volume style name ("Cone", "Bar", …) as the typed UI state.
+fn volume_style(s: &str) -> crate::VolumeStyle {
+    match config::volume_style_name(s) {
+        "Bar" => crate::VolumeStyle::Bar,
+        "Popup" => crate::VolumeStyle::Popup,
+        "Percent" => crate::VolumeStyle::Percent,
+        _ => crate::VolumeStyle::Cone,
     }
 }
 
