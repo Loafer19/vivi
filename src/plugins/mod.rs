@@ -602,6 +602,11 @@ pub fn client_message(args: &[String]) {
             Err(e) => eprintln!("vivi: vivi-download {id} {job}: {e}"),
         },
         Some(M::DownloadRemove { id, job }) => crate::downloads::remove(id, job),
+        Some(M::DownloadsShow) => {
+            if let Some(a) = with(|r| r.app.upgrade()).flatten() {
+                crate::downloads::open(&a);
+            }
+        }
         Some(M::Toast(text)) => {
             with(|r| {
                 if let Some(a) = r.app.upgrade() {

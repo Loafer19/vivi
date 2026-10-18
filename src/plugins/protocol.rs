@@ -91,6 +91,8 @@ pub enum ScriptMessage<'a> {
     },
     /// `vivi-download-remove <plugin id> <job id>`.
     DownloadRemove { id: &'a str, job: &'a str },
+    /// `vivi-downloads-show`: open Library → Downloads.
+    DownloadsShow,
     /// `vivi-toast <text> [seconds]` with non-blank text (trimmed).
     Toast(&'a str),
 }
@@ -130,6 +132,7 @@ impl<'a> ScriptMessage<'a> {
             },
             ["vivi-download", id, job, json] => M::Download { id, job, json },
             ["vivi-download-remove", id, job] => M::DownloadRemove { id, job },
+            ["vivi-downloads-show", ..] => M::DownloadsShow,
             ["vivi-toast", text, ..] if !text.trim().is_empty() => M::Toast(text.trim()),
             _ => return None,
         })
@@ -222,6 +225,7 @@ mod tests {
             &["vivi-download-remove", "p", "j1"],
             M::DownloadRemove { id: "p", job: "j1" },
         );
+        is(&["vivi-downloads-show"], M::DownloadsShow);
         assert_eq!(p(&["vivi-toast", "  "]), None);
         assert_eq!(p(&["vivi-setting", "p", "k"]), None);
         assert_eq!(p(&["other", "x"]), None);

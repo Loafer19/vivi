@@ -296,9 +296,7 @@ pub fn drain() {
             Cmd::Next => p.playlist_step(true),
             Cmd::Downloads => {
                 show(&a);
-                a.global::<crate::Library>()
-                    .invoke_navigate("downloads".into());
-                a.global::<crate::Overlays>().set_library_open(true);
+                crate::downloads::open(&a);
             }
             Cmd::Quit => {
                 let _ = slint::quit_event_loop();

@@ -483,6 +483,13 @@ fn to_row(j: &Job, names: &[(String, String, String)]) -> crate::DlJob {
     }
 }
 
+/// Open Library → Downloads (tray menu, `vivi-downloads-show`).
+pub fn open(a: &AppWindow) {
+    a.global::<crate::Library>()
+        .invoke_navigate("downloads".into());
+    a.global::<crate::Overlays>().set_library_open(true);
+}
+
 /// Push the list to the UI, save, notify and update the tray line.
 pub fn refresh() {
     let (jobs, save, news) = ST.with(|s| {

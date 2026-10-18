@@ -191,7 +191,7 @@ a track id …). Report fields (all optional; omitted ones keep their value):
   from a timer). Free Music reports its queue this way.
 * **Packages** send
   `mp.commandv("script-message", "vivi-download", "<plugin id>", "<job id>", utils.format_json({...}))`
-  and `vivi-download-remove <plugin id> <job id>`.
+  and `vivi-download-remove <plugin id> <job id>`; `vivi-downloads-show` opens the panel.
 * **Callbacks**: the panel's buttons call the plugin back with the job id:
   `download-pause`, `download-resume`, `download-cancel`, `download-retry` (a built-in's
   `command(name, [job])`, a package's `script-message-to <script> download-cancel <job>`).
