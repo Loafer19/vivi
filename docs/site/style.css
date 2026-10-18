@@ -154,12 +154,28 @@ a.card.link h3 svg.lucide { color: var(--accent); }
 .keys small, .soon { font-size: 11px; color: var(--accent); background: var(--accent-bg); border-radius: 99px; padding: 1px 7px; margin-left: 4px; white-space: nowrap; }
 .dls { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
 .dls h3 { margin: 0 0 4px; font-size: 16px; }
-.cmp-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
-.cmp { margin: 0; min-width: 820px; font-size: 13px; }
+/* Compare table. Wide screens: the wrapper only clips (overflow: clip is not a scroll container), so the
+   header row sticks to the page just below the sticky nav. Narrow screens: the wrapper is the scroll
+   container in both directions (capped at the viewport height), with the header row and the feature
+   column sticky inside it. */
+:root { --nav-h: 59px; }
+.cmp-wrap { border: 1px solid var(--line); border-radius: var(--radius); overflow: visible; overflow: clip; }
+.cmp { margin: 0; min-width: 820px; font-size: 13px; border-collapse: separate; border-spacing: 0; }
 .cmp th, .cmp td { padding: 8px 10px; }
 .cmp thead th { white-space: nowrap; }
-.cmp thead th { position: sticky; top: 0; background: var(--bg2); color: var(--fg); }
-.cmp tbody th { color: var(--fg); font-weight: 500; position: sticky; left: 0; background: var(--bg); }
+.cmp thead th { position: sticky; top: calc(var(--nav-h) - 1px); z-index: 2; background: var(--bg2); color: var(--fg); box-shadow: inset 0 -1px var(--line); }
+.cmp tbody th { color: var(--fg); font-weight: 500; position: sticky; left: 0; z-index: 1; background: var(--bg); }
+.cmp tr.sec th > span { position: sticky; left: 10px; }
+@media (max-width: 880px) {
+  .cmp-wrap { overflow: auto; max-height: calc(100vh - var(--nav-h) - 24px); max-height: calc(100svh - var(--nav-h) - 24px); overscroll-behavior-x: contain; }
+  .cmp-wrap .cmp { display: table; overflow: visible; min-width: 760px; }
+  .cmp thead th { top: 0; }
+  .cmp thead th:first-child { left: 0; z-index: 3; }
+  .cmp tbody th:not([colspan]), .cmp thead th:first-child { min-width: 128px; max-width: 150px; box-shadow: inset -1px 0 var(--line); }
+  .cmp thead th:first-child { box-shadow: inset -1px 0 var(--line), inset 0 -1px var(--line); }
+  .cmp tbody th:not([colspan]) { background: var(--bg2); }
+}
+@media (max-width: 640px) { :root { --nav-h: 52px; } .cmp { font-size: 12px; } .cmp th, .cmp td { padding: 7px 8px; } }
 .cmp td.y { color: #7fc77f; } .cmp td.n { color: var(--fg3); } .cmp td.q { color: var(--fg3); }
 .cmp col.vivi, .cmp td.v { background: rgba(211, 121, 24, .06); }
 .cmp tr.sec th { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; background: var(--bg2); }

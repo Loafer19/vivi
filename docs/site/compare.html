@@ -27,18 +27,18 @@
 </section>
 <p class="lead"><span style="color:#7fc77f">✓</span> built in, or an add-on from the project's own directory (noted) · – not built in · <b>?</b> not confirmed in the official docs · n/a not applicable or not measured. Third-party scripts and components add a lot to mpv, VLC and foobar2000; this table only counts what the projects ship or list themselves.</p>
 <div class="cmp-wrap" tabindex="0" role="region" aria-label="Comparison table (scrolls sideways)"><table class="cmp"><thead><tr><th scope="col">Feature</th><th scope="col">Vivi</th><th scope="col">mpv</th><th scope="col">VLC</th><th scope="col">MPC-HC</th><th scope="col">IINA</th><th scope="col">Celluloid</th><th scope="col">foobar2000</th></tr></thead><tbody>
-<tr class="sec"><th colspan="8">Music</th></tr>
+<tr class="sec"><th colspan="8"><span>Music</span></th></tr>
 <tr><th scope="row">Waveform progress bar</th><td class="v y">✓</td><td class="n">–</td><td class="n">–</td><td class="q">?</td><td class="q">?</td><td class="n">–</td><td class="y">✓ <small>component</small></td></tr>
 <tr><th scope="row">Karaoke / synced lyrics view</th><td class="v y">✓</td><td class="n">–</td><td class="n">–</td><td class="q">?</td><td class="q">?</td><td class="n">–</td><td class="y">✓ <small>component</small></td></tr>
 <tr><th scope="row">Auto-tagger (fingerprint / MusicBrainz)</th><td class="v y">✓</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="y">✓ <small>MusicBrainz component</small></td></tr>
 <tr><th scope="row">Free music catalogue (Jamendo, FMA, Archive)</th><td class="v y">✓</td><td class="n">–</td><td class="q">?</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="q">?</td></tr>
 <tr><th scope="row">Music library</th><td class="v y">✓</td><td class="n">–</td><td class="y">✓</td><td class="q">?</td><td class="q">?</td><td class="n">–</td><td class="y">✓</td></tr>
-<tr class="sec"><th colspan="8">Extending</th></tr>
+<tr class="sec"><th colspan="8"><span>Extending</span></th></tr>
 <tr><th scope="row">Plugins / add-ons</th><td class="v y">✓</td><td class="y">✓ <small>Lua / JS scripts</small></td><td class="y">✓ <small>add-ons</small></td><td class="q">?</td><td class="y">✓</td><td class="q">?</td><td class="y">✓ <small>components</small></td></tr>
 <tr><th scope="row">In-app plugin marketplace</th><td class="v y">✓</td><td class="n">–</td><td class="q">?</td><td class="n">–</td><td class="q">?</td><td class="n">–</td><td class="q">?</td></tr>
 <tr><th scope="row">MCP server for AI agents</th><td class="v y">✓</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
 <tr><th scope="row">Customizable control bar</th><td class="v y">✓</td><td class="q">?</td><td class="y">✓ <small>toolbar editor</small></td><td class="q">?</td><td class="y">✓</td><td class="q">?</td><td class="y">✓</td></tr>
-<tr class="sec"><th colspan="8">Playback</th></tr>
+<tr class="sec"><th colspan="8"><span>Playback</span></th></tr>
 <tr><th scope="row">Network streams / IPTV (M3U)</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="q">?</td><td class="q">?</td><td class="q">?</td><td>radio</td></tr>
 <tr><th scope="row">Online subtitle search</th><td class="v y">✓</td><td class="n">–</td><td class="y">✓ <small>VLSub</small></td><td class="q">?</td><td class="y">✓</td><td class="n">–</td><td>n/a</td></tr>
 <tr><th scope="row">Subtitle sync / offset</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="q">?</td><td class="q">?</td><td class="q">?</td><td>n/a</td></tr>
@@ -46,15 +46,15 @@
 <tr><th scope="row">Recording / stream dump</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="q">?</td><td class="q">?</td><td class="q">?</td><td>n/a</td></tr>
 <tr><th scope="row">Miniplayer / picture-in-picture</th><td class="v y">✓</td><td class="n">–</td><td class="q">?</td><td class="q">?</td><td class="y">✓</td><td class="n">–</td><td class="q">?</td></tr>
 <tr><th scope="row">Video playback</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">–</td></tr>
-<tr class="sec"><th colspan="8">Footprint (measured, see below)</th></tr>
-<tr><th scope="row">Download (Linux)</th><td class="v">14.8 MB tarball</td><td>n/a (distro)</td><td>n/a (distro)</td><td>n/a</td><td>n/a</td><td>n/a</td><td>n/a</td></tr>
-<tr><th scope="row">Installed size (own files)</th><td class="v">35.7 MB</td><td>6.5 MB</td><td>19.8 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">Time to first window, warm</th><td class="v">~0.38 s</td><td>~0.85 s</td><td>~0.19 s</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">Time to first window, cold cache</th><td class="v">~0.84 s</td><td>~1.13 s</td><td>~0.47 s</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">Memory, idle (PSS)</th><td class="v">~194 MB</td><td>~153 MB</td><td>~58 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">Memory, playing 1080p (PSS)</th><td class="v">~276 MB</td><td>~361 MB</td><td>~277 MB</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr><th scope="row">CPU, playing 1080p</th><td class="v">4.6%</td><td>16.7% <small>(software decoding by default)</small></td><td>4.4%</td><td>n/a</td><td>n/a</td><td class="q">?</td><td>n/a</td></tr>
-<tr class="sec"><th colspan="8">Project</th></tr>
+<tr class="sec"><th colspan="8"><span>Footprint (measured, see below)</span></th></tr>
+<tr><th scope="row">Download (Linux)</th><td class="v">14.8 MB tarball</td><td>n/a (distro)</td><td>n/a (distro)</td><td>n/a</td><td>n/a</td><td>n/a (distro)</td><td>n/a</td></tr>
+<tr><th scope="row">Installed size (own files)</th><td class="v">35.7 MB</td><td>6.5 MB</td><td>19.8 MB</td><td>n/a</td><td>n/a</td><td>1.2 MB</td><td>n/a</td></tr>
+<tr><th scope="row">Time to first window, warm</th><td class="v">~0.38 s</td><td>~0.85 s</td><td>~0.19 s</td><td>n/a</td><td>n/a</td><td>~0.35 s</td><td>n/a</td></tr>
+<tr><th scope="row">Time to first window, cold cache</th><td class="v">~0.84 s</td><td>~1.13 s</td><td>~0.47 s</td><td>n/a</td><td>n/a</td><td>~0.73 s</td><td>n/a</td></tr>
+<tr><th scope="row">Memory, idle (PSS)</th><td class="v">~194 MB</td><td>~153 MB</td><td>~58 MB</td><td>n/a</td><td>n/a</td><td>~298 MB</td><td>n/a</td></tr>
+<tr><th scope="row">Memory, playing 1080p (PSS)</th><td class="v">~276 MB</td><td>~361 MB</td><td>~277 MB</td><td>n/a</td><td>n/a</td><td>~570 MB</td><td>n/a</td></tr>
+<tr><th scope="row">CPU, playing 1080p</th><td class="v">4.6%</td><td>16.7% <small>(software decoding by default)</small></td><td>4.4%</td><td>n/a</td><td>n/a</td><td>32% <small>(software decoding by default)</small></td><td>n/a</td></tr>
+<tr class="sec"><th colspan="8"><span>Project</span></th></tr>
 <tr><th scope="row">Open source</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">–</td></tr>
 <tr><th scope="row">License</th><td class="v">MIT</td><td>GPL-2.0+ <small>(LGPL build option)</small></td><td>GPL-2.0 <small>(libVLC LGPL)</small></td><td>GPL-3.0</td><td>GPL-3.0</td><td>GPL-3.0</td><td>freeware</td></tr>
 <tr><th scope="row">Platforms</th><td class="v">Linux, Windows, macOS</td><td>Linux, Windows, macOS, BSD</td><td>Windows, macOS, Linux, mobile</td><td>Windows</td><td>macOS</td><td>Linux</td><td>Windows, macOS, mobile</td></tr>
@@ -68,16 +68,16 @@
   <div class="card"><h3>foobar2000</h3><p>Long audio-focused polish: gapless playback, ReplayGain, CD ripping, transcoding, DSP effects and a large component ecosystem. Not open source, and no video.</p></div>
   <div class="card"><h3>IINA</h3><p>A truly native macOS app with trackpad gestures, Picture in Picture and Live Text. Vivi's macOS build is unsigned and best effort.</p></div>
   <div class="card"><h3>MPC-HC</h3><p>A mature Windows classic built on the DirectShow / LAV filter ecosystem.</p></div>
-  <div class="card"><h3>Celluloid</h3><p>Fits right into GNOME with GTK, MPRIS and Wayland support, and reads your existing mpv config files as-is.</p></div>
+  <div class="card"><h3>Celluloid</h3><p>Opens its window slightly faster than Vivi in our test (~0.35 s warm, ~0.73 s cold, against ~0.38 s and ~0.84 s), fits right into GNOME with GTK, MPRIS and Wayland support, and reads your existing mpv config files as-is.</p></div>
 </div>
 
 <h2 id="numbers">How we measured</h2>
 <p class="lead">Size was measured on 17 Oct 2026; start time, memory and CPU on one desktop under identical conditions on 18 Oct 2026. Numbers appear only where we measured them.</p>
 <ul class="src">
   <li><b>Download</b>: size of <code>vivi-v0.11.1-linux-x86_64.tar.gz</code> on the GitHub release (14,816,584 bytes). mpv and VLC on Linux come from distribution packages, so there is no single download to compare.</li>
-  <li><b>Installed size</b>: Vivi = the files the installer copies (<code>vivi</code>, <code>vivi-mcp</code>, desktop file and icons), excluding the system libmpv. mpv and VLC = the <code>Installed-Size</code> of their Debian 13 packages (mpv + libmpv2; vlc, vlc-bin, vlc-plugin-base, vlc-plugin-qt, libvlc5, libvlccore9), excluding shared libraries such as FFmpeg and Qt.</li>
-  <li><b>Start time, memory and CPU</b>: Arch Linux, Hyprland (Wayland), NVIDIA RTX 3060 Ti, 12-core CPU, 16 GB RAM; each player with its normal configuration on that PC. Vivi = release build of commit <code>c6a6264</code> (0.11.1 + master), mpv 0.41 (<code>--idle --force-window=yes</code>), VLC 3.0.23 (Qt interface). Time runs from launch to the first Wayland surface attach (<code>WAYLAND_DEBUG=1</code>, polled every 20 ms); VLC 3 draws through XWayland, so for VLC it is the time until its window is mapped (<code>hyprctl clients</code>). Warm = median of 3 runs; cold = after <code>echo 3 &gt; /proc/sys/vm/drop_caches</code>. Memory is PSS of the main process from <code>/proc/PID/smaps_rollup</code> 3 s after the window appears, idle (nothing opened) or playing a local 1080p H.264 clip; CPU is the average over 10 s of that playback (100% = one core). Vivi and VLC decode on the GPU there; mpv uses software decoding unless <code>hwdec</code> is set.</li>
-  <li>MPC-HC, IINA and foobar2000 do not run natively on Linux and Celluloid was not tested, so no numbers are shown for them.</li>
+  <li><b>Installed size</b>: Vivi = the files the installer copies (<code>vivi</code>, <code>vivi-mcp</code>, desktop file and icons), excluding the system libmpv. mpv and VLC = the <code>Installed-Size</code> of their Debian 13 packages (mpv + libmpv2; vlc, vlc-bin, vlc-plugin-base, vlc-plugin-qt, libvlc5, libvlccore9), excluding shared libraries such as FFmpeg and Qt. Celluloid = the <code>Installed Size</code> of the Arch Linux package <code>celluloid 0.30-2</code> (1,191 KiB, measured 18 Oct 2026), excluding libmpv and GTK.</li>
+  <li><b>Start time, memory and CPU</b>: Arch Linux, Hyprland (Wayland), NVIDIA RTX 3060 Ti, 12-core CPU, 16 GB RAM; each player with its normal configuration on that PC. Vivi = release build of commit <code>c6a6264</code> (0.11.1 + master), mpv 0.41 (<code>--idle --force-window=yes</code>), VLC 3.0.23 (Qt interface), Celluloid 0.30 (GTK 4, on the same libmpv 0.41, default settings). Time runs from launch to the first Wayland surface attach (<code>WAYLAND_DEBUG=1</code>, polled every 20 ms); VLC 3 draws through XWayland, so for VLC it is the time until its window is mapped (<code>hyprctl clients</code>). Warm = median of 3 runs; cold = after <code>echo 3 &gt; /proc/sys/vm/drop_caches</code>. Memory is PSS of the main process from <code>/proc/PID/smaps_rollup</code> 3 s after the window appears, idle (nothing opened) or playing a local 1080p H.264 clip (1080×1920, 30 fps); CPU is the average over 10 s of that playback (100% = one core). Vivi and VLC decode on the GPU there; mpv and Celluloid use software decoding unless <code>hwdec</code> is set. Celluloid playing memory is the mean of 2 runs (531 and 604 MB).</li>
+  <li>MPC-HC, IINA and foobar2000 do not run natively on Linux, so no numbers are shown for them.</li>
 </ul>
 
 <h2 id="sources">Sources</h2>
