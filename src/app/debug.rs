@@ -13,7 +13,7 @@ pub(crate) fn screenshot_mode() -> bool {
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
-/// VIVI_MENU, VIVI_SUB, VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
+/// VIVI_MENU, VIVI_SUB, VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] (a plugin dialog, searched when a query or
 /// source is given).
 /// Show plugin `id` in Settings → Extensions → Browse (search filtered to its name).
@@ -142,6 +142,18 @@ pub(crate) fn debug_ui(app: &AppWindow) {
         slint::Timer::single_shot(Duration::from_millis(2500), move || {
             if let Some(a) = w.upgrade() {
                 a.invoke_add_subs();
+            }
+        });
+    }
+    // VIVI_EXT=<plugin id>[:gear] (or "" for All / Marketplace): the Extensions window.
+    if let Some(t) = var("VIVI_EXT") {
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(2500), move || {
+            if let Some(a) = w.upgrade() {
+                let (id, gear) = t
+                    .split_once(':')
+                    .map_or((t.as_str(), false), |(i, g)| (i, g == "gear"));
+                crate::extwin::open(&a, id, gear);
             }
         });
     }

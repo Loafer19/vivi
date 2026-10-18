@@ -1,0 +1,84 @@
+// Command palette (Ctrl+K): a search field over app actions and plugin commands.
+// Keyboard only: type to filter (fuzzy), Up / Down select, Enter runs, Esc closes
+// (through the overlay stack, Overlay.palette). Rows are list items for screen readers.
+import { Theme, Metrics, Icon } from "core/theme.slint";
+import { TextField } from "core/controls.slint";
+import { Palette, PaletteItem } from "state/palette.slint";
+
+component PaletteRow inherits Rectangle {
+    in property <PaletteItem> item;
+    in property <bool> selected;
+    callback clicked();
+    height: 36px; border-radius: Metrics.radius-md;
+    background: root.selected ? Theme.bg-a1 : (ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; spacing: 10px;
+        Text { text: root.item.label; color: root.selected ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        if root.item.group != "": Text { text: root.item.group; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
+        if root.item.hint != "": Rectangle {
+            width: kt.preferred-width + 12px; height: 22px; y: (parent.height - self.height) / 2;
+            border-radius: Metrics.radius-sm; background: Theme.field;
+            kt := Text { text: root.item.hint; color: Theme.fg-2; font-family: "DM Mono"; font-size: Metrics.font-xs; vertical-alignment: center; horizontal-alignment: center; }
+        }
+    }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.item.label + (root.item.hint != "" ? ", " + root.item.hint : ""); accessible-item-selected: root.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+export component PaletteDialog inherits Rectangle {
+    callback close();
+    property <int> rows: 10;
+    property <int> first: max(0, Palette.selected - root.rows + 1);
+    function move(d: int) {
+        Palette.selected = clamp(Palette.selected + d, 0, max(0, Palette.items.length - 1));
+    }
+    background: Theme.scrim;
+    TouchArea { clicked => { root.close(); } }
+    card := Rectangle {
+        width: min(640px, root.width - 32px);
+        height: col.preferred-height;
+        x: (root.width - self.width) / 2; y: min(96px, root.height / 8);
+        background: Theme.bg-a4; border-radius: Metrics.radius-xl; border-width: 1px; border-color: Theme.bg-a1;
+        drop-shadow-blur: 24px; drop-shadow-offset-y: 10px; drop-shadow-color: Theme.shadow;
+        clip: true;
+        TouchArea { }
+        keys := FocusScope {
+            capture-key-pressed(e) => {
+                if (e.text == Key.UpArrow) { root.move(-1); return accept; }
+                if (e.text == Key.DownArrow) { root.move(1); return accept; }
+                if (e.text == Key.PageUp) { root.move(-root.rows); return accept; }
+                if (e.text == Key.PageDown) { root.move(root.rows); return accept; }
+                if (e.text == Key.Return) {
+                    if (Palette.items.length > 0) { Palette.run(Palette.items[Palette.selected].id); }
+                    return accept;
+                }
+                if (e.text == Key.Escape) { root.close(); return accept; }
+                reject
+            }
+            col := VerticalLayout {
+                padding: 8px; spacing: 6px;
+                HorizontalLayout {
+                    spacing: 8px; padding-left: 4px;
+                    VerticalLayout { alignment: center; Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; } }
+                    field := TextField {
+                        height: 40px; horizontal-stretch: 1; background: transparent;
+                        text <=> Palette.query; placeholder: "Type a command or plugin action"; label: "Command palette";
+                        edited(t) => { Palette.selected = 0; Palette.search(t); }
+                        init => { self.focus-input(); }
+                    }
+                }
+                Rectangle { height: 1px; background: Theme.bg-a1; }
+                if Palette.items.length == 0: Text { height: 36px; x: 12px; text: "No matching commands."; color: Theme.fg-a3; vertical-alignment: center; }
+                for it[i] in Palette.items: VerticalLayout {
+                    if i >= root.first && i < root.first + root.rows: PaletteRow {
+                        item: it; selected: i == Palette.selected;
+                        clicked => { Palette.run(it.id); }
+                    }
+                }
+                Text {
+                    height: 22px; x: 12px; text: "↑ ↓ select  ·  Enter run  ·  Esc close  ·  " + Palette.items.length + " commands";
+                    color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center;
+                }
+            }
+        }
+    }
+}

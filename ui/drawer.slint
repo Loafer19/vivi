@@ -1,0 +1,76 @@
+// Player side drawer: a right slide-out panel that plugins host (`drawer.panel`).
+// One icon tab per contributing plugin; Lyrics shows its synced lines, other plugins
+// their actions. It hides with the player controls (auto-hide) and Esc closes it.
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
+import { Icons } from "core/icons.slint";
+import { SecondaryButton } from "core/buttons.slint";
+import { SectionHeader } from "core/rows.slint";
+import { Drawer } from "state/drawer.slint";
+import { Lyrics } from "state/lyrics.slint";
+
+component DrawerTab inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> selected;
+    callback clicked();
+    width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+    background: root.selected ? Theme.bg-a1 : (ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
+    Icon { width: 16px; height: 16px; source: root.icon; tint: root.selected ? Theme.accent : Theme.fg-a2; }
+    ta := TouchArea { accessible-role: tab; accessible-label: root.label; accessible-item-selected: root.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    Tooltip { text: @markdown("\{root.label}"); }
+}
+
+export component SideDrawer inherits Rectangle {
+    callback close();
+    background: Theme.bg-a4.with-alpha(0.97);
+    border-width: 1px; border-color: Theme.bg-a1;
+    TouchArea { }
+    VerticalLayout {
+        HorizontalLayout {
+            height: 48px; padding-left: 12px; padding-right: 8px; spacing: 6px;
+            for t in Drawer.tabs: VerticalLayout { alignment: center;
+                DrawerTab { label: t.name; icon: Icons.plugin(t.icon); selected: t.id == Drawer.tab; clicked => { Drawer.open(t.id); } } }
+            Text { horizontal-stretch: 1; text: Drawer.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; }
+            VerticalLayout { alignment: center;
+                Rectangle {
+                    width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+                    background: gta.has-hover ? Theme.bg-a1 : transparent;
+                    TriIcon { width: 20px; height: 20px; base: @image-url("../assets/icons/layers/settings-twotone-b.svg"); accent: @image-url("../assets/icons/layers/settings-twotone-a.svg"); dim: @image-url("../assets/icons/layers/settings-twotone-d.svg"); }
+                    gta := TouchArea { accessible-role: button; accessible-label: Drawer.title + " settings"; mouse-cursor: pointer; clicked => { Drawer.settings(); } }
+                } }
+            VerticalLayout { alignment: center;
+                Rectangle {
+                    width: 32px; height: 32px; border-radius: Metrics.radius-sm;
+                    background: xta.has-hover ? Theme.bg-a1 : transparent;
+                    Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/close.svg"); }
+                    xta := TouchArea { accessible-role: button; accessible-label: "Close drawer"; mouse-cursor: pointer; clicked => { root.close(); } }
+                } }
+        }
+        Rectangle { height: 1px; background: Theme.bg-a1; }
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                alignment: start; padding: 16px; spacing: 10px;
+                if Drawer.tab == "lyrics" && Lyrics.lines.length == 0: Text { text: "No lyrics for this track yet."; color: Theme.fg-a3; wrap: word-wrap; }
+                if Drawer.tab == "lyrics": VerticalLayout {
+                    spacing: 6px;
+                    for l[i] in Lyrics.lines: Text {
+                        text: l == "" ? "♪" : l; wrap: word-wrap;
+                        font-size: Metrics.font-md; font-weight: i == Lyrics.index ? 700 : 400;
+                        color: i == Lyrics.index ? Theme.accent : (i < Lyrics.index ? Theme.fg-a3 : Theme.fg-a1);
+                    }
+                }
+                if Drawer.tab != "lyrics": Text { text: Drawer.info; color: Theme.fg-a1; font-size: Metrics.font-sm; wrap: word-wrap; }
+                if Drawer.tab != "lyrics" && Drawer.actions.length > 0: SectionHeader { text: "Actions"; }
+                if Drawer.tab != "lyrics": VerticalLayout { spacing: 6px;
+                    for a in Drawer.actions: HorizontalLayout {
+                        spacing: 10px;
+                        Text { horizontal-stretch: 1; text: a.title; color: Theme.fg-a1; font-size: Metrics.font-sm; vertical-alignment: center; wrap: word-wrap; }
+                        SecondaryButton { text: a.label; clicked => { Drawer.run-action(a.id); } }
+                    }
+                }
+            }
+        }
+    }
+}

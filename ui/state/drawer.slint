@@ -1,0 +1,12 @@
+// Player side drawer: plugin panels (`drawer.panel` contributions), see src/drawer.rs.
+import { ExtTab, ExtAction } from "extensions.slint";
+export global Drawer {
+    in-out property <[ExtTab]> tabs;   // name = the contribution's label
+    in-out property <string> tab;      // plugin id
+    in-out property <string> title;
+    in-out property <string> info;
+    in-out property <[ExtAction]> actions;
+    callback open(string);             // plugin id ("" = first panel)
+    callback settings();
+    callback run-action(string);       // settings row id of an action ("plugin.<id>.<key>")               // the plugin's settings (Extensions window, gear)
+}

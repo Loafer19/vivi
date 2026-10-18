@@ -35,9 +35,13 @@ import { Viz } from "state/viz.slint";
 import { SkipIntro } from "state/skip-intro.slint";
 import { Extensions, ExtTab } from "state/extensions.slint";
 import { ExtensionsDialog } from "extensions.slint";
+import { Palette, PaletteItem } from "state/palette.slint";
+import { PaletteDialog } from "palette.slint";
+import { Drawer } from "state/drawer.slint";
+import { SideDrawer } from "drawer.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro, Extensions }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro, Extensions, Palette, Drawer }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -538,6 +542,7 @@ export component AppWindow inherits Window {
     // The overlay Esc closes (top-most open one); same conditions as each overlay's `if` below.
     out property <Overlay> top-overlay:
         Menus.menu-kind != "" ? Overlay.menu
+        : Overlays.palette-open ? Overlay.palette
         : Overlays.shortcuts-open ? Overlay.shortcuts
         : Overlays.info-open ? Overlay.info
         : Overlays.onboarding-open ? Overlay.onboarding
@@ -551,6 +556,7 @@ export component AppWindow inherits Window {
         : Overlays.settings-open ? Overlay.settings
         : Overlays.new-playlist-open ? Overlay.new-playlist
         : Overlays.network-open ? Overlay.network
+        : Overlays.drawer-open && Playback.has-media && !root.mini && root.show-ui ? Overlay.drawer
         : Overlays.panel-open && Playback.has-media && !root.mini ? Overlay.side-panel
         : Overlays.library-open && Playback.has-media ? Overlay.library
         : Overlays.karaoke-open && Playback.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
@@ -646,7 +652,7 @@ export component AppWindow inherits Window {
 
     // Rust moves focus back to the player after Esc closed an overlay.
     public function focus-main() { fs.focus(); }
-    property <bool> dialog-open: Overlays.settings-open || Overlays.extensions-open || Overlays.customize-open || Overlays.network-open
+    property <bool> dialog-open: Overlays.settings-open || Overlays.extensions-open || Overlays.palette-open || Overlays.customize-open || Overlays.network-open
         || Overlays.new-playlist-open || Overlays.subs-open || Overlays.md-open || Overlays.ls-open
         || Overlays.tr-open || Overlays.onboarding-open || Overlays.qr-open || Overlays.info-open
         || Overlays.shortcuts-open;
@@ -785,6 +791,15 @@ export component AppWindow inherits Window {
         x: 12px; y: 50px;
         modes: Viz.modes; mode: Viz.mode;
         select(i) => { Viz.select(i); }
+    }
+
+    // ---------- Plugin side drawer (src/drawer.rs); hides with the controls ----------
+    if !root.mini && Playback.has-media && Overlays.drawer-open && root.show-ui: SideDrawer {
+        width: root.width < 800px ? root.width : 360px;
+        x: root.width - self.width - (Overlays.panel-open && root.width >= 800px ? 400px : 0);
+        y: 40px;
+        height: root.height - 40px - root.bar-h;
+        close => { Overlays.drawer-open = false; fs.focus(); }
     }
 
     // ---------- Side panel ----------
@@ -1332,6 +1347,12 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Menus (topmost) ----------
+    // ---------- Command palette (src/palette.rs) ----------
+    if Overlays.palette-open: PaletteDialog {
+        width: root.width; height: root.height;
+        close => { Overlays.palette-open = false; fs.focus(); }
+    }
+
     if Menus.menu-kind != "": TouchArea {
         clicked => { Menus.menu-kind = ""; Menus.sub-open = ""; }
         pointer-event(e) => {

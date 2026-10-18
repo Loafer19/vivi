@@ -103,8 +103,8 @@ its point and runs the chosen one.
 | `menu.video` | Video menu | done | none |
 | `context.item` | Right-click on a library file / folder (audio, video, folder kinds) | done | item key (path) |
 | `context.player` | Right-click on the player → *Plugins* submenu | done | none |
-| `palette.command` | Command palette (Ctrl+K) | planned | none |
-| `drawer.panel` | Player side drawer (right slide-out) | planned | none |
+| `palette.command` | Command palette (Ctrl+K, `src/palette.rs`): fuzzy search over every keymap action, a few app commands, sources (*Open …*), drawer panels and these entries (plugin name as the group) | done | none |
+| `drawer.panel` | Player side drawer (`src/drawer.rs`, `ui/drawer.slint`): right slide-out with an icon tab per plugin, hides with the controls, Esc closes; opened from player menu → Plugins → Side drawer or the palette. Lyrics shows its synced lines; other plugins show their description and `action` settings as buttons, the gear opens their settings. `command` is sent when the panel opens | done | none |
 | `home.widget` | Block on Home | planned | none |
 | `controlbar.button` | Element in Customize Player (off by default) | planned | none |
 | `tray.item` | Tray menu | planned | none |

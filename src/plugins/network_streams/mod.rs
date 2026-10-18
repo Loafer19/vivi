@@ -775,6 +775,7 @@ impl Plugin for NetworkStreams {
         .source("open")
         .contribute(contrib::PALETTE_COMMAND, "Browse network streams", "open")
         .contribute(contrib::CONTEXT_PLAYER, "Stream info", "info")
+        .contribute(contrib::DRAWER_PANEL, "Network Streams", "")
         .setting(SettingSpec::action(
             "open",
             "Browse streams",

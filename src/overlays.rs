@@ -43,6 +43,7 @@ pub fn close(a: &AppWindow, o: Overlay) {
         }
         Overlay::Subtitles => a.global::<crate::Overlays>().set_subs_open(false),
         Overlay::Qr => a.global::<crate::Overlays>().set_qr_open(false),
+        Overlay::Palette => a.global::<crate::Overlays>().set_palette_open(false),
         Overlay::Extensions => a.global::<crate::Overlays>().set_extensions_open(false),
         Overlay::Settings => a.global::<crate::Overlays>().set_settings_open(false),
         Overlay::NewPlaylist => a.global::<crate::Dialogs>().invoke_new_playlist_close(),
@@ -50,6 +51,7 @@ pub fn close(a: &AppWindow, o: Overlay) {
             a.global::<crate::Overlays>().set_network_open(false);
             a.global::<crate::Dialogs>().set_net_error("".into());
         }
+        Overlay::Drawer => a.global::<crate::Overlays>().set_drawer_open(false),
         Overlay::SidePanel => a.global::<crate::Overlays>().set_panel_open(false),
         Overlay::Library => a.global::<crate::Overlays>().set_library_open(false),
         Overlay::Karaoke => {

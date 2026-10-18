@@ -39,6 +39,8 @@ pub enum Action {
     Settings,
     /// The Extensions window.
     Extensions,
+    /// The command palette.
+    Palette,
     Bookmark,
     /// Audio-only files with the visualizer on; otherwise the key goes to mpv.
     Visualizer,
@@ -108,6 +110,8 @@ use K::{Named as N, Text as T};
 /// Alt combinations are not here: they belong to mpv scripts and plugin packages.
 #[rustfmt::skip]
 pub const BINDINGS: &[Binding] = &[
+    // Before Play / pause, whose K matches with any Ctrl state.
+    b(A::Palette, &[T("k")], On, Any, "Command palette", "Ctrl+K"),
     b(A::PlayPause, &[T(" "), T("k")], Any, Any, "Play / pause", "Space  K"),
     b(A::SeekForward, &[N(Key::RightArrow)], Any, Any, "Seek forward (Shift: long skip)", "→"),
     b(A::SeekBack, &[N(Key::LeftArrow)], Any, Any, "Seek back (Shift: long skip)", "←"),
@@ -237,7 +241,7 @@ mod tests {
         // (text, shift, ctrl) → action, as the hand-written match did.
         let cases: &[(&str, bool, bool, Option<Action>)] = &[
             (" ", false, false, Some(A::PlayPause)),
-            ("k", false, true, Some(A::PlayPause)),
+            ("k", false, true, Some(A::Palette)), // Ctrl+K: command palette (was play / pause)
             ("K", true, false, None),
             ("f", false, false, Some(A::Fullscreen)),
             ("F", true, false, None),

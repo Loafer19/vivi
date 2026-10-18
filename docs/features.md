@@ -123,6 +123,7 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 ## Keyboard shortcuts
 | Key | Action |
 |---|---|
+| Ctrl+K | Command palette |
 | Space / K | Play / pause |
 | → | Seek forward (Shift: long skip) |
 | ← | Seek back (Shift: long skip) |

@@ -37,6 +37,8 @@ pub(crate) fn setup_features(
     plugins::setup(app, player, cfg.clone());
     crate::extwin::setup(app, cfg.clone());
     crate::extwin::refresh();
+    crate::palette::setup(app);
+    crate::drawer::setup(app);
     fx::setup(app, player);
     dialogs::setup(app, player);
     ipc::setup(app, player, cfg.borrow().general.remote_control);

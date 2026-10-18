@@ -1,0 +1,10 @@
+// Command palette (Ctrl+K): app actions and plugin commands (`palette.command`),
+// filtered by a fuzzy match in src/palette.rs.
+export struct PaletteItem { id: string, label: string, group: string, hint: string }
+export global Palette {
+    in-out property <string> query;
+    in-out property <[PaletteItem]> items;
+    in-out property <int> selected;
+    callback search(string);
+    callback run(string);
+}

@@ -263,6 +263,9 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
         // Right-click on the player: plugin actions (`context.player`), then Extensions.
         "plugins" => {
             let mut v = plugin_rows(contrib::CONTEXT_PLAYER, "plugins");
+            if !plugins::contributions(contrib::DRAWER_PANEL).is_empty() {
+                v.push(div(row("drawer", "Side drawer", "plugins", "")));
+            }
             v.push(div(row(
                 "extensions",
                 "Extensions…",
@@ -650,6 +653,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "customize" => a.global::<crate::Overlays>().set_customize_open(true),
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "extensions" => crate::extwin::open(a, "", false),
+            "drawer" => crate::drawer::toggle(a),
             "settings" => {
                 a.global::<crate::Overlays>().set_settings_open(true);
                 a.global::<crate::Settings>().invoke_refresh(

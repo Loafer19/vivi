@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod desktop;
 mod dialogs;
+mod drawer;
 mod extwin;
 mod fx;
 mod images;
@@ -17,6 +18,7 @@ mod mini;
 #[cfg(target_os = "linux")]
 mod mpris;
 mod overlays;
+mod palette;
 mod peaks;
 mod player;
 mod plugins;
