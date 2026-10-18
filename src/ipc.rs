@@ -79,6 +79,129 @@ fn search_streams(args: &Value) -> Result<Value, String> {
     Ok(json!({ "count": items.len(), "items": items }))
 }
 
+/// Recent list entries matching `args.query` (words in title, subtitle or target) and
+/// `args.kind` (video, audio, folder, playlist, stream, web, music), newest first.
+#[cfg(unix)]
+pub fn recent_items(v: &[crate::store::RecentEntry], args: &Value) -> Value {
+    let q = args["query"].as_str().unwrap_or("").to_lowercase();
+    let words: Vec<&str> = q.split_whitespace().collect();
+    let kind = args["kind"].as_str().unwrap_or("").to_lowercase();
+    let items: Vec<Value> = v
+        .iter()
+        .filter(|e| {
+            let k = e.kind.label().to_lowercase();
+            kind.is_empty() || k == kind || k.starts_with(&kind)
+        })
+        .filter(|e| {
+            let hay = format!("{} {} {}", e.title, e.sub, e.target).to_lowercase();
+            words.iter().all(|w| hay.contains(w))
+        })
+        .map(|e| {
+            json!({ "target": e.target, "kind": e.kind.label(), "title": e.title,
+                "subtitle": e.sub, "image": e.image })
+        })
+        .collect();
+    json!(items)
+}
+
+/// Saved playlists (Library → Playlists): name, path and entry count.
+#[cfg(unix)]
+fn saved_playlists() -> Value {
+    json!(crate::store::playlists()
+        .into_iter()
+        .map(|(name, path)| {
+            let n = std::fs::read_to_string(&path)
+                .map(|t| {
+                    t.lines()
+                        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+                        .count()
+                })
+                .unwrap_or(0);
+            json!({ "name": name, "path": path.to_string_lossy(), "entries": n })
+        })
+        .collect::<Vec<_>>())
+}
+
+/// mpv `playlist-move` target that puts entry `from` at final index `to` in a queue of `n`.
+#[cfg(unix)]
+pub fn move_target(from: i64, to: i64, n: i64) -> Result<i64, String> {
+    if !(0..n).contains(&from) || !(0..n).contains(&to) {
+        return Err(format!(
+            "index out of range (queue has {n} entries, 0-based)"
+        ));
+    }
+    // mpv inserts before the target index, counted before the entry is removed.
+    Ok(if to > from { to + 1 } else { to })
+}
+
+/// Contribution points whose entries agents may run (UI-only points are left out).
+#[cfg(unix)]
+pub const AGENT_POINTS: [&str; 9] = [
+    crate::plugins::contrib::PALETTE_COMMAND,
+    crate::plugins::contrib::CONTEXT_PLAYER,
+    crate::plugins::contrib::CONTEXT_ITEM,
+    crate::plugins::contrib::MENU_SUBTITLES,
+    crate::plugins::contrib::MENU_AUDIO,
+    crate::plugins::contrib::MENU_VIDEO,
+    crate::plugins::contrib::TRAY_ITEM,
+    crate::plugins::contrib::CONTROLBAR_BUTTON,
+    crate::plugins::contrib::SIDEBAR_SOURCE,
+];
+
+/// Plugin commands from contributions, one per (plugin, command): the first label wins and
+/// `points` lists every place it shows up. `takes_target` = it is a library-item action.
+#[cfg(unix)]
+pub fn plugin_commands(by_point: &[(&str, Vec<crate::plugins::Contributed>)]) -> Vec<Value> {
+    let mut out: Vec<Value> = Vec::new();
+    for (point, list) in by_point {
+        for c in list {
+            if let Some(e) = out
+                .iter_mut()
+                .find(|e| e["plugin"] == c.id.as_str() && e["command"] == c.command.as_str())
+            {
+                if let Some(p) = e["points"].as_array_mut() {
+                    p.push(json!(point));
+                }
+                if *point == crate::plugins::contrib::CONTEXT_ITEM {
+                    e["takes_target"] = json!(true);
+                }
+                continue;
+            }
+            out.push(json!({
+                "plugin": c.id, "plugin_name": c.name, "command": c.command, "label": c.label,
+                "points": [point],
+                "where": crate::plugins::contrib::describe(point),
+                "takes_target": *point == crate::plugins::contrib::CONTEXT_ITEM,
+            }));
+        }
+    }
+    out
+}
+
+/// An explicit screenshot path: an image file that does not exist yet.
+#[cfg(unix)]
+pub fn screenshot_path(s: &str, overwrite: bool) -> Result<std::path::PathBuf, String> {
+    let p = std::path::PathBuf::from(s.trim());
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    if !["png", "jpg", "jpeg", "webp"].contains(&ext.as_str()) {
+        return Err("\"path\" must end in .png, .jpg, .jpeg or .webp".into());
+    }
+    if !p.is_absolute() {
+        return Err("\"path\" must be absolute".into());
+    }
+    if p.exists() && !overwrite {
+        return Err(format!(
+            "{} exists; pass \"overwrite\": true to replace it",
+            p.display()
+        ));
+    }
+    Ok(p)
+}
+
 #[cfg(unix)]
 pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>, enabled: bool) {
     use std::io::{BufRead, BufReader, Write};
@@ -140,6 +263,10 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                             };
                             if cmd == "search" {
                                 search(&args)
+                            } else if cmd == "recent" {
+                                Ok(recent_items(&crate::store::recent_entries(), &args))
+                            } else if cmd == "saved_playlists" {
+                                Ok(saved_playlists())
                             } else if cmd == "search_streams" {
                                 search_streams(&args)
                             } else if cmd.starts_with("__") {
@@ -227,7 +354,27 @@ fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
         "playlist_pos": num("playlist-pos").unwrap_or(-1.0) as i64,
         "playlist_count": num("playlist-count").unwrap_or(0.0) as i64,
         "eq_preset": if eq_on { fx.get_preset().to_string() } else { "Off".into() },
+        "is_stream": path.contains("://"),
+        "has_video": p.get("vid").is_some_and(|v| v != "no" && !v.is_empty()),
+        "audio_track": p.get("aid").unwrap_or_default(),
+        "chapter": num("chapter").map(|c| c as i64).unwrap_or(-1),
+        "chapter_title": p.get("chapter-metadata/title").unwrap_or_default(),
+        "repeat": repeat_mode(p),
+        "shuffle": a.global::<crate::Playback>().get_shuffle_on(),
+        "lyrics_available": a.global::<crate::Lyrics>().get_lines().row_count() > 0,
     })
+}
+
+#[cfg(unix)]
+fn repeat_mode(p: &crate::player::Player) -> &'static str {
+    let on = |k: &str| p.get(k).is_some_and(|v| v != "no" && !v.is_empty());
+    if on("loop-file") {
+        "one"
+    } else if on("loop-playlist") {
+        "all"
+    } else {
+        "off"
+    }
 }
 
 #[cfg(unix)]
@@ -294,7 +441,10 @@ fn handle(
             .queue()
             .into_iter()
             .enumerate()
-            .map(|(i, (f, cur))| json!({ "index": i, "path": f, "current": cur }))
+            .map(
+                |(i, (f, cur))| json!({ "index": i, "path": f, "current": cur,
+                "title": p.get(&format!("playlist/{i}/title")).unwrap_or_default() })
+            )
             .collect::<Vec<_>>())),
         "playlist_play" => {
             let i = args["index"].as_i64().ok_or("missing \"index\"")?;
@@ -431,7 +581,7 @@ fn handle(
                 _ => "subtitles",
             };
             let path = match args["path"].as_str().filter(|s| !s.trim().is_empty()) {
-                Some(s) => std::path::PathBuf::from(s.trim()),
+                Some(s) => screenshot_path(s, args["overwrite"].as_bool() == Some(true))?,
                 None => {
                     let d = p.get("screenshot-directory").unwrap_or_default();
                     let d = match d.strip_prefix("~/") {
@@ -555,7 +705,241 @@ fn handle(
                 json!({ "started": true, "note": "alignment runs in the background; the synced copy is loaded when done" }),
             )
         }
+        "playlist_remove" => {
+            let n = p.queue().len() as i64;
+            let i = args["index"].as_i64().ok_or("missing \"index\"")?;
+            if !(0..n).contains(&i) {
+                return Err(format!(
+                    "index out of range (queue has {n} entries, 0-based)"
+                ));
+            }
+            p.remove_index(i as i32);
+            Ok(json!({ "removed": i, "count": n - 1 }))
+        }
+        "playlist_move" => {
+            let n = p.queue().len() as i64;
+            let from = args["from"].as_i64().ok_or("missing \"from\"")?;
+            let to = args["to"].as_i64().ok_or("missing \"to\"")?;
+            let t = move_target(from, to, n)?;
+            if from != to {
+                p.try_cmd("playlist-move", &[&from.to_string(), &t.to_string()])?;
+            }
+            ok()
+        }
+        "playlist_clear" => {
+            let n = p.queue().len();
+            if args["keep_current"].as_bool() == Some(false) {
+                p.run("stop");
+            } else {
+                p.run("playlist-clear"); // mpv keeps the playing entry
+            }
+            Ok(json!({ "removed": n.saturating_sub(p.queue().len()) }))
+        }
+        "repeat" => {
+            let m = args["mode"]
+                .as_str()
+                .ok_or("missing \"mode\" (off, one, all)")?;
+            let (file, list) = match m {
+                "off" => ("no", "no"),
+                "one" => ("inf", "no"),
+                "all" => ("no", "inf"),
+                _ => return Err("\"mode\" must be off, one or all".into()),
+            };
+            p.set("loop-file", file);
+            p.set("loop-playlist", list);
+            a.global::<crate::Playback>().set_repeat_on(m == "one");
+            Ok(json!({ "repeat": m }))
+        }
+        "shuffle" => {
+            let on = args["enabled"].as_bool().ok_or("missing \"enabled\"")?;
+            if on != a.global::<crate::Playback>().get_shuffle_on() {
+                p.run(if on {
+                    "playlist-shuffle"
+                } else {
+                    "playlist-unshuffle"
+                });
+                a.global::<crate::Playback>().set_shuffle_on(on);
+            }
+            Ok(json!({ "shuffle": on }))
+        }
+        "open_saved_playlist" => {
+            let name = args["name"].as_str().ok_or("missing \"name\"")?;
+            let (_, path) = crate::store::playlists()
+                .into_iter()
+                .find(|(n, _)| n == name)
+                .ok_or_else(|| format!("no saved playlist {name:?}; see list_saved_playlists"))?;
+            let t = path.to_string_lossy().into_owned();
+            if args["queue"].as_bool() == Some(true) {
+                p.enqueue(&t);
+            } else {
+                p.open(&t);
+            }
+            ok()
+        }
+        "save_queue" => {
+            let name = args["name"]
+                .as_str()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .ok_or("missing \"name\"")?;
+            let files: Vec<String> = p.queue().into_iter().map(|(f, _)| f).collect();
+            if files.is_empty() {
+                return Err("the queue is empty".into());
+            }
+            let exists = crate::store::playlists().iter().any(|(n, _)| n == name);
+            if exists && args["overwrite"].as_bool() != Some(true) {
+                return Err(format!(
+                    "playlist {name:?} exists; pass \"overwrite\": true to replace it"
+                ));
+            }
+            let path = crate::store::save_playlist(name, &files).map_err(|e| e.to_string())?;
+            Ok(json!({ "path": path.to_string_lossy(), "entries": files.len() }))
+        }
+        "plugin_commands" => {
+            let by: Vec<(&str, Vec<crate::plugins::Contributed>)> = AGENT_POINTS
+                .iter()
+                .map(|pt| (*pt, crate::plugins::contributions(pt)))
+                .collect();
+            Ok(json!(plugin_commands(&by)))
+        }
+        "run_plugin_command" => {
+            let pid = args["plugin"].as_str().ok_or("missing \"plugin\"")?;
+            let c = args["command"].as_str().unwrap_or("");
+            let by: Vec<(&str, Vec<crate::plugins::Contributed>)> = AGENT_POINTS
+                .iter()
+                .map(|pt| (*pt, crate::plugins::contributions(pt)))
+                .collect();
+            let all = plugin_commands(&by);
+            let e = all
+                .iter()
+                .find(|e| e["plugin"] == pid && e["command"] == c)
+                .ok_or_else(|| {
+                    format!(
+                        "plugin {pid:?} has no command {c:?} (or is off); see list_plugin_commands"
+                    )
+                })?;
+            let mut extra = Vec::new();
+            if e["takes_target"] == true {
+                match args["target"].as_str().filter(|t| !t.trim().is_empty()) {
+                    Some(t) => extra.push(t.trim().to_string()),
+                    None if e["points"].as_array().is_some_and(|p| p.len() == 1) => {
+                        return Err(
+                            "this command acts on a library item: give \"target\" (path)".into(),
+                        )
+                    }
+                    None => {}
+                }
+            }
+            if !crate::plugins::run(pid, c, &extra) {
+                return Err(format!("plugin {pid:?} is off"));
+            }
+            Ok(json!({ "ran": e["label"] }))
+        }
+        "lyrics_offset" => {
+            let l = a.global::<crate::Lyrics>();
+            if l.get_lines().row_count() == 0 {
+                return Err("no lyrics are loaded for this track".into());
+            }
+            let cur = l.get_offset() as f64;
+            let arg = if args["reset"].as_bool() == Some(true) {
+                "reset".to_string()
+            } else if let Some(v) = args["seconds"].as_f64() {
+                (v - cur).to_string()
+            } else if let Some(d) = args["delta"].as_f64() {
+                d.to_string()
+            } else {
+                return Err("give \"seconds\", \"delta\" or \"reset\": true".into());
+            };
+            crate::plugins::command(crate::plugins::lyrics::ID, "offset", &[arg]);
+            Ok(json!({ "offset_seconds": l.get_offset() }))
+        }
+        "karaoke" => {
+            let on = args["enabled"].as_bool().ok_or("missing \"enabled\"")?;
+            if on && a.global::<crate::Lyrics>().get_lines().row_count() == 0 {
+                return Err("no lyrics are loaded for this track".into());
+            }
+            crate::plugins::command(
+                crate::plugins::lyrics::ID,
+                "karaoke",
+                &[if on { "on" } else { "off" }.into()],
+            );
+            Ok(json!({ "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }))
+        }
         "" => Err("missing \"cmd\"".into()),
         _ => Err(format!("unknown command {cmd:?}")),
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use crate::plugins::Contributed;
+
+    #[test]
+    fn move_targets_follow_mpv_insert_semantics() {
+        assert_eq!(move_target(0, 2, 3), Ok(3)); // down: insert after the old slot
+        assert_eq!(move_target(2, 0, 3), Ok(0));
+        assert_eq!(move_target(1, 1, 3), Ok(1));
+        assert!(move_target(0, 3, 3).is_err());
+        assert!(move_target(-1, 0, 3).is_err());
+    }
+
+    #[test]
+    fn recent_filters_by_words_and_kind() {
+        use crate::store::{RecentEntry, RecentKind};
+        let mut a = RecentEntry::new("https://ice.somafm.com/groovesalad");
+        a.kind = RecentKind::Stream;
+        a.title = "Groove Salad".into();
+        let mut b = RecentEntry::new("/films/Alien.mkv");
+        b.kind = RecentKind::Video;
+        let v = [a, b];
+        let all = recent_items(&v, &json!({}));
+        assert_eq!(all.as_array().unwrap().len(), 2);
+        let r = recent_items(&v, &json!({ "query": "groove salad" }));
+        assert_eq!(r[0]["title"], "Groove Salad");
+        assert_eq!(r.as_array().unwrap().len(), 1);
+        let r = recent_items(&v, &json!({ "kind": "video" }));
+        assert_eq!(r[0]["target"], "/films/Alien.mkv");
+    }
+
+    #[test]
+    fn plugin_commands_dedupe_and_mark_item_actions() {
+        use crate::plugins::contrib::{CONTEXT_ITEM, CONTEXT_PLAYER, PALETTE_COMMAND};
+        let c = |id: &str, label: &str, cmd: &str| Contributed {
+            id: id.into(),
+            name: id.into(),
+            icon: String::new(),
+            label: label.into(),
+            command: cmd.into(),
+        };
+        let v = plugin_commands(&[
+            (
+                PALETTE_COMMAND,
+                vec![c("dl", "Downloads: add the playing stream", "add-current")],
+            ),
+            (
+                CONTEXT_PLAYER,
+                vec![c("dl", "Download for offline", "add-current")],
+            ),
+            (CONTEXT_ITEM, vec![c("tagger", "Tag this file", "tag")]),
+        ]);
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0]["label"], "Downloads: add the playing stream");
+        assert_eq!(v[0]["points"].as_array().unwrap().len(), 2);
+        assert_eq!(v[0]["takes_target"], false);
+        assert_eq!(v[1]["takes_target"], true);
+    }
+
+    #[test]
+    fn screenshot_paths_are_new_image_files() {
+        let d = std::env::temp_dir();
+        assert!(screenshot_path("/tmp/x.txt", false).is_err());
+        assert!(screenshot_path("rel/x.png", false).is_err());
+        let f = d.join(format!("vivi-ipc-test-{}.png", std::process::id()));
+        assert!(screenshot_path(f.to_str().unwrap(), false).is_ok());
+        std::fs::write(&f, b"x").unwrap();
+        assert!(screenshot_path(f.to_str().unwrap(), false).is_err());
+        assert!(screenshot_path(f.to_str().unwrap(), true).is_ok());
+        let _ = std::fs::remove_file(f);
     }
 }
