@@ -11,6 +11,8 @@ import { SecondaryButton, ButtonSize } from "core/buttons.slint";
 import { SecondaryButton, ButtonSize } from "core/buttons.slint";
 import { SectionHeader, ValueChip, ListRow } from "core/rows.slint";
 import { PanelTab } from "core/types.slint";
+import { Icons } from "core/icons.slint";
+import { LibItem, TypeBadge } from "library.slint";
 
 export struct Item { key: string, label: string, selected: bool }
 
@@ -248,6 +250,9 @@ export component SidePanel inherits Rectangle {
     callback playlist-delete(string);
     in property <string> preset-name;
     in property <[Item]> library;
+    // Recent entries (same model as the library home shelf), shown above the search results.
+    in property <[LibItem]> recent;
+    callback recent-open(LibItem);
     callback library-search(string);
     callback library-play(string);
     callback library-enqueue(string);
@@ -590,7 +595,22 @@ export component SidePanel inherits Rectangle {
                 // ---- Compact library ----
                 if root.tab == PanelTab.library: VerticalLayout {
                     spacing: 10px; alignment: start;
-                    TextField { placeholder: "Search library"; edited(t) => { root.library-search(t); } }
+                    lsearch := TextField { placeholder: "Search library"; edited(t) => { root.library-search(t); } }
+                    if lsearch.text == "" && root.recent.length > 0: SectionHeader { text: "Recent"; }
+                    for it[i] in root.recent: Rectangle {
+                        visible: lsearch.text == "" && i < 5;
+                        height: self.visible ? 34px : 0px;
+                        border-radius: Metrics.radius-sm;
+                        background: rta.has-hover ? Theme.bg-a1 : transparent;
+                        rta := TouchArea { accessible-role: button; accessible-label: "Open " + it.title + " (" + it.badge + ")"; mouse-cursor: pointer; clicked => { root.recent-open(it); } }
+                        HorizontalLayout {
+                            padding-left: 8px; padding-right: 8px; spacing: 8px;
+                            Icon { source: Icons.kind(it.icon != "" ? it.icon : it.kind); width: 16px; height: 34px; tint: Theme.fg-a2; }
+                            Text { text: it.title; color: Theme.fg-2; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; }
+                            if it.badge != "": VerticalLayout { alignment: center; TypeBadge { text: it.badge; } }
+                        }
+                    }
+                    if lsearch.text == "" && root.recent.length > 0: SectionHeader { text: "Files"; }
                     if root.library.length == 0: Text { text: "No matching files. Folders are set in Settings → Library."; color: Theme.fg-a3; wrap: word-wrap; }
                     for it in root.library: Rectangle {
                         height: 34px; border-radius: Metrics.radius-sm;

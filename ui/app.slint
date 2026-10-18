@@ -644,6 +644,8 @@ export component AppWindow inherits Window {
         library: Panel.lib;
         library-search(q) => { Panel.lib-search(q); }
         library-play(k) => { Library.open(k, "video"); }
+        recent: Library.recent;
+        recent-open(it) => { Library.open(it.key, it.kind); }
         library-enqueue(k) => { Library.menu(k, "video", "enqueue"); }
         sub-delay <=> Panel.pv-sub-delay;
         sub-scale <=> Panel.pv-sub-scale;

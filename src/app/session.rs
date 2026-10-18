@@ -116,8 +116,9 @@ pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
             fetch_web_thumb(a, e.target.clone());
         }
         store::push_recent_entry(e);
+        // Updates the Open Recent list and re-renders the home shelf / panel section.
         a.global::<crate::Library>()
-            .set_recent_files(recent_items());
+            .invoke_menu("".into(), "".into(), "refresh-recent".into());
     }
     let p = p.clone();
     let w = a.as_weak();
