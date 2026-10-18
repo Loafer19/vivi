@@ -4,13 +4,13 @@
 //! The window has a vertical tab per plugin plus All / Marketplace. A plugin tab shows
 //! its overview (description, status, where it shows up from its contribution points,
 //! its action buttons, Open for sources); the gear switches to its settings, plus
-//! "Show in sidebar" / order for sources. Row changes go through
+//! "Show in sidebar" / order for sources and "Show on Home" / order for Home widgets. Row changes go through
 //! `Settings.setting-changed`, so the window and Settings share one handler.
 
 use crate::config::Config;
 use crate::plugins::{self, contrib, Manifest, Origin, SettingKind};
 use crate::settings::{self, Rows};
-use crate::{AppWindow, ExtAction, ExtTab, SettingRow};
+use crate::{AppWindow, ExtAction, ExtTab, ExtWidget, SettingRow};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -163,13 +163,40 @@ fn gear_rows(r: &mut Rows, m: &Manifest) {
         );
         r.last().labels = settings::strs(&["Move up", "Move down"]);
     }
+    if m.contributes
+        .iter()
+        .any(|c| c.point == contrib::HOME_WIDGET)
+    {
+        r.header("Home");
+        r.toggle(
+            &format!("src.{}.home-show", m.id),
+            "Show on Home",
+            "Show this plugin's widgets on the Home screen.",
+            !plugins::hidden_at(r.c, contrib::HOME_WIDGET, &m.id),
+        );
+        r.push(
+            &format!("src.{}.home", m.id),
+            "Position on Home",
+            "",
+            "buttons",
+            String::new(),
+        );
+        r.last().labels = settings::strs(&["Move up", "Move down"]);
+    }
 }
 
-/// A `src.<id>[.show]` row changed (from `Settings.setting-changed`).
+/// A `src.<id>[.show|.home|.home-show]` row changed (from `Settings.setting-changed`).
 pub fn source_setting(rest: &str, value: &str) {
-    match rest.strip_suffix(".show") {
-        Some(id) => plugins::arrange_source(id, if value == "true" { "show" } else { "hide" }),
-        None => plugins::arrange_source(rest, if value == "Move up" { "up" } else { "down" }),
+    let show = if value == "true" { "show" } else { "hide" };
+    let mv = if value == "Move up" { "up" } else { "down" };
+    if let Some(id) = rest.strip_suffix(".home-show") {
+        plugins::arrange(contrib::HOME_WIDGET, id, show);
+    } else if let Some(id) = rest.strip_suffix(".home") {
+        plugins::arrange(contrib::HOME_WIDGET, id, mv);
+    } else if let Some(id) = rest.strip_suffix(".show") {
+        plugins::arrange_source(id, show);
+    } else {
+        plugins::arrange_source(rest, mv);
     }
 }
 
@@ -200,6 +227,23 @@ pub fn refresh() {
         })
         .collect();
     g.set_sources(ModelRc::new(VecModel::from(sources)));
+    let widgets: Vec<ExtWidget> = plugins::contributions(contrib::HOME_WIDGET)
+        .into_iter()
+        .map(|e| ExtWidget {
+            info: all
+                .iter()
+                .find(|m| m.id == e.id)
+                .map(|m| m.description.as_str())
+                .unwrap_or_default()
+                .into(),
+            id: e.id.into(),
+            name: e.name.into(),
+            label: e.label.into(),
+            icon: e.icon.into(),
+            command: e.command.into(),
+        })
+        .collect();
+    g.set_widgets(ModelRc::new(VecModel::from(widgets)));
     if !a.global::<crate::Overlays>().get_extensions_open() {
         return;
     }

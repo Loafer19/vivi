@@ -756,6 +756,8 @@ export component AppWindow inherits Window {
         open-network() => { Overlays.network-open = true; }
         sources: Extensions.sources;
         open-source(id) => { Extensions.run(id, "::source"); }
+        widgets: Extensions.widgets;
+        run-widget(id, cmd) => { Extensions.run(id, cmd); }
         open-extensions() => { Extensions.select(Extensions.tab, false); }
         add-folders() => { Settings.category = 8; Overlays.settings-open = true; Settings.refresh(8, "", false); }
         clear-recent() => { Library.clear-recent(); }

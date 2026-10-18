@@ -7,6 +7,8 @@ import { SettingRow } from "../settings.slint";
 export struct ExtTab { id: string, name: string, icon: string, on: bool, source: bool }
 // A button on a plugin's overview: `id` is the settings row id ("plugin.<id>.<key>").
 export struct ExtAction { id: string, title: string, label: string }
+// A Home widget (`home.widget`): plugin `id` / `name`, card `label`, `command` run on click.
+export struct ExtWidget { id: string, name: string, label: string, icon: string, command: string, info: string }
 
 export global Extensions {
     in-out property <[ExtTab]> tabs;
@@ -31,6 +33,8 @@ export global Extensions {
     in-out property <[ExtAction]> actions;
     // Sidebar → Sources (enabled, not hidden, in the user's order).
     in-out property <[ExtTab]> sources;
+    // Home widgets of enabled plugins, in the user's order (hidden ones left out).
+    in-out property <[ExtWidget]> widgets;
     // Open the window on a tab (plugin id or ""), optionally on its settings.
     callback select(string, bool);
     // Run a contribution of plugin `id` (command "" opens its tab).

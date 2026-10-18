@@ -842,6 +842,7 @@ impl Plugin for FreeMusic {
         )
         .source("open")
         .contribute(contrib::PALETTE_COMMAND, "Find free music", "open")
+        .contribute(contrib::HOME_WIDGET, "Discover free music", "open")
         .setting(SettingSpec::secret(
             "jamendo-client-id",
             "Jamendo client ID",

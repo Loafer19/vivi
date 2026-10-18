@@ -10,7 +10,7 @@ import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { ListRow } from "core/rows.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
-import { ExtTab } from "state/extensions.slint";
+import { ExtTab, ExtWidget } from "state/extensions.slint";
 
 export struct LibItem {
     key: string,
@@ -293,6 +293,28 @@ component SourceChip inherits Rectangle {
     if fs.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
 }
 
+// Home → a plugin widget (`home.widget`): icon, title, the plugin's one-line description.
+component WidgetCard inherits Rectangle {
+    in property <string> label;
+    in property <string> info;
+    in property <image> icon;
+    callback clicked();
+    height: 72px; width: 260px; border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 14px; spacing: 12px;
+        VerticalLayout { alignment: center; Icon { width: 20px; height: 20px; source: root.icon; tint: Theme.accent; } }
+        VerticalLayout {
+            alignment: center; spacing: 3px;
+            Text { text: root.label; color: Theme.fg-1; font-size: Metrics.font-base; overflow: elide; }
+            Text { text: root.info; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; }
+        }
+    }
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; accessible-description: root.info; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { focus-on-click: false; key-pressed(e) => { if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; } reject } }
+    if fs.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+}
+
 component HeadIcon inherits Rectangle {
     in property <string> label;   // screen-reader name and hover tooltip
     in property <image> icon;
@@ -328,6 +350,9 @@ export component LibraryView inherits Rectangle {
     // Source plugins (Extensions.sources): rail buttons and the Home "Sources" row.
     in property <[ExtTab]> sources;
     callback open-source(string);
+    // Plugin widgets on Home (Extensions.widgets); run(plugin id, command).
+    in property <[ExtWidget]> widgets;
+    callback run-widget(string, string);
     callback open-extensions();
     callback navigate(string);
     callback history(bool); // false = back, true = forward
@@ -476,6 +501,22 @@ export component LibraryView inherits Rectangle {
                             HorizontalLayout {
                                 spacing: 10px; alignment: start;
                                 for s in root.sources: SourceChip { label: s.name; icon: Icons.plugin(s.icon); clicked => { root.open-source(s.id); } }
+                            }
+                        }
+                        if root.widgets.length > 0: VerticalLayout {
+                            spacing: 12px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text { text: "Widgets"; color: Theme.fg-1; font-size: Metrics.font-lg; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                                Text {
+                                    text: "Manage"; color: wta.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center;
+                                    wta := TouchArea { accessible-role: button; accessible-label: "Manage Home widgets in Extensions"; mouse-cursor: pointer; clicked => { root.open-extensions(); } }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 10px; alignment: start;
+                                for w in root.widgets: WidgetCard { label: w.label; info: w.info; icon: Icons.plugin(w.icon); clicked => { root.run-widget(w.id, w.command); } }
                             }
                         }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;

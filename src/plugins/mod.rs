@@ -742,19 +742,40 @@ pub struct Contributed {
 pub const SOURCES_ID: &str = "vivi-sources";
 /// Per-plugin setting that hides a source from the sidebar (`"true"`).
 pub const HIDDEN_KEY: &str = "ui.hidden";
+/// Config entry holding the order of the Home widgets (`order = "a,b"`).
+pub const HOME_ID: &str = "vivi-home";
+/// Per-plugin setting that hides its Home widgets (`"true"`).
+pub const HOME_HIDDEN_KEY: &str = "ui.home-hidden";
 
-/// Whether the user hid source `id` from the sidebar.
-pub fn source_hidden(c: &Config, id: &str) -> bool {
+/// Surfaces the user can arrange: (config entry with the order, per-plugin hide key).
+fn layout(point: &str) -> Option<(&'static str, &'static str)> {
+    match point {
+        contrib::SIDEBAR_SOURCE => Some((SOURCES_ID, HIDDEN_KEY)),
+        contrib::HOME_WIDGET => Some((HOME_ID, HOME_HIDDEN_KEY)),
+        _ => None,
+    }
+}
+
+/// Whether the user hid plugin `id`'s entries at `point` (Sources, Home widgets).
+pub fn hidden_at(c: &Config, point: &str, id: &str) -> bool {
+    let Some((_, key)) = layout(point) else {
+        return false;
+    };
     c.plugins
         .get(id)
-        .and_then(|s| s.settings.get(HIDDEN_KEY))
+        .and_then(|s| s.settings.get(key))
         .is_some_and(|v| v == "true")
 }
 
-/// User order of the sidebar's Sources (ids; unknown ones go last).
-pub fn source_order(c: &Config) -> Vec<String> {
-    c.plugins
-        .get(SOURCES_ID)
+/// Whether the user hid source `id` from the sidebar.
+pub fn source_hidden(c: &Config, id: &str) -> bool {
+    hidden_at(c, contrib::SIDEBAR_SOURCE, id)
+}
+
+/// User order of the plugins at `point` (ids; unknown ones go last).
+fn order_at(c: &Config, point: &str) -> Vec<String> {
+    layout(point)
+        .and_then(|(entry, _)| c.plugins.get(entry))
         .and_then(|s| s.settings.get("order"))
         .map(|o| {
             o.split(',')
@@ -765,17 +786,18 @@ pub fn source_order(c: &Config) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Sort `v` by the user's source order, keeping manifest order for the rest.
-fn order_sources(order: &[String], v: &mut [Contributed]) {
+/// Sort `v` by the user's order, keeping manifest order for the rest.
+fn order_by(order: &[String], v: &mut [Contributed]) {
     v.sort_by_key(|e| order.iter().position(|o| *o == e.id).unwrap_or(usize::MAX));
 }
 
-/// Move source `id` up (`-1`) or down (`1`) in the sidebar, or hide / show it.
-pub fn arrange_source(id: &str, what: &str) {
-    let ids: Vec<String> = contributions_all(contrib::SIDEBAR_SOURCE)
-        .into_iter()
-        .map(|e| e.id)
-        .collect();
+/// Move plugin `id` `"up"` / `"down"` at an arrangeable `point`, or `"hide"` / `"show"` it.
+pub fn arrange(point: &str, id: &str, what: &str) {
+    let Some((entry, key)) = layout(point) else {
+        return;
+    };
+    let mut ids: Vec<String> = contributions_all(point).into_iter().map(|e| e.id).collect();
+    ids.dedup();
     with(|r| {
         let mut c = r.cfg.borrow_mut();
         match what {
@@ -784,7 +806,7 @@ pub fn arrange_source(id: &str, what: &str) {
                     .entry(id.into())
                     .or_default()
                     .settings
-                    .insert(HIDDEN_KEY.into(), (what == "hide").to_string());
+                    .insert(key.into(), (what == "hide").to_string());
             }
             "up" | "down" => {
                 let mut order = ids.clone();
@@ -797,7 +819,7 @@ pub fn arrange_source(id: &str, what: &str) {
                     order.swap(i, j);
                 }
                 c.plugins
-                    .entry(SOURCES_ID.into())
+                    .entry(entry.into())
                     .or_default()
                     .settings
                     .insert("order".into(), order.join(","));
@@ -809,8 +831,13 @@ pub fn arrange_source(id: &str, what: &str) {
     });
 }
 
-/// Contributions of every enabled plugin at `point`, hidden sources included,
-/// in the user's source order.
+/// Move source `id` up / down in the sidebar, or hide / show it (see [`arrange`]).
+pub fn arrange_source(id: &str, what: &str) {
+    arrange(contrib::SIDEBAR_SOURCE, id, what);
+}
+
+/// Contributions of every enabled plugin at `point`, hidden ones included, in the
+/// user's order (Sources, Home widgets).
 pub fn contributions_all(point: &str) -> Vec<Contributed> {
     with(|r| {
         let c = r.cfg.borrow();
@@ -846,19 +873,19 @@ pub fn contributions_all(point: &str) -> Vec<Contributed> {
                     })
             })
             .collect();
-        order_sources(&source_order(&c), &mut v);
+        order_by(&order_at(&c, point), &mut v);
         v
     })
     .unwrap_or_default()
 }
 
-/// What a surface shows at `point` (hidden sources left out).
+/// What a surface shows at `point` (entries the user hid left out).
 pub fn contributions(point: &str) -> Vec<Contributed> {
     let mut v = contributions_all(point);
-    if point == contrib::SIDEBAR_SOURCE {
+    if layout(point).is_some() {
         with(|r| {
             let c = r.cfg.borrow();
-            v.retain(|e| !source_hidden(&c, &e.id));
+            v.retain(|e| !hidden_at(&c, point, &e.id));
         });
     }
     v
@@ -1083,7 +1110,7 @@ mod tests {
                 command: String::new(),
             })
             .collect();
-        order_sources(&["c".into(), "a".into()], &mut v);
+        order_by(&["c".into(), "a".into()], &mut v);
         let ids: Vec<&str> = v.iter().map(|e| e.id.as_str()).collect();
         assert_eq!(ids, ["c", "a", "b"]);
     }

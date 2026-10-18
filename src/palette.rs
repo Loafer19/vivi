@@ -47,6 +47,10 @@ fn entries() -> Vec<Entry> {
         });
     }
     for e in plugins::contributions(contrib::PALETTE_COMMAND) {
+        // A plugin command that is also a shortcut action is listed once (with its key).
+        if v.iter().any(|x| x.label.eq_ignore_ascii_case(&e.label)) {
+            continue;
+        }
         v.push(Entry {
             id: format!("plug:{}|{}", e.id, e.command),
             label: e.label,
