@@ -32,6 +32,7 @@
 - **Radio lyrics setting**: *Approximate sync* (synced lyrics timed from the title change) and the *Radio sync offset* setting are replaced by click-to-sync; the setting's choices are now *Click a line to sync* (default), *Plain lyrics* and *Off*.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - **vivi-mcp / control socket**: `set_volume` answers with a number and a boolean (`volume`, `muted`) like `get_status` instead of mpv's raw strings, and `get_status` no longer reports `has_video: true` while nothing is loaded.
 - **Plugin options no longer leak between plugins whose ids share a prefix**: the YouTube & yt-dlp plugin (`youtube`) received YouTube Music's settings (`youtube-music-*` script-opts) and logged "unknown key" warnings. Packages with dashes in the id also get their options as `<id_with_underscores>-<key>`, and the dashed form is left out when it would collide.
 - **vivi-mcp `screenshot` no longer overwrites files**: an explicit `path` must be an absolute image file name (.png, .jpg, .webp) that does not exist yet, unless `overwrite: true`.
@@ -97,6 +98,7 @@
 - **Karaoke follows the theme**: the full-screen lyrics stage, its chips and the empty state are light in light mode. It reads a typed lyrics state (found / searching / missing) and the numeric offset instead of comparing display strings.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - **`vivi --version` and `vivi --help`**: `--version` / `-V` prints the version (with the commit and build date when known) and exits, `--help` / `-h` prints the usage and exits; before, both started the player and tried to open the flag as a file. Other unknown `-`/`--` options are reported on stderr and ignored instead of being opened; `--` still lets a file name start with `-`.
 - **Station logos load again**: logos were cached without a file extension, so Slint could not tell their format and every one failed ("The image format could not be determined" on each start). Downloads are now checked by their first bytes: PNG and JPEG logos are shrunk to at most 128 px and saved as `.png`, SVG logos as `.svg`, anything else (HTML error pages, icons) is not kept. Existing cache files are converted once in the background and non-images deleted. Logos and Recent pictures are decoded on a worker thread (shrunk to the tile size) once per run instead of at full size on the UI thread at every Home refresh.
 - **Seek track and volume slider were not vertically aligned** in the inline bar styles: the Compact and Plain tracks and the volume wedge sat about 3 px above the button row, and in Waveform the wedge was 3.5 px above the waveform's centre. The seek track and wedge are now centred on the button row in Compact, Waveform and Plain, so they share one vertical centre (new `Metrics.bar-track-h` / `bar-wave-h` tokens).
@@ -113,6 +115,7 @@
 - **Customize Player** rework: every bottom-bar element is a movable item — previous, play, next, ±10 s, elapsed / total time, the seekbar, flexible spaces, volume and all buttons (no fixed centre). Pick the **progress bar style** in the dialog: Compact inline, Classic (full width on top), Waveform (audio files) or Plain thin; the bar under the dialog is a live preview. Profiles: Minimal (Plain), Default (compact reference layout), Power (Waveform, all controls). The separate *Control bar layout*, *Skip buttons* and *Waveform seekbar* settings are gone; existing choices are migrated into the item list and style on load.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - Compact control bar matches the reference density: 36 px row, all buttons on one vertical centre (no per-icon offsets), smaller equal-size buttons, near-black seek track with a dim orange played fill and a slim bright handle, times next to the bar, smaller volume wedge. Title bar buttons are centred in the 40 px strip.
 - Compact seek track uses the reference colours (track #090909, played #371F06, accent handle, bar #181818): rounded track with the fill and handle inset 1.5 px so a thin dark border stays all round; times in the secondary grey.
 - About → Check for updates picks the real release assets (Windows/macOS `.zip`, AppImage, Linux tarball, `.flatpak`) instead of looking for `.msi` / `.exe` / `.dmg`.
@@ -138,6 +141,7 @@ Highlights: compact single-row control bar, waveform seekbar and seekbar ranges 
 - **MCP** (`vivi-mcp`): `list_audio_tracks` / `set_audio_track`, `list_subtitle_tracks` / `set_subtitle_track`, `get_chapters` / `seek_chapter`, `set_speed`, `screenshot`, `open_network_stream`, `search_streams`, `list_plugins` / `plugin_info` (read-only) and `get_lyrics`, with matching control-socket commands.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - Plugin toasts (lyrics offset, saved files, …) no longer show the resume toast's *Start over* button.
 
 ## [0.10.0] - 2026-10-15
@@ -183,6 +187,7 @@ Highlights: Discord Rich Presence and Remote Control become downloadable plugins
 - Packages get their folder as script-opt `<id>-pkgdir`, can save their own settings (`vivi-setting`) and open a folder dialog (`vivi-pick-folder`); action settings can set a button `label`.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - Downloadable plugins declared `min_vivi = 0.8.0`, but packages exist only since 0.9.0; they now say 0.9.0 (new patch versions of A-B Loop, Night Mode, Playback Statistics, Scene Chapters, ListenBrainz Scrobbler, SponsorBlock, Subtitle Auto-Sync).
 
 ## [0.9.0] - 2026-10-15
@@ -221,6 +226,7 @@ Highlights: Network Streams (radio now-playing card and visualizer, IPTV via ipt
 - **Packaging**: Flatpak manifest, AppStream metainfo and a CI job that builds a `.flatpak` bundle (#29). The AppImage now bundles a slim libmpv (decoders-only FFmpeg, no mpv CLI, zstd -19), cutting it from 106 MB to 44 MB; the Windows zip is smaller too.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - Shortcuts with modifiers are forwarded to mpv by physical key (winit KeyCode mapped to US-QWERTY mpv names), so they work with any keyboard layout; the Cyrillic table stays as a fallback.
 - Plugin package key combos (A-B Loop Alt+A/B/C, Night Mode Alt+N, Statistics Alt+S) gave no feedback on Wayland: mpv's OSD is only drawn into the video frame, so with no video (idle, audio files, UI on top) their messages were invisible. Packages now also send `script-message vivi-toast <text>`, which Vivi shows as a toast (A-B Loop 1.0.1, Night Mode 1.0.2, Playback Statistics 1.0.1).
 - Alt/Ctrl combos typed with a Cyrillic layout active (e.g. Ukrainian "т" for Alt+N) are mapped to the QWERTY key, so mpv bindings still match. `VIVI_KEY_DEBUG=1` logs every key event and the mpv key name it is forwarded as.
@@ -250,6 +256,7 @@ Milestone M8 (v0.8): Figma fidelity. Each part has a side-by-side Figma vs Vivi 
 - **Music visualizer** (`src/viz/`): audio-only files (no video track; cover art does not count) show a visualizer instead of a blank area. There are seven modes: Spectrometer (scrolling spectrogram), Scope (oscilloscope), Spectrum (bars with peak caps), Waveform (scrolling loudness envelope), Radial (circular spectrum that pulses on beats), Particles (bursts on onsets) and Pitch (12 pitch-class wheel coloured by the dominant note, with the note name shown). Colours follow the theme accent and background. Pick a mode, or Disabled, from the Figma-style dropdown at the top left, or press `V` to cycle. The choice is remembered in `$XDG_STATE_HOME/vivi/visualizer`, and the visualizer fills the window in fullscreen. Audio comes from a second lightweight decode of the file (symphonia) kept in sync with mpv's `time-pos`, so it works with any audio output and needs no PipeWire monitor. The FFT uses rustfft. Analysis and drawing run at about 30 fps on a canvas of at most 800 px, and they stop when paused or when the file has video. New modes implement the `Visual` trait in `src/viz/modes.rs`.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - `Player::cmd` quoted arguments with mpv's `%len%` syntax, which `mpv_command_string` does not understand. Adding a subtitle or audio file from the menu failed. Arguments are now double-quoted with escapes.
 
 ### Changed
@@ -288,6 +295,7 @@ Milestone M7: packaging and desktop integration.
 - **Drag & drop on Wayland** (#5): winit does not support Wayland drag & drop yet. `VIVI_X11=1` runs Vivi through XWayland, where dropping files works. The README documents this.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - **Top-bar buttons did not respond to clicks** (seen on Hyprland since v0.5.0). The invisible hover strip that reveals the top bar was declared after the bar, so it sat on top of it in z-order and caught every click. It now sits underneath the bar.
 - Video turned black after library thumbnails or other images had been drawn: GL state is now reset before mpv renders each frame.
 - Home directory and path separators now work on Windows. SQLite is bundled on Windows and macOS.
@@ -322,6 +330,7 @@ Milestone M5 complete: customization and onboarding.
 - New bottom-bar actions: repeat (loop file), shuffle the queue, snapshot (mpv screenshot), stop, and ±10 s seek.
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - Side-panel sliders (delays, subtitle size/position, video adjustments, speed, volume) now show mpv's actual values, including those set by a per-show preset, and keep them when the panel is closed and reopened.
 - Settings language fields keep focus while you type: rows are now updated in place instead of being rebuilt.
 - The settings search heading now matches the search box, also when the search is set programmatically.
@@ -379,6 +388,7 @@ Milestone M3: side panel & tracks.
 - Playback: speed presets + slider, A-B loop, sleep timer, chapters, in-memory bookmarks (Ctrl+B).
 
 ### Fixed
+- **Plugin messages show when nothing plays**: toasts from extensions (e.g. a sign-in result) were only drawn over the player, so they were invisible in the library, the Extensions window or a plugin dialog. The toast now shows there too, above dialogs.
 - Subtitles were hidden behind the bottom bar.
 - Empty gaps above lists in the side panel.
 
