@@ -11,6 +11,8 @@ import { Icons } from "core/icons.slint";
 import { ListRow } from "core/rows.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 import { ExtTab, ExtWidget } from "state/extensions.slint";
+import { Downloads } from "state/downloads.slint";
+import { DownloadsView } from "downloads.slint";
 
 export struct LibItem {
     key: string,
@@ -396,6 +398,21 @@ export component LibraryView inherits Rectangle {
                 RailButton { label: "Streams"; icon: @image-url("../assets/icons/streaming.svg"); active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "network"; clicked => { root.navigate("network"); } }
                 RailButton { label: "Playlists"; icon: @image-url("../assets/icons/playlist.svg"); active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
                 RailButton { label: "Recently played"; icon: @image-url("../assets/icons/recent.svg"); active-icon: @image-url("../assets/icons/recent.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
+                // Shared Downloads panel; the badge counts queued / running / paused jobs.
+                Rectangle {
+                    width: 32px; height: 32px;
+                    RailButton {
+                        label: Downloads.active > 0 ? "Downloads (" + Downloads.active + " active)" : "Downloads";
+                        icon: @image-url("../assets/icons/arrow-down.svg");
+                        active-icon: @image-url("../assets/icons/layers/arrow-down-twotone-b.svg"); active-accent: @image-url("../assets/icons/layers/arrow-down-twotone-a.svg"); active-dim: @image-url("../assets/icons/layers/arrow-down-twotone-d.svg");
+                        active: root.section == "downloads"; clicked => { root.navigate("downloads"); }
+                    }
+                    if Downloads.active > 0: Rectangle {
+                        x: parent.width - 12px; y: -3px; width: max(15px, bt.preferred-width + 8px); height: 15px;
+                        border-radius: 7.5px; background: Theme.accent;
+                        bt := Text { text: Downloads.active > 99 ? "99+" : Downloads.active; color: Theme.bg-b2; font-size: Metrics.font-micro; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                    }
+                }
                 RailButton { label: "Open file"; icon: @image-url("../assets/icons/add.svg"); active-icon: @image-url("../assets/icons/add.svg"); clicked => { root.open-file(); } }
                 if root.sources.length > 0: Rectangle { height: 1px; background: Theme.bg-a1; }
                 for s in root.sources: SourceButton { label: s.name; icon: Icons.plugin(s.icon); clicked => { root.open-source(s.id); } }
@@ -448,7 +465,7 @@ export component LibraryView inherits Rectangle {
                 height: 24px; spacing: 12px;
                 Text {
                     horizontal-stretch: 1; vertical-alignment: center; font-size: Metrics.font-base; color: Theme.fg-a3;
-                    text: root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
+                    text: root.nav == "downloads" ? Downloads.jobs.length + " downloads" : root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
                 }
                 HeadIcon {
                     label: "Sort"; icon: root.sort != "name" && root.sort != "title" ? @image-url("../assets/icons/sort-active.svg") : @image-url("../assets/icons/sort.svg");
@@ -537,15 +554,16 @@ export component LibraryView inherits Rectangle {
                             title-clicked => { root.navigate("recent"); } action => { root.clear-recent(); } forget(it) => { root.forget-recent(it); }
                             open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                     }
-                    if (root.nav != "home" || root.query != "") && !root.show-grid: Rows {
+                    if root.nav == "downloads": DownloadsView { }
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && !root.show-grid: Rows {
                         items: root.items; forget(it) => { root.forget-recent(it); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
-                    if (root.nav != "home" || root.query != "") && root.show-grid: Grid {
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.show-grid: Grid {
                         items: root.items; grid: true; forget(it) => { root.forget-recent(it); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
-                    if (root.nav != "home" || root.query != "") && root.items.length == 0: Text {
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0: Text {
                         text: root.scanning ? "Scanning…" : (root.query != "" ? "Nothing matches “" + root.query + "”." : "Nothing here yet.");
                         color: Theme.fg-a3;
                     }

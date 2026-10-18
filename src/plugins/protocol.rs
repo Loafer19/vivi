@@ -82,6 +82,15 @@ pub enum ScriptMessage<'a> {
         title: &'a str,
         body: &'a str,
     },
+    /// `vivi-download <plugin id> <job id> <json>`: create / update a job in the shared
+    /// Downloads panel (fields of [`crate::downloads::Report`]).
+    Download {
+        id: &'a str,
+        job: &'a str,
+        json: &'a str,
+    },
+    /// `vivi-download-remove <plugin id> <job id>`.
+    DownloadRemove { id: &'a str, job: &'a str },
     /// `vivi-toast <text> [seconds]` with non-blank text (trimmed).
     Toast(&'a str),
 }
@@ -119,6 +128,8 @@ impl<'a> ScriptMessage<'a> {
                 title: title.trim(),
                 body: rest.first().copied().unwrap_or(""),
             },
+            ["vivi-download", id, job, json] => M::Download { id, job, json },
+            ["vivi-download-remove", id, job] => M::DownloadRemove { id, job },
             ["vivi-toast", text, ..] if !text.trim().is_empty() => M::Toast(text.trim()),
             _ => return None,
         })
@@ -199,6 +210,18 @@ mod tests {
             },
         );
         assert_eq!(p(&["vivi-notify", "p", " "]), None);
+        is(
+            &["vivi-download", "p", "j1", "{}"],
+            M::Download {
+                id: "p",
+                job: "j1",
+                json: "{}",
+            },
+        );
+        is(
+            &["vivi-download-remove", "p", "j1"],
+            M::DownloadRemove { id: "p", job: "j1" },
+        );
         assert_eq!(p(&["vivi-toast", "  "]), None);
         assert_eq!(p(&["vivi-setting", "p", "k"]), None);
         assert_eq!(p(&["other", "x"]), None);

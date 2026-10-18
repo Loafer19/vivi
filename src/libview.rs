@@ -387,6 +387,10 @@ impl Lib {
                     out.push(self.item(m, cfg));
                 }
             }
+            // The shared Downloads panel (ui/downloads.slint) draws its own list.
+            "downloads" => {
+                crumbs.push(("downloads".into(), "Downloads".into()));
+            }
             "playlists" => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
                 out.push(Self::action(
@@ -1209,7 +1213,7 @@ pub fn flush_pending(p: &Player) {
 }
 
 /// Show a file (or folder) in the system file manager.
-fn reveal(path: &str) {
+pub(crate) fn reveal(path: &str) {
     let p = Path::new(path);
     #[cfg(target_os = "macos")]
     let r = std::process::Command::new("open").arg("-R").arg(p).spawn();

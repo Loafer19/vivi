@@ -38,9 +38,15 @@ pub const CONTROLBAR_BUTTON: &str = "controlbar.button";
 pub const TRAY_ITEM: &str = "tray.item";
 /// The plugin may send desktop notifications (`label` describes them).
 pub const NOTIFY: &str = "notify";
+/// The plugin reports downloads to the shared Downloads panel (`src/downloads.rs`).
+pub const DOWNLOADS: &str = "downloads";
+/// A button in the Downloads panel's header (e.g. "Record stream").
+pub const DOWNLOADS_ACTION: &str = "downloads.action";
+/// The Downloads panel's "paste a link" field; `command` gets the URL as its argument.
+pub const DOWNLOADS_URL: &str = "downloads.url";
 
 /// Every known point, in documentation order.
-pub const POINTS: [&str; 12] = [
+pub const POINTS: [&str; 15] = [
     SIDEBAR_SOURCE,
     MENU_SUBTITLES,
     MENU_AUDIO,
@@ -53,6 +59,9 @@ pub const POINTS: [&str; 12] = [
     CONTROLBAR_BUTTON,
     TRAY_ITEM,
     NOTIFY,
+    DOWNLOADS,
+    DOWNLOADS_ACTION,
+    DOWNLOADS_URL,
 ];
 
 /// What a plugin is for.
@@ -116,6 +125,9 @@ pub fn describe(point: &str) -> &'static str {
         CONTROLBAR_BUTTON => "Control bar (Customize Player)",
         TRAY_ITEM => "Tray menu",
         NOTIFY => "Desktop notifications",
+        DOWNLOADS => "Downloads panel",
+        DOWNLOADS_ACTION => "Downloads panel button",
+        DOWNLOADS_URL => "Downloads panel: paste a link",
         _ => "",
     }
 }

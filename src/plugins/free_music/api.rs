@@ -2,6 +2,7 @@
 //! downloader (audio, cover, licence text).
 
 use super::*;
+use std::sync::atomic::AtomicU32;
 
 pub(crate) const IA_ROWS: usize = 12;
 pub(crate) const IA_TRACKS_PER_ITEM: usize = 8;
@@ -635,7 +636,18 @@ pub fn licence_text(t: &Track) -> String {
 
 /// Download a track into [`target`] with tags, cover and a licence file; `progress`
 /// gets per-mille progress. Returns the saved path.
-pub fn download(t: &Track, dir: &Path, progress: &AtomicU32) -> Result<PathBuf, String> {
+/// Progress of the running download, shared with the Downloads panel.
+#[derive(Debug, Default)]
+pub struct DlProgress {
+    /// Per mille.
+    pub pm: AtomicU32,
+    pub got: std::sync::atomic::AtomicU64,
+    pub total: std::sync::atomic::AtomicU64,
+    /// Set by Cancel in the Downloads panel.
+    pub cancel: std::sync::atomic::AtomicBool,
+}
+
+pub fn download(t: &Track, dir: &Path, progress: &DlProgress) -> Result<PathBuf, String> {
     use std::io::{Read, Write};
     if t.download.is_empty() {
         return Err("The artist does not allow downloads of this track (preview only)".into());
@@ -655,6 +667,7 @@ pub fn download(t: &Track, dir: &Path, progress: &AtomicU32) -> Result<PathBuf, 
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse().ok())
         .unwrap_or(0);
+    progress.total.store(total, Ordering::Relaxed);
     // lofty picks the format from the extension, so the partial file ends in .mp3.
     let tmp = out.with_extension("part.mp3");
     let res = (|| -> Result<(), String> {
@@ -669,8 +682,12 @@ pub fn download(t: &Track, dir: &Path, progress: &AtomicU32) -> Result<PathBuf, 
             }
             f.write_all(&buf[..n]).map_err(|e| e.to_string())?;
             got += n as u64;
+            progress.got.store(got, Ordering::Relaxed);
             if let Some(pm) = (got * 1000).checked_div(total) {
-                progress.store(pm.min(999) as u32, Ordering::Relaxed);
+                progress.pm.store(pm.min(999) as u32, Ordering::Relaxed);
+            }
+            if progress.cancel.load(Ordering::Relaxed) {
+                return Err("Cancelled".into());
             }
         }
         if got == 0 {
@@ -697,7 +714,7 @@ pub fn download(t: &Track, dir: &Path, progress: &AtomicU32) -> Result<PathBuf, 
         return Err(e);
     }
     let _ = std::fs::write(out.with_extension("licence.txt"), licence_text(t));
-    progress.store(1000, Ordering::Relaxed);
+    progress.pm.store(1000, Ordering::Relaxed);
     Ok(out)
 }
 

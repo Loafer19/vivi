@@ -108,7 +108,10 @@ its point and runs the chosen one.
 | `home.widget` | Card on Home under *Widgets* (icon, `label`, the plugin's description; click runs `command`). Each plugin's gear view has *Show on Home* and *Position on Home* (stored as `ui.home-hidden` in the plugin's settings and `order` in the `vivi-home` entry) | done | none |
 | `controlbar.button` | Bottom-bar button: listed under *Available items* in Customize Player after the built-in ones (never in a profile, so off until the user adds it). Stored in `interface.toolbar` as `plug:<plugin id>\|<command>`; it folds into ⋯ like other items and disappears while the plugin is off. Lyrics (karaoke view), Skip Intro (mark), Subtitle Search (search online) | done | none |
 | `tray.item` | Tray icon menu (Linux StatusNotifierItem, `src/tray.rs`), between Show / Hide window and Quit; clicking shows the window and runs `command` | done | none |
-| `notify` | Desktop notifications: built-ins call `Ctx::notify(title, body)`, packages send `script-message vivi-notify <plugin id> <title> [body]`. Shown through `org.freedesktop.Notifications` on Linux (`src/notify.rs`) only when the plugin declares `notify` and *Settings → Extensions → Desktop notifications from extensions* is on; otherwise (or on Windows / macOS for now) the text shows as a player toast. Free Music: download finished / failed | done | none |
+| `notify` | Desktop notifications: built-ins call `Ctx::notify(title, body)`, packages send `script-message vivi-notify <plugin id> <title> [body]`. Shown through `org.freedesktop.Notifications` on Linux (`src/notify.rs`) only when the plugin declares `notify` and *Settings → Extensions → Desktop notifications from extensions* is on; otherwise (or on Windows / macOS for now) the text shows as a player toast. | done | none |
+| `downloads` | The plugin reports jobs to the shared Downloads panel (see *Downloads* below); declaring it lists the panel under *Where it shows up* | done | none |
+| `downloads.action` | Button in the Downloads panel header (e.g. *Record stream*, *Find free music*) | done | none |
+| `downloads.url` | The Downloads panel's *paste a link* field (first plugin that declares it); `label` is the placeholder | done | the URL |
 
 Unknown points are ignored with a log line, so a manifest written for a newer Vivi still
 loads. The Extensions window lists each plugin's points under *Where it shows up*.
@@ -153,6 +156,53 @@ are features.
 **Sidebar order / hiding** is host state, not plugin settings: `[plugins.<id>]
 settings."ui.hidden" = "true"` hides a source, `[plugins.vivi-sources] settings.order =
 "a,b"` orders them (`plugins::arrange_source`).
+
+### Downloads (shared panel)
+
+Library → **Downloads** (icon rail, with a badge counting queued / running / paused jobs)
+lists every plugin's downloads: artwork (or the plugin glyph), title, plugin, progress
+bar, size / speed / ETA (or the error), and the actions that fit the state: Pause /
+Resume (only when the job says `can_pause`), Cancel, Retry, Play now, Open file, Show in
+folder, Remove from list, plus *Clear finished*. `src/downloads.rs` owns the list,
+saves it to `downloads.json` in the data folder (jobs still running when Vivi quits come
+back as failed, "Interrupted when Vivi closed", so Retry works), measures the speed from
+the byte counts, sends a notification when a job finishes or fails (the `notify` path:
+desktop notification if allowed, else a toast) and puts "2 downloading · 45%" in the
+tray tooltip / menu.
+
+A job is identified by (plugin id, job id); the job id is the plugin's own (a URL hash,
+a track id …). Report fields (all optional; omitted ones keep their value):
+
+| Field | Meaning |
+| --- | --- |
+| `title` | Shown in the row |
+| `state` | `queued`, `active` (alias `downloading`, `recording`), `paused`, `done`, `failed` (alias `cancelled`) |
+| `done`, `total` | Bytes so far / in total (0 = unknown) |
+| `progress` | 0..1 when only the share is known |
+| `speed` | Bytes per second (else measured by Vivi) |
+| `path` | The file (enables Play / Open / Show in folder when done) |
+| `artwork` | A local image file for the thumbnail |
+| `error` | Shown when failed |
+| `detail` | Free text instead of size / ETA (e.g. "Recording · 12:30") |
+| `can_pause` | Show Pause / Resume |
+
+* **Built-in plugins** call `crate::downloads::report(ID, job, Report { … })` and
+  `crate::downloads::remove(ID, job)`; safe from any plugin callback (the panel refreshes
+  from a timer). Free Music reports its queue this way.
+* **Packages** send
+  `mp.commandv("script-message", "vivi-download", "<plugin id>", "<job id>", utils.format_json({...}))`
+  and `vivi-download-remove <plugin id> <job id>`.
+* **Callbacks**: the panel's buttons call the plugin back with the job id:
+  `download-pause`, `download-resume`, `download-cancel`, `download-retry` (a built-in's
+  `command(name, [job])`, a package's `script-message-to <script> download-cancel <job>`).
+  The plugin then reports the new state. Cancel on a queued job is marked failed
+  ("Cancelled") by the host as well. Play / Open / Show in folder / Remove / Clear finished
+  are handled by Vivi.
+
+Older Vivi versions ignore the `vivi-download` messages, so a package can send them
+unconditionally and keep its own UI as a fallback. Vivi sets the mpv property
+`user-data/vivi/downloads` to `1` when the panel exists; Offline Downloads checks it and
+only drops its own queue page then.
 
 ### Extensions window
 

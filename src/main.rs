@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod desktop;
 mod dialogs;
+mod downloads;
 mod drawer;
 mod extwin;
 mod fx;

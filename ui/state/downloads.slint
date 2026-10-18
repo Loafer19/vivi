@@ -1,0 +1,38 @@
+// Downloads: the shared Downloads panel (src/downloads.rs). Every plugin's jobs in one list.
+import { ExtAction } from "extensions.slint";
+
+// One job; `id` is "<plugin id>\u{1f}<job id>", `state` queued | active | paused | done | failed.
+export struct DlJob {
+    id: string,
+    title: string,
+    plugin: string,  // plugin name
+    icon: string,    // plugin icon key (Icons.plugin) when there is no artwork
+    art: image,
+    has-art: bool,
+    state: string,
+    progress: float, // 0..1, -1 = unknown
+    detail: string,  // size / speed / ETA, or the error
+    can-pause: bool,
+    has-file: bool,
+}
+
+export global Downloads {
+    in-out property <[DlJob]> jobs;
+    // Queued + active + paused (the sidebar badge).
+    in-out property <int> active;
+    // "2 downloading · 45%" (also the tray tooltip).
+    in-out property <string> line;
+    // Some job is done or failed (shows Clear finished).
+    in-out property <bool> finished;
+    // Header buttons from plugins (`downloads.action`): id = plugin, title = command, label.
+    in-out property <[ExtAction]> actions;
+    // "Paste a link" field (`downloads.url`), when a plugin offers one.
+    in-out property <string> url-plugin;
+    in-out property <string> url-command;
+    in-out property <string> url-label;
+    // Row action: pause | resume | cancel | retry | play | open | folder | remove.
+    callback act(string, string);
+    callback clear-finished();
+    // Run a plugin command (plugin, command, argument).
+    callback run(string, string, string);
+}

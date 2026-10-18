@@ -220,7 +220,9 @@ impl Ctx<'_> {
         toast(self.app, msg);
     }
     /// A desktop notification (`notify` contribution point): only for plugins that
-    /// declare `notify` and while the user allows it; otherwise the toast.
+    /// declare `notify` and while the user allows it; otherwise the toast. Host API for
+    /// built-ins; none needs it right now (Free Music's notices come from Downloads).
+    #[allow(dead_code)]
     pub fn notify(&self, title: &str, body: &str) {
         notify_or_toast(self.app, &self.cfg.borrow(), self.manifest, title, body);
     }
@@ -595,6 +597,11 @@ pub fn client_message(args: &[String]) {
                 }
             });
         }
+        Some(M::Download { id, job, json }) => match serde_json::from_str(json) {
+            Ok(r) => crate::downloads::report(id, job, r),
+            Err(e) => eprintln!("vivi: vivi-download {id} {job}: {e}"),
+        },
+        Some(M::DownloadRemove { id, job }) => crate::downloads::remove(id, job),
         Some(M::Toast(text)) => {
             with(|r| {
                 if let Some(a) = r.app.upgrade() {

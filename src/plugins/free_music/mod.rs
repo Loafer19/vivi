@@ -15,7 +15,7 @@ use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -88,7 +88,8 @@ enum Msg {
         err: String,
     },
     Cover(String, Option<PathBuf>),
-    Saved(String, Result<PathBuf, String>),
+    /// Track id, title, result.
+    Saved(String, String, Result<PathBuf, String>),
 }
 
 /// Which way the downloads go ([`Manifest`] setting `downloader`).
@@ -121,7 +122,9 @@ pub struct FreeMusic {
     back: Vec<Query>,
     title: String,
     dl_queue: VecDeque<Track>,
-    dl_active: Option<(Track, Arc<AtomicU32>)>,
+    dl_active: Option<(Track, Arc<DlProgress>)>,
+    /// Tracks downloaded this session, for Retry in the Downloads panel.
+    dl_tracks: HashMap<String, Track>,
     dl_done: usize,
     dl_last: String,
     note: String,
@@ -151,6 +154,7 @@ impl Default for FreeMusic {
             title: String::new(),
             dl_queue: VecDeque::new(),
             dl_active: None,
+            dl_tracks: HashMap::new(),
             dl_done: 0,
             dl_last: String::new(),
             note: String::new(),
@@ -320,7 +324,7 @@ impl FreeMusic {
 
     fn status(&self, cx: &Ctx) {
         if let Some((t, p)) = &self.dl_active {
-            let pct = p.load(Ordering::Relaxed) / 10;
+            let pct = p.pm.load(Ordering::Relaxed) / 10;
             let left = self.dl_queue.len();
             let s = format!(
                 "Downloading “{}” {pct}%{}",
@@ -757,6 +761,20 @@ impl FreeMusic {
             cx.toast("Already in the download queue");
             return;
         }
+        crate::downloads::report(
+            ID,
+            &t.id,
+            crate::downloads::Report {
+                title: Some(format!("{} — {}", t.artist, t.title)),
+                state: Some("queued".into()),
+                artwork: cached_cover(&t.cover).map(|p| p.to_string_lossy().into_owned()),
+                error: Some(String::new()),
+                done: Some(0),
+                can_pause: Some(false),
+                ..Default::default()
+            },
+        );
+        self.dl_tracks.insert(t.id.clone(), t.clone());
         self.dl_queue.push_back(t);
         self.next_download(cx);
         self.status(cx);
@@ -769,11 +787,20 @@ impl FreeMusic {
         let Some(t) = self.dl_queue.pop_front() else {
             return;
         };
-        let p = Arc::new(AtomicU32::new(0));
+        let p = Arc::new(DlProgress::default());
         let (tx, dir, t2, p2) = (self.tx.clone(), Self::folder(cx), t.clone(), p.clone());
+        crate::downloads::report(
+            ID,
+            &t.id,
+            crate::downloads::Report {
+                state: Some("active".into()),
+                path: Some(target(&t, &dir).to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+        );
         std::thread::spawn(move || {
             let r = download(&t2, &dir, &p2);
-            let _ = tx.send(Msg::Saved(t2.title.clone(), r));
+            let _ = tx.send(Msg::Saved(t2.id.clone(), t2.title.clone(), r));
         });
         self.dl_active = Some((t, p));
     }
@@ -843,7 +870,8 @@ impl Plugin for FreeMusic {
         .source("open")
         .contribute(contrib::PALETTE_COMMAND, "Find free music", "open")
         .contribute(contrib::HOME_WIDGET, "Discover free music", "open")
-        .contribute(contrib::NOTIFY, "Download finished or failed", "")
+        .contribute(contrib::DOWNLOADS, "Track downloads", "")
+        .contribute(contrib::DOWNLOADS_ACTION, "Find free music", "open")
         .setting(SettingSpec::secret(
             "jamendo-client-id",
             "Jamendo client ID",
@@ -885,6 +913,23 @@ impl Plugin for FreeMusic {
     fn command(&mut self, cx: &Ctx, name: &str, args: &[String]) {
         match name {
             "open" => self.open(cx),
+            // Downloads panel buttons (args[0] = track id).
+            "download-cancel" => {
+                let id = args.first().cloned().unwrap_or_default();
+                if let Some((t, p)) = &self.dl_active {
+                    if t.id == id {
+                        p.cancel.store(true, Ordering::Relaxed);
+                    }
+                }
+                self.dl_queue.retain(|t| t.id != id);
+            }
+            "download-retry" => {
+                let id = args.first().cloned().unwrap_or_default();
+                match self.dl_tracks.get(&id).cloned() {
+                    Some(t) => self.download(cx, t),
+                    None => cx.toast("Find the track in Free Music again to download it"),
+                }
+            }
             "choose-folder" => {
                 let _ = slint::invoke_from_event_loop(|| {
                     if let Some(d) = rfd::FileDialog::new()
@@ -1069,20 +1114,34 @@ impl Plugin for FreeMusic {
                         self.covers_dirty = true;
                     }
                 }
-                Msg::Saved(title, r) => {
+                Msg::Saved(id, title, r) => {
                     self.dl_active = None;
+                    // The Downloads panel notifies (desktop notification or toast).
                     match r {
                         Ok(p) => {
                             self.dl_done += 1;
                             self.dl_last = format!("Saved {}", p.display());
-                            cx.notify(
-                                "Download finished",
-                                &format!("“{title}” saved with licence and attribution"),
+                            crate::downloads::report(
+                                ID,
+                                &id,
+                                crate::downloads::Report {
+                                    state: Some("done".into()),
+                                    path: Some(p.to_string_lossy().into_owned()),
+                                    ..Default::default()
+                                },
                             );
                         }
                         Err(e) => {
                             self.dl_last = format!("“{title}” failed: {e}");
-                            cx.notify("Download failed", &self.dl_last.clone());
+                            crate::downloads::report(
+                                ID,
+                                &id,
+                                crate::downloads::Report {
+                                    state: Some("failed".into()),
+                                    error: Some(e),
+                                    ..Default::default()
+                                },
+                            );
                         }
                     }
                     self.next_download(cx);
@@ -1106,8 +1165,17 @@ impl Plugin for FreeMusic {
             self.covers_dirty = false;
             self.show(cx);
         }
-        if self.dl_active.is_some() {
+        if let Some((t, p)) = &self.dl_active {
             status = true;
+            crate::downloads::report(
+                ID,
+                &t.id,
+                crate::downloads::Report {
+                    done: Some(p.got.load(Ordering::Relaxed)),
+                    total: Some(p.total.load(Ordering::Relaxed)),
+                    ..Default::default()
+                },
+            );
         }
         if status && cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             self.status(cx);
@@ -1186,7 +1254,7 @@ mod tests {
         assert!(!a.download.is_empty());
         assert_eq!(v[1].download, "", "download not allowed");
         let dir = std::env::temp_dir().join("vivi-fm-nodl");
-        assert!(download(&v[1], &dir, &AtomicU32::new(0)).is_err());
+        assert!(download(&v[1], &dir, &DlProgress::default()).is_err());
         // Entries without a stream are dropped.
         assert!(v.iter().all(|t| !t.stream.is_empty()));
     }
@@ -1455,7 +1523,7 @@ mod tests {
                 }
             })
             .unwrap();
-        let p = download(small, &dir, &AtomicU32::new(0)).unwrap();
+        let p = download(small, &dir, &DlProgress::default()).unwrap();
         let (tags, dur) = auto_tagger::read_tags(&p).unwrap();
         assert_eq!(tags.title, small.title);
         assert!(
