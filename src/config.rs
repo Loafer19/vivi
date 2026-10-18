@@ -77,6 +77,9 @@ pub struct Playback {
     pub precise_seek: bool,
     /// Preferred stream quality for yt-dlp (mpv `ytdl-format`).
     pub quality: String,
+    /// mpv `gpu-hwdec-interop`: "auto" lets vivi pick the one for the GPU it renders on
+    /// (VA-API on Mesa, CUDA on NVIDIA); any other value is passed to mpv as is.
+    pub hwdec_interop: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -339,6 +342,7 @@ impl Default for Playback {
             repeat: "Off".into(),
             precise_seek: false,
             quality: "Best available".into(),
+            hwdec_interop: "auto".into(),
         }
     }
 }

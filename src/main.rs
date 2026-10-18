@@ -69,7 +69,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         open_plugin_link(&app, &id);
     }
     let p = player.clone();
-    render::attach(&app, player.mpv.clone(), move || {
+    let interop = {
+        let c = cfg.borrow();
+        (c.playback.hwdec_interop.clone(), c.playback.hwdec.clone())
+    };
+    render::attach(&app, player.mpv.clone(), interop, move || {
         let mut it = cli.iter();
         if let Some(first) = it.next() {
             p.open(first);

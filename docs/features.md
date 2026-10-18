@@ -10,7 +10,7 @@ instant startup, a simple interface by default with deep customization when you 
 ![Vivi](screenshots/player.png)
 
 ## Features
-- Plays nearly any format via libmpv (OpenGL render API), `hwdec=auto-safe`
+- Plays nearly any format via libmpv (OpenGL render API), `hwdec=auto-safe`; only the hardware-decoding interop for the GPU vivi renders on is loaded (VA-API on Mesa, CUDA on NVIDIA; override with `[playback] hwdec_interop`)
 - Wayland (Hyprland) and X11 — Slint winit + femtovg backend
 - UI based on the Figma "VLC Redesign": thick seek bar with hover time, Figma icons, dark theme
 - Controls and cursor auto-hide after 2 s of inactivity; subtitles move above the bar when it's shown

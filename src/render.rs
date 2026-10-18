@@ -88,11 +88,72 @@ impl GlReset {
     }
 }
 
+/// mpv `gpu-hwdec-interop` for the render context. libmpv's render API loads *every*
+/// interop when this is left on auto (CUDA included, which loads libcuda and can wake a
+/// laptop's discrete GPU while the window renders on the integrated one), so vivi picks
+/// the one matching the GL driver it renders with. `config` is `[playback] hwdec_interop`
+/// ("auto" or empty = pick), `hwdec` the `[playback] hwdec` setting. `None` = leave mpv's
+/// default (all interops).
+pub fn pick_interop(config: &str, hwdec: &str, vendor: &str, renderer: &str) -> Option<String> {
+    let config = config.trim();
+    if !config.is_empty() && !config.eq_ignore_ascii_case("auto") {
+        return Some(config.to_string());
+    }
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    // An explicit hardware decoder needs its own interop.
+    match hwdec {
+        h if h.starts_with("nvdec") || h.starts_with("cuda") => return Some("cuda".into()),
+        h if h.starts_with("vaapi") => return Some("vaapi".into()),
+        h if h.starts_with("vulkan") || h.starts_with("drm") || h.starts_with("vdpau") => {
+            return None
+        }
+        _ => {}
+    }
+    let gl = format!("{vendor} {renderer}").to_ascii_lowercase();
+    if gl.contains("nvidia") && !gl.contains("nouveau") {
+        Some("cuda".into())
+    } else if [
+        "mesa", "amd", "radeon", "intel", "x.org", "llvmpipe", "nouveau",
+    ]
+    .iter()
+    .any(|k| gl.contains(k))
+    {
+        Some("vaapi".into())
+    } else {
+        None
+    }
+}
+
+/// GL_VENDOR / GL_RENDERER of the current context (empty when unavailable).
+fn gl_strings(gpa: ProcFn) -> (String, String) {
+    type GetString = extern "system" fn(u32) -> *const u8;
+    let p = gpa(c"glGetString");
+    if p.is_null() {
+        return Default::default();
+    }
+    // SAFETY: glGetString(GLenum) -> const GLubyte*, per the OpenGL specification.
+    let f = unsafe { std::mem::transmute::<*const c_void, GetString>(p) };
+    let get = |name: u32| {
+        let p = f(name);
+        if p.is_null() {
+            return String::new();
+        }
+        // SAFETY: a non-null result is a NUL-terminated static string owned by the driver.
+        unsafe { std::ffi::CStr::from_ptr(p.cast()) }
+            .to_string_lossy()
+            .into_owned()
+    };
+    (get(0x1F00), get(0x1F01))
+}
+
 /// `on_ready` runs once the mpv render context exists. Files must be loaded only after
 /// that, otherwise `vo=libmpv` fails to initialize ("No render context set").
 pub fn attach(
     app: &crate::AppWindow,
     mpv: Arc<Mpv>,
+    interop: (String, String),
     on_ready: impl FnOnce() + 'static,
 ) -> Result<(), slint::SetRenderingNotifierError> {
     let weak = app.as_weak();
@@ -111,6 +172,12 @@ pub fn attach(
                 };
                 let gpa: ProcFn = gpa;
                 gl = GlReset::load(gpa);
+                let (vendor, renderer) = gl_strings(gpa);
+                if let Some(i) = pick_interop(&interop.0, &interop.1, &vendor, &renderer) {
+                    if let Err(e) = mpv.set_property("gpu-hwdec-interop", i.as_str()) {
+                        eprintln!("vivi: gpu-hwdec-interop={i}: {e:?}");
+                    }
+                }
                 let ptr = &gpa as *const ProcFn as usize;
                 // SAFETY: mpv handle outlives the render context (Arc kept in closure).
                 let handle = unsafe { &mut *mpv.ctx.as_ptr() };
@@ -168,4 +235,64 @@ pub fn attach(
             }
             _ => {}
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pick_interop;
+
+    #[test]
+    fn interop_follows_config_hwdec_and_gl_vendor() {
+        let p = |c, h, v, r| pick_interop(c, h, v, r);
+        assert_eq!(
+            p("vulkan", "auto-safe", "NVIDIA Corporation", ""),
+            Some("vulkan".into())
+        );
+        if !cfg!(target_os = "linux") {
+            assert_eq!(p("auto", "auto-safe", "AMD", "Radeon"), None);
+            return;
+        }
+        assert_eq!(
+            p(
+                "auto",
+                "auto-safe",
+                "AMD",
+                "AMD Radeon Graphics (radeonsi, renoir)"
+            ),
+            Some("vaapi".into())
+        );
+        assert_eq!(
+            p("", "auto-safe", "Intel", "Mesa Intel(R) Xe Graphics"),
+            Some("vaapi".into())
+        );
+        assert_eq!(
+            p(
+                "auto",
+                "auto-safe",
+                "Mesa",
+                "llvmpipe (LLVM 19.1.7, 256 bits)"
+            ),
+            Some("vaapi".into())
+        );
+        assert_eq!(
+            p(
+                "auto",
+                "auto",
+                "NVIDIA Corporation",
+                "NVIDIA GeForce RTX 3050"
+            ),
+            Some("cuda".into())
+        );
+        assert_eq!(
+            p("auto", "auto-safe", "Mesa", "NV167 (nouveau)"),
+            Some("vaapi".into())
+        );
+        assert_eq!(p("auto", "nvdec", "AMD", "Radeon"), Some("cuda".into()));
+        assert_eq!(
+            p("auto", "vaapi-copy", "NVIDIA Corporation", ""),
+            Some("vaapi".into())
+        );
+        assert_eq!(p("auto", "vulkan", "AMD", "Radeon"), None);
+        assert_eq!(p("auto", "auto-safe", "Some Vendor", "GPU"), None);
+    }
 }
