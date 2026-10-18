@@ -1096,8 +1096,18 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 })
                 .collect();
             v.sort_by_key(|m| std::cmp::Reverse(m.mtime));
+            // One row per file: the same file reached twice (symlinked or overlapping
+            // library folders) or copied into two folders (same title and size).
+            let mut seen_path = HashSet::new();
+            let mut seen_file = HashSet::new();
             let items: Vec<Item> = v
                 .iter()
+                .filter(|m| {
+                    let real = std::fs::canonicalize(&m.path)
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or_else(|_| m.path.clone());
+                    seen_path.insert(real) && seen_file.insert((m.title.to_lowercase(), m.size))
+                })
                 .take(60)
                 .map(|m| Item {
                     key: m.path.clone().into(),
