@@ -905,8 +905,10 @@ mod tests {
 
     #[test]
     fn eq_chain_and_presets() {
-        let mut fx = Fx::default();
-        fx.auto_preamp = false;
+        let mut fx = Fx {
+            auto_preamp: false,
+            ..Default::default()
+        };
         assert!(fx.select_preset("Club"));
         let (kind, label, f) = fx.filter("eq").unwrap();
         assert_eq!((kind, label.as_str()), ("af", "@vivi-eq"));
