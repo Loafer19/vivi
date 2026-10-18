@@ -65,7 +65,10 @@ export global Icons {
 
     // Equalizer preset name → icon.
     pure public function preset(n: string) -> image {
-        return n == "Classical" ? @image-url("../../assets/icons/eq-classical.svg")
+        return n == "Bass" ? @image-url("../../assets/icons/eq-full_bass.svg")
+            : n == "Vocal" ? @image-url("../../assets/icons/eq-live.svg")
+            : n == "Night" ? @image-url("../../assets/icons/eq-soft.svg")
+            : n == "Classical" ? @image-url("../../assets/icons/eq-classical.svg")
             : n == "Club" ? @image-url("../../assets/icons/eq-club.svg")
             : n == "Dance" ? @image-url("../../assets/icons/eq-dance.svg")
             : n == "Full bass" ? @image-url("../../assets/icons/eq-full_bass.svg")

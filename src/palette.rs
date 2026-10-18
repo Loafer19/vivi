@@ -170,7 +170,12 @@ fn run(a: &AppWindow, id: &str) {
                 K::Text(t) => t.into(),
                 K::Named(k) => k.into(),
             };
-            a.invoke_key(text, b.shift == Mod::On, b.ctrl == Mod::On, false);
+            a.invoke_key(
+                text,
+                b.shift == Mod::On,
+                b.ctrl == Mod::On,
+                b.alt == Mod::On,
+            );
         }
         "plug" => {
             let (pid, cmd) = arg.split_once('|').unwrap_or((arg, ""));
@@ -227,7 +232,12 @@ mod tests {
                 K::Named(k) => k.into(),
             };
             assert_eq!(
-                keymap::lookup(&text, b.shift == Mod::On, b.ctrl == Mod::On),
+                keymap::lookup(
+                    &text,
+                    b.shift == Mod::On,
+                    b.ctrl == Mod::On,
+                    b.alt == Mod::On
+                ),
                 Some(b.action),
                 "{}",
                 b.label

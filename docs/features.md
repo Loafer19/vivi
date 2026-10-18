@@ -34,7 +34,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Music visualizer for audio-only files and streams (no video track; cover art does not count), fed from what mpv actually plays, so EQ and audio filters show up: Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left or press `V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](screenshots/visualizer.png)
 - Settings window rebuilt per Figma: grouped sidebar (App / Media / System), 13 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
 - Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), Auto-tagger (AcoustID + MusicBrainz + Cover Art Archive), Free Music (Internet Archive / Jamendo), Network Streams (Internet radio, iptv-org TV, music genres, SomaFM, M3U/IPTV, saved streams), the visualizer, plus downloadable plugins installed and updated from Settings → Extensions → Browse (Discord Rich Presence, Remote Control (phone web page), YouTube & yt-dlp downloads, A-B Loop, Night Mode, Playback Statistics, ListenBrainz Scrobbler, Subtitle Auto-Sync, SponsorBlock, Scene Chapters & Thumbnails) and mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
-- 10-band equalizer with VLC presets and custom presets, plus video filters (adjust, crop, colour effects) and audio effects (compressor, reverb, delay), saved in `~/.config/vivi/fx.toml`
+- 10-band equalizer with VLC presets (plus Bass, Vocal and Night) and custom presets, `Alt+E` to cycle presets and `Alt+Shift+E` to turn it on / off, an *Auto pre-amp / prevent clipping* option (on by default: the preamp drops by the largest band boost), plus video filters (adjust, crop, colour effects) and audio effects (compressor, reverb, delay), saved in `~/.config/vivi/fx.toml`
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
 
 | Library | Side panel |
@@ -148,6 +148,8 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | Ctrl+E | Extensions |
 | Ctrl+B | Add bookmark |
 | ? | Keyboard shortcuts |
+| Alt+E | Next equalizer preset (turns it on) |
+| Alt+Shift+E | Equalizer on / off |
 | Esc | Close the top dialog or panel, then leave miniplayer / fullscreen |
 | Double-click | Fullscreen |
 | Click | Play / pause |

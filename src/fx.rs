@@ -11,10 +11,16 @@ use std::collections::BTreeMap;
 pub const BANDS: [u32; 10] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 
 /// Built-in presets: preamp (VLC convention, 12 dB = unity) followed by 10 bands in dB.
+/// Bass, Vocal and Night come from the former Equalizer plugin (unity preamp; the
+/// auto pre-amp keeps their boosts from clipping).
 pub const PRESETS: &[(&str, [f32; 11])] = &[
     (
         "Flat",
         [12.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    ),
+    (
+        "Bass",
+        [12.0, 6.0, 4.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     ),
     (
         "Classical",
@@ -57,6 +63,10 @@ pub const PRESETS: &[(&str, [f32; 11])] = &[
         [7.0, -4.8, 0.0, 4.0, 5.6, 5.6, 5.6, 4.0, 2.4, 2.4, 2.4],
     ),
     (
+        "Night",
+        [12.0, -5.0, -3.0, -1.0, 1.0, 2.0, 2.0, 1.0, 0.0, -1.0, -1.0],
+    ),
+    (
         "Party",
         [6.0, 7.2, 7.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.2, 7.2],
     ),
@@ -87,6 +97,10 @@ pub const PRESETS: &[(&str, [f32; 11])] = &[
     (
         "Techno",
         [5.0, 8.0, 5.6, 0.0, -5.6, -4.8, 0.0, 8.0, 9.6, 9.6, 8.8],
+    ),
+    (
+        "Vocal",
+        [12.0, -2.0, -1.0, 1.0, 3.0, 4.0, 3.0, 2.0, 0.0, -1.0, -1.0],
     ),
 ];
 
@@ -132,6 +146,8 @@ pub struct Fx {
     pub custom: Vec<Preset>,
     pub extract_color: String,
     pub threshold_color: String,
+    /// Auto pre-amp / prevent clipping: lower the preamp by the largest band boost.
+    pub auto_preamp: bool,
 }
 
 impl Default for Fx {
@@ -145,6 +161,7 @@ impl Default for Fx {
             custom: Vec::new(),
             extract_color: "#FF0000".into(),
             threshold_color: "#FF0000".into(),
+            auto_preamp: true,
         }
     }
 }
@@ -269,6 +286,41 @@ impl Fx {
         eq[11] = 1.0;
         self.preset = name.into();
         true
+    }
+
+    /// Built-in then custom preset names, in the order Alt+E cycles them.
+    pub fn preset_names(&self) -> Vec<String> {
+        PRESETS
+            .iter()
+            .map(|(n, _)| n.to_string())
+            .chain(self.custom.iter().map(|c| c.name.clone()))
+            .collect()
+    }
+
+    /// Select the preset after the current one (wrapping; "Custom" starts at the first)
+    /// and turn the equalizer on. Returns its name.
+    pub fn cycle_preset(&mut self) -> String {
+        let names = self.preset_names();
+        let next = names
+            .iter()
+            .position(|n| *n == self.preset)
+            .map_or(0, |i| (i + 1) % names.len());
+        let name = names[next].clone();
+        self.select_preset(&name);
+        name
+    }
+
+    /// Turn the equalizer on or off; returns the new state.
+    pub fn toggle(&mut self) -> bool {
+        let on = self.get("eq").get(11).copied().unwrap_or(0.0) <= 0.0;
+        self.set("eq", 11, if on { 1.0 } else { 0.0 });
+        on
+    }
+
+    /// Gain (dB) applied before the bands: preamp − 12, and with the auto pre-amp at most
+    /// minus the largest positive band boost, so the loudest band stays at or under 0 dB.
+    pub fn effective_preamp(&self) -> f32 {
+        eq_gain(&self.get("eq"), self.auto_preamp)
     }
 
     /// Save the current bands as "Custom Preset N" and select it.
@@ -401,7 +453,7 @@ impl Fx {
         let (_, kind, _) = GROUPS.iter().find(|(g, _, _)| *g == group)?;
         let v = self.get(group);
         let chain: Vec<String> = match group {
-            "eq" => eq_chain(&v),
+            "eq" => eq_chain(&v, self.auto_preamp),
             "video" => video_chain(&v),
             "crop" => crop_chain(&v),
             "color" => self.color_chain(&v),
@@ -469,12 +521,21 @@ impl Fx {
     }
 }
 
-fn eq_chain(v: &[f32]) -> Vec<String> {
+fn eq_gain(v: &[f32], auto: bool) -> f32 {
+    let gain = v.first().map_or(0.0, |p| p - 12.0);
+    if !auto {
+        return gain;
+    }
+    let boost = v.iter().skip(1).take(10).fold(0f32, |m, g| m.max(*g));
+    gain.min(-boost)
+}
+
+fn eq_chain(v: &[f32], auto: bool) -> Vec<String> {
     if v[11] <= 0.0 {
         return Vec::new();
     }
     let mut c = Vec::new();
-    let gain = v[0] - 12.0;
+    let gain = eq_gain(v, auto);
     if gain.abs() > 0.05 {
         c.push(format!("volume={}dB", n(gain)));
     }
@@ -609,6 +670,16 @@ fn swatch(h: &str) -> slint::Color {
     slint::Color::from_rgb_u8((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }
 
+/// Open the side panel on Audio with the Equalizer expanded.
+pub fn open_panel(a: &crate::AppWindow) {
+    use slint::ComponentHandle;
+    a.global::<crate::Overlays>().set_extensions_open(false);
+    a.global::<crate::Overlays>().set_settings_open(false);
+    a.global::<crate::Panel>().set_tab(crate::PanelTab::Audio);
+    a.global::<crate::FxState>().set_eq_open(true);
+    a.global::<crate::Overlays>().set_panel_open(true);
+}
+
 /// Wire the FxState global: apply saved effects now and on every change.
 pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>) {
     use crate::FxState;
@@ -648,6 +719,8 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
             g.set_reverb(floats(fx.get("reverb")));
             g.set_delay(floats(fx.get("delay")));
             g.set_preset(fx.preset.clone().into());
+            g.set_auto_preamp(fx.auto_preamp);
+            g.set_effective_preamp(fx.effective_preamp());
             g.set_custom(strings(fx.custom.iter().map(|c| c.name.clone()).collect()));
             g.set_builtin(strings(
                 PRESETS.iter().map(|(n, _)| n.to_string()).collect(),
@@ -744,10 +817,23 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
     }
     {
         let (st, changed) = (st.clone(), changed.clone());
+        let w = app.as_weak();
         g.on_preset_action(move |action, name, arg| {
+            let mut toast = None;
             {
                 let fx = &mut st.borrow_mut().fx;
                 match action.as_str() {
+                    // Alt+E / Alt+Shift+E (keymap EqPreset / EqToggle).
+                    "cycle" => toast = Some(format!("Equalizer: {}", fx.cycle_preset())),
+                    "toggle" => {
+                        let on = fx.toggle();
+                        toast = Some(if on {
+                            format!("Equalizer on: {}", fx.preset)
+                        } else {
+                            "Equalizer off".into()
+                        });
+                    }
+                    "auto-preamp" => fx.auto_preamp = !fx.auto_preamp,
                     "select" => {
                         fx.select_preset(&name);
                     }
@@ -791,6 +877,9 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                 }
             }
             changed("eq");
+            if let (Some(t), Some(a)) = (toast, w.upgrade()) {
+                crate::plugins::toast(&a, &t);
+            }
         });
     }
     {
@@ -817,6 +906,7 @@ mod tests {
     #[test]
     fn eq_chain_and_presets() {
         let mut fx = Fx::default();
+        fx.auto_preamp = false;
         assert!(fx.select_preset("Club"));
         let (kind, label, f) = fx.filter("eq").unwrap();
         assert_eq!((kind, label.as_str()), ("af", "@vivi-eq"));
@@ -839,6 +929,76 @@ mod tests {
         fx.reset("eq");
         assert_eq!(fx.get("eq")[11], 1.0);
         assert_eq!(fx.filter("eq").unwrap().2, None);
+    }
+
+    #[test]
+    fn auto_preamp_prevents_clipping() {
+        let mut fx = Fx::default();
+        assert!(fx.auto_preamp, "on by default");
+        // Bass: unity preamp, +6 dB at 60 Hz → the preamp drops by 6 dB.
+        fx.select_preset("Bass");
+        assert_eq!(fx.effective_preamp(), -6.0);
+        let f = fx.filter("eq").unwrap().2.unwrap();
+        assert!(
+            f.starts_with("lavfi=[volume=-6dB,equalizer=f=60:t=o:w=1:g=6,"),
+            "{f}"
+        );
+        // Club already lowers its preamp (−6 dB) but boosts 8 dB: −8 dB, not −14.
+        fx.select_preset("Club");
+        assert_eq!(fx.effective_preamp(), -8.0);
+        // Cuts only (Classical): nothing to compensate.
+        fx.select_preset("Classical");
+        assert_eq!(fx.effective_preamp(), 0.0);
+        assert!(!fx.filter("eq").unwrap().2.unwrap().contains("volume="));
+        fx.auto_preamp = false;
+        fx.select_preset("Bass");
+        assert_eq!(fx.effective_preamp(), 0.0);
+        assert!(!fx.filter("eq").unwrap().2.unwrap().contains("volume="));
+        // Older fx.toml without the key: on.
+        let old: Fx = toml::from_str("preset = \"Rock\"\n").unwrap();
+        assert!(old.auto_preamp);
+        let off: Fx = toml::from_str("auto_preamp = false\n").unwrap();
+        assert!(!off.auto_preamp);
+    }
+
+    #[test]
+    fn plugin_presets_are_built_in() {
+        for p in ["Flat", "Bass", "Vocal", "Rock", "Night"] {
+            assert!(PRESETS.iter().any(|(n, _)| *n == p), "{p}");
+        }
+        let mut names: Vec<&str> = PRESETS.iter().map(|(n, _)| *n).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), PRESETS.len());
+    }
+
+    #[test]
+    fn cycle_and_toggle() {
+        let mut fx = Fx::default();
+        assert_eq!(fx.get("eq")[11], 0.0);
+        assert_eq!(fx.cycle_preset(), PRESETS[1].0);
+        assert_eq!(fx.get("eq")[11], 1.0, "cycling turns the equalizer on");
+        fx.new_preset();
+        let last = fx.preset.clone();
+        fx.select_preset(PRESETS[PRESETS.len() - 1].0);
+        assert_eq!(
+            fx.cycle_preset(),
+            last,
+            "custom presets follow the built-in ones"
+        );
+        assert_eq!(fx.cycle_preset(), "Flat", "wraps around");
+        fx.set("eq", 3, 1.0);
+        assert_eq!(fx.preset, "Custom");
+        assert_eq!(
+            fx.cycle_preset(),
+            "Flat",
+            "Custom starts at the first preset"
+        );
+        assert!(!fx.toggle());
+        assert_eq!(fx.get("eq")[11], 0.0);
+        assert_eq!(fx.preset, "Flat", "toggling keeps the preset");
+        assert!(fx.toggle());
+        assert_eq!(fx.get("eq")[11], 1.0);
     }
 
     #[test]
@@ -891,7 +1051,8 @@ mod tests {
         assert!(one.contains("\"vivi-eq-presets\""));
         let mut b = Fx::default();
         assert_eq!(b.import_json(&one).unwrap(), ["Rock (2)"]);
-        assert_eq!(b.custom[0].values, PRESETS[13].1.to_vec());
+        let rock = PRESETS.iter().find(|(n, _)| *n == "Rock").unwrap().1;
+        assert_eq!(b.custom[0].values, rock.to_vec());
         b.custom[0].name = "Mine".into();
         let mut c = Fx::default();
         c.import_json(&b.export_json()).unwrap();

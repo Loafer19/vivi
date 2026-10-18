@@ -17,6 +17,9 @@ export global FxState {
     in property <[float]> reverb: [0, 8, 10, 4, 3, 3];
     in property <[float]> delay: [0, 20, 20, 30, 80];
     in property <string> preset: "Flat";
+    // Auto pre-amp / prevent clipping, and the gain it results in (dB, ≤ 0 when on).
+    in property <bool> auto-preamp: true;
+    in property <float> effective-preamp;
     in property <[string]> builtin;
     in property <[string]> custom;
     in property <[string]> gradients: ["Turbo", "Magma", "Viridis", "Heat", "Cividis"];
@@ -29,7 +32,8 @@ export global FxState {
     // Text typed into a dB/px field ("3.5 dB" → 3.5).
     callback set-text(string, int, string);
     callback set-color(int, string);
-    // action: "select" | "new" | "rename" | "delete" | "reset"; name; argument (new name).
+    // action: "select" | "new" | "rename" | "delete" | "import" | "export" | "cycle" |
+    // "toggle" | "auto-preamp" (flip the option); name; argument (new name).
     callback preset-action(string, string, string);
     callback reset(string);
 }
@@ -346,8 +350,24 @@ export component Equalizer inherits VerticalLayout {
             }
         }
         HorizontalLayout {
+            spacing: 8px; height: 30px;
+            Text {
+                text: "Auto pre-amp / prevent clipping"; color: Theme.fg-a2; font-size: Metrics.font-md;
+                vertical-alignment: center; horizontal-stretch: 1; overflow: elide;
+            }
+            Toggle {
+                on: FxState.auto-preamp; label: "Auto pre-amp / prevent clipping";
+                toggled => { FxState.preset-action("auto-preamp", "", ""); }
+            }
+        }
+        HorizontalLayout {
             alignment: end;
-            Text { text: "dB · preamp 12 dB = unity"; color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-stretch: 1; vertical-alignment: center; }
+            Text {
+                text: FxState.auto-preamp && FxState.effective-preamp < FxState.eq[0] - 12 - 0.05
+                    ? "dB · preamp 12 dB = unity · auto pre-amp " + Format.one(FxState.effective-preamp) + " dB"
+                    : "dB · preamp 12 dB = unity";
+                color: Theme.fg-a3; font-size: Metrics.font-xs; horizontal-stretch: 1; vertical-alignment: center; overflow: elide;
+            }
             ResetLink { clicked => { FxState.reset("eq"); } }
         }
     }

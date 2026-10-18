@@ -22,10 +22,11 @@ pub(crate) fn wire(
             );
         }
         use keymap::Action as A;
-        let action = keymap::lookup(s, shift, ctrl);
-        // Alt combinations belong to mpv scripts / plugin packages (V is the exception:
-        // the visualizer cycles with Alt held too, as it always did).
-        if alt && action != Some(A::Visualizer) {
+        let action = keymap::lookup(s, shift, ctrl, alt);
+        // Alt combinations belong to mpv scripts / plugin packages, except the player's
+        // own Alt shortcuts (equalizer) and V (the visualizer cycles with Alt held too,
+        // as it always did).
+        if alt && !matches!(action, Some(A::Visualizer | A::EqPreset | A::EqToggle)) {
             return forward_key(&p, s, ctrl, alt);
         }
         let Some(action) = action else {
@@ -108,6 +109,16 @@ pub(crate) fn wire(
             A::Shortcuts => a
                 .global::<crate::Overlays>()
                 .set_shortcuts_open(!a.global::<crate::Overlays>().get_shortcuts_open()),
+            A::EqPreset => a.global::<crate::FxState>().invoke_preset_action(
+                "cycle".into(),
+                "".into(),
+                "".into(),
+            ),
+            A::EqToggle => a.global::<crate::FxState>().invoke_preset_action(
+                "toggle".into(),
+                "".into(),
+                "".into(),
+            ),
             A::Escape => {
                 overlays::escape(&a);
             }

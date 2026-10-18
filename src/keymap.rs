@@ -45,6 +45,10 @@ pub enum Action {
     /// Audio-only files with the visualizer on; otherwise the key goes to mpv.
     Visualizer,
     Shortcuts,
+    /// Alt+E: next equalizer preset (turns the equalizer on).
+    EqPreset,
+    /// Alt+Shift+E: equalizer on / off.
+    EqToggle,
     Escape,
 }
 
@@ -78,6 +82,9 @@ pub struct Binding {
     pub keys: &'static [K],
     pub ctrl: Mod,
     pub shift: Mod,
+    /// Alt: `Any` for the plain bindings (with Alt held they still go to mpv, see
+    /// `app/wiring/keys.rs`), `On` for the few Alt shortcuts of the player itself.
+    pub alt: Mod,
     /// Shortcut list label.
     pub label: &'static str,
     /// Keys as shown in the shortcut list.
@@ -97,8 +104,23 @@ const fn b(
         keys,
         ctrl,
         shift,
+        alt: Mod::Any,
         label,
         shown,
+    }
+}
+
+/// An Alt shortcut (Ctrl not held).
+const fn alt(
+    action: Action,
+    keys: &'static [K],
+    shift: Mod,
+    label: &'static str,
+    shown: &'static str,
+) -> Binding {
+    Binding {
+        alt: Mod::On,
+        ..b(action, keys, Mod::Off, shift, label, shown)
     }
 }
 
@@ -107,7 +129,7 @@ use Mod::{Any, Off, On};
 use K::{Named as N, Text as T};
 
 /// All shortcuts. The first match wins, so order matters (Shift+L before L).
-/// Alt combinations are not here: they belong to mpv scripts and plugin packages.
+/// Alt combinations other than the `alt(…)` rows belong to mpv scripts and plugin packages.
 #[rustfmt::skip]
 pub const BINDINGS: &[Binding] = &[
     // Before Play / pause, whose K matches with any Ctrl state.
@@ -138,6 +160,8 @@ pub const BINDINGS: &[Binding] = &[
     b(A::Extensions, &[T("e")], On, Any, "Extensions", "Ctrl+E"),
     b(A::Bookmark, &[T("b")], On, Any, "Add bookmark", "Ctrl+B"),
     b(A::Shortcuts, &[T("?")], Off, Any, "Keyboard shortcuts", "?"),
+    alt(A::EqPreset, &[T("e"), T("E")], Off, "Next equalizer preset (turns it on)", "Alt+E"),
+    alt(A::EqToggle, &[T("e"), T("E")], On, "Equalizer on / off", "Alt+Shift+E"),
     b(A::Escape, &[N(Key::Escape)], Any, Any,
         "Close the top dialog or panel, then leave miniplayer / fullscreen", "Esc"),
 ];
@@ -157,11 +181,16 @@ fn matches(k: &K, text: &str) -> bool {
     }
 }
 
-/// The binding for a key press (Slint key text plus Shift/Ctrl), if any.
-pub fn lookup(text: &str, shift: bool, ctrl: bool) -> Option<Action> {
+/// The binding for a key press (Slint key text plus Shift/Ctrl/Alt), if any.
+pub fn lookup(text: &str, shift: bool, ctrl: bool, alt: bool) -> Option<Action> {
     BINDINGS
         .iter()
-        .find(|b| b.ctrl.ok(ctrl) && b.shift.ok(shift) && b.keys.iter().any(|k| matches(k, text)))
+        .find(|b| {
+            b.ctrl.ok(ctrl)
+                && b.shift.ok(shift)
+                && b.alt.ok(alt)
+                && b.keys.iter().any(|k| matches(k, text))
+        })
         .map(|b| b.action)
 }
 
@@ -278,28 +307,51 @@ mod tests {
             ("?", true, false, Some(A::Shortcuts)),
             ("i", false, false, None),
             ("j", false, false, None),
+            ("E", true, false, None),
         ];
         for (t, shift, ctrl, want) in cases {
             assert_eq!(
-                lookup(t, *shift, *ctrl),
+                lookup(t, *shift, *ctrl, false),
                 *want,
                 "{t:?} shift={shift} ctrl={ctrl}"
             );
         }
         assert_eq!(
-            lookup(&key(Key::RightArrow), true, false),
+            lookup(&key(Key::RightArrow), true, false, false),
             Some(A::SeekForward)
         );
         assert_eq!(
-            lookup(&key(Key::LeftArrow), false, false),
+            lookup(&key(Key::LeftArrow), false, false, false),
             Some(A::SeekBack)
         );
-        assert_eq!(lookup(&key(Key::UpArrow), false, false), Some(A::VolumeUp));
         assert_eq!(
-            lookup(&key(Key::DownArrow), false, true),
+            lookup(&key(Key::UpArrow), false, false, false),
+            Some(A::VolumeUp)
+        );
+        assert_eq!(
+            lookup(&key(Key::DownArrow), false, true, false),
             Some(A::VolumeDown)
         );
-        assert_eq!(lookup(&key(Key::Escape), false, false), Some(A::Escape));
+        assert_eq!(
+            lookup(&key(Key::Escape), false, false, false),
+            Some(A::Escape)
+        );
+    }
+
+    #[test]
+    fn alt_bindings() {
+        assert_eq!(lookup("e", false, false, true), Some(A::EqPreset));
+        assert_eq!(lookup("E", true, false, true), Some(A::EqToggle));
+        assert_eq!(
+            lookup("e", false, true, true),
+            Some(A::Extensions),
+            "Ctrl+Alt+E"
+        );
+        assert_eq!(lookup("e", false, false, false), None);
+        // Plain bindings still match with Alt (the handler forwards those to mpv).
+        assert_eq!(lookup("f", false, false, true), Some(A::Fullscreen));
+        assert_eq!(shown(A::EqPreset), "Alt+E");
+        assert_eq!(shown(A::EqToggle), "Alt+Shift+E");
     }
 
     #[test]
