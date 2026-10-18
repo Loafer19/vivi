@@ -134,20 +134,152 @@
   <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>macOS</h3><p>Apple Silicon zip · 38.8 MB · unsigned, best effort</p></a>
 </div>
 
-<h2 id="install">Install</h2>
-<p class="lead">Linux (x86_64): downloads the latest release and verifies checksums.</p>
-<pre><code>curl -fsSL https://viviplayer.app/install.sh | sh
+<section class="get" aria-labelledby="install">
+<h2 id="install">Get Vivi</h2>
+<p class="lead">Install, update or remove Vivi with one copy-paste. Pick your system; the commands use the latest release, v@VIVI_VERSION@.</p>
+<div class="getbar"><div class="os" role="group" aria-label="Operating system"><button type="button" data-os="linux" aria-pressed="true">Linux</button><button type="button" data-os="windows" aria-pressed="false">Windows</button><button type="button" data-os="mac" aria-pressed="false">macOS</button></div><span>All files and <code>SHA256SUMS</code>: <a href="https://github.com/Loafer19/vivi/releases/latest">releases page</a></span></div>
+<div class="tabs" role="tablist" aria-label="Get Vivi">
+  <button role="tab" aria-selected="true" aria-controls="g-install" id="gb-install"><i data-lucide="download"></i>Install</button>
+  <button role="tab" aria-selected="false" aria-controls="g-update" id="gb-update" tabindex="-1"><i data-lucide="refresh-cw"></i>Update</button>
+  <button role="tab" aria-selected="false" aria-controls="g-uninstall" id="gb-uninstall" tabindex="-1"><i data-lucide="trash-2"></i>Uninstall</button>
+  <button role="tab" aria-selected="false" aria-controls="g-source" id="gb-source" tabindex="-1"><i data-lucide="hammer"></i><span class="wide">Build from source</span><span class="narrow">From source</span></button>
+</div>
+<div class="panel" role="tabpanel" id="g-install" aria-labelledby="gb-install" tabindex="0">
+<div data-for="linux">
+<div class="way"><h3>Install script <span class="tag">Recommended</span></h3><p>Downloads the latest release and checks it against <code>SHA256SUMS</code>. On Arch it builds the <code>vivi-bin</code> package with <code>makepkg -si</code>; elsewhere it installs into <code>~/.local</code> and tells you if <code>libmpv</code> is missing. <a href="install.sh">Read the script</a>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl -fsSL https://viviplayer.app/install.sh | sh</code></pre></div></div>
+<div class="way"><h3>Arch Linux: vivi-bin / vivi-git</h3><p>Not on the AUR yet: these build the repo's AUR PKGBUILDs with <code>makepkg</code>. <code>vivi-bin</code> is the prebuilt release, <code>vivi-git</code> builds the latest <code>master</code>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code><span class="cmt"># vivi-bin (prebuilt release)</span>
+mkdir vivi-bin &amp;&amp; cd vivi-bin
+curl -fLO https://viviplayer.app/vivi-bin/PKGBUILD
+makepkg -si
 
-# uninstall (settings and library stay)
-curl -fsSL https://viviplayer.app/install.sh | sh -s -- --uninstall</code></pre>
-<p class="lead">On Arch it builds the <code>vivi-bin</code> package with <code>makepkg -si</code>; on other distributions it installs into <code>~/.local</code> and checks for <code>libmpv</code>. <a href="install.sh">Read the script</a>.</p>
-<pre><code># From source (Arch / Omarchy)
+<span class="cmt"># or vivi-git (latest master, built from source)</span>
+git clone https://github.com/Loafer19/vivi
+cd vivi/packaging/aur/vivi-git &amp;&amp; makepkg -si</code></pre></div></div>
+<div class="way"><h3>Flatpak</h3><p>Not on Flathub yet: install the release bundle (it pulls the runtime from Flathub).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+curl -fLO https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/vivi-v@VIVI_VERSION@-x86_64.flatpak
+flatpak install --user vivi-v@VIVI_VERSION@-x86_64.flatpak
+flatpak run io.github.loafer19.vivi</code></pre></div></div>
+<div class="way"><h3>AppImage</h3><p>Any x86_64 distribution, libmpv bundled. One file: make it executable and run it.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>mkdir -p ~/Applications &amp;&amp; cd ~/Applications
+curl -fLO https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/Vivi-v@VIVI_VERSION@-x86_64.AppImage
+chmod +x Vivi-v@VIVI_VERSION@-x86_64.AppImage
+./Vivi-v@VIVI_VERSION@-x86_64.AppImage</code></pre></div></div>
+</div>
+<div data-for="windows" hidden>
+<div class="way"><h3>Scoop <span class="tag">Recommended</span></h3><p>Installs the portable build from the manifest in the repo, with a Start menu shortcut and a <code>vivi</code> command.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>scoop install https://raw.githubusercontent.com/Loafer19/vivi/master/packaging/scoop/vivi.json</code></pre></div></div>
+<div class="way"><h3>winget</h3><p>Not in the winget catalog yet: install from the manifest in the repo. Allowing local manifests needs an admin terminal once.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>winget settings --enable LocalManifestFiles
+git clone https://github.com/Loafer19/vivi
+winget install --manifest .\vivi\packaging\winget</code></pre></div></div>
+<div class="way"><h3>Portable zip (PowerShell)</h3><p>Windows 10/11 x64. There is no installer: the zip has <code>vivi.exe</code> and <code>libmpv-2.dll</code>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>Invoke-WebRequest https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/vivi-v@VIVI_VERSION@-windows-x86_64.zip -OutFile vivi.zip
+Expand-Archive vivi.zip "$env:LOCALAPPDATA\Programs" -Force
+&amp; "$env:LOCALAPPDATA\Programs\vivi-v@VIVI_VERSION@-windows-x86_64\vivi.exe"</code></pre></div></div>
+</div>
+<div data-for="mac" hidden>
+<div class="way"><h3>App zip (Terminal) <span class="tag">Experimental</span></h3><p>Apple Silicon only, ad-hoc signed. If you download it in a browser instead, right-click Vivi.app → Open the first time. There is no Homebrew cask or .dmg yet.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl -fLO https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/vivi-v@VIVI_VERSION@-macos-arm64.zip
+ditto -x -k vivi-v@VIVI_VERSION@-macos-arm64.zip /Applications
+open /Applications/Vivi.app</code></pre></div></div>
+</div>
+</div>
+<div class="panel" role="tabpanel" id="g-update" aria-labelledby="gb-update" tabindex="0" hidden>
+<div data-for="linux">
+<div class="way"><h3>Install script</h3><p>Run it again: it installs the latest release over the old one (on Arch it rebuilds <code>vivi-bin</code>).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl -fsSL https://viviplayer.app/install.sh | sh</code></pre></div></div>
+<div class="way"><h3>Arch Linux: vivi-bin / vivi-git</h3><p>Rebuild the package in the folder you built it in.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code><span class="cmt"># vivi-bin: fetch the PKGBUILD of the new release</span>
+cd vivi-bin
+curl -fLO https://viviplayer.app/vivi-bin/PKGBUILD
+makepkg -si
+
+<span class="cmt"># vivi-git: makepkg pulls the latest master</span>
+cd vivi/packaging/aur/vivi-git &amp;&amp; makepkg -si</code></pre></div></div>
+<div class="way"><h3>Flatpak</h3><p>A bundle has no update source: download the new one and reinstall it (settings stay). <code>flatpak update</code> keeps the runtime current.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl -fLO https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/vivi-v@VIVI_VERSION@-x86_64.flatpak
+flatpak install --user --reinstall vivi-v@VIVI_VERSION@-x86_64.flatpak
+flatpak update --user</code></pre></div></div>
+<div class="way"><h3>AppImage</h3><p>Replace the file with the new release.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>cd ~/Applications &amp;&amp; rm -f Vivi-v*-x86_64.AppImage
+curl -fLO https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/Vivi-v@VIVI_VERSION@-x86_64.AppImage
+chmod +x Vivi-v@VIVI_VERSION@-x86_64.AppImage</code></pre></div></div>
+</div>
+<div data-for="windows" hidden>
+<div class="way"><h3>Scoop</h3><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>scoop update vivi</code></pre></div></div>
+<div class="way"><h3>winget</h3><p>Run it where you cloned the repo: pull the updated manifest, then upgrade from it.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>git -C vivi pull
+winget upgrade --manifest .\vivi\packaging\winget</code></pre></div></div>
+<div class="way"><h3>Portable zip (PowerShell)</h3><p>Remove the old folder and unpack the new release. Settings are kept.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>Remove-Item -Recurse "$env:LOCALAPPDATA\Programs\vivi-v*-windows-x86_64"
+Invoke-WebRequest https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/vivi-v@VIVI_VERSION@-windows-x86_64.zip -OutFile vivi.zip
+Expand-Archive vivi.zip "$env:LOCALAPPDATA\Programs" -Force</code></pre></div></div>
+</div>
+<div data-for="mac" hidden>
+<div class="way"><h3>App zip (Terminal)</h3><p>Replace Vivi.app with the new release. Settings are kept.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>rm -rf /Applications/Vivi.app
+curl -fLO https://github.com/Loafer19/vivi/releases/download/v@VIVI_VERSION@/vivi-v@VIVI_VERSION@-macos-arm64.zip
+ditto -x -k vivi-v@VIVI_VERSION@-macos-arm64.zip /Applications</code></pre></div></div>
+</div>
+</div>
+<div class="panel" role="tabpanel" id="g-uninstall" aria-labelledby="gb-uninstall" tabindex="0" hidden>
+<div data-for="linux">
+<div class="way"><h3>Install script</h3><p>Removes the <code>vivi-bin</code> package on Arch, or the files it put in <code>~/.local</code>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl -fsSL https://viviplayer.app/install.sh | sh -s -- --uninstall</code></pre></div></div>
+<div class="way"><h3>Arch Linux: vivi-bin / vivi-git</h3><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>sudo pacman -R vivi-bin
+<span class="cmt"># or</span>
+sudo pacman -R vivi-git</code></pre></div></div>
+<div class="way"><h3>Flatpak</h3><p>Add <code>--delete-data</code> to also remove its settings and library (<code>~/.var/app/io.github.loafer19.vivi</code>).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>flatpak uninstall --user io.github.loafer19.vivi</code></pre></div></div>
+<div class="way"><h3>AppImage</h3><p>Delete the file.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>rm ~/Applications/Vivi-v*-x86_64.AppImage</code></pre></div></div>
+<div class="way"><h3>Settings and library</h3><p>Uninstalling keeps them. To start from scratch, remove these too:</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>rm -rf ~/.config/vivi ~/.local/share/vivi ~/.local/state/vivi ~/.cache/vivi</code></pre></div></div>
+</div>
+<div data-for="windows" hidden>
+<div class="way"><h3>Scoop</h3><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>scoop uninstall vivi</code></pre></div></div>
+<div class="way"><h3>winget</h3><p>Run it where you cloned the repo.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>winget uninstall --manifest .\vivi\packaging\winget</code></pre></div></div>
+<div class="way"><h3>Portable zip (PowerShell)</h3><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>Remove-Item -Recurse "$env:LOCALAPPDATA\Programs\vivi-v*-windows-x86_64"</code></pre></div></div>
+<div class="way"><h3>Settings and library</h3><p>Uninstalling keeps them. To start from scratch, remove these too:</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.config\vivi", "$HOME\.local\share\vivi", "$HOME\.local\state\vivi", "$HOME\.cache\vivi"</code></pre></div></div>
+</div>
+<div data-for="mac" hidden>
+<div class="way"><h3>App</h3><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>rm -rf /Applications/Vivi.app</code></pre></div></div>
+<div class="way"><h3>Settings and library</h3><p>Uninstalling keeps them. To start from scratch, remove these too:</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>rm -rf ~/.config/vivi ~/.local/share/vivi ~/.local/state/vivi ~/.cache/vivi</code></pre></div></div>
+</div>
+</div>
+<div class="panel" role="tabpanel" id="g-source" aria-labelledby="gb-source" tabindex="0" hidden>
+<div data-for="linux">
+<div class="way"><h3>1. Dependencies</h3><p>Pick your distribution. Optional at runtime: <code>ffmpeg</code> (library thumbnails) and <code>yt-dlp</code> (YouTube).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code><span class="cmt"># Debian / Ubuntu</span>
+sudo apt install build-essential pkg-config git libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev
+
+<span class="cmt"># Fedora</span>
+sudo dnf install gcc pkgconf-pkg-config git mpv-devel libxkbcommon-devel fontconfig-devel gtk3-devel sqlite-devel
+
+<span class="cmt"># Arch / Omarchy</span>
+sudo pacman -S --needed base-devel git rust mpv sqlite libxkbcommon wayland mesa</code></pre></div></div>
+<div class="way"><h3>2. Rust</h3><p>Debian, Ubuntu and Fedora: get a current stable Rust with rustup (Arch's <code>rust</code> package above is fine).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre></div></div>
+<div class="way"><h3>3. Build and run</h3><p><code>vivi</code> and <code>vivi-mcp</code> end up in <code>target/release/</code>. Your own build has no built-in Jamendo and AcoustID keys: add yours in Settings, or set <code>VIVI_JAMENDO_CLIENT_ID</code> and <code>VIVI_ACOUSTID_KEY</code> when building. <a href="https://github.com/Loafer19/vivi/blob/master/docs/features.md#build-from-source-arch--omarchy">More in the docs</a>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>git clone https://github.com/Loafer19/vivi &amp;&amp; cd vivi
+cargo build --release
+./target/release/vivi
+
+<span class="cmt"># optional: put both on your PATH</span>
+install -Dm755 -t ~/.local/bin target/release/vivi target/release/vivi-mcp</code></pre></div></div>
+</div>
+<div data-for="windows" hidden>
+<div class="way"><h3>Windows</h3><p>Building on Windows needs libmpv from <a href="https://github.com/shinchiro/mpv-winbuild-cmake">mpv-winbuild-cmake</a> and an MSVC import library for it; the exact steps are in the <a href="https://github.com/Loafer19/vivi/blob/master/.github/workflows/release.yml">release workflow</a>. The <a href="#install" data-goto="install">prebuilt zip</a> is the easy way.</p></div>
+</div>
+<div data-for="mac" hidden>
+<div class="way"><h3>macOS (Apple Silicon) <span class="tag">Experimental</span></h3><p>Homebrew's mpv provides libmpv. Your own build has no built-in Jamendo and AcoustID keys: add yours in Settings, or set <code>VIVI_JAMENDO_CLIENT_ID</code> and <code>VIVI_ACOUSTID_KEY</code> when building. <a href="https://github.com/Loafer19/vivi/blob/master/docs/features.md#build-from-source-arch--omarchy">More in the docs</a>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code><span class="cmt"># Rust (skip if you already have it)</span>
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+brew install mpv
 git clone https://github.com/Loafer19/vivi &amp;&amp; cd vivi
-sudo pacman -S --needed mpv sqlite rust
-cargo build --release &amp;&amp; ./target/release/vivi</code></pre>
-<p class="lead">AppImage, tarball, Windows and macOS builds are on the <a href="https://github.com/Loafer19/vivi/releases">releases page</a>.</p>
+LIBRARY_PATH=/opt/homebrew/lib cargo build --release
+./target/release/vivi</code></pre></div></div>
+</div>
+</div>
+</section>
 <p class="note">Work in progress: not every frame of the Figma design is ported yet. Progress is tracked in the <a href="https://github.com/Loafer19/vivi/milestones">milestones</a>.</p>
 </main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+(()=>{const t=document.getElementById('toast');let h;
+const toast=m=>{t.textContent=m;t.classList.add('show');clearTimeout(h);h=setTimeout(()=>t.classList.remove('show'),1800)};
+const cp=(s,m)=>{(navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject()).then(()=>toast(m),()=>{const a=document.createElement('textarea');a.value=s;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();toast(m)})};
+document.querySelectorAll('.get .copy').forEach(b=>b.addEventListener('click',()=>{cp(b.nextElementSibling.textContent,'Copied to clipboard ✓');b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1500)}));
+const tabs=[...document.querySelectorAll('.get [role=tab]')];
+const sel=(b,f=true)=>{tabs.forEach(x=>{const on=x===b;x.setAttribute('aria-selected',on);x.tabIndex=on?0:-1;document.getElementById(x.getAttribute('aria-controls')).hidden=!on});if(f)b.focus()};
+tabs.forEach((b,i)=>{b.addEventListener('click',()=>sel(b));b.addEventListener('keydown',e=>{const k={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i+tabs.length-1)%tabs.length,Home:0,End:tabs.length-1}[e.key];if(k!==undefined){e.preventDefault();sel(tabs[k])}})});
+document.querySelectorAll('.get [data-goto]').forEach(a=>a.addEventListener('click',()=>sel(document.getElementById('gb-'+a.dataset.goto),false)));
+const osb=[...document.querySelectorAll('.get [data-os]')];
+const os=v=>{osb.forEach(x=>x.setAttribute('aria-pressed',x.dataset.os===v));document.querySelectorAll('.get [data-for]').forEach(d=>d.hidden=d.dataset.for!==v)};
+osb.forEach(b=>b.addEventListener('click',()=>os(b.dataset.os)));
+const ua=navigator.userAgent;os(/Windows/.test(ua)?'windows':/Mac OS X|Macintosh/.test(ua)&&!/Mobile/.test(ua)?'mac':'linux');
+})();
+</script>
 <footer><a href="compare.html">Compare players</a> · <a href="ai-agents.html">AI agents</a> · <a href="https://plugins.viviplayer.app/">Plugins</a><br>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC) ·

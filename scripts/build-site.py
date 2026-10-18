@@ -105,6 +105,11 @@ def inline_icons(text: str) -> str:
     return re.sub(r'<i data-lucide="([a-z0-9-]+)"></i>', lambda m: icon(m.group(1)), text)
 
 
+def release_version() -> str:
+    """Latest app release: the vivi-bin pkgver, which the release workflow bumps on every release."""
+    return re.search(r"^pkgver=(\S+)$", (ROOT / "packaging/aur/vivi-bin/PKGBUILD").read_text(), re.M).group(1)
+
+
 def main() -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -118,8 +123,10 @@ def main() -> None:
     # install.sh builds this on Arch (kept at the latest release by the release workflow).
     (OUT / "vivi-bin").mkdir(exist_ok=True)
     shutil.copy(ROOT / "packaging/aur/vivi-bin/PKGBUILD", OUT / "vivi-bin/PKGBUILD")
+    version = release_version()
     for page in OUT.glob("*.html"):
-        page.write_text(seo(page.name, inline_icons(page.read_text())))
+        # @VIVI_VERSION@ in download commands (home page "Get Vivi") follows the latest release.
+        page.write_text(seo(page.name, inline_icons(page.read_text().replace("@VIVI_VERSION@", version))))
     sitemap(OUT)
     missing = [
         (page.name, ref)
