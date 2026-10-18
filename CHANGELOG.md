@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-18
+
 ### Added
 - **Icons for spots that had none**: Rotate 90° in the Video menu (new two-tone rotate glyph, like the other menu rows); single-tone icons on the text buttons Add bookmark, Add files (empty queue), Open file / Open stream / Add folders (empty library), Check for updates and Copy system info (new copy glyph) in About.
 - **Volume control styles**: Customize → Volume offers four styles, each chip with a miniature preview:
