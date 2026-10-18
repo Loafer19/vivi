@@ -355,7 +355,7 @@ fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
         "playlist_count": num("playlist-count").unwrap_or(0.0) as i64,
         "eq_preset": if eq_on { fx.get_preset().to_string() } else { "Off".into() },
         "is_stream": path.contains("://"),
-        "has_video": p.get("vid").is_some_and(|v| v != "no" && !v.is_empty()),
+        "has_video": !path.is_empty() && p.get("vid").is_some_and(|v| v != "no" && !v.is_empty()),
         "audio_track": p.get("aid").unwrap_or_default(),
         "chapter": num("chapter").map(|c| c as i64).unwrap_or(-1),
         "chapter_title": p.get("chapter-metadata/title").unwrap_or_default(),
@@ -425,7 +425,10 @@ fn handle(
             if let Some(m) = args["muted"].as_bool() {
                 p.set("mute", if m { "yes" } else { "no" });
             }
-            Ok(json!({ "volume": p.get("volume"), "muted": p.get("mute") }))
+            Ok(json!({
+                "volume": p.get("volume").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0),
+                "muted": p.get("mute").as_deref() == Some("yes"),
+            }))
         }
         "open" => {
             let t = target(args)?;
