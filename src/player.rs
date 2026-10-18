@@ -53,6 +53,19 @@ impl Player {
             init.set_property("idle", "yes")?;
             init.set_property("input-default-bindings", "no")?;
             init.set_property("volume-max", 150i64)?;
+            // mpv's built-in OSD scripts (stats, console, select, positioning, commands)
+            // are not reachable in vivi (no default bindings, its own UI); each is a Lua
+            // state and a thread. ytdl_hook stays for web URLs.
+            for o in [
+                "load-stats-overlay",
+                "load-console",
+                "load-select",
+                "load-positioning",
+                "load-commands",
+                "load-auto-profiles",
+            ] {
+                init.set_property(o, "no")?;
+            }
             // Resume: mpv watch-later files in $XDG_STATE_HOME/vivi/watch_later.
             let wl = crate::store::watch_later_dir();
             let _ = std::fs::create_dir_all(&wl);

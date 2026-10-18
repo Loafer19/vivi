@@ -84,6 +84,15 @@ pub fn apply_player(p: &Player, c: &Config) {
         },
     );
     p.set("ytdl-format", &ytdl_format(&c.playback.quality));
+    // Network cache: mpv's 150 + 50 MiB defaults are far more than streams need.
+    p.set(
+        "demuxer-max-bytes",
+        &format!("{}MiB", c.playback.cache_mib.clamp(4, 2048)),
+    );
+    p.set(
+        "demuxer-max-back-bytes",
+        &format!("{}MiB", c.playback.cache_back_mib.clamp(0, 2048)),
+    );
     let (file, list) = match c.playback.repeat.as_str() {
         "One" => ("inf", "no"),
         "All" => ("no", "inf"),

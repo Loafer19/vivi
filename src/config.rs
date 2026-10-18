@@ -80,6 +80,10 @@ pub struct Playback {
     /// mpv `gpu-hwdec-interop`: "auto" lets vivi pick the one for the GPU it renders on
     /// (VA-API on Mesa, CUDA on NVIDIA); any other value is passed to mpv as is.
     pub hwdec_interop: String,
+    /// Network read-ahead cache in MiB (mpv `demuxer-max-bytes`; mpv's own default is 150).
+    pub cache_mib: i64,
+    /// Already-played network data kept for seeking back, in MiB (`demuxer-max-back-bytes`).
+    pub cache_back_mib: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -343,6 +347,8 @@ impl Default for Playback {
             precise_seek: false,
             quality: "Best available".into(),
             hwdec_interop: "auto".into(),
+            cache_mib: 48,
+            cache_back_mib: 16,
         }
     }
 }
