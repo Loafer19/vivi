@@ -562,7 +562,7 @@ export component SidePanel inherits Rectangle {
                     if root.bookmarks.length == 0: VerticalLayout {
                         spacing: 10px; alignment: start;
                         Text { text: "No bookmarks yet — press + or Ctrl+B."; color: Theme.fg-a3; wrap: word-wrap; }
-                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; text: "Add bookmark"; clicked => { root.add-bookmark(); } } }
+                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; icon: @image-url("../assets/icons/bookmark.svg"); text: "Add bookmark"; clicked => { root.add-bookmark(); } } }
                     }
                     for it in root.bookmarks: TimeRow {
                         title: it.label; time: Format.hms(it.key.to-float(), true);
@@ -637,7 +637,7 @@ export component SidePanel inherits Rectangle {
                     if root.queue.length == 0: VerticalLayout {
                         spacing: 10px; alignment: start;
                         Text { text: "Queue is empty — add files or drop them on the window."; color: Theme.fg-a3; wrap: word-wrap; }
-                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; text: "Add files"; clicked => { root.queue-add(); } } }
+                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; icon: @image-url("../assets/icons/add-file.svg"); text: "Add files"; clicked => { root.queue-add(); } } }
                     }
                     VerticalLayout {
                         spacing: 2px; alignment: start;

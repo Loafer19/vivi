@@ -412,9 +412,9 @@ export component LibraryView inherits Rectangle {
                             Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; wrap: word-wrap; }
                             HorizontalLayout {
                                 alignment: center; spacing: Metrics.space-2; padding-top: 6px;
-                                PrimaryButton { text: "Open file"; clicked => { root.open-file(); } }
-                                SecondaryButton { text: "Open stream"; clicked => { root.open-network(); } }
-                                SecondaryButton { text: "Add folders"; clicked => { root.add-folders(); } }
+                                PrimaryButton { icon: @image-url("../assets/icons/file.svg"); text: "Open file"; clicked => { root.open-file(); } }
+                                SecondaryButton { icon: @image-url("../assets/icons/streaming.svg"); text: "Open stream"; clicked => { root.open-network(); } }
+                                SecondaryButton { icon: @image-url("../assets/icons/new_folder.svg"); text: "Add folders"; clicked => { root.add-folders(); } }
                             }
                         }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;

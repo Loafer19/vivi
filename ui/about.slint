@@ -83,7 +83,7 @@ export component AboutPage inherits VerticalLayout {
                     Text { text: About.message; color: Theme.fg-a3; font-size: Metrics.font-sm; wrap: word-wrap; }
                 }
                 if About.state == "available": VerticalLayout { alignment: center; PrimaryButton { text: About.download-label; clicked => { About.download(); } } }
-                VerticalLayout { alignment: center; SecondaryButton { text: "Check for updates"; enabled: About.state != "checking"; clicked => { About.check(); } } }
+                VerticalLayout { alignment: center; SecondaryButton { icon: @image-url("../assets/icons/refresh.svg"); text: "Check for updates"; enabled: About.state != "checking"; clicked => { About.check(); } } }
             }
             if About.state == "available" && About.notes != "": Rectangle {
                 background: Theme.field; border-radius: Metrics.radius-md;
@@ -111,7 +111,7 @@ export component AboutPage inherits VerticalLayout {
             padding: 18px; spacing: 6px;
             HorizontalLayout {
                 SectionHeader { caps: true; horizontal-stretch: 1; text: "BUILD"; vertical-alignment: center; }
-                SecondaryButton { text: About.copied != "" ? About.copied : "Copy system info"; clicked => { ti.select-all(); ti.copy(); ti.clear-selection(); About.copied = "Copied ✓"; } }
+                SecondaryButton { icon: @image-url("../assets/icons/copy.svg"); text: About.copied != "" ? About.copied : "Copy system info"; clicked => { ti.select-all(); ti.copy(); ti.clear-selection(); About.copied = "Copied ✓"; } }
             }
             for k[i] in About.build-keys: HorizontalLayout {
                 height: 24px;

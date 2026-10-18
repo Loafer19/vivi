@@ -185,7 +185,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                     });
                 }
             }
-            v.push(div(row("rotate", "Rotate 90°", "", "")));
+            v.push(div(row("rotate", "Rotate 90°", "rotate", "")));
             v.push(row("snapshot", "Take Snapshot", "snapshot", ""));
             v.push(row(
                 "fullscreen",

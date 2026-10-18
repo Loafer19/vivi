@@ -87,6 +87,7 @@ export global Icons {
 
     // Menu row icon name (src/menus.rs) → two-tone layers.
     public pure function menu(name: string) -> image {
+        if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-b.svg"); }
         if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-b.svg"); }
         if (name == "add-file") { return @image-url("../../assets/icons/menu/add-file.svg"); }
         if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-b.svg"); }
@@ -146,6 +147,7 @@ export global Icons {
         return @image-url("../../assets/icons/layers/menu_play-b.svg");
     }
     public pure function menu-accent(name: string) -> image {
+        if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-a.svg"); }
         if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-a.svg"); }
         if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-a.svg"); }
         if (name == "add-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_add-subtitle-tracks-a.svg"); }
@@ -180,6 +182,7 @@ export global Icons {
         return @image-url("../../assets/icons/layers/empty.svg");
     }
     public pure function menu-dim(name: string) -> image {
+        if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-d.svg"); }
         if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-d.svg"); }
         if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-d.svg"); }
         if (name == "add-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_add-subtitle-tracks-d.svg"); }
