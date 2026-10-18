@@ -197,14 +197,14 @@ pub struct NetworkStreams {
     /// Station picked in the browser, for the now-playing card.
     playing: Option<Stream>,
     np_url: String,
-    logo_task: crate::util::Task<(String, Option<LogoImg>)>,
+    logo_task: crate::util::Task<(String, Option<PathBuf>)>,
     poll: u32,
     /// Unfiltered results; `list` is its view (group chip + live filter + favorites first).
     all: Vec<Stream>,
     filtered_by: String,
     /// Row logos (by logo URL) and their background loader.
     logos: std::collections::HashMap<String, slint::Image>,
-    row_logo_rx: Option<Receiver<(String, Option<LogoImg>)>>,
+    row_logo_rx: Option<Receiver<(String, Option<PathBuf>)>>,
     logos_dirty: bool,
     /// Active group chip ("" = all).
     chip: String,
@@ -306,8 +306,7 @@ impl NetworkStreams {
         self.row_logo_rx = Some(rx);
         std::thread::spawn(move || {
             for l in want {
-                let img = fetch_logo(&l).and_then(|p| decode_logo(&p, LOGO_MAX));
-                if tx.send((l, img)).is_err() {
+                if tx.send((l.clone(), fetch_logo(&l))).is_err() {
                     break;
                 }
             }
@@ -603,38 +602,17 @@ pub(crate) fn migrate_logo_cache() -> usize {
     n
 }
 
-/// A cached logo decoded off the UI thread; [`LogoImg::into_image`] (UI thread) is cheap.
-pub(crate) enum LogoImg {
-    Pixels(slint::SharedPixelBuffer<slint::Rgba8Pixel>),
-    Svg(PathBuf),
+thread_local! {
+    /// Logos decoded by the image cache: (now-playing card?, key, image), drained in `tick`.
+    static READY: std::cell::RefCell<Vec<(bool, String, slint::Image)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-impl LogoImg {
-    pub(crate) fn into_image(self) -> Option<slint::Image> {
-        match self {
-            Self::Pixels(b) => Some(slint::Image::from_rgba8(b)),
-            Self::Svg(p) => slint::Image::load_from_path(&p).ok(),
-        }
-    }
-}
-
-/// Decode a cached logo or picture (call from a worker thread), shrunk to fit `max` px.
-pub(crate) fn decode_logo(p: &Path, max: u32) -> Option<LogoImg> {
-    if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg")) {
-        return Some(LogoImg::Svg(p.to_path_buf()));
-    }
-    let img = image::open(p).ok()?;
-    let img = if img.width() > max || img.height() > max {
-        img.thumbnail(max, max)
-    } else {
-        img
-    };
-    let img = img.into_rgba8();
-    Some(LogoImg::Pixels(slint::SharedPixelBuffer::clone_from_slice(
-        img.as_raw(),
-        img.width(),
-        img.height(),
-    )))
+/// The logo at `p` from the image cache, or `None` while it is decoded (it then arrives
+/// through [`READY`] under `key`).
+fn logo_image(p: &Path, size: u32, now_playing: bool, key: String) -> Option<slint::Image> {
+    crate::images::get(p, size, move |i| {
+        READY.with(|r| r.borrow_mut().push((now_playing, key, i)))
+    })
 }
 
 /// Download a station logo into the cache (once); `None` when it cannot be fetched or
@@ -730,9 +708,7 @@ impl NetworkStreams {
             a.global::<crate::NowPlaying>().set_station(name.into());
             if let Some(logo) = st.map(|s| s.logo).filter(|l| l.starts_with("http")) {
                 let u = path.clone();
-                self.logo_task = crate::util::Task::spawn(move || {
-                    (u, fetch_logo(&logo).and_then(|p| decode_logo(&p, LOGO_MAX)))
-                });
+                self.logo_task = crate::util::Task::spawn(move || (u, fetch_logo(&logo)));
             }
         }
         let g = |k: &str| cx.player.get(k).filter(|v| !v.trim().is_empty());
@@ -1165,11 +1141,20 @@ impl Plugin for NetworkStreams {
         if let Some(rx) = &self.row_logo_rx {
             let mut got = false;
             while let Ok((url, p)) = rx.try_recv() {
-                let img = p.and_then(LogoImg::into_image).unwrap_or_default();
-                self.logos.insert(url, img);
+                let img = p.and_then(|p| logo_image(&p, crate::images::ROW, false, url.clone()));
+                self.logos.insert(url, img.unwrap_or_default());
                 got = true;
             }
             self.logos_dirty |= got;
+        }
+        for (now_playing, key, img) in READY.with(|r| std::mem::take(&mut *r.borrow_mut())) {
+            if !now_playing {
+                self.logos.insert(key, img);
+                self.logos_dirty = true;
+            } else if key == self.np_url {
+                cx.app.global::<crate::NowPlaying>().set_logo(img);
+                cx.app.global::<crate::NowPlaying>().set_has_logo(true);
+            }
         }
         if let Some(rx) = &self.epg_rx {
             loop {
@@ -1196,11 +1181,13 @@ impl Plugin for NetworkStreams {
         }
         if let Some((url, path)) = self.logo_task.poll() {
             if url == self.np_url {
-                match path.and_then(LogoImg::into_image) {
+                let key = url.clone();
+                match path.and_then(|p| logo_image(&p, crate::images::TILE, true, key)) {
                     Some(img) => {
                         cx.app.global::<crate::NowPlaying>().set_logo(img);
                         cx.app.global::<crate::NowPlaying>().set_has_logo(true);
                     }
+                    // Not a picture, or still decoding (shown when READY has it).
                     None => cx.app.global::<crate::NowPlaying>().set_has_logo(false),
                 }
             }
@@ -1266,10 +1253,6 @@ mod tests {
         assert_eq!(out, dir.join("a.png"));
         assert_eq!(image::image_dimensions(&out).unwrap(), (128, 64));
         assert!(store_logo(&dir.join("b"), b"<html>").is_none());
-        let Some(LogoImg::Pixels(px)) = decode_logo(&out, 32) else {
-            panic!("png logo did not decode");
-        };
-        assert_eq!((px.width(), px.height()), (32, 16));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -26,11 +26,23 @@ pub(crate) fn chapter_thumbs(a: &AppWindow, p: &Player) {
         scenes::thumbs(&scenes::cache_roots(), &path, n)
     };
     let has: Vec<bool> = files.iter().map(Option::is_some).collect();
+    // Decoded on the image worker; each thumbnail is filled in when it is ready.
+    let weak = a.as_weak();
     let imgs: Vec<slint::Image> = files
         .iter()
-        .map(|f| {
+        .enumerate()
+        .map(|(i, f)| {
+            let weak = weak.clone();
             f.as_deref()
-                .and_then(|f| slint::Image::load_from_path(f).ok())
+                .and_then(|f| {
+                    crate::images::get(f, crate::images::ROW * 2, move |img| {
+                        let Some(a) = weak.upgrade() else { return };
+                        let m = a.global::<crate::Panel>().get_chapter_thumbs();
+                        if i < m.row_count() {
+                            m.set_row_data(i, img);
+                        }
+                    })
+                })
                 .unwrap_or_default()
         })
         .collect();

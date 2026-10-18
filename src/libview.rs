@@ -3,10 +3,10 @@
 use crate::config::Config;
 use crate::library::{self, Media};
 use crate::player::Player;
-use crate::{store, AppWindow, Item, LibItem};
+use crate::{images, store, AppWindow, Item, LibItem};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -63,9 +63,13 @@ impl Lib {
         };
         if cfg.library.thumbnails {
             let tp = library::thumb_path(&m.path);
-            if let Some(img) = tp.exists().then(|| library::load_thumb(&tp)).flatten() {
-                it.thumb = img;
-                it.has_thumb = true;
+            if tp.exists() {
+                // Decoded on the image worker; the row is filled when it is ready.
+                let key = m.path.clone();
+                if let Some(img) = images::get(&tp, images::TILE, move |i| set_thumb(&key, &i)) {
+                    it.thumb = img;
+                    it.has_thumb = true;
+                }
             } else if tp.with_extension("none").exists() {
                 // No picture available (e.g. audio without cover art).
             } else if let Some(tx) = &self.thumbs {
@@ -185,9 +189,13 @@ impl Lib {
 
     /// Use the playlist thumbnail chosen in the New Playlist dialog.
     fn cover(it: &mut LibItem, playlist: &std::path::Path) {
-        if let Some(img) = store::playlist_cover(playlist).and_then(|c| library::load_thumb(&c)) {
-            it.thumb = img;
-            it.has_thumb = true;
+        if let Some(c) = store::playlist_cover(playlist) {
+            let key = c.to_string_lossy().into_owned();
+            it.thumb_key = key.as_str().into();
+            if let Some(img) = images::get(&c, images::TILE, move |i| set_thumb(&key, &i)) {
+                it.thumb = img;
+                it.has_thumb = true;
+            }
         }
     }
 
@@ -647,7 +655,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     let thumbs = (cfg.borrow().library.thumbnails && library::ffmpeg_available()).then(|| {
         library::thumb_worker(move |path, file| {
             let _ = slint::invoke_from_event_loop(move || {
-                if let Some(img) = library::load_thumb(&file) {
+                let key = path.clone();
+                if let Some(img) = images::get(&file, images::TILE, move |i| set_thumb(&key, &i)) {
                     set_thumb(&path, &img);
                 }
             });
@@ -661,6 +670,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             if crate::plugins::network_streams::migrate_logo_cache() > 0 {
                 let _ = w.upgrade_in_event_loop(|a| a.global::<crate::Library>().invoke_refresh());
             }
+            // Keep the image caches on disk under their budget, oldest files first.
+            images::prune_disk(images::DISK_BUDGET);
         });
     }
 
@@ -1327,10 +1338,6 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
 
 thread_local! {
     static LOADED: RefCell<Option<Vec<Media>>> = const { RefCell::new(None) };
-    /// Recent pictures (station logos, covers, web thumbnails) by file, decoded once per
-    /// run on a worker thread; `None` while decoding or when the file is not an image.
-    static PICS: RefCell<HashMap<String, Option<slint::Image>>> = RefCell::default();
-    static PIC_TX: RefCell<Option<std::sync::mpsc::Sender<String>>> = const { RefCell::new(None) };
 }
 
 /// Show `img` on every library row whose `thumb_key` is `key`.
@@ -1348,37 +1355,9 @@ fn set_thumb(key: &str, img: &slint::Image) {
     });
 }
 
-/// The decoded picture for `path` if it is ready. Otherwise queues it once for the
-/// decoder thread (shrunk to the thumbnail size), which fills the rows keyed by `path`.
+/// The picture for `path` if it is in the image cache; otherwise it is decoded on the
+/// image worker and the rows keyed by `path` are filled when it is ready.
 fn picture(path: &str) -> Option<slint::Image> {
-    if let Some(v) = PICS.with(|p| p.borrow().get(path).cloned()) {
-        return v;
-    }
-    PICS.with(|p| p.borrow_mut().insert(path.to_string(), None));
-    PIC_TX.with(|t| {
-        let mut t = t.borrow_mut();
-        let tx = t.get_or_insert_with(|| {
-            let (tx, rx) = std::sync::mpsc::channel::<String>();
-            let _ = std::thread::Builder::new()
-                .name("vivi-pictures".into())
-                .spawn(move || {
-                    while let Ok(p) = rx.recv() {
-                        let img = crate::plugins::network_streams::decode_logo(
-                            Path::new(&p),
-                            library::THUMB_W,
-                        );
-                        let _ = slint::invoke_from_event_loop(move || {
-                            let Some(img) = img.and_then(|i| i.into_image()) else {
-                                return;
-                            };
-                            PICS.with(|c| c.borrow_mut().insert(p.clone(), Some(img.clone())));
-                            set_thumb(&p, &img);
-                        });
-                    }
-                });
-            tx
-        });
-        let _ = tx.send(path.to_string());
-    });
-    None
+    let key = path.to_string();
+    images::get(Path::new(path), images::TILE, move |i| set_thumb(&key, &i))
 }

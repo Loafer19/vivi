@@ -360,9 +360,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         }
                         "library.rescan" => rescan = true,
                         "library.clear_thumbs" => {
-                            let _ = std::fs::remove_dir_all(store::cache_dir().join("thumbs"));
+                            crate::images::clear();
+                            refresh();
                             a.global::<crate::Settings>()
-                                .set_status("Thumbnail cache cleared".into());
+                                .set_status("Image cache cleared".into());
                             return;
                         }
                         k if k.starts_with("library.remove:") => {

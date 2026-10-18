@@ -214,6 +214,11 @@ fn fetch_cover(url: &str) -> Option<PathBuf> {
     Some(p)
 }
 
+thread_local! {
+    /// Covers decoded by the image cache (by cover URL), drained in `tick`.
+    static READY: std::cell::RefCell<Vec<(String, slint::Image)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 /// The Internet Archive's "no image" thumbnail is a wide banner; album art is ~square.
 fn is_cover(img: &slint::Image) -> bool {
     let s = img.size();
@@ -1015,6 +1020,12 @@ impl Plugin for FreeMusic {
                 self.search(cx);
             }
         }
+        for (url, img) in READY.with(|r| std::mem::take(&mut *r.borrow_mut())) {
+            if is_cover(&img) {
+                self.covers.insert(url, img);
+                self.covers_dirty = true;
+            }
+        }
         let mut changed = false;
         let mut status = false;
         while let Ok(m) = self.rx.try_recv() {
@@ -1043,10 +1054,12 @@ impl Plugin for FreeMusic {
                     changed = true;
                 }
                 Msg::Cover(url, p) => {
-                    if let Some(img) = p
-                        .and_then(|p| slint::Image::load_from_path(&p).ok())
-                        .filter(is_cover)
-                    {
+                    let Some(p) = p else { continue };
+                    let key = url.clone();
+                    let img = crate::images::get(&p, crate::images::ROW, move |i| {
+                        READY.with(|r| r.borrow_mut().push((key, i)))
+                    });
+                    if let Some(img) = img.filter(is_cover) {
                         self.covers.insert(url, img);
                         self.covers_dirty = true;
                     }

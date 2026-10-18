@@ -162,6 +162,16 @@ impl<'a> Rows<'a> {
 pub(crate) const SOON: &str = " (Not available yet.)";
 
 /// All rows; the bool marks "advanced" rows hidden behind "Advanced Options".
+/// Settings → Library → Clear image cache: what the cache holds and its size on disk.
+fn image_cache_info() -> String {
+    let mb = |b: u64| b as f64 / (1024.0 * 1024.0);
+    format!(
+        "Thumbnails, covers and station logos in ~/.cache/vivi use {:.1} MB (at most {:.0} MB; oldest go first). They are made again when needed.",
+        mb(crate::images::disk_usage()),
+        mb(crate::images::DISK_BUDGET)
+    )
+}
+
 pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
     let mut r = Rows {
         c,
@@ -562,7 +572,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .header("Metadata & Artwork")
         .toggle("library.thumbnails", "Thumbnails", "Generate video thumbnails and album covers with ffmpeg (if installed), cached in ~/.cache/vivi/thumbs.", c.library.thumbnails)
         .advanced()
-        .action("library.clear_thumbs", "Clear thumbnail cache", "Delete cached thumbnails; they are regenerated when needed.", "Clear")
+        .action("library.clear_thumbs", "Clear image cache", &image_cache_info(), "Clear")
         .stub_toggle("stub.library.hidden", "Show hidden files", &s(""), false);
 
     // ---------- Network ----------

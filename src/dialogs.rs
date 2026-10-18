@@ -71,11 +71,16 @@ fn push_np(a: &AppWindow) {
             .collect();
         a.global::<crate::Dialogs>()
             .set_new_playlist_files(slint::ModelRc::new(slint::VecModel::from(names)));
-        match n
-            .cover
-            .as_deref()
-            .and_then(|c| slint::Image::load_from_path(c).ok())
-        {
+        let weak = a.as_weak();
+        match n.cover.as_deref().and_then(|c| {
+            crate::images::get(c, crate::images::TILE, move |img| {
+                if let Some(a) = weak.upgrade() {
+                    a.global::<crate::Dialogs>().set_new_playlist_cover(img);
+                    a.global::<crate::Dialogs>()
+                        .set_new_playlist_has_cover(true);
+                }
+            })
+        }) {
             Some(img) => {
                 a.global::<crate::Dialogs>().set_new_playlist_cover(img);
                 a.global::<crate::Dialogs>()
@@ -248,8 +253,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                 match store::save_playlist(&name, &files) {
                     Ok(path) => {
                         if let Some(c) = cover {
-                            if let Err(e) = store::set_playlist_cover(&path, &c) {
-                                eprintln!("vivi: playlist cover: {e}");
+                            match store::set_playlist_cover(&path, &c) {
+                                Ok(p) => crate::images::forget(&p),
+                                Err(e) => eprintln!("vivi: playlist cover: {e}"),
                             }
                         }
                         a.global::<crate::Dialogs>()

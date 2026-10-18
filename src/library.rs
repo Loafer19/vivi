@@ -341,15 +341,6 @@ pub fn make_art(path: &str, out: &Path) {
     }
 }
 
-pub fn load_thumb(p: &Path) -> Option<slint::Image> {
-    let b = std::fs::read(p).ok()?;
-    if b.len() != (THUMB_W * THUMB_H * 4) as usize {
-        return None;
-    }
-    let buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&b, THUMB_W, THUMB_H);
-    Some(slint::Image::from_rgba8(buf))
-}
-
 /// Background worker: receives media, produces thumbnails, reports the path back.
 pub fn thumb_worker(done: impl Fn(String, PathBuf) + Send + 'static) -> mpsc::Sender<Media> {
     let (tx, rx) = mpsc::channel::<Media>();

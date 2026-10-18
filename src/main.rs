@@ -5,6 +5,7 @@ mod config;
 mod desktop;
 mod dialogs;
 mod fx;
+mod images;
 mod ipc;
 mod keymap;
 mod library;
