@@ -86,6 +86,20 @@ fn unescape(s: &str) -> String {
         .replace("&amp;", "&")
 }
 
+/// Guide XML from a download: gzip (`.xml.gz`) is unpacked (at most [`MAX_XML`]), plain
+/// XML is used as it is.
+fn guide_text(b: &[u8]) -> Result<String, String> {
+    if !b.starts_with(&[0x1f, 0x8b]) {
+        return Ok(String::from_utf8_lossy(b).into_owned());
+    }
+    let mut xml = String::new();
+    flate2::read::GzDecoder::new(b)
+        .take(MAX_XML)
+        .read_to_string(&mut xml)
+        .map_err(|e| format!("EPG: {e}"))?;
+    Ok(xml)
+}
+
 /// Programmes running now or starting within the next 12 hours.
 pub fn parse_xmltv(xml: &str, now: i64) -> Guide {
     let mut g = Guide::new();
@@ -195,16 +209,7 @@ pub fn load(url: &str) -> Result<Guide, String> {
     }
     let fetched = (|| {
         let b = web::get_bytes(url, MAX_DOWNLOAD)?.ok_or("EPG not found (404)")?;
-        let mut xml = String::new();
-        if b.starts_with(&[0x1f, 0x8b]) {
-            flate2::read::GzDecoder::new(&b[..])
-                .take(MAX_XML)
-                .read_to_string(&mut xml)
-                .map_err(|e| format!("EPG: {e}"))?;
-        } else {
-            xml = String::from_utf8_lossy(&b).into_owned();
-        }
-        Ok::<_, String>(parse_xmltv(&xml, t))
+        Ok::<_, String>(parse_xmltv(&guide_text(&b)?, t))
     })();
     match fetched {
         Ok(guide) => {
@@ -224,6 +229,17 @@ pub fn load(url: &str) -> Result<Guide, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guide_gzip_and_plain() {
+        use std::io::Write;
+        let xml = "<tv><channel id=\"a\"/></tv>";
+        let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        e.write_all(xml.as_bytes()).unwrap();
+        assert_eq!(guide_text(&e.finish().unwrap()).unwrap(), xml);
+        assert_eq!(guide_text(xml.as_bytes()).unwrap(), xml);
+        assert!(guide_text(&[0x1f, 0x8b, 0, 1, 2]).is_err());
+    }
 
     #[test]
     fn xmltv_now_next() {

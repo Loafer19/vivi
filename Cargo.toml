@@ -20,8 +20,9 @@ serde_json = "1"
 rustfft = "6"
 symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac"] }
 sha2 = "0.11.1"
-flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
-zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Deflate through miniz_oxide, the backend png and usvg already link (one implementation, not two).
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2"] }
 rusty-chromaprint = "0.3.0"
 # QR codes for plugin pairing dialogs (`script-message vivi-qr`); no image/svg features.
 qrcode = { version = "0.14", default-features = false }
