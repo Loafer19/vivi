@@ -425,7 +425,18 @@ pub fn epg_url(header: &str) -> String {
 
 /// Group names of a `group-title` (iptv-org joins several with `;`).
 pub(crate) fn groups_of(s: &Stream) -> impl Iterator<Item = &str> {
-    s.group.split(';').map(str::trim).filter(|g| !g.is_empty())
+    // radio-browser tags and SomaFM genres are comma lists; SomaFM adds its description
+    // after " — " (also in favorites saved before), which is not a group.
+    let sep = if matches!(s.source.as_str(), "SomaFM" | "radio-browser.info") {
+        ','
+    } else {
+        ';'
+    };
+    s.group
+        .split(';')
+        .flat_map(move |g| g.split(" — ").next().unwrap_or("").split(sep))
+        .map(str::trim)
+        .filter(|g| !g.is_empty())
 }
 
 /// The most common groups of a channel list, biggest first (at most `max`).

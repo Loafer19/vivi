@@ -148,3 +148,20 @@ export component AdvancedBar inherits Rectangle {
     }
     ata := TouchArea { accessible-role: button; accessible-label: "Advanced Options"; accessible-checked: root.expanded; mouse-cursor: pointer; clicked => { root.expanded = !root.expanded; root.toggled(root.expanded); } }
 }
+
+// Edge fades over a horizontally scrolling row: shown on the side that has more
+// content, in the colour of the surface underneath.
+export component EdgeFades inherits Rectangle {
+    in property <length> viewport-x;
+    in property <length> viewport-width;
+    in property <brush> base;
+    property <length> w: 36px;
+    if root.viewport-x < -1px: Rectangle {
+        x: 0; width: root.w; height: root.height;
+        background: @linear-gradient(90deg, root.base 0%, transparent 100%);
+    }
+    if root.viewport-x > root.width - root.viewport-width + 1px: Rectangle {
+        x: root.width - root.w; width: root.w; height: root.height;
+        background: @linear-gradient(270deg, root.base 0%, transparent 100%);
+    }
+}

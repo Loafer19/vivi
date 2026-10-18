@@ -4,7 +4,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Item } from "panel.slint";
-import { Dropdown, TextField } from "core/controls.slint";
+import { Dropdown, TextField, EdgeFades } from "core/controls.slint";
 import { Modal } from "core/modal.slint";
 import { FlatButton, PrimaryButton } from "core/buttons.slint";
 import { Badge, BadgeTone } from "core/rows.slint";
@@ -547,18 +547,35 @@ export component MusicDialog inherits Modal {
             }
             FlatButton { height: 36px; text: root.busy ? "…" : root.search-label; enabled: !root.busy; clicked => { root.selected = -1; root.search(); } }
         }
+        // Filter chips: one row that scrolls sideways (drag or wheel) with faded edges when
+        // it overflows; long labels elide at 180 px and show in full in a tooltip.
         if root.chips.length > 0: Rectangle {
-            height: 34px; clip: true;
-            HorizontalLayout {
-                padding-left: 12px; padding-right: 12px; padding-bottom: 6px; spacing: 6px; alignment: start;
-                for c in root.chips: Rectangle {
-                    width: ct.preferred-width + 20px; height: 26px; border-radius: self.height / 2;
-                    background: c == root.chip ? Theme.accent.with-alpha(0.30) : (cta.has-hover ? Theme.bg-a1 : Theme.bg-a3);
-                    border-width: 1px; border-color: c == root.chip ? Theme.accent : transparent;
-                    ct := Text { text: c; color: c == root.chip ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
-                    cta := TouchArea { accessible-role: button; accessible-label: c; accessible-checked: c == root.chip; mouse-cursor: pointer; clicked => { root.selected = -1; root.chip-clicked(c); } }
+            height: 34px;
+            chip-fl := Flickable {
+                x: 12px; y: 0; width: parent.width - 24px; height: 28px;
+                content-width: max(self.width, chip-row.preferred-width);
+                // The mouse wheel scrolls the row sideways.
+                TouchArea {
+                    x: 0; y: 0; width: chip-fl.content-width; height: chip-fl.height;
+                    scroll-event(e) => {
+                        if chip-fl.content-width <= chip-fl.width { return reject; }
+                        chip-fl.content-x = max(chip-fl.width - chip-fl.content-width, min(0, chip-fl.content-x + (abs(e.delta-y) > abs(e.delta-x) ? e.delta-y : e.delta-x)));
+                        accept
+                    }
+                }
+                chip-row := HorizontalLayout {
+                    x: 0; y: 0; height: 26px; spacing: 6px; alignment: start;
+                    for c in root.chips: Rectangle {
+                        width: min(180px, ct.preferred-width + 20px); height: 26px; border-radius: self.height / 2;
+                        background: c == root.chip ? Theme.accent.with-alpha(0.30) : (cta.has-hover ? Theme.bg-a1 : Theme.bg-a3);
+                        border-width: 1px; border-color: c == root.chip ? Theme.accent : transparent;
+                        ct := Text { x: 10px; width: parent.width - 20px; text: c; color: c == root.chip ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; overflow: elide; }
+                        cta := TouchArea { accessible-role: button; accessible-label: c; accessible-checked: c == root.chip; mouse-cursor: pointer; clicked => { root.selected = -1; root.chip-clicked(c); } }
+                        if ct.preferred-width > ct.width + 1px: Tooltip { text: @markdown("\{c}"); }
+                    }
                 }
             }
+            EdgeFades { x: 12px; y: 0; width: parent.width - 24px; height: 28px; viewport-x: chip-fl.content-x; viewport-width: chip-fl.content-width; base: Theme.bg-a4; }
         }
         if root.filters.length > 0: HorizontalLayout {
             padding-left: 12px; padding-right: 12px; padding-bottom: 8px; spacing: 8px;

@@ -8,6 +8,7 @@
 
 ### Fixed
 - **Station names in the Network Streams list are no longer cut to a few letters**: long descriptions (SomaFM genres and blurbs) took the whole row. The description now elides first, the name keeps up to half the row, and a name that still has to elide shows in full in a tooltip. The browser also grows with the window (up to 1400 × 960 px) instead of staying 900 × 640, with a narrower details pane.
+- **Network Streams filter chips are short and stay inside the dialog**: SomaFM chips showed each channel's whole description ("70s, rock — Mellow album rock from the Seventies…") and ran off the right edge. Chips are now the genre or group names (SomaFM genres and radio-browser tags one per chip, also for favorites saved earlier), a long label elides at 180 px with the full text in a tooltip, and when the chips do not fit the row scrolls sideways (drag or mouse wheel) with faded edges, like the Customize rows.
 
 ## [0.12.0] - 2026-10-18
 

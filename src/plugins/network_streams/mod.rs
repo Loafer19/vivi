@@ -1336,6 +1336,7 @@ mod tests {
         assert_eq!(s[0].url, "http://b");
         assert_eq!(s[0].group, "jazz, smooth");
         assert_eq!(s[0].label(), "France  ·  MP3 128 kbps  ·  jazz, smooth");
+        assert_eq!(top_groups(&s, 5), ["jazz", "smooth"]);
     }
 
     #[test]
@@ -1450,6 +1451,9 @@ mod tests {
         assert_eq!(s[0].url, "http://p/gs130.pls");
         assert_eq!(s[0].logo, "http://i/s.png");
         assert!(s[0].group.starts_with("ambient, electronica"));
+        // Chips are the genres, not the description.
+        assert_eq!(top_groups(&s, 5), ["ambient", "electronica"]);
+        assert_eq!(by_group(&s, "electronica").len(), 1);
     }
 
     /// Live iptv-org and SomaFM. `--ignored`.
