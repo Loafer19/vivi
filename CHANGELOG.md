@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Tray icon and background playback** (Linux, StatusNotifierItem): closing the window keeps music and radio playing with Vivi in the system tray. Left click shows / hides the window, middle click plays / pauses; the menu has the current title, Play / Pause, Previous, Next, Show / Hide, plugin entries (`tray.item`), active downloads and Quit, and the tooltip shows the title. Starting `vivi` again (or opening a file with it) brings the hidden window back and plays the file. Settings → General → Window → Close button: *Minimize to tray* (default) or *Quit*; without a system tray closing quits as before.
 - **Desktop notifications from extensions** (`notify`): Free Music tells you when a download finishes or fails with a system notification on Linux (`org.freedesktop.Notifications`); packages can send `vivi-notify`. Turn it off in Settings → Extensions → Options (messages then show in the player).
 - **Plugin buttons in the bottom bar**: Customize Player lists buttons from your extensions (Karaoke lyrics view, Mark intro / credits, Search subtitles online, and any package that contributes `controlbar.button`) after the built-in items; none is on until you add it, and a button hides while its plugin is off.
 - **Home widgets**: plugins that contribute `home.widget` get a card under *Widgets* on Home (Network Streams: Radio stations, Free Music: Discover free music); show / hide and reorder them from the plugin's gear view in Extensions.

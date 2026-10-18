@@ -29,6 +29,11 @@ pub(super) const GENERAL: &[Field] = &[
         set: |c, v| c.general.remote_control = on(v),
     },
     Field {
+        id: "general.close_button",
+        get: Some(|c| c.general.close_button.clone()),
+        set: |c, v| c.general.close_button = v.into(),
+    },
+    Field {
         id: "general.save_log",
         get: Some(|c| c.general.save_log.to_string()),
         set: |c, v| c.general.save_log = on(v),

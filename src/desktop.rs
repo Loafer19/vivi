@@ -58,7 +58,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     }
                     Cmd::Volume(v) => p.set_volume(v),
                     Cmd::Open(u) => p.open(u.strip_prefix("file://").unwrap_or(&u)),
-                    Cmd::Raise => a.window().request_redraw(),
+                    Cmd::Raise => crate::tray::show(&a),
                     Cmd::Quit => {
                         let _ = slint::quit_event_loop();
                     }

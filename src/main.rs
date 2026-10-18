@@ -28,6 +28,7 @@ mod render;
 mod scenes;
 mod settings;
 mod store;
+mod tray;
 mod util;
 mod viz;
 
@@ -69,6 +70,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             (files, links)
         }
     };
+    // A Vivi with a tray icon is running: it shows its window and opens the files.
+    if links.is_empty() && tray::forward(&cli) {
+        return Ok(());
+    }
     app::startup::init()?;
 
     let app = AppWindow::new()?;
@@ -122,7 +127,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     side_panel(&app, &player, log);
     queue_and_resume(&app, &player, log);
 
-    app.run()?;
+    // The loop runs until Quit (not until the last window closes), so closing can hide
+    // the window to the tray while playback continues (src/tray.rs).
+    app.show()?;
+    slint::run_event_loop_until_quit()?;
+    let _ = app.hide();
     player.save_position();
     Ok(())
 }

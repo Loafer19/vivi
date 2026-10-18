@@ -211,6 +211,14 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             &s(""),
             false,
         )
+        .header("Window")
+        .choice(
+            "general.close_button",
+            "Close button",
+            "Minimize to tray keeps music and radio playing with an icon in the system tray (click it to bring Vivi back). Without a system tray, closing quits.",
+            &schema::get(c, "general.close_button"),
+            &crate::config::CLOSE_BUTTON,
+        )
         .header("Remote control")
         .toggle(
             "general.remote_control",

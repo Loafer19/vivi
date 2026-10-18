@@ -42,6 +42,7 @@ pub(crate) fn setup_features(
     fx::setup(app, player);
     dialogs::setup(app, player);
     ipc::setup(app, player, cfg.borrow().general.remote_control);
+    crate::tray::setup(app, player, cfg.clone());
     if screenshot_mode() {
         debug_ui(app);
     }

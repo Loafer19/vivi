@@ -143,7 +143,13 @@ pub struct General {
     pub remote_control: bool,
     /// Settings → About: query GitHub for a newer release on startup (off by default).
     pub check_updates: bool,
+    /// Window close button: "Minimize to tray" (keeps playing; only while a system tray
+    /// is available, see `src/tray.rs`) or "Quit".
+    pub close_button: String,
 }
+
+/// Choices of `general.close_button`.
+pub const CLOSE_BUTTON: [&str; 2] = ["Minimize to tray", "Quit"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -218,6 +224,7 @@ impl Default for General {
             log_level: "Errors only".into(),
             remote_control: false,
             check_updates: false,
+            close_button: CLOSE_BUTTON[0].into(),
         }
     }
 }
