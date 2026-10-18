@@ -2,7 +2,7 @@
 # Prebuilt binaries from the GitHub release tarball. pkgver and sha256sums are bumped by
 # the release workflow (.github/workflows/release.yml, job "packaging"); see packaging/aur/README.md.
 pkgname=vivi-bin
-pkgver=0.11.1
+pkgver=0.12.0
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64')
@@ -18,8 +18,8 @@ conflicts=('vivi' 'vivi-git')
 options=('!debug' '!strip')
 source_x86_64=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-${CARCH}.tar.gz")
 source=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
-sha256sums=('5e7714cca801309be6cdd7faf00ba4d5e5f6c4dadd1bcc684c7bf3a4db08c19a')
-sha256sums_x86_64=('20e1e4bac095f9464371f291523d1e42ddc5c7652b327c6b7ded7437421a429c')
+sha256sums=('0b549d3cd7dd94d11f934bd10458e420a919726bafb5e01126153b8decf27ca9')
+sha256sums_x86_64=('0266f20ba331ff7ec34e216e7842fd95f50ba620d452a263366efe16bebed372')
 
 package() {
   cd "vivi-v${pkgver}-linux-${CARCH}"
