@@ -35,7 +35,7 @@ component JobRow inherits Rectangle {
                 Text { text: root.job.title; color: Theme.fg-1; font-size: Metrics.font-base; overflow: elide; horizontal-stretch: 1; }
                 Text { text: root.job.plugin; color: Theme.fg-a3; font-size: Metrics.font-sm; }
             }
-            if root.running: Rectangle {
+            if root.job.state == "active" || root.job.state == "paused": Rectangle {
                 height: 4px; border-radius: 2px; background: Theme.bg-a1;
                 Rectangle {
                     x: 0; height: 100%; border-radius: 2px;

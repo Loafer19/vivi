@@ -467,15 +467,15 @@ export component LibraryView inherits Rectangle {
                     horizontal-stretch: 1; vertical-alignment: center; font-size: Metrics.font-base; color: Theme.fg-a3;
                     text: root.nav == "downloads" ? Downloads.jobs.length + " downloads" : root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
                 }
-                HeadIcon {
+                if root.nav != "downloads": HeadIcon {
                     label: "Sort"; icon: root.sort != "name" && root.sort != "title" ? @image-url("../assets/icons/sort-active.svg") : @image-url("../assets/icons/sort.svg");
                     clicked => { root.menu-request("sort", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
                 }
-                HeadIcon {
+                if root.nav != "downloads": HeadIcon {
                     label: "View"; icon: @image-url("../assets/icons/list.svg");
                     clicked => { root.menu-request("view", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
                 }
-                HeadIcon {
+                if root.nav != "downloads": HeadIcon {
                     label: "Search"; icon: @image-url("../assets/icons/search.svg");
                     clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }

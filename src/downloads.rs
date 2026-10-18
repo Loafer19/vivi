@@ -270,14 +270,28 @@ pub fn summary(jobs: &[Job]) -> (usize, f32) {
     (run.len(), p)
 }
 
-/// "2 downloading · 45%" (empty when nothing runs).
+/// "2 downloading · 1 queued · 45%" (empty when nothing runs).
 pub fn summary_line(jobs: &[Job]) -> String {
     let (n, p) = summary(jobs);
-    match (n, p >= 0.0) {
-        (0, _) => String::new(),
-        (n, true) => format!("{n} downloading · {}%", (p * 100.0).round() as i32),
-        (n, false) => format!("{n} downloading"),
+    if n == 0 {
+        return String::new();
     }
+    let count = |s: State| jobs.iter().filter(|j| j.state == s).count();
+    let mut parts: Vec<String> = [
+        (State::Active, "downloading"),
+        (State::Queued, "queued"),
+        (State::Paused, "paused"),
+    ]
+    .iter()
+    .filter_map(|&(s, w)| {
+        let c = count(s);
+        (c > 0).then(|| format!("{c} {w}"))
+    })
+    .collect();
+    if p >= 0.0 {
+        parts.push(format!("{}%", (p * 100.0).round() as i32));
+    }
+    parts.join(" · ")
 }
 
 pub fn size(b: u64) -> String {
@@ -572,6 +586,27 @@ pub fn refresh() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn summary_counts_states() {
+        let job = |state, done, total| Job {
+            state,
+            done,
+            total,
+            ..Job::default()
+        };
+        let jobs = [
+            job(State::Active, 300, 1000),
+            job(State::Queued, 0, 0),
+            job(State::Paused, 200, 1000),
+            job(State::Done, 5, 5),
+        ];
+        assert_eq!(
+            summary_line(&jobs),
+            "1 downloading · 1 queued · 1 paused · 25%"
+        );
+        assert_eq!(summary_line(&jobs[1..2]), "1 queued");
+    }
 
     #[test]
     fn reports_merge_and_restore() {
