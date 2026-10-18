@@ -16,7 +16,7 @@ pub(crate) fn customize(
         move |f: &dyn Fn(&mut Vec<String>)| {
             let Some(a) = w.upgrade() else { return };
             let mut c = cfg.borrow_mut();
-            let mut t = config::sanitize_toolbar(&c.interface.toolbar);
+            let mut t = visible_toolbar(&c.interface.toolbar, &plugin_buttons());
             f(&mut t);
             c.interface.toolbar = t;
             c.interface.profile = profile_of(&c.interface);

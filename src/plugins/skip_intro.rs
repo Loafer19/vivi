@@ -181,6 +181,7 @@ impl Plugin for SkipIntro {
             "skip",
         )
         .contribute(contrib::PALETTE_COMMAND, "Mark intro / credits here", "mark")
+        .contribute(contrib::CONTROLBAR_BUTTON, "Mark intro / credits here", "mark")
         .setting(SettingSpec::toggle(
             "auto",
             "Skip automatically",

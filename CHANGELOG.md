@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Plugin buttons in the bottom bar**: Customize Player lists buttons from your extensions (Karaoke lyrics view, Mark intro / credits, Search subtitles online, and any package that contributes `controlbar.button`) after the built-in items; none is on until you add it, and a button hides while its plugin is off.
 - **Home widgets**: plugins that contribute `home.widget` get a card under *Widgets* on Home (Network Streams: Radio stations, Free Music: Discover free music); show / hide and reorder them from the plugin's gear view in Extensions.
 - **Command palette** (`Ctrl+K`): type to fuzzy-search every player action (with its shortcut), Extensions / Customize / Open Network Stream, the sources and every plugin command (`palette.command`); Up / Down / Page Up / Page Down select, Enter runs, Esc closes. Rows are list items for screen readers. `Ctrl+K` used to be a second Play / pause key (`K` and Space still are).
 - **Plugin side drawer** in the player: a right slide-out panel with a tab per plugin that contributes `drawer.panel` (Lyrics shows the synced lines with the current one highlighted; Network Streams its actions), a two-tone gear to its settings and a close button. It hides with the player controls and Esc closes it; open it from the player menu → Plugins → Side drawer or the palette.

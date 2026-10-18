@@ -637,6 +637,7 @@ impl Plugin for SubtitleSearch {
         )
         .contribute(contrib::MENU_SUBTITLES, "Search online…", "search-online")
         .contribute(contrib::PALETTE_COMMAND, "Search subtitles online", "search-online")
+        .contribute(contrib::CONTROLBAR_BUTTON, "Search subtitles online", "search-online")
         .setting(SettingSpec::secret(
             "api-key",
             "OpenSubtitles API key",

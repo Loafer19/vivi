@@ -25,6 +25,7 @@ import { Menus } from "state/menus.slint";
 import { Library } from "state/library.slint";
 import { Settings } from "state/settings.slint";
 import { Customize } from "state/customize.slint";
+import { Icons } from "core/icons.slint";
 import { Lyrics } from "state/lyrics.slint";
 import { Subtitles } from "state/subtitles.slint";
 import { MusicDialogState, MdCaps } from "state/music-dialog.slint";
@@ -487,16 +488,20 @@ component BarItem inherits HorizontalLayout {
 
 component OverflowRow inherits Rectangle {
     in property <string> id;
+    // Plugin buttons: their own label / icon (else the Tools catalogue's).
+    in property <string> plabel;
+    in property <image> picon;
+    property <string> label: root.plabel != "" ? root.plabel : Tools.label(root.id);
     in property <bool> active;
     callback act(string);
     border-radius: Metrics.radius-sm;
     background: ta.has-hover ? Theme.bg-a1 : transparent;
     clip: true;
-    ta := TouchArea { accessible-role: button; accessible-label: Tools.label(root.id); mouse-cursor: pointer; clicked => { root.act(root.id); } }
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; mouse-cursor: pointer; clicked => { root.act(root.id); } }
     HorizontalLayout {
         padding-left: 8px; spacing: 10px;
-        Icon { source: Tools.icon(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
-        Text { text: Tools.label(root.id); color: root.active ? Theme.accent : Theme.fg-1; vertical-alignment: center; }
+        Icon { source: root.plabel != "" ? root.picon : Tools.icon(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
+        Text { text: root.label; color: root.active ? Theme.accent : Theme.fg-1; vertical-alignment: center; }
     }
 }
 
@@ -1025,7 +1030,13 @@ export component AppWindow inherits Window {
                         seek(t) => { Playback.seek(t); fs.focus(); }
                     } }
                     if id == "spacer" || (id == "seek" && root.bar-classic): Rectangle { horizontal-stretch: 1; }
-                    if on && !root.is-core(id): BarItem {
+                    // A plugin's button (`controlbar.button`), when the user added it in Customize.
+                    if on && i < Customize.bar-meta.length && Customize.bar-meta[i].label != "": IconButton { tab-focus: false;
+                        size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: Customize.bar-meta[i].label;
+                        icon: Icons.plugin(Customize.bar-meta[i].icon);
+                        clicked => { root.bar-act(id); fs.focus(); }
+                    }
+                    if on && !root.is-core(id) && (i >= Customize.bar-meta.length || Customize.bar-meta[i].label == ""): BarItem {
                         id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); vstyle: Customize.vol-style; boxed: root.bar.boxed; muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;
                         act(x) => { root.bar-act(x); fs.focus(); }
                         volume-changed(v) => { Playback.volume = v; Playback.volume-changed(v); }
@@ -1178,7 +1189,8 @@ export component AppWindow inherits Window {
         }
         VerticalLayout {
             padding: 6px;
-            for id[i] in Customize.bar-items: OverflowRow { visible: i < Customize.bar-cum.length && Customize.bar-cum[i] > root.bar-fit; height: self.visible ? 36px : 0; id: id; active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
+            for id[i] in Customize.bar-items: OverflowRow { visible: i < Customize.bar-cum.length && Customize.bar-cum[i] > root.bar-fit; height: self.visible ? 36px : 0; id: id;
+                plabel: i < Customize.bar-meta.length ? Customize.bar-meta[i].label : ""; picon: Icons.plugin(i < Customize.bar-meta.length ? Customize.bar-meta[i].icon : ""); active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
         }
     }
 
@@ -1294,6 +1306,7 @@ export component AppWindow inherits Window {
         vol-styles: Customize.vol-styles; vol-style: Customize.vol-style;
         pick-volume(st) => { Customize.pick-volume(st); }
         available: Customize.available;
+        items-meta: Customize.bar-meta; available-meta: Customize.available-meta;
         profiles: Customize.profiles; profile: Customize.profile;
         move(i, d) => { Customize.move(i, d); }
         remove(i) => { Customize.remove(i); }

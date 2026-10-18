@@ -4,6 +4,8 @@ import { Modal } from "core/modal.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 import { BarStyle, Bars, VolumeStyle } from "core/types.slint";
 import { EdgeFades } from "core/controls.slint";
+import { Icons } from "core/icons.slint";
+import { ToolMeta } from "state/customize.slint";
 
 export global Tools {
     public pure function icon(id: string) -> image {
@@ -84,6 +86,9 @@ component Glyph inherits Rectangle {
 // One placed item: icon with move/remove controls and a hover label.
 component Placed inherits Rectangle {
     in property <string> id;
+    // A plugin button's label / icon key (empty label = built-in item).
+    in property <ToolMeta> meta;
+    property <bool> plug: root.meta.label != "";
     in property <bool> first;
     in property <bool> last;
     in property <int> index;
@@ -111,10 +116,10 @@ component Placed inherits Rectangle {
         x: root.steps * root.pitch + (root.steps > 0 ? root.width + 2px : -4px); y: 4px;
         width: 2px; height: root.height - 8px; background: Theme.accent;
     }
-    Icon { y: 7px; source: Tools.icon(root.id); width: 20px; height: 20px; tint: Theme.fg-1; }
+    Icon { y: 7px; source: root.plug ? Icons.plugin(root.meta.icon) : Tools.icon(root.id); width: 20px; height: 20px; tint: Theme.fg-1; }
     Text {
         x: 4px; y: 30px; width: parent.width - 8px; height: 16px;
-        text: Tools.short(root.id); color: Theme.fg-a2; font-size: Metrics.font-xs;
+        text: root.plug ? root.meta.label : Tools.short(root.id); color: Theme.fg-a2; font-size: Metrics.font-xs;
         horizontal-alignment: center; vertical-alignment: center; overflow: elide;
     }
     HorizontalLayout {
@@ -126,13 +131,14 @@ component Placed inherits Rectangle {
     if hov.has-hover: Rectangle {
         y: -28px; height: 24px; width: tl.preferred-width + 14px; z: 5;
         background: Theme.bg-a1; border-radius: Metrics.radius-sm; border-width: 1px; border-color: Theme.divider;
-        tl := Text { text: Tools.label(root.id); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
+        tl := Text { text: root.plug ? root.meta.label : Tools.label(root.id); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
     }
 }
 
 component Zone inherits Rectangle {
     in property <string> title;
     in property <[string]> items;
+    in property <[ToolMeta]> metas;
     in property <int> offset;
     in property <bool> lock-first;
     in property <bool> lock-last;
@@ -146,6 +152,7 @@ component Zone inherits Rectangle {
         x: 10px; y: 22px; height: 74px; spacing: 6px; alignment: start;
         for id[i] in root.items: Placed {
             id: id;
+            meta: i < root.metas.length ? root.metas[i] : { label: "", icon: "" };
             first: i == 0;
             last: i == root.items.length - 1;
             index: i; count: root.items.length;
@@ -219,6 +226,8 @@ component VolumePreview inherits Rectangle {
 
 export component CustomizeDialog inherits Modal {
     in property <[string]> items;
+    in property <[ToolMeta]> items-meta;
+    in property <[ToolMeta]> available-meta;
     in property <[string]> styles;
     in property <BarStyle> bar-style;
     callback pick-style(string);
@@ -244,7 +253,7 @@ export component CustomizeDialog inherits Modal {
         padding: 22px; spacing: 14px;
         Text { text: "Customize Player"; color: Theme.fg-1; font-size: Metrics.font-xl; font-weight: 600; }
         Text {
-            text: "Every element is movable: drag a tile (or use ‹ ›) to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it. The bar under this dialog is a live preview.";
+            text: "Every element is movable: drag a tile (or use ‹ ›) to re-order the bottom bar (left → right) and × to remove an item. Click an item below to add it; buttons from your extensions come after the built-in items. The bar under this dialog is a live preview.";
             color: Theme.fg-a1; wrap: word-wrap;
         }
         HorizontalLayout {
@@ -317,7 +326,7 @@ export component CustomizeDialog inherits Modal {
                 content-width: max(self.width, zone.preferred-width);
                 zone := Zone {
                     width: max(parent.width, self.preferred-width);
-                    title: "BOTTOM BAR  (left → right)"; items: root.items; offset: 0;
+                    title: "BOTTOM BAR  (left → right)"; items: root.items; metas: root.items-meta; offset: 0;
                     move(i, d) => { root.move(i, d); }
                     remove(i) => { root.remove(i); }
                 }
@@ -334,20 +343,22 @@ export component CustomizeDialog inherits Modal {
                 content-width: max(self.width, av-row.preferred-width + 20px);
                 av-row := HorizontalLayout {
                 x: 10px; y: 10px; height: 56px; spacing: 6px; alignment: start;
-                for id in root.available: Rectangle {
+                for id[ai] in root.available: Rectangle {
+                    property <string> plabel: ai < root.available-meta.length ? root.available-meta[ai].label : "";
+                    property <string> full: self.plabel != "" ? self.plabel : Tools.label(id);
                     height: 56px; width: 76px; border-radius: Metrics.radius-md;
                     background: ata.has-hover ? Theme.divider : Theme.bg-a1;
-                    Icon { y: 8px; source: Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
+                    Icon { y: 8px; source: parent.plabel != "" ? Icons.plugin(root.available-meta[ai].icon) : Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
                     Text {
                         x: 4px; y: 32px; width: parent.width - 8px; height: 16px;
-                        text: Tools.short(id); color: Theme.fg-a2; font-size: Metrics.font-xs;
+                        text: parent.plabel != "" ? parent.plabel : Tools.short(id); color: Theme.fg-a2; font-size: Metrics.font-xs;
                         horizontal-alignment: center; vertical-alignment: center; overflow: elide;
                     }
-                    ata := TouchArea { accessible-role: button; accessible-label: "Add " + Tools.label(id); mouse-cursor: pointer; clicked => { root.add(id); } }
+                    ata := TouchArea { accessible-role: button; accessible-label: "Add " + parent.full; mouse-cursor: pointer; clicked => { root.add(id); } }
                     if ata.has-hover: Rectangle {
                         y: -30px; height: 24px; width: tl.preferred-width + 14px; z: 5;
                         background: Theme.bg-a1; border-radius: Metrics.radius-sm;
-                        tl := Text { text: "Add " + Tools.label(id); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
+                        tl := Text { text: "Add " + (ai < root.available-meta.length && root.available-meta[ai].label != "" ? root.available-meta[ai].label : Tools.label(id)); color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-alignment: center; }
                     }
                 }
                 }

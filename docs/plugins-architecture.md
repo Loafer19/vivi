@@ -106,7 +106,7 @@ its point and runs the chosen one.
 | `palette.command` | Command palette (Ctrl+K, `src/palette.rs`): fuzzy search over every keymap action, a few app commands, sources (*Open …*), drawer panels and these entries (plugin name as the group) | done | none |
 | `drawer.panel` | Player side drawer (`src/drawer.rs`, `ui/drawer.slint`): right slide-out with an icon tab per plugin, hides with the controls, Esc closes; opened from player menu → Plugins → Side drawer or the palette. Lyrics shows its synced lines; other plugins show their description and `action` settings as buttons, the gear opens their settings. `command` is sent when the panel opens | done | none |
 | `home.widget` | Card on Home under *Widgets* (icon, `label`, the plugin's description; click runs `command`). Each plugin's gear view has *Show on Home* and *Position on Home* (stored as `ui.home-hidden` in the plugin's settings and `order` in the `vivi-home` entry) | done | none |
-| `controlbar.button` | Element in Customize Player (off by default) | planned | none |
+| `controlbar.button` | Bottom-bar button: listed under *Available items* in Customize Player after the built-in ones (never in a profile, so off until the user adds it). Stored in `interface.toolbar` as `plug:<plugin id>\|<command>`; it folds into ⋯ like other items and disappears while the plugin is off. Lyrics (karaoke view), Skip Intro (mark), Subtitle Search (search online) | done | none |
 | `tray.item` | Tray menu | planned | none |
 | `notify` | Desktop notifications (respecting a setting) | planned | none |
 

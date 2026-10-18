@@ -615,11 +615,15 @@ pub fn profile_style(name: &str) -> &'static str {
     }
 }
 
-/// Known items in order, no duplicates (except spacers).
+/// Prefix of a plugin's bottom-bar button (`plug:<plugin id>|<command>`, `controlbar.button`).
+pub const PLUGIN_ITEM: &str = "plug:";
+
+/// Known items (and plugin buttons) in order, no duplicates (except spacers).
 pub fn sanitize_toolbar(v: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for s in v {
-        let ok = TOOL_ITEMS.contains(&s.as_str());
+        let ok = TOOL_ITEMS.contains(&s.as_str())
+            || s.strip_prefix(PLUGIN_ITEM).is_some_and(|r| r.contains('|'));
         if ok && (s == "spacer" || !out.contains(s)) {
             out.push(s.clone());
         }
@@ -684,6 +688,16 @@ mod toolbar_tests {
         }
         let bad = vec!["nope".to_string(), "volume".into(), "volume".into()];
         assert_eq!(sanitize_toolbar(&bad), vec!["volume".to_string()]);
+        // Plugin buttons (`controlbar.button`) are kept once; a malformed one is dropped.
+        let plug = vec![
+            "plug:lyrics|karaoke".to_string(),
+            "plug:lyrics|karaoke".into(),
+            "plug:broken".into(),
+        ];
+        assert_eq!(
+            sanitize_toolbar(&plug),
+            vec!["plug:lyrics|karaoke".to_string()]
+        );
     }
     #[test]
     fn migrates_old_bar() {

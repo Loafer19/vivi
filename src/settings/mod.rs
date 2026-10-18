@@ -89,7 +89,15 @@ fn bar_action(a: &AppWindow, p: &Player, id: &str) {
             });
             a.global::<crate::Playback>().set_shuffle_on(on);
         }
-        _ => {}
+        _ => {
+            // A plugin's button (`controlbar.button`).
+            if let Some((plugin, cmd)) = id
+                .strip_prefix(config::PLUGIN_ITEM)
+                .and_then(|r| r.split_once('|'))
+            {
+                crate::plugins::run(plugin, cmd, &[]);
+            }
+        }
     }
 }
 

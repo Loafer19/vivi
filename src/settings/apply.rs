@@ -241,7 +241,8 @@ pub(crate) use crate::util::strings;
 
 /// Push the configured bottom-bar layout to the UI.
 pub fn apply_toolbar(a: &AppWindow, c: &Config) {
-    let t = config::sanitize_toolbar(&c.interface.toolbar);
+    let buttons = plugin_buttons();
+    let t = visible_toolbar(&c.interface.toolbar, &buttons);
     // Cumulative width (in ~32 px slots) of the items that may fold into "⋯"; -1 = always shown.
     let mut used = 0;
     let cum: Vec<i32> = t
@@ -255,6 +256,15 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
             }
         })
         .collect();
+    let meta = |id: &str| {
+        buttons
+            .iter()
+            .find(|(k, _)| k == id)
+            .map_or_else(crate::ToolMeta::default, |(_, m)| m.clone())
+    };
+    let metas: Vec<crate::ToolMeta> = t.iter().map(|id| meta(id)).collect();
+    a.global::<crate::Customize>()
+        .set_bar_meta(ModelRc::new(VecModel::from(metas)));
     a.global::<crate::Customize>()
         .set_bar_items(strings(t.iter().cloned()));
     a.global::<crate::Customize>()
@@ -270,14 +280,50 @@ pub fn apply_toolbar(a: &AppWindow, c: &Config) {
         .set_vol_styles(strings(config::VOLUME_STYLES));
     a.global::<crate::Customize>()
         .set_profile(c.interface.profile.clone().into());
-    a.global::<crate::Customize>().set_available(strings(
-        config::TOOL_ITEMS
-            .iter()
-            .filter(|i| **i == "spacer" || !t.iter().any(|s| s == *i))
-            .copied(),
-    ));
+    // Built-in items, then plugin buttons (off until added here).
+    let avail: Vec<String> = config::TOOL_ITEMS
+        .iter()
+        .filter(|i| **i == "spacer" || !t.iter().any(|s| s == *i))
+        .map(|s| s.to_string())
+        .chain(
+            buttons
+                .iter()
+                .filter(|(k, _)| !t.contains(k))
+                .map(|(k, _)| k.clone()),
+        )
+        .collect();
+    let avail_meta: Vec<crate::ToolMeta> = avail.iter().map(|id| meta(id)).collect();
+    a.global::<crate::Customize>()
+        .set_available_meta(ModelRc::new(VecModel::from(avail_meta)));
+    a.global::<crate::Customize>()
+        .set_available(strings(avail.iter().cloned()));
     a.global::<crate::Playback>()
         .set_volume_max(c.audio.volume_max as f32);
+}
+
+/// Bottom-bar buttons enabled plugins contribute (`controlbar.button`): item id and
+/// its label / icon key.
+pub fn plugin_buttons() -> Vec<(String, crate::ToolMeta)> {
+    crate::plugins::contributions(crate::plugins::contrib::CONTROLBAR_BUTTON)
+        .into_iter()
+        .map(|e| {
+            (
+                format!("{}{}|{}", config::PLUGIN_ITEM, e.id, e.command),
+                crate::ToolMeta {
+                    label: e.label.into(),
+                    icon: e.icon.into(),
+                },
+            )
+        })
+        .collect()
+}
+
+/// The configured bar without buttons of plugins that are off or gone.
+pub fn visible_toolbar(t: &[String], buttons: &[(String, crate::ToolMeta)]) -> Vec<String> {
+    config::sanitize_toolbar(t)
+        .into_iter()
+        .filter(|s| !s.starts_with(config::PLUGIN_ITEM) || buttons.iter().any(|(k, _)| k == s))
+        .collect()
 }
 
 /// Name of the built-in profile matching the bar, else "Custom".

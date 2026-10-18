@@ -244,6 +244,8 @@ pub fn refresh() {
         })
         .collect();
     g.set_widgets(ModelRc::new(VecModel::from(widgets)));
+    // Plugin buttons in the bottom bar follow the plugins being turned on / off.
+    settings::apply_toolbar(&a, &c);
     if !a.global::<crate::Overlays>().get_extensions_open() {
         return;
     }
