@@ -40,6 +40,10 @@ use std::time::Duration;
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // NVIDIA-only machines: load just the NVIDIA EGL vendor (no Mesa). Must run before
+    // any thread starts, since it sets an environment variable.
+    #[cfg(target_os = "linux")]
+    app::egl::select_vendor();
     // --version / --help answer before any window, mpv or thread starts.
     let (cli, links) = match app::cli::parse(std::env::args().skip(1)) {
         app::cli::Cli::Version => {
