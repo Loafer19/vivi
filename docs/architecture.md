@@ -70,6 +70,22 @@ state directly: `VIVI_SETTINGS=<n>`, `VIVI_PANEL=<n>`, `VIVI_CUSTOMIZE=<profile>
 `VIVI_LIB`, `VIVI_URL`, `VIVI_MUSIC`, `VIVI_STREAM_ERROR=<url>` (the failed-stream
 banner with Retry / Copy), and others listed there.
 
+## Icon conventions
+
+* **Two-tone** (`TriIcon`, with base, accent and dim layers from `tools/icon_layers.py` in
+  `assets/icons/layers/*-twotone-{a,b,d}.svg`) for icons drawn at about 18 px or larger:
+  * control-bar buttons, side-panel tabs and context-menu rows;
+  * settings categories and Customize tiles;
+  * Recent and library tiles;
+  * empty states and dialog headers.
+* **Single-tone** (`Icon`, one tinted layer) for small glyphs of about 16 px or less:
+  * Recent type badges, submenu chevrons, check marks and the close ×;
+  * chip and inline icons (such as the Customize style previews);
+  * status indicators (recording, A-B loop).
+* At small sizes a second tone blurs into the first, and at large sizes a single tone reads
+  flat next to the two-tone icons. When adding an icon, pick the variant by its rendered
+  size, not by where its SVG came from.
+
 ## Conventions
 
 * No colour, radius or font size literals outside `ui/core/theme.slint`.
