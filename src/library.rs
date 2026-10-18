@@ -86,7 +86,14 @@ fn read_tags(path: &Path, m: &mut Media) {
 }
 
 /// Scan `roots`, updating changed files and removing vanished ones. Returns the media count.
+#[cfg(test)]
 pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> {
+    scan_changes(conn, roots).map(|(n, _)| n)
+}
+
+/// [`scan`] that also returns how many entries were added, updated or removed. Unchanged
+/// files (same mtime as in the index) are only stat'ed, not re-read.
+pub fn scan_changes(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<(usize, usize)> {
     let known: BTreeMap<String, i64> = {
         let mut st = conn.prepare("SELECT path, mtime FROM media")?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
@@ -94,6 +101,7 @@ pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> 
     };
     let tx = conn.transaction()?;
     let mut seen = std::collections::BTreeSet::new();
+    let mut changed = 0;
     for root in roots {
         for e in walkdir::WalkDir::new(root)
             .follow_links(true)
@@ -136,6 +144,7 @@ pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> 
                 ..Default::default()
             };
             read_tags(p, &mut m);
+            changed += 1;
             tx.execute(
                 "INSERT OR REPLACE INTO media VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
                 params![
@@ -153,10 +162,11 @@ pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> 
     for p in known.keys() {
         if !seen.contains(p) || !in_roots(p) {
             tx.execute("DELETE FROM media WHERE path=?1", [p])?;
+            changed += 1;
         }
     }
     tx.commit()?;
-    Ok(seen.len())
+    Ok((seen.len(), changed))
 }
 
 pub fn all(conn: &Connection) -> Vec<Media> {
@@ -382,6 +392,7 @@ mod tests {
         let mut c = open_db(&dir.join("t.db")).unwrap();
         let roots = vec![dir.to_string_lossy().into_owned()];
         assert_eq!(scan(&mut c, &roots).unwrap(), 2);
+        assert_eq!(scan_changes(&mut c, &roots).unwrap(), (2, 0));
         std::fs::remove_file(dir.join("song.mp3")).unwrap();
         scan(&mut c, &roots).unwrap();
         let a = all(&c);

@@ -724,37 +724,54 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         })
     };
 
-    // Background scan; re-render when done.
-    let rescan: Rc<dyn Fn()> = {
+    // Background scan; re-render when done. `quiet` (the startup scan): no "scanning"
+    // indicator, and Home is only rebuilt when the index actually changed.
+    let rescan_with: Rc<dyn Fn(bool)> = {
         let w = app.as_weak();
         let cfg = cfg.clone();
-        Rc::new(move || {
+        Rc::new(move |quiet| {
             let roots = cfg.borrow().library.folders.clone();
-            if let Some(a) = w.upgrade() {
+            if let Some(a) = w.upgrade().filter(|_| !quiet) {
                 a.global::<crate::Library>().set_scanning(true);
             }
             let w = w.clone();
             let db = db.clone();
             std::thread::spawn(move || {
                 let t = std::time::Instant::now();
-                let res = library::open_db(&db)
-                    .and_then(|mut c| library::scan(&mut c, &roots).map(|n| (n, library::all(&c))));
+                let res = library::open_db(&db).and_then(|mut c| {
+                    library::scan_changes(&mut c, &roots).map(|(n, changed)| {
+                        (
+                            n,
+                            changed,
+                            (!quiet || changed > 0).then(|| library::all(&c)),
+                        )
+                    })
+                });
                 let _ = slint::invoke_from_event_loop(move || {
                     let Some(a) = w.upgrade() else { return };
                     a.global::<crate::Library>().set_scanning(false);
                     match res {
-                        Ok((n, media)) => {
+                        Ok((n, changed, media)) => {
                             if log {
-                                eprintln!("library scan: {n} files in {:?}", t.elapsed());
+                                eprintln!(
+                                    "library scan: {n} files, {changed} changed in {:?}",
+                                    t.elapsed()
+                                );
                             }
-                            LOADED.with(|l| *l.borrow_mut() = Some(media));
-                            a.global::<crate::Library>().invoke_refresh();
+                            if let Some(media) = media {
+                                LOADED.with(|l| *l.borrow_mut() = Some(media));
+                                a.global::<crate::Library>().invoke_refresh();
+                            }
                         }
                         Err(e) => eprintln!("vivi: library scan failed: {e}"),
                     }
                 });
             });
         })
+    };
+    let rescan: Rc<dyn Fn()> = {
+        let r = rescan_with.clone();
+        Rc::new(move || r(false))
     };
 
     {
@@ -1159,8 +1176,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             }
         });
     }
+    // Home is built once from the stored index; the folders are re-checked a few seconds
+    // later (stat only, tags of changed files) and Home is rebuilt only if something changed.
     render();
-    rescan();
+    slint::Timer::single_shot(std::time::Duration::from_secs(3), move || rescan_with(true));
 }
 
 thread_local! {
