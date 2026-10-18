@@ -209,6 +209,18 @@ impl Deprecation {
         }
     }
 
+    /// One-line toast: "The Equalizer plugin is deprecated: built into Vivi 0.13.0".
+    pub fn short(&self, name: &str) -> String {
+        if self.replacement.starts_with("builtin:") && !self.since.is_empty() {
+            format!(
+                "The {name} plugin is deprecated: built into Vivi {}",
+                self.since
+            )
+        } else {
+            format!("The {name} plugin is deprecated")
+        }
+    }
+
     /// Whether this Vivi can open the replacement.
     pub fn can_open(&self) -> bool {
         self.replacement == "builtin:equalizer" || self.replacement.starts_with("plugin:")
@@ -816,7 +828,7 @@ pub fn deprecation_notice() {
     if let Err(e) = crate::store::write_atomic(&notices_file(), &lines) {
         eprintln!("vivi: save deprecation notices: {e}");
     }
-    let msg = d.text(&name);
+    let msg = d.short(&name);
     let n = a.global::<crate::Notices>();
     n.set_resume_text(msg.as_str().into());
     if d.can_open() {
@@ -1104,6 +1116,10 @@ mod tests {
             "Equalizer is deprecated: built into Vivi since 0.13.0."
         );
         assert!(d.can_open());
+        assert_eq!(
+            d.short("Equalizer"),
+            "The Equalizer plugin is deprecated: built into Vivi 0.13.0"
+        );
         assert_eq!(c[1].deprecated, None);
         let custom = Deprecation {
             message: "Use X.".into(),
