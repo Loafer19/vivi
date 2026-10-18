@@ -14,7 +14,8 @@ pub(crate) fn screenshot_mode() -> bool {
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
 /// VIVI_MENU, VIVI_SUB, VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
-/// [VIVI_MUSICQ=query] (Auto-tagger / Free Music dialog, searched when a query is given).
+/// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] (a plugin dialog, searched when a query or
+/// source is given).
 /// Show plugin `id` in Settings → Extensions → Browse (search filtered to its name).
 pub(crate) fn open_plugin_link(app: &AppWindow, id: &str) {
     use plugins::packages;
@@ -76,11 +77,20 @@ pub(crate) fn debug_ui(app: &AppWindow) {
     }
     if let Some(id) = var("VIVI_MUSIC") {
         let q = var("VIVI_MUSICQ");
+        let src = var("VIVI_MUSICSRC");
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(2000), move || {
             plugins::command(&id, "open", &[]);
-            if let (Some(a), Some(q)) = (w.upgrade(), q) {
-                a.global::<crate::MusicDialogState>().set_query(q.into());
+            let Some(a) = w.upgrade() else { return };
+            if let Some(s) = &src {
+                a.global::<crate::MusicDialogState>()
+                    .set_source(s.as_str().into());
+            }
+            if let Some(q) = &q {
+                a.global::<crate::MusicDialogState>()
+                    .set_query(q.as_str().into());
+            }
+            if src.is_some() || q.is_some() {
                 plugins::command(&id, "search", &[]);
             }
         });
