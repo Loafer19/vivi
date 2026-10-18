@@ -1249,6 +1249,7 @@ export component AppWindow inherits Window {
         view(g) => { MusicDialogState.grid = g; root.plugin-command(MusicDialogState.owner, "view", g ? "grid" : "list"); }
         filter(n, v) => { root.plugin-command(MusicDialogState.owner, "filter", n + "\u{1f}" + v); }
         more => { root.plugin-command(MusicDialogState.owner, "more", ""); }
+        window(f, c) => { MusicDialogState.win-first = f; MusicDialogState.win-count = c; MusicDialogState.window-changed(); }
         edited => { if MusicDialogState.caps.rich { root.plugin-command(MusicDialogState.owner, "edited", ""); } }
         chip-clicked(c) => { root.plugin-command(MusicDialogState.owner, "chip", c); }
         action(n, i) => { root.plugin-command(MusicDialogState.owner, "act:" + n, i); }

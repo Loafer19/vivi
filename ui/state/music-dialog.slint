@@ -33,4 +33,9 @@ export global MusicDialogState {
     in-out property <[MdFilter]> filters;
     in-out property <string> copy;
     in-out property <bool> has-more;
+    // Visible part of the rich list / grid (first index, count): covers are decoded only
+    // around it (src/plugins/host.rs).
+    in-out property <int> win-first;
+    in-out property <int> win-count: 60;
+    callback window-changed();
 }

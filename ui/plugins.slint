@@ -608,6 +608,9 @@ export component MusicDialog inherits Modal {
     callback chip-clicked(string);
     callback filter(string, string);
     callback more();
+    // Rows / tiles on screen (first index, count) of the rich list, so the owner decodes
+    // only their covers; delegates outside it (plus a margin) are not created.
+    callback window(int, int);
     callback edited();
     callback action(string, int);
     callback search();
@@ -714,6 +717,15 @@ export component MusicDialog inherits Modal {
                     property <int> n: root.tracks.length;
                     property <bool> g: root.grid;
                     changed g => { self.reveal(root.selected); }
+                    // Virtualized: only rows / tiles near the viewport exist (1000+ liked songs).
+                    property <int> per-line: root.grid ? self.cols : 1;
+                    property <int> win-first: max(0, floor(-sv.content-y / self.stride)) * self.per-line;
+                    property <int> win-count: (ceil(sv.visible-height / self.stride) + 1) * self.per-line;
+                    property <int> lo: self.win-first - 4 * self.per-line;
+                    property <int> hi: self.win-first + self.win-count + 4 * self.per-line;
+                    changed win-first => { root.window(self.win-first, self.win-count); }
+                    changed win-count => { root.window(self.win-first, self.win-count); }
+                    init => { root.window(self.win-first, self.win-count); }
                     function line(i: int) -> int { return root.grid ? floor(i / self.cols) : i; }
                     function reveal(i: int) {
                         if i < 0 { return; }
@@ -748,29 +760,36 @@ export component MusicDialog inherits Modal {
                             if root.has-more && self.content-height > self.visible-height
                                 && -self.content-y > self.content-height - self.visible-height - 160px { root.more(); }
                         }
-                        if !root.grid: VerticalLayout {
-                            spacing: 2px; alignment: start;
-                            for r[i] in root.tracks: TrackRow {
-                                fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
-                                clicked => { rk.focus(); root.selected = i; root.select(i); }
-                                activated => { root.selected = i; root.select(i); root.primary(i); }
-                                play => { root.selected = i; root.select(i); root.primary(i); }
-                                queue => { root.action("Queue", i); }
-                                download => { root.selected = i; root.select(i); root.secondary(i); }
+                        if !root.grid: Rectangle {
+                            x: 0; y: 0; width: rk.inner; height: rk.content-h;
+                            for r[i] in root.tracks: Rectangle {
+                                x: 0; y: i * rk.stride; width: rk.inner; height: 52px;
+                                if i >= rk.lo && i < rk.hi: TrackRow {
+                                    width: parent.width;
+                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                    clicked => { rk.focus(); root.selected = i; root.select(i); }
+                                    activated => { root.selected = i; root.select(i); root.primary(i); }
+                                    play => { root.selected = i; root.select(i); root.primary(i); }
+                                    queue => { root.action("Queue", i); }
+                                    download => { root.selected = i; root.select(i); root.secondary(i); }
+                                }
                             }
-                            if root.has-more: Rectangle { height: 40px;
+                            if root.has-more: Rectangle { x: 0; y: rk.content-h - 40px; width: rk.inner; height: 40px;
                                 Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { accessible-role: button; accessible-label: "Load more"; mouse-cursor: pointer; clicked => { root.more(); } }
                             }
                         }
                         if root.grid: Rectangle {
                             x: 0; y: 0; width: rk.inner; height: rk.content-h;
-                            for r[i] in root.tracks: CoverTile {
+                            for r[i] in root.tracks: Rectangle {
                                 x: mod(i, rk.cols) * (rk.tile-w + rk.gap); y: floor(i / rk.cols) * rk.stride;
-                                width: rk.tile-w; height: rk.tile-h; cover-h: rk.tile-w - 16px;
-                                fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
-                                clicked => { rk.focus(); root.selected = i; root.select(i); }
-                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                                width: rk.tile-w; height: rk.tile-h;
+                                if i >= rk.lo && i < rk.hi: CoverTile {
+                                    width: parent.width; height: parent.height; cover-h: rk.tile-w - 16px;
+                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                    clicked => { rk.focus(); root.selected = i; root.select(i); }
+                                    activated => { root.selected = i; root.select(i); root.primary(i); }
+                                }
                             }
                             if root.has-more: Rectangle { x: 0; y: rk.content-h - 40px; width: rk.inner; height: 40px;
                                 Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }

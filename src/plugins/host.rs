@@ -19,10 +19,11 @@
 //! messages are unaffected. See docs/plugins-architecture.md ("Host API for packages").
 
 use serde::Deserialize;
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 /// One result row (`rows` of [`DialogUpdate`]).
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -117,7 +118,12 @@ struct Host {
     owners: HashSet<String>,
     rows: Vec<Row>,
     grid: bool,
-    covers: HashMap<(String, u32), slint::Image>,
+    /// The dialog's row model, updated in place (a new model would rebuild every delegate).
+    model: Option<Rc<VecModel<crate::FmRow>>>,
+    /// Covers being decoded (url, size): asked once, not again on every refresh.
+    decoding: HashSet<(String, u32)>,
+    /// A coalesced [`refresh_rows`] is scheduled.
+    refresh_queued: bool,
     asked: HashSet<String>,
     /// Downloaded cover files by URL.
     files: HashMap<String, PathBuf>,
@@ -222,35 +228,58 @@ fn want_covers(urls: Vec<String>) {
                 let Some(p) = fetch_cover(&u) else { continue };
                 let _ = slint::invoke_from_event_loop(move || {
                     HOST.with(|h| h.borrow_mut().files.insert(u, p));
-                    refresh_rows();
-                    refresh_np_cover();
+                    schedule_refresh();
                 });
             }
         });
     }
 }
 
-/// A decoded cover of `url` at `size` px, requesting it when missing.
+/// One [`refresh_rows`] (and now-playing cover) for any number of covers that arrived
+/// within a frame or two. Calling it per cover rebuilt every row per decoded cover, and
+/// each rebuild asked again for every cover still decoding: with ~1000 rows that never
+/// finished (100% CPU, gigabytes of queued callbacks).
+fn schedule_refresh() {
+    let first = HOST.with(|h| !std::mem::replace(&mut h.borrow_mut().refresh_queued, true));
+    if first {
+        slint::Timer::single_shot(std::time::Duration::from_millis(40), || {
+            HOST.with(|h| h.borrow_mut().refresh_queued = false);
+            refresh_rows();
+            refresh_np_cover();
+        });
+    }
+}
+
+/// A decoded cover of `url` at `size` px from the image cache (its byte budget bounds
+/// memory), requesting the decode once when missing.
 fn cover(url: &str, size: u32) -> Option<slint::Image> {
     let k = (url.to_string(), size);
-    let (img, file) = HOST.with(|h| {
+    let (file, busy) = HOST.with(|h| {
         let h = h.borrow();
-        (h.covers.get(&k).cloned(), h.files.get(url).cloned())
+        (h.files.get(url).cloned(), h.decoding.contains(&k))
     });
-    if img.is_some() {
-        return img;
-    }
     let file = file?;
+    if busy {
+        return None;
+    }
     let k2 = k.clone();
-    let now = crate::images::get(&file, size, move |i| {
-        HOST.with(|h| h.borrow_mut().covers.insert(k2, i));
-        refresh_rows();
-        refresh_np_cover();
+    let now = crate::images::get(&file, size, move |_| {
+        HOST.with(|h| h.borrow_mut().decoding.remove(&k2));
+        schedule_refresh();
     });
-    if let Some(i) = &now {
-        HOST.with(|h| h.borrow_mut().covers.insert(k, i.clone()));
+    if now.is_none() {
+        HOST.with(|h| h.borrow_mut().decoding.insert(k));
     }
     now
+}
+
+/// Rows whose covers are decoded: the visible window plus one window before and after.
+fn cover_range(first: i32, count: i32, len: usize) -> std::ops::Range<usize> {
+    let count = count.max(1) as usize;
+    let first = first.max(0) as usize;
+    let lo = first.saturating_sub(count);
+    let hi = (first + 2 * count).min(len);
+    lo.min(hi)..hi
 }
 
 fn app() -> Option<crate::AppWindow> {
@@ -281,10 +310,13 @@ fn refresh_rows() {
     } else {
         crate::images::ROW
     };
+    let near = cover_range(st.get_win_first(), st.get_win_count(), rows.len());
     let fm: Vec<crate::FmRow> = rows
         .iter()
-        .map(|r| {
-            let img = cover(&r.cover, size);
+        .enumerate()
+        .map(|(i, r)| {
+            // Rows far from the viewport hold no image (bounded memory).
+            let img = near.contains(&i).then(|| cover(&r.cover, size)).flatten();
             crate::FmRow {
                 title: r.title.as_str().into(),
                 sub: r.sub.as_str().into(),
@@ -299,12 +331,41 @@ fn refresh_rows() {
             }
         })
         .collect();
-    st.set_tracks(ModelRc::new(VecModel::from(fm)));
+    let model = HOST.with(|h| h.borrow().model.clone());
+    match model {
+        // Same model still shown: change only the rows that differ, append new ones.
+        Some(m) if same_model(&st.get_tracks(), &m) && m.row_count() <= fm.len() => {
+            for (i, row) in fm.into_iter().enumerate() {
+                if i < m.row_count() {
+                    if m.row_data(i).as_ref() != Some(&row) {
+                        m.set_row_data(i, row);
+                    }
+                } else {
+                    m.push(row);
+                }
+            }
+        }
+        _ => {
+            let m = Rc::new(VecModel::from(fm));
+            st.set_tracks(ModelRc::from(m.clone()));
+            HOST.with(|h| h.borrow_mut().model = Some(m));
+        }
+    }
+}
+
+fn same_model(shown: &ModelRc<crate::FmRow>, m: &Rc<VecModel<crate::FmRow>>) -> bool {
+    shown
+        .as_any()
+        .downcast_ref::<VecModel<crate::FmRow>>()
+        .map(|v| v as *const _)
+        == Some(Rc::as_ptr(m))
 }
 
 /// Apply a `vivi-dialog` update from package `id`.
 pub fn dialog(a: &crate::AppWindow, id: &str, u: DialogUpdate) {
     let st = a.global::<crate::MusicDialogState>();
+    // Scrolling changes which rows get covers (see `cover_range`).
+    st.on_window_changed(schedule_refresh);
     let ov = a.global::<crate::Overlays>();
     if st.get_owner() != id {
         if !u.open {
@@ -665,6 +726,17 @@ mod tests {
         assert!(inside(&own, escape.to_str().unwrap()).is_none());
         assert!(inside(&own, "/nonexistent/file").is_none());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn covers_only_near_the_viewport() {
+        // ~1000 liked songs: only the visible window and one window around it.
+        assert_eq!(cover_range(500, 30, 1000), 470..560);
+        assert_eq!(cover_range(0, 30, 1000), 0..60);
+        assert_eq!(cover_range(990, 30, 1000), 960..1000);
+        assert_eq!(cover_range(0, 0, 5), 0..2);
+        assert_eq!(cover_range(10, 30, 5), 0..5);
+        assert!(cover_range(0, 60, 2000).len() <= 120);
     }
 
     #[test]
