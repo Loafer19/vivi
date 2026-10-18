@@ -2,7 +2,7 @@
 import { Theme, Metrics, Icon } from "core/theme.slint";
 import { Modal } from "core/modal.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
-import { BarStyle, Bars } from "core/types.slint";
+import { BarStyle, Bars, VolumeStyle } from "core/types.slint";
 
 export global Tools {
     public pure function icon(id: string) -> image {
@@ -200,11 +200,47 @@ component BarPreview inherits Rectangle {
     }
 }
 
+// Miniature of a volume control style for the Customize chips (small glyphs: single-tone).
+component VolumePreview inherits Rectangle {
+    in property <string> style;
+    in property <brush> ink;
+    in property <brush> fill;
+    width: 28px; height: 14px;
+    if root.style == "Cone": Path {
+        width: 100%; height: 100%;
+        viewbox-width: 28; viewbox-height: 14;
+        fill: root.ink;
+        MoveTo { x: 0; y: 6; } LineTo { x: 28; y: 0; } LineTo { x: 28; y: 14; } LineTo { x: 0; y: 8; } Close { }
+    }
+    if root.style == "Cone": Path {
+        width: 100%; height: 100%;
+        viewbox-width: 28; viewbox-height: 14;
+        fill: root.fill;
+        MoveTo { x: 0; y: 6; } LineTo { x: 17; y: 2.4; } LineTo { x: 17; y: 11.6; } LineTo { x: 0; y: 8; } Close { }
+    }
+    if root.style == "Bar": Rectangle {
+        Rectangle { x: 0; y: 4px; width: 28px; height: 6px; border-radius: 3px; background: root.ink; }
+        Rectangle { x: 0; y: 4px; width: 17px; height: 6px; border-radius: 3px; background: root.fill; }
+    }
+    if root.style == "Popup": Rectangle {
+        Rectangle { x: 0; y: 5px; width: 6px; height: 6px; border-radius: 1px; background: root.ink; }
+        Rectangle { x: 12px; y: 0; width: 4px; height: 14px; border-radius: 2px; background: root.ink; }
+        Rectangle { x: 12px; y: 5px; width: 4px; height: 9px; border-radius: 2px; background: root.fill; }
+    }
+    if root.style == "Percent": Rectangle {
+        Rectangle { x: 0; y: 4px; width: 6px; height: 6px; border-radius: 1px; background: root.ink; }
+        Text { x: 9px; width: 19px; text: "%"; color: root.fill; font-size: Metrics.font-sm; font-weight: 700; vertical-alignment: center; horizontal-alignment: center; }
+    }
+}
+
 export component CustomizeDialog inherits Modal {
     in property <[string]> items;
     in property <[string]> styles;
     in property <BarStyle> bar-style;
     callback pick-style(string);
+    in property <[string]> vol-styles;
+    in property <VolumeStyle> vol-style;
+    callback pick-volume(string);
     in property <[string]> available;
     in property <[string]> profiles;
     in property <string> profile;
@@ -264,6 +300,29 @@ export component CustomizeDialog inherits Modal {
                     color: si == Bars.index(root.bar-style) ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
                 }
                 sta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-style(st); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px; alignment: start;
+            Text { text: "Volume"; color: Theme.fg-2; vertical-alignment: center; }
+            for vs[vi] in root.vol-styles: Rectangle {
+                property <bool> on: vi == Bars.volume-index(root.vol-style);
+                accessible-role: button; accessible-label: "Volume control: " + vt.text;
+                accessible-checked: self.on;
+                accessible-action-default => { root.pick-volume(vs); }
+                height: 30px; width: vt.preferred-width + 28px + 30px; border-radius: Metrics.radius-md;
+                background: self.on ? Theme.accent : (vta.has-hover ? Theme.divider : Theme.bg-a1);
+                VolumePreview {
+                    x: 11px; y: (parent.height - self.height) / 2; style: vs;
+                    ink: parent.on ? Theme.bg-b2 : Theme.fg-a2;
+                    fill: parent.on ? Theme.bg-b2 : Theme.accent;
+                }
+                vt := Text {
+                    x: 11px + 28px + 8px; width: self.preferred-width;
+                    text: vs == "Cone" ? "Cone" : vs == "Bar" ? "Flat bar" : vs == "Popup" ? "Pop-up slider" : "Icon + percent";
+                    color: parent.on ? Theme.bg-b2 : Theme.fg-2; vertical-alignment: center; horizontal-alignment: center;
+                }
+                vta := TouchArea { mouse-cursor: pointer; clicked => { root.pick-volume(vs); } }
             }
         }
         Text { text: "In the player"; color: Theme.fg-1; font-weight: 600; }

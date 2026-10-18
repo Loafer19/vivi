@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **Volume control styles**: Customize → Volume offers four styles, each chip with a miniature preview:
+  - **Cone**: the wedge, as before and still the default.
+  - **Flat bar**: a slider drawn like the seek track of the current bar style.
+  - **Pop-up slider**: the speaker icon only; hovering it opens a vertical slider, the wheel changes the volume and a click mutes.
+  - **Icon + percent**: the number next to the icon; drag sideways or scroll to change it.
+
+  All styles are one "Volume" slider for screen readers (value, 5 % steps, increment and decrement). The style is stored as `[interface] volume_style` (case-insensitive; unknown values fall back to Cone) and is part of the Customize profile.
 - **Keyboard shortcuts overlay**: press `?` (or main menu → Keyboard Shortcuts) for every shortcut in two columns; Esc or `?` closes it.
 - One keymap (`src/keymap.rs`) drives the key handler, Settings → Controls → Keyboard Shortcuts, the `?` overlay, onboarding and the menu hints, so the lists can no longer drift. The list now includes S (stop), N / Shift+N, R (record), Ctrl+\ (hide UI), Ctrl+Q, V, P and `?`; a test keeps `docs/features.md` in sync.
 - Toasts when recording starts / stops (with the file path) and when Ctrl+\ hides the interface (saying how to bring it back).

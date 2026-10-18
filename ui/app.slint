@@ -16,7 +16,7 @@ import { VizView, VizDropdown } from "viz.slint";
 import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsState, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
 import { Modal } from "core/modal.slint";
 import { IconButton, PrimaryButton, FlatButton, ButtonSize } from "core/buttons.slint";
-import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
+import { BarStyle, BarMetrics, Bars, VolumeStyle, PanelTab, Overlay, TagStatus } from "core/types.slint";
 import { Overlays } from "state/overlays.slint";
 import { Playback } from "state/playback.slint";
 import { Panel } from "state/panel.slint";
@@ -264,6 +264,156 @@ component VolumeBar inherits Rectangle {
     }
 }
 
+// Shared input for every volume control style: one slider for screen readers (value, step,
+// increment / decrement), click / drag to set, wheel to step. `cone` maps the position
+// through the cone's fill curve; `vertical` reads bottom → top; `relative` drags change the
+// value by the distance moved (the percentage readout has no track to point at).
+component VolumeTouch inherits TouchArea {
+    in property <float> value;
+    in property <float> maximum: 150;
+    in property <bool> cone;
+    in property <bool> vertical;
+    in property <bool> relative;
+    callback changed(float);
+    callback tapped(); // a press without a drag (relative mode)
+    property <float> start;
+    property <bool> dragged;
+    mouse-cursor: root.relative ? ew-resize : pointer;
+    accessible-role: slider; accessible-label: "Volume"; accessible-value: round(root.value) + "%";
+    accessible-value-minimum: 0; accessible-value-maximum: root.maximum; accessible-value-step: 5;
+    accessible-action-increment => { root.changed(min(root.maximum, root.value + 5)); }
+    accessible-action-decrement => { root.changed(max(0, root.value - 5)); }
+    pure function cone-volume(x: float) -> float {
+        if (x <= 33) { return x / 0.66; }
+        if (x <= 41) { return 50 + (x - 33) / 0.8; }
+        if (x <= 48) { return 60 + (x - 41) / 0.7; }
+        if (x <= 63) { return 70 + (x - 48) / 0.5; }
+        if (x <= 75) { return 100 + (x - 63) / 0.24; }
+        return 150 + (x - 75) / 0.26;
+    }
+    pure function at() -> float {
+        root.vertical ? 1 - clamp(self.mouse-y / self.height, 0, 1) : clamp(self.mouse-x / self.width, 0, 1)
+    }
+    function set-at() {
+        root.changed(min(root.maximum, root.cone ? root.cone-volume(root.at() * 88) : root.at() * root.maximum));
+    }
+    pointer-event(e) => {
+        if (e.kind == PointerEventKind.down) {
+            root.start = root.value; root.dragged = false;
+            if (!root.relative) { root.set-at(); }
+        }
+        if (e.kind == PointerEventKind.up && root.relative && !root.dragged) { root.tapped(); }
+    }
+    moved => {
+        if (self.pressed) {
+            if (root.relative) {
+                root.dragged = root.dragged || abs(self.mouse-x - self.pressed-x) > 3px;
+                if (root.dragged) { root.changed(clamp(round(root.start + (self.mouse-x - self.pressed-x) / 2px), 0, root.maximum)); }
+            } else { root.set-at(); }
+        }
+    }
+    scroll-event(e) => {
+        root.changed(clamp(root.value + (e.delta-y > 0 ? 5 : -5), 0, root.maximum));
+        accept
+    }
+}
+
+// "Bar" volume: a flat slider drawn like the seek track of the current bar style.
+component VolumeSlider inherits Rectangle {
+    in property <float> value;
+    in property <float> maximum: 150;
+    in property <bool> compact;
+    in property <bool> boxed: true;
+    callback changed(float);
+    width: compact ? 64px : 88px; height: compact ? Metrics.bar-track-h : 28px;
+    property <float> frac: clamp(root.value / max(1, root.maximum), 0, 1);
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: root.boxed ? (root.compact ? root.height : Metrics.bar-track-h) : 4px;
+        border-radius: root.boxed ? 4px : 2px;
+        background: root.boxed ? Theme.track : Theme.bg-a1;
+        Rectangle {
+            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
+            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
+            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * root.frac);
+            background: root.boxed ? (ta.has-hover ? Theme.track-fill-hover : Theme.track-fill) : (ta.has-hover ? Theme.accent-bright : Theme.accent);
+        }
+    }
+    Rectangle {
+        width: root.boxed ? 5px : 4px; height: root.boxed ? track.height - 3px : 12px; border-radius: 2px;
+        x: clamp(1.5px + (root.width - 3px) * root.frac - self.width, 1.5px, root.width - self.width - 1.5px);
+        y: (root.height - self.height) / 2;
+        background: Theme.accent;
+        visible: root.boxed || ta.has-hover;
+    }
+    ta := VolumeTouch { value: root.value; maximum: root.maximum; changed(v) => { root.changed(v); } }
+}
+
+// "Popup" volume: the speaker icon only; hovering it opens a vertical slider above, the wheel
+// changes the volume and a click mutes.
+component VolumePopup inherits Rectangle {
+    in property <float> value;
+    in property <float> maximum: 150;
+    in property <bool> compact;
+    in property <image> icon;
+    in property <string> tip;
+    callback changed(float);
+    callback mute();
+    width: compact ? 28px : 36px; height: compact ? 26px : 32px;
+    border-radius: Metrics.radius-md;
+    background: ita.has-hover ? Theme.bg-a1 : transparent;
+    property <bool> open: ita.has-hover || pta.has-hover || pta.pressed;
+    Icon { source: root.icon; width: root.compact ? 18px : 20px; height: self.width; tint: ita.has-hover ? Theme.fg-1 : Theme.fg-2; }
+    ita := VolumeTouch {
+        value: root.value; maximum: root.maximum; relative: true;
+        accessible-label: root.tip;
+        changed(v) => { root.changed(v); }
+        tapped => { root.mute(); }
+    }
+    // The pop-up reaches down to the icon so moving onto it keeps it open.
+    Rectangle {
+        visible: root.open;
+        property <length> card-h: 132px;
+        x: (root.width - self.width) / 2; y: -self.card-h - 4px;
+        width: 40px; height: self.card-h + 4px;
+        Rectangle {
+            height: parent.card-h; border-radius: Metrics.radius-md;
+            background: Theme.bar.with-alpha(1); border-width: 1px; border-color: Theme.divider;
+            Text { y: 8px; height: 14px; text: round(root.value) + "%"; color: Theme.fg-a2; font-size: Metrics.font-micro; horizontal-alignment: center; }
+            Rectangle {
+                x: (parent.width - self.width) / 2; y: 28px; width: 6px; height: parent.height - 40px;
+                border-radius: self.width / 2; background: Theme.track;
+                Rectangle {
+                    y: parent.height * (1 - clamp(root.value / max(1, root.maximum), 0, 1));
+                    height: parent.height - self.y; border-radius: parent.border-radius;
+                    background: pta.has-hover ? Theme.accent-bright : Theme.accent;
+                }
+                pta := VolumeTouch {
+                    x: -12px; width: parent.width + 24px;
+                    value: root.value; maximum: root.maximum; vertical: true;
+                    changed(v) => { root.changed(v); }
+                }
+            }
+        }
+    }
+}
+
+// "Percent" volume: the number next to the speaker icon; drag sideways or scroll to change.
+component VolumePercent inherits Rectangle {
+    in property <float> value;
+    in property <float> maximum: 150;
+    in property <bool> compact;
+    callback changed(float);
+    width: pt.preferred-width + 8px; height: compact ? 26px : 32px;
+    border-radius: Metrics.radius-sm;
+    background: ta.has-hover || ta.pressed ? Theme.bg-a1 : transparent;
+    pt := Text {
+        text: round(root.value) + "%"; font-size: Metrics.font-sm; font-family: "DM Mono";
+        color: ta.has-hover ? Theme.fg-1 : Theme.fg-a2; vertical-alignment: center; horizontal-alignment: center;
+    }
+    ta := VolumeTouch { value: root.value; maximum: root.maximum; relative: true; changed(v) => { root.changed(v); } }
+}
+
 // A configurable bottom-bar item (see toolbar.slint for the catalogue).
 component BarItem inherits HorizontalLayout {
     in property <string> id;
@@ -275,26 +425,43 @@ component BarItem inherits HorizontalLayout {
     in property <bool> wide: true; // room for the volume slider
     in property <bool> shown: true; // false = collapsed into the overflow menu
     in property <bool> compact: false;
+    in property <VolumeStyle> vstyle: VolumeStyle.cone;
+    in property <bool> boxed: true; // bar style draws boxed tracks (all but Plain)
     callback act(string);
     callback volume-changed(float);
-    spacing: root.compact ? 2px : 6px;
-    horizontal-stretch: 0;
-    if root.shown && root.id == "volume": IconButton { tab-focus: false;
-        size: root.compact ? ButtonSize.sm : ButtonSize.md;
-        tip: Tools.label("volume");
-        icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
+    property <image> vol-icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
             : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
             : root.volume < 100 ? @image-url("../assets/icons/close-medium.svg")
             : @image-url("../assets/icons/volume-high.svg");
+    spacing: root.compact ? 2px : 6px;
+    horizontal-stretch: 0;
+    if root.shown && root.id == "volume" && root.vstyle != VolumeStyle.popup: IconButton { tab-focus: false;
+        size: root.compact ? ButtonSize.sm : ButtonSize.md;
+        tip: Tools.label("volume");
+        icon: root.vol-icon;
         clicked => { root.act("mute"); }
     }
+    if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.popup: VerticalLayout { alignment: center; VolumePopup {
+        compact: root.compact; icon: root.vol-icon; tip: Tools.label("volume");
+        value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+        mute => { root.act("mute"); }
+    } }
+    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.bar: VerticalLayout { alignment: root.compact ? center : start; VolumeSlider {
+        compact: root.compact; boxed: root.boxed; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    } }
+    if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.percent: VerticalLayout { alignment: root.compact ? center : start; VolumePercent {
+        compact: root.compact; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    } }
     // Inline bars: centred on the row like the seek track, so both share one vertical centre.
-    if root.shown && root.wide && root.id == "volume" && root.compact: VerticalLayout { alignment: center; VolumeBar {
+    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.cone && root.compact: VerticalLayout { alignment: center; VolumeBar {
         compact: true; value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
     } }
     // Classic: the seek track has its own row; the wedge stays in line with the buttons.
-    if root.shown && root.wide && root.id == "volume" && !root.compact: VolumeBar {
+    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.cone && !root.compact: VolumeBar {
         compact: false; value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
     }
@@ -826,7 +993,7 @@ export component AppWindow inherits Window {
                     } }
                     if id == "spacer" || (id == "seek" && root.bar-classic): Rectangle { horizontal-stretch: 1; }
                     if on && !root.is-core(id): BarItem {
-                        id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;
+                        id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); vstyle: Customize.vol-style; boxed: root.bar.boxed; muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;
                         act(x) => { root.bar-act(x); fs.focus(); }
                         volume-changed(v) => { Playback.volume = v; Playback.volume-changed(v); }
                     }
@@ -1082,6 +1249,8 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         items: Customize.bar-items; styles: Customize.bar-styles; bar-style: Customize.bar-style;
         pick-style(st) => { Customize.style(st); }
+        vol-styles: Customize.vol-styles; vol-style: Customize.vol-style;
+        pick-volume(st) => { Customize.pick-volume(st); }
         available: Customize.available;
         profiles: Customize.profiles; profile: Customize.profile;
         move(i, d) => { Customize.move(i, d); }
