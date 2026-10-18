@@ -192,7 +192,7 @@ component VolumeBar inherits Rectangle {
     in property <float> maximum: 150;
     callback changed(float);
     in property <bool> compact: false;
-    width: compact ? 56px : 88px; height: compact ? 18px : 28px;
+    width: compact ? 56px : 88px; height: compact ? Metrics.bar-track-h : 28px;
     // volume (percent) → filled width in Figma units (0..88)
     pure function fill-of(v: float) -> float {
         if (v <= 0) { return 0; }
@@ -288,8 +288,14 @@ component BarItem inherits HorizontalLayout {
             : @image-url("../assets/icons/volume-high.svg");
         clicked => { root.act("mute"); }
     }
-    if root.shown && root.wide && root.id == "volume": VolumeBar {
-        compact: root.compact; value: root.volume; maximum: root.volume-max;
+    // Inline bars: centred on the row like the seek track, so both share one vertical centre.
+    if root.shown && root.wide && root.id == "volume" && root.compact: VerticalLayout { alignment: center; VolumeBar {
+        compact: true; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    } }
+    // Classic: the seek track has its own row; the wedge stays in line with the buttons.
+    if root.shown && root.wide && root.id == "volume" && !root.compact: VolumeBar {
+        compact: false; value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
     }
     // Icon only on the bar (labels live in the ⋯ overflow menu and hover Tooltip).
@@ -805,9 +811,10 @@ export component AppWindow inherits Window {
                         }
                         if ab: IconButton { tab-focus: false; size: true ? ButtonSize.sm : ButtonSize.md; tip: "Clear A-B range"; icon: @image-url("../assets/icons/close.svg"); clicked => { Playback.set-ab(-1, -1); fs.focus(); } }
                     }
-                    if id == "seek" && !root.bar-classic: SeekBar {
+                    // Centred on the row (a fixed-height child would sit at the top).
+                    if id == "seek" && !root.bar-classic: VerticalLayout { alignment: center; horizontal-stretch: 1; SeekBar {
                         horizontal-stretch: 1;
-                        height: Playback.wave-peaks.length > 0 ? 24px : 18px;
+                        height: Playback.wave-peaks.length > 0 ? Metrics.bar-wave-h : Metrics.bar-track-h;
                         boxed: root.bar.boxed;
                         track-h: 4px;
                         position: Playback.position; duration: Playback.duration;
@@ -816,7 +823,7 @@ export component AppWindow inherits Window {
                         ab-set(x, y) => { Playback.set-ab(x, y); }
                         fmt(t) => { root.fmt(t) }
                         seek(t) => { Playback.seek(t); fs.focus(); }
-                    }
+                    } }
                     if id == "spacer" || (id == "seek" && root.bar-classic): Rectangle { horizontal-stretch: 1; }
                     if on && !root.is-core(id): BarItem {
                         id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;

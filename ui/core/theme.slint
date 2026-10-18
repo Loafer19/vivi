@@ -125,6 +125,10 @@ export global Metrics {
     out property <length> row-h: 36px;
     out property <length> bar-h: 36px;       // Compact / Waveform / Plain bottom bar
     out property <length> bar-h-classic: 72px;
+    // Seek track and compact volume wedge heights in the bar; both are centred on the
+    // button row so their tracks share one vertical centre.
+    out property <length> bar-track-h: 18px;
+    out property <length> bar-wave-h: 24px;      // Waveform style seek track
 }
 
 export component Icon inherits Image {
