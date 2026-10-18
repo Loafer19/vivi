@@ -22,7 +22,7 @@
 - **Recent pictures and icons**: when a web video (YouTube, Vimeo, …) is opened, its thumbnail is fetched in the background and used for its Recent tile and row. YouTube thumbnails come straight from YouTube; for other sites the thumbnail comes from yt-dlp. Thumbnails are cached in `~/.cache/vivi/web-thumbs`. Recent grid tiles without a picture show the entry's own icon (stream, folder, playlist, link for web videos) instead of the generic video icon, and web videos use the link icon in the Open Recent menu too. "Clear" on the home "Recently Played" shelf now updates the home screen and the Recent view right away.
 - **Recent in the side panel**: the side panel's Library tab lists the five newest Recent entries (icon, title and type badge) above the search results while the search box is empty; clicking one opens it.
 ### Changed
-- **Faster CI**: the CI build uses a new `ci` profile (release optimizations without fat LTO, 16 codegen units, no incremental or debug info) and links with mold. Rust caching is shared between jobs and kept when a job fails. The swap step was dropped from CI because the build no longer needs it. Release and packaging builds keep fat LTO.
+- **Faster CI**: the CI build uses a new `ci` profile (release optimizations without fat LTO, 16 codegen units, no incremental or debug info) and links with mold. Rust caching is shared between jobs and kept when a job fails. The swap step was dropped from CI because the build no longer needs it. Release and packaging builds keep fat LTO. CI now also runs `cargo test`, using the same `ci` profile.
 - CI, Release and Packaging jobs that build with the fat-LTO release profile on Linux add a 10 GB swapfile first; with accessibility enabled the AUR vivi-git build was killed for lack of memory.
 - **Esc closes the top-most open overlay** — menus, shortcuts, info, onboarding, Customize, tag review, Find Lyrics, music / streams dialog, Add Subtitles, QR, Settings, New Playlist, Network Stream, side panel, library, karaoke — and only then leaves the miniplayer, then fullscreen. It also works while a text field in a dialog has focus.
 - **Consistent UI**: every colour, corner radius and font size in the UI now comes from design tokens (`ui/core/theme.slint`: `Theme` status / scrim / shadow / on-media / stage colours and a `Metrics` scale for spacing, radii, fonts, icons and row heights). Odd values are snapped to the scale (e.g. 15 px text → 16 px, 5 px corners → 6 px).
@@ -41,9 +41,9 @@
 - **Karaoke follows the theme**: the full-screen lyrics stage, its chips and the empty state are light in light mode. It reads a typed lyrics state (found / searching / missing) and the numeric offset instead of comparing display strings.
 
 ### Fixed
-- **Hover × on Recent grid tiles opened the item instead of removing it** (most visible on folders, which navigated into the folder). The × now sits above the tile's click area and removes the entry by its stored target.
-- **Side panel library list showed files twice**: the same file reached through a symlink or overlapping library folders, or copied into two library folders, is now listed once.
 - **Seek track and volume slider were not vertically aligned** in the inline bar styles: the Compact and Plain tracks and the volume wedge sat about 3 px above the button row, and in Waveform the wedge was 3.5 px above the waveform's centre. The seek track and wedge are now centred on the button row in Compact, Waveform and Plain, so they share one vertical centre (new `Metrics.bar-track-h` / `bar-wave-h` tokens).
+- **Side panel library list showed files twice**: the same file reached through a symlink or overlapping library folders, or copied into two library folders, is now listed once.
+- **Hover × on Recent grid tiles opened the item instead of removing it** (most visible on folders, which navigated into the folder). The × now sits above the tile's click area and removes the entry by its stored target.
 - Main menu → Keyboard Shortcuts opened Settings → Playback; the library's "Edit subtitles / audio" opened Controls / Privacy instead of Subtitles / Audio.
 
 ## [0.11.1] - 2026-10-17
