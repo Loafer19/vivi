@@ -20,7 +20,7 @@ fn get_proc_address(ctx: &usize, name: &str) -> *mut c_void {
 
 /// Minimal GL state reset before mpv draws. femtovg leaves textures, programs, buffers,
 /// scissor/blend state and pixel-store settings bound after uploading images (library
-/// thumbnails, seek previews), which made mpv's frame come out black.
+/// thumbnails, seek-bar previews), which made mpv's frame come out black.
 struct GlReset {
     disable: extern "system" fn(u32),
     active_texture: extern "system" fn(u32),

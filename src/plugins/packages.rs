@@ -755,6 +755,10 @@ pub struct State {
     pub busy: Option<String>,
     /// Package whose permissions prompt is open.
     pub confirm: Option<String>,
+    /// Package to enable once installed ([`install_and_enable`]).
+    pub enable_after: Option<String>,
+    /// Package to offer for install once the catalog has been downloaded.
+    pub install_after_fetch: Option<String>,
 }
 
 thread_local! {
@@ -869,7 +873,7 @@ pub fn updates() -> Vec<Entry> {
     })
 }
 
-fn toast(msg: &str) {
+pub fn toast(msg: &str) {
     let Some(a) = APP.with(|a| a.borrow().as_ref().and_then(|w| w.upgrade())) else {
         return;
     };
@@ -971,8 +975,20 @@ pub fn check(manual: bool) {
                         (_, 0) => format!("Catalog updated: {n} plugins, everything is up to date"),
                         (_, u) => format!("{u} plugin update(s) available"),
                     });
+                    if let Some(id) = with_state(|s| s.install_after_fetch.take()) {
+                        if with_state(|s| s.catalog.iter().any(|e| e.id == id)) {
+                            action(&id, "Install");
+                        } else {
+                            with_state(|s| s.enable_after = None);
+                            status(format!("{id} is not in the plugin catalog"));
+                        }
+                    }
                 }
                 Err(e) => {
+                    with_state(|s| {
+                        s.install_after_fetch = None;
+                        s.enable_after = None;
+                    });
                     eprintln!("vivi: plugin catalog {url}: {e}");
                     status(if manual {
                         format!("Could not load the plugin catalog: {e}")
@@ -1020,10 +1036,22 @@ pub fn install(id: &str) {
             install_with(&root(), &entry, &b, &got)
         });
         let _ = slint::invoke_from_event_loop(move || {
-            with_state(|s| s.busy = None);
+            let enable = with_state(|s| {
+                s.busy = None;
+                let e = s.enable_after.as_deref() == Some(entry.id.as_str());
+                if e {
+                    s.enable_after = None;
+                }
+                e
+            });
             let msg = match res {
                 Ok(i) => {
-                    let loaded = super::rescan_package(&i.manifest.id);
+                    let mut loaded = super::rescan_package(&i.manifest.id);
+                    // Installed from a suggestion (seek-bar hint): turn it on as well.
+                    if enable && !loaded {
+                        super::setting_changed(&super::toggle_id(&i.manifest.id), "true");
+                        loaded = super::rescan_package(&i.manifest.id);
+                    }
                     match (was, loaded) {
                         (None, true) => {
                             format!("Installed {} {}", i.manifest.name, i.manifest.version)
@@ -1044,6 +1072,31 @@ pub fn install(id: &str) {
             status(msg);
         });
     });
+}
+
+/// Plugins the Extensions catalog marks "Recommended" (by id).
+pub const RECOMMENDED: &[&str] = &["chapter-thumbnails"];
+
+pub fn is_recommended(id: &str) -> bool {
+    RECOMMENDED.contains(&id)
+}
+
+/// Install package `id` on a suggestion outside the Extensions window (the seek-bar hint)
+/// with the usual flow: the window opens on All / Marketplace → Browse, where the
+/// permission prompt asks first; the package is enabled once installed. Downloads the
+/// catalog first when it does not list `id` yet.
+pub fn install_and_enable(a: &AppWindow, id: &str) {
+    with_state(|s| {
+        s.tab = "Browse".into();
+        s.enable_after = Some(id.into());
+    });
+    crate::extwin::open(a, "", false);
+    if with_state(|s| s.catalog.iter().any(|e| e.id == id)) {
+        action(id, "Install");
+    } else {
+        with_state(|s| s.install_after_fetch = Some(id.into()));
+        check(true);
+    }
 }
 
 /// Extensions page button for package `id` (labels from `settings.rs`).
@@ -1069,7 +1122,12 @@ pub fn action(id: &str, label: &str) {
         }
         "Allow & install" => install(id),
         "Cancel" => {
-            with_state(|s| s.confirm = None);
+            with_state(|s| {
+                s.confirm = None;
+                if s.enable_after.as_deref() == Some(id) {
+                    s.enable_after = None;
+                }
+            });
             status(String::new());
         }
         "Roll back" => {

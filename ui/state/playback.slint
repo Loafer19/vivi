@@ -21,7 +21,9 @@ export global Playback {
     in-out property <[float]> wave-peaks;
     in-out property <string> wave-path;
     in-out property <[image]> preview-frames;
-    // The pointer is over a seek bar: seek previews are generated from the first hover on.
+    // Frames from the Chapter Thumbnails package cache (src/preview.rs), evenly spaced.
+    // The pointer went over a seek bar: src/preview.rs tells the package (first hover per
+    // file, `vivi-preview-wanted`) or offers to install it.
     callback preview-wanted();
     callback bar-action(string);
     callback toggle-play();

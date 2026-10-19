@@ -10,7 +10,7 @@
 - **Plays anything** mpv plays, with hardware decoding, on Wayland, X11, Windows and macOS
 - **Library**: home screen, video folders, music by album/artist/genre, playlists, resume, search
 - **Side panel**: queue, bookmarks, chapters, plus quick playback/video/audio/subtitle settings
-- **Equalizer & effects**, seek-bar previews, miniplayer, music visualizer, MPRIS, light/dark themes
+- **Equalizer & effects**, seek-bar previews (Chapter Thumbnails extension), miniplayer, music visualizer, MPRIS, light/dark themes
 - **Lyrics karaoke**: full-screen synced lyrics with word highlight, Find Lyrics, save as `.lrc` or embed
 - **Subtitles**: OpenSubtitles hash-first search, language chips, preview, one-click load, per-file offset, auto-sync
 - **Auto-tagger**: AcoustID + MusicBrainz and more, confidence-ranked, per-field alternatives, undo

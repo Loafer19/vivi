@@ -358,7 +358,12 @@ pub(crate) fn browse(r: &mut Rows) {
             size = format!("{size} {}", e.size_note);
         }
         let perms = describe_permissions(&e.permissions);
-        r.last().options = strs(&[&e.version, &e.author, &e.icon, &perms, &state, &size]);
+        let rec = if packages::is_recommended(&e.id) {
+            "Recommended"
+        } else {
+            ""
+        };
+        r.last().options = strs(&[&e.version, &e.author, &e.icon, &perms, &state, &size, rec]);
         r.last().labels = strs(&labels);
         r.last().enabled = busy.is_none();
     }

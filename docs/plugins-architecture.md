@@ -280,7 +280,11 @@ shows up* and its `action` settings as buttons; the gear in the header switches 
 settings (the Settings `Row` component; changes go through `Settings.setting-changed`, so
 `plugin.*`, `pkg.*`, `ext.*`, `scripts.*` and `src.*` rows share one handler). Open it
 from Rust with `extwin::open(app, id, gear)`; a plugin opens its own settings with
-`plugins::run(id, "", &[])`.
+`plugins::run(id, "", &[])`. Browse shows a *Recommended* badge on catalog entries whose
+id is in `packages::RECOMMENDED` (core list; `chapter-thumbnails`). Core code that
+suggests a package installs it with `packages::install_and_enable(app, id)`: the window
+opens on Browse with the normal Install / permission prompt, and the package is enabled
+once installed (the seek-bar hint in `src/preview.rs` uses it).
 
 ### Music plugins (#63, #65, #69, #70)
 
@@ -289,7 +293,7 @@ from Rust with `extwin::open(app, id, gear)`; a plugin opens its own settings wi
 | Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz, Cover Art Archive, Deezer, iTunes Search and LRCLIB need none; Last.fm API key (genres) and Discogs token optional (#79). Candidates from all sources are merged and ranked by confidence (`rank_candidates`, `Candidate::confidence`); disagreeing values become per-field alternatives (⇄ in the review); fingerprint matches propose a sanitized, opt-in file name (`sanitize_file_name`, `rename_to`). The review shows the source of every field; synced LRCLIB lyrics are embedded when *Embed synced lyrics* is on (MP3 SYLT+USLT, FLAC/Ogg/Opus `LYRICS`, M4A `©lyr`, #80) |
 | Equalizer (`equalizer`, #74) | script, **deprecated** since 0.13.0 | presets via mpv `equalizer`/`superequalizer` af; replaced by the built-in Equalizer (`Alt+E` / `Alt+Shift+E`, auto pre-amp) | none |
 | Subtitle sync (`subtitle-sync`, #72) | script | alass (system or managed download) + managed media ffmpeg | none |
-| Chapter thumbnails (`chapter-thumbnails`, #75) | script + core | managed media ffmpeg; core reads the cache | none |
+| Chapter thumbnails (`chapter-thumbnails`, #75) | script + core | managed media ffmpeg; core reads the cache (the only source of seek-bar previews; offered by a hint on the first seek-bar hover and marked *Recommended* in Browse) | none |
 | AcoustID (`acoustid`, #76) | script + tagger | fpcalc (system or Chromaprint download); results open in the tagger review with a rename proposal | AcoustID application key |
 | Scrobbler (`scrobbler`, #77) | script | Last.fm + ListenBrainz | Last.fm API key + secret, ListenBrainz token |
 | Free Music (`free-music`, #70) | built in | search/results/licence dialog; downloads are tagged with lofty | Jamendo `client_id` (optional, <https://devportal.jamendo.com>); Internet Archive needs none |
@@ -442,6 +446,9 @@ Script messages Vivi handles for packages:
 | `vivi-pick-folder <id> <key>` | folder dialog; the result is saved as that setting and sent back as `script-message-to <script> folder-picked <path>` |
 | `vivi-qr <title> <text> [caption]` | dialog with `text` as a QR code (e.g. a pairing link), shown above Settings (0.10.1+) |
 | `vivi-fullscreen [toggle\|on\|off]` | switches Vivi's window fullscreen (0.10.1+) |
+
+Vivi sends `script-message vivi-preview-wanted` on the first seek-bar hover of each local
+video while Chapter Thumbnails is enabled (its *On hover* mode starts rendering then).
 
 `action` settings may set `label` (button text, default "Run"); `size_note` adds a note to
 the size in Browse (e.g. the YouTube plugin's own yt-dlp download).

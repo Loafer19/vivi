@@ -48,7 +48,7 @@ export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, Panel
 component SeekBar inherits Rectangle {
     in property <float> position;
     in property <float> duration;
-    in property <[image]> frames; // evenly spaced preview frames (may be empty / partial)
+    in property <[image]> frames; // evenly spaced preview frames from the Chapter Thumbnails cache (may be empty)
     in property <[float]> chapters; // chapter start times (s) → segment gaps on the track
     in property <[float]> peaks; // audio waveform peaks 0..1 (empty = plain bar)
     in property <float> range-a: -1; // plugin range (vivi-range), drawn in blue
@@ -133,7 +133,7 @@ component SeekBar inherits Rectangle {
         background: Theme.accent;
         visible: root.boxed || root.track-h > 8px || ta.has-hover;
     }
-    // Hover frame preview (#10)
+    // Hover frame preview (#10; frames from the Chapter Thumbnails package)
     if ta.has-hover && root.duration > 0 && root.frames.length > 0: Rectangle {
         y: -30px - 6px - 108px;
         width: 192px; height: 108px;
@@ -1022,6 +1022,31 @@ export component AppWindow inherits Window {
                 if Customize.bar-slots > root.bar-fit: IconButton { tab-focus: false;
                     size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; icon: @image-url("../assets/icons/more.svg"); tip: "More";
                     clicked => { overflow.show(); }
+                }
+            }
+        }
+    }
+
+    // ---------- Extension hint above the seek bar (src/preview.rs) ----------
+    // Toast look, high enough to clear the seek bar's hover time (and above a toast).
+    if !root.mini && Playback.has-media && root.show-ui && Notices.hint-text != "": Rectangle {
+        width: min(hint.preferred-width, root.width - 32px); height: 44px;
+        x: (root.width - self.width) / 2;
+        y: root.height - root.bar-h - self.height - (Notices.resume-text != "" ? 84px : 40px);
+        border-radius: Metrics.radius-xxl;
+        background: Theme.bar;
+        border-width: 1px; border-color: Theme.divider;
+        TouchArea { } // keep clicks off the video
+        hint := HorizontalLayout {
+            padding-left: Metrics.space-4; padding-right: Metrics.space-2; spacing: Metrics.space-4;
+            Text { text: Notices.hint-text; color: Theme.fg-2; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+            HorizontalLayout {
+                spacing: Metrics.space-1; horizontal-stretch: 0;
+                VerticalLayout { alignment: center;
+                    PrimaryButton { size: ButtonSize.sm; text: Notices.hint-action; clicked => { Notices.hint-accept(); fs.focus(); } }
+                }
+                VerticalLayout { alignment: center;
+                    FlatButton { size: ButtonSize.sm; text: "Don't show again"; clicked => { Notices.hint-never(); fs.focus(); } }
                 }
             }
         }

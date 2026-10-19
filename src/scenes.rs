@@ -1,7 +1,8 @@
 //! Thumbnails written by plugin packages, read here so the core needs no ffmpeg for them:
 //! `<data>/vivi/plugin-data/<plugin>/<key>/chapter-<n>.jpg` (n from 1) by Chapter
-//! Thumbnails (#75) or Scene Chapters (#62), and `seek-NN.jpg` (seek-bar previews) by
-//! Chapter Thumbnails. The key is the packages' hash of "path|size|mtime".
+//! Thumbnails (#75) or Scene Chapters (#62), and `seek-NN.jpg` (seek-bar previews, any
+//! count; `seek.meta` = "frames=<n>" once complete) by Chapter Thumbnails. The key is the
+//! packages' hash of "path|size|mtime".
 
 use std::path::{Path, PathBuf};
 
@@ -45,15 +46,27 @@ pub fn thumbs(roots: &[PathBuf], path: &str, chapters: usize) -> Vec<Option<Path
         .collect()
 }
 
-/// Seek-bar preview frames `seek-00.jpg`, `seek-01.jpg`, … of `path` (the contiguous run
-/// from 00), or None when there are fewer than 10.
+/// Seek-bar preview frames `seek-00.jpg`, `seek-01.jpg`, … of `path`: the contiguous run
+/// from 00 (the package picks the count, e.g. 25–200), capped at `frames=<n>` from
+/// `seek.meta` once a run is complete; None when there are fewer than 10.
 pub fn seek_frames(root: &Path, path: &str) -> Option<Vec<PathBuf>> {
     let dir = file_dir(root, path)?;
-    let v: Vec<PathBuf> = (0..1000)
+    let max = std::fs::read_to_string(dir.join("seek.meta"))
+        .ok()
+        .and_then(|m| meta_frames(&m))
+        .unwrap_or(1000);
+    let v: Vec<PathBuf> = (0..max)
         .map(|i| dir.join(format!("seek-{i:02}.jpg")))
         .take_while(|f| f.is_file())
         .collect();
     (v.len() >= 10).then_some(v)
+}
+
+/// `frames=<n>` of a `seek.meta` file.
+fn meta_frames(meta: &str) -> Option<usize> {
+    meta.lines()
+        .find_map(|l| l.trim().strip_prefix("frames="))
+        .and_then(|n| n.trim().parse().ok())
 }
 
 #[cfg(test)]
@@ -102,6 +115,21 @@ mod tests {
             super::seek_frames(&d.join("root"), &p).map(|v| v.len()),
             Some(12)
         );
+        // More than 100 frames (3-digit names) and the seek.meta cap.
+        for i in 12..150 {
+            std::fs::write(cd.join(format!("seek-{i:02}.jpg")), b"j").unwrap();
+        }
+        assert_eq!(
+            super::seek_frames(&d.join("root"), &p).map(|v| v.len()),
+            Some(150)
+        );
+        std::fs::write(cd.join("seek.meta"), "frames=120\n").unwrap();
+        assert_eq!(
+            super::seek_frames(&d.join("root"), &p).map(|v| v.len()),
+            Some(120)
+        );
+        assert_eq!(super::meta_frames("x=1\nframes=25\n"), Some(25));
+        assert_eq!(super::meta_frames("frames=\n"), None);
         let _ = std::fs::remove_dir_all(&d);
     }
 }

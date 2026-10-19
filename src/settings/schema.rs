@@ -338,6 +338,11 @@ pub(super) const OTHER: &[Field] = &[
         set: |c, v| c.performance.video_sync = v.into(),
     },
     Field {
+        id: "interface.hint_chapter_thumbnails",
+        get: None,
+        set: |c, v| c.interface.hint_chapter_thumbnails = v == "true",
+    },
+    Field {
         id: "library.thumbnails",
         get: None,
         set: |c, v| c.library.thumbnails = v == "true",

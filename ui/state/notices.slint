@@ -1,4 +1,4 @@
-// Core notices: the bottom toast / resume prompt (Start over, dismiss), the network stream loading spinner and the stream error banner.
+// Core notices: the bottom toast / resume prompt (Start over, dismiss), the network stream loading spinner, the stream error banner and the extension hint above the seek bar.
 export global Notices {
     in-out property <string> resume-text;
     in-out property <string> resume-offer;
@@ -13,6 +13,12 @@ export global Notices {
     in-out property <string> stream-error;
     in-out property <string> stream-url;     // the stream that failed (Retry re-opens it)
     in-out property <bool> stream-copied;     // "Copy" was pressed for the current error
+    // Hint above the seek bar (src/preview.rs: Chapter Thumbnails for frame previews);
+    // "" = hidden. hint-action is the button label ("Install" / "Enable").
+    in-out property <string> hint-text;
+    in-out property <string> hint-action;
+    callback hint-accept();
+    callback hint-never();
     callback start-over();
     callback dismiss-resume();
     callback toast-run(string);

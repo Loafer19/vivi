@@ -22,7 +22,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Miniplayer (`P`): compact always-on-top window (391×339 by default, resizable down to 280×160, size and position remembered) with an optional queue view; tiny sizes show the video only, with hover controls
 - Figma-matched menus (main right-click menu with submenus and shortcut hints, file/folder/playlist context menus, sort/view menus), dropdowns, cone volume control and icons, with comparisons in [docs/design/compare](design/compare)
 - Responsive layout down to 480×320: the bottom bar folds extra buttons into a “⋯” menu, the side panel overlays the video (full width below 800 px), the library switches to an icon rail and list view, Settings uses a category dropdown — see [docs/screenshots/responsive](screenshots/responsive)
-- Seek-bar hover preview: frame thumbnails while hovering the seek bar (needs `ffmpeg`)
+- Seek-bar hover preview: frame thumbnails while hovering the seek bar, from the Chapter Thumbnails extension (the player offers it the first time you hover the seek bar of a video)
 - MPRIS2 (Linux): media keys, `playerctl`, Waybar/desktop widgets with title, artist and cover art
 - Queue (add, drop, reorder, remove), saved `.m3u` playlists, resume where you left off, recent files
 - Open via file dialog (XDG portal), command line (multiple files are queued), or drag & drop (X11, Windows, macOS; on Wayland see below)

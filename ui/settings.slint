@@ -8,6 +8,7 @@ import { Dropdown, Toggle, Slider, Segmented, TextField, PathField, AdvancedBar 
 import { Icons } from "core/icons.slint";
 import { Modal } from "core/modal.slint";
 import { FlatButton } from "core/buttons.slint";
+import { Badge, BadgeTone } from "core/rows.slint";
 
 export struct SettingRow {
     id: string,
@@ -21,7 +22,7 @@ export struct SettingRow {
     // | "buttons" (title/info + one button per label; clicked label is the value)
     // | "package" (catalog card: title = name, info = description, value = "confirm"
     //   while the permission prompt is open, options = [version, author, icon key,
-    //   permissions, state, size], labels = buttons)
+    //   permissions, state, size, badge ("Recommended" or "")], labels = buttons)
     kind: string,
     value: string,
     options: [string],
@@ -86,8 +87,8 @@ component PluginCard inherits Rectangle {
     }
 }
 
-// Catalog card (Extensions → Browse): icon, name, meta, description, permissions and
-// Install / Update / Uninstall buttons, or the permission prompt.
+// Catalog card (Extensions → Browse): icon, name (+ "Recommended" badge), meta,
+// description, permissions and Install / Update / Uninstall buttons, or the permission prompt.
 // clip + capped description/meta keep long catalog copy inside the card.
 component PackageCard inherits Rectangle {
     in property <SettingRow> setting;
@@ -110,8 +111,12 @@ component PackageCard inherits Rectangle {
             HorizontalLayout { spacing: 8px;
                 Text {
                     text: setting.title; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600;
-                    overflow: elide; horizontal-stretch: 1;
+                    overflow: elide; horizontal-stretch: 0; min-width: min(96px, self.preferred-width); // a few letters stay next to the badge
                 }
+                if setting.options.length > 6 && setting.options[6] != "": VerticalLayout { alignment: center;
+                    Badge { text: setting.options[6]; tone: BadgeTone.accent; }
+                }
+                Rectangle { horizontal-stretch: 1; }
                 Text {
                     text: "v" + setting.options[0] + "  ·  " + setting.options[1] + "  ·  " + setting.options[5];
                     color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; font-family: "DM Mono";

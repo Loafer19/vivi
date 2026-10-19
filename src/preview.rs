@@ -1,68 +1,47 @@
-//! Seek-bar hover preview (#10): evenly spaced frames rendered in the background with the
-//! `ffmpeg` CLI (fast keyframe seeks, small RGBA frames), kept in memory for the current file.
-//! Nothing runs until the pointer first goes over the seek bar; then one worker renders the
-//! frames one ffmpeg at a time, coarse to fine, so a few spread-out frames are ready first.
-//! When the Chapter Thumbnails package (#75) has cached frames for the file, those are
-//! shown instead and no ffmpeg runs.
+//! Seek-bar hover preview (#10). The frames come from the Chapter Thumbnails package
+//! (#75): it renders `seek-NN.jpg` per file into its cache (any count, see `scenes.rs`)
+//! and sends `vivi-preview-frames`; the core only shows them. The first seek-bar hover
+//! per file sends it `script-message vivi-preview-wanted` (its default "On hover" mode
+//! starts rendering then). Without the package the bar shows the hover time only, and
+//! the first hover over the seek bar of a local video offers the package once per
+//! session (the hint above the bar, `[interface] hint_chapter_thumbnails` = false hides
+//! it for good).
 
+use crate::config::Config;
 use crate::AppWindow;
-use slint::{ComponentHandle, Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
+use slint::{ComponentHandle, Image, ModelRc, VecModel};
+use std::cell::{Cell, RefCell};
 use std::path::Path;
-use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
-pub const FRAMES: usize = 50;
-const W: u32 = 192;
-const H: u32 = 108;
+/// The package that renders seek-bar frames.
+pub const PLUGIN: &str = "chapter-thumbnails";
+/// How long the hint stays when nothing is clicked.
+const HINT_SECS: u64 = 15;
 
-/// Bumped on every new file so stale workers stop early.
-static GENERATION: AtomicU64 = AtomicU64::new(0);
-
-fn frame(path: &str, t: f64) -> Option<Vec<u8>> {
-    let vf = format!(
-        "scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2"
-    );
-    let out = std::process::Command::new("ffmpeg")
-        .args([
-            "-v",
-            "error",
-            "-nostdin",
-            "-skip_frame",
-            "nokey",
-            "-ss",
-            &format!("{t:.2}"),
-            "-i",
-            path,
-        ])
-        .args([
-            "-an",
-            "-sn",
-            "-frames:v",
-            "1",
-            "-vf",
-            &vf,
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-",
-        ])
-        .output()
-        .ok()?;
-    (out.stdout.len() == (W * H * 4) as usize).then_some(out.stdout)
+thread_local! {
+    /// Local video playing now (previews and the hint apply only to those).
+    static CURRENT: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// The hint was shown this session.
+    static HINTED: Cell<bool> = const { Cell::new(false) };
+    /// The package was told about the first hover of the current file.
+    static WANTED: Cell<bool> = const { Cell::new(false) };
 }
 
 fn plugin_root() -> std::path::PathBuf {
-    crate::store::data_dir().join("plugin-data/chapter-thumbnails")
+    crate::store::data_dir().join("plugin-data").join(PLUGIN)
+}
+
+fn is_local_video(path: &str, duration: f64) -> bool {
+    let p = Path::new(path);
+    duration > 1.0 && p.is_file() && crate::library::kind_of(p) == Some("video")
 }
 
 /// Show the Chapter Thumbnails package's cached frames for `path`; false when it has none.
-/// Stops any ffmpeg workers of this file.
 pub fn load_cached(app: &AppWindow, path: &str) -> bool {
     let Some(files) = crate::scenes::seek_frames(&plugin_root(), path) else {
         return false;
     };
-    GENERATION.fetch_add(1, Ordering::SeqCst);
     let imgs: Vec<Image> = files
         .iter()
         .filter_map(|f| Image::load_from_path(f).ok())
@@ -72,98 +51,100 @@ pub fn load_cached(app: &AppWindow, path: &str) -> bool {
     true
 }
 
-/// Start generating previews for `path` (local video files only).
-pub fn start(app: &AppWindow, path: &str, duration: f64, enabled: bool) {
-    let gen = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
-    let model: Rc<VecModel<Image>> = Rc::new(VecModel::default());
+/// A file was loaded: drop the old frames and show the package's cache of a local video.
+pub fn start(app: &AppWindow, path: &str, duration: f64) {
     app.global::<crate::Playback>()
-        .set_preview_frames(ModelRc::from(model.clone()));
-    let p = Path::new(path);
-    if !enabled || duration <= 1.0 || !p.is_file() || crate::library::kind_of(p) != Some("video") {
-        return;
+        .set_preview_frames(ModelRc::new(VecModel::<Image>::default()));
+    let local = is_local_video(path, duration);
+    CURRENT.with(|c| *c.borrow_mut() = local.then(|| path.to_string()));
+    WANTED.with(|w| w.set(false));
+    if local {
+        load_cached(app, path);
     }
-    if load_cached(app, path) {
-        return;
-    }
-    WANTED.with(|w| *w.borrow_mut() = Some((gen, path.to_string(), duration)));
-    PENDING.with(|p| p.borrow_mut().clear());
 }
 
-/// Frame indices coarse to fine: every 16th first, then every 8th, ...
-fn order() -> Vec<usize> {
-    let mut v: Vec<usize> = (0..FRAMES).collect();
-    v.sort_by_key(|i| [16, 8, 4, 2, 1].iter().position(|s| i % s == 0));
-    v
+/// What the hint offers: `Some("Install")` / `Some("Enable")`, None when the package
+/// already runs.
+fn hint_action(installed: bool, enabled: bool) -> Option<&'static str> {
+    match (installed, enabled) {
+        (false, _) => Some("Install"),
+        (true, false) => Some("Enable"),
+        (true, true) => None,
+    }
 }
 
-/// The pointer is over the seek bar: start the worker for the current file (once).
-pub fn wanted(app: &AppWindow) {
-    let Some((gen, path, duration)) = WANTED.with(|w| w.borrow_mut().take()) else {
-        return;
+/// The pointer went over the seek bar of the current file. Returns true on the first
+/// hover of a local video while the package is enabled: the caller sends it
+/// `vivi-preview-wanted`. Otherwise offers Chapter Thumbnails (once per session) when
+/// the package is not installed or not enabled and the user has not turned the hint off.
+pub fn hovered(app: &AppWindow, c: &Config) -> bool {
+    if CURRENT.with(|p| p.borrow().is_none()) {
+        return false;
+    }
+    let m = crate::plugins::manifests()
+        .into_iter()
+        .find(|m| m.id == PLUGIN);
+    let enabled = m.as_ref().is_some_and(|m| crate::plugins::is_enabled(c, m));
+    if enabled {
+        return !WANTED.with(|w| w.replace(true));
+    }
+    if HINTED.with(Cell::get) || !c.interface.hint_chapter_thumbnails {
+        return false;
+    }
+    let Some(action) = hint_action(m.is_some(), enabled) else {
+        return false;
     };
-    if GENERATION.load(Ordering::SeqCst) != gen {
-        return;
-    }
+    HINTED.with(|h| h.set(true));
+    let text = if action == "Install" {
+        "Frame previews — install Chapter Thumbnails"
+    } else {
+        "Frame previews — enable Chapter Thumbnails"
+    };
+    let n = app.global::<crate::Notices>();
+    n.set_hint_text(text.into());
+    n.set_hint_action(action.into());
     let w = app.as_weak();
-    {
-        std::thread::spawn(move || {
-            for i in order() {
-                if GENERATION.load(Ordering::SeqCst) != gen {
-                    return;
-                }
-                let t = duration * (i as f64 + 0.5) / FRAMES as f64;
-                let Some(px) = frame(&path, t) else { continue };
-                let w = w.clone();
-                let _ = slint::invoke_from_event_loop(move || {
-                    if GENERATION.load(Ordering::SeqCst) != gen {
-                        return;
-                    }
-                    let Some(a) = w.upgrade() else { return };
-                    let img = Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
-                        &px, W, H,
-                    ));
-                    PENDING.with(|p| {
-                        let mut p = p.borrow_mut();
-                        if p.len() != FRAMES {
-                            *p = vec![None; FRAMES];
-                        }
-                        p[i] = Some(img);
-                        // Publish once every slot has some frame: missing slots borrow the nearest ready one.
-                        let ready = p.iter().filter(|x| x.is_some()).count();
-                        if ready <= 4 || ready % 10 == 0 || ready == FRAMES {
-                            let filled: Vec<Image> = (0..FRAMES)
-                                .filter_map(|j| {
-                                    (0..FRAMES)
-                                        .flat_map(|d| [j.checked_sub(d), Some(j + d)])
-                                        .flatten()
-                                        .find_map(|x| p.get(x).cloned().flatten())
-                                })
-                                .collect();
-                            a.global::<crate::Playback>()
-                                .set_preview_frames(ModelRc::new(VecModel::from(filled)));
-                        }
-                    });
-                });
+    slint::Timer::single_shot(Duration::from_secs(HINT_SECS), move || {
+        if let Some(a) = w.upgrade() {
+            if a.global::<crate::Notices>().get_hint_text().as_str() == text {
+                hide_hint(&a);
             }
-        });
-    }
+        }
+    });
+    false
 }
 
-thread_local! {
-    /// File waiting for the first seek-bar hover: (generation, path, duration).
-    static WANTED: std::cell::RefCell<Option<(u64, String, f64)>> = const { std::cell::RefCell::new(None) };
-    static PENDING: std::cell::RefCell<Vec<Option<Image>>> = const { std::cell::RefCell::new(Vec::new()) };
+pub fn hide_hint(app: &AppWindow) {
+    app.global::<crate::Notices>().set_hint_text("".into());
+}
+
+/// Hint button "Install" / "Enable": the marketplace install flow (Extensions → Browse,
+/// permission prompt), and the package is enabled once installed. Nothing installs
+/// without the user confirming there.
+pub fn hint_accept(app: &AppWindow) {
+    let action = app.global::<crate::Notices>().get_hint_action();
+    hide_hint(app);
+    if action.as_str() == "Enable" {
+        let msg = crate::plugins::setting_changed(&crate::plugins::toggle_id(PLUGIN), "true");
+        crate::settings::refresh_ui();
+        crate::plugins::packages::toast(msg.as_deref().unwrap_or("Enabled Chapter Thumbnails"));
+    } else {
+        crate::plugins::packages::install_and_enable(app, PLUGIN);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn frames_are_rendered_coarse_to_fine() {
-        let o = super::order();
-        assert_eq!(o.len(), super::FRAMES);
-        assert_eq!(&o[..4], &[0, 16, 32, 48]);
-        let mut s = o.clone();
-        s.sort_unstable();
-        assert_eq!(s, (0..super::FRAMES).collect::<Vec<_>>());
+    fn hint_offers_install_or_enable() {
+        assert_eq!(super::hint_action(false, false), Some("Install"));
+        assert_eq!(super::hint_action(true, false), Some("Enable"));
+        assert_eq!(super::hint_action(true, true), None);
+    }
+
+    #[test]
+    fn only_local_videos() {
+        assert!(!super::is_local_video("https://example.com/v.mp4", 100.0));
+        assert!(!super::is_local_video("/nonexistent/v.mp4", 100.0));
     }
 }

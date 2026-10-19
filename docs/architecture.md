@@ -27,7 +27,7 @@ distribution and the package format are in [plugins-architecture.md](plugins-arc
 | `config.rs`, `store.rs` | Settings file and small XDG state files. |
 | `player.rs`, `render.rs` | libmpv wrapper and the OpenGL render underlay. |
 | `library.rs`, `libview.rs` | Media library (SQLite cache, scans, thumbnails) and its UI controller. |
-| `menus.rs`, `dialogs.rs`, `overlays.rs`, `mini.rs`, `loading.rs`, `preview.rs` | Menus, small dialogs, Esc handling, miniplayer, stream loading overlay, seekbar preview. |
+| `menus.rs`, `dialogs.rs`, `overlays.rs`, `mini.rs`, `loading.rs`, `preview.rs` | Menus, small dialogs, Esc handling, miniplayer, stream loading overlay, seekbar preview (shows the Chapter Thumbnails cache, offers the package). |
 | `fx.rs`, `peaks.rs`, `scenes.rs` | Equalizer / filters, seekbar waveform, package thumbnails. |
 | `ipc.rs`, `mpris.rs`, `desktop.rs`, `about.rs` | Control socket (for `vivi-mcp`), MPRIS2, desktop glue, About and update check. |
 | `keymap.rs` | Every shortcut, in match order. |

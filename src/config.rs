@@ -56,6 +56,9 @@ pub struct Interface {
     pub bar_style: String,
     /// Volume control style: "Cone" | "Bar" | "Popup" | "Percent" (see `VOLUME_STYLES`).
     pub volume_style: String,
+    /// Offer the Chapter Thumbnails package (seek-bar frame previews) above the seek bar;
+    /// "Don't show again" turns it off.
+    pub hint_chapter_thumbnails: bool,
     /// 0.11.0 settings, read once and folded into `toolbar` / `bar_style` by `migrate`.
     #[serde(skip_serializing)]
     pub bar_layout: Option<String>,
@@ -338,6 +341,7 @@ impl Default for Interface {
             mini_window: None,
             bar_style: "Compact".into(),
             volume_style: "Cone".into(),
+            hint_chapter_thumbnails: true,
             bar_layout: None,
             skip_buttons: None,
             waveform: None,
@@ -748,6 +752,15 @@ mod toolbar_tests {
         // Older configs have no volume_style: serde default → Cone.
         let i: Interface = toml::from_str("bar_style = \"Plain\"").unwrap();
         assert_eq!(i.volume_style, "Cone");
+    }
+
+    #[test]
+    fn chapter_thumbnails_hint_defaults_on() {
+        // Older configs have no key: the hint is offered.
+        let i: Interface = toml::from_str("theme = \"dark\"").unwrap();
+        assert!(i.hint_chapter_thumbnails);
+        let i: Interface = toml::from_str("hint_chapter_thumbnails = false").unwrap();
+        assert!(!i.hint_chapter_thumbnails);
     }
 
     #[test]

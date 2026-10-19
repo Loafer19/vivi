@@ -17,10 +17,31 @@ pub(crate) fn wire(
     let weak = app.as_weak();
     {
         let w = weak.clone();
+        let c = cfg.clone();
+        let p = player.clone();
         app.global::<crate::Playback>().on_preview_wanted(move || {
-            if let Some(a) = w.upgrade() {
-                preview::wanted(&a);
+            let Some(a) = w.upgrade() else { return };
+            // First hover of this file: Chapter Thumbnails ("On hover") renders its frames.
+            if preview::hovered(&a, &c.borrow()) {
+                p.cmd("script-message", &["vivi-preview-wanted"]);
             }
+        });
+        let w = weak.clone();
+        app.global::<crate::Notices>().on_hint_accept(move || {
+            if let Some(a) = w.upgrade() {
+                preview::hint_accept(&a);
+            }
+        });
+        let w = weak.clone();
+        let c = cfg.clone();
+        app.global::<crate::Notices>().on_hint_never(move || {
+            let Some(a) = w.upgrade() else { return };
+            preview::hide_hint(&a);
+            c.borrow_mut().interface.hint_chapter_thumbnails = false;
+            if let Err(e) = c.borrow().save() {
+                eprintln!("vivi: save config: {e}");
+            }
+            settings::refresh_ui();
         });
     }
     let player = player.clone();
@@ -63,12 +84,7 @@ pub(crate) fn wire(
                         }
                         a.global::<crate::Library>().invoke_refresh();
                         let dur: f64 = player.mpv.get_property("duration").unwrap_or(0.0);
-                        preview::start(
-                            &a,
-                            &player.get("path").unwrap_or_default(),
-                            dur,
-                            cfg.borrow().library.thumbnails,
-                        );
+                        preview::start(&a, &player.get("path").unwrap_or_default(), dur);
                         peaks::start(
                             &a,
                             &player.get("path").unwrap_or_default(),
