@@ -108,11 +108,13 @@ fn tab_of(m: &Manifest, c: &Config) -> ExtTab {
     }
 }
 
-/// "Where it shows up" lines of a manifest.
+/// "Where it shows up" lines of a manifest (entries that moved to an enabled plugin left
+/// out, as the menus and palette leave them out; see `contrib::MOVED`).
 pub fn places(m: &Manifest) -> Vec<String> {
     let mut v: Vec<String> = m
         .contributes
         .iter()
+        .filter(|c| !moved_away(&m.id, c))
         .map(|c| {
             let at = contrib::describe(&c.point);
             if c.label.is_empty() || c.label == m.name {
@@ -124,6 +126,17 @@ pub fn places(m: &Manifest) -> Vec<String> {
         .collect();
     v.dedup();
     v
+}
+
+/// Entry `c` of plugin `id` moved to another plugin that offers it at the same point now.
+fn moved_away(id: &str, c: &contrib::Contribution) -> bool {
+    contrib::MOVED.iter().any(|(oid, ocmd, nid, ncmd)| {
+        id == *oid
+            && c.command == *ocmd
+            && plugins::contributions_all(&c.point)
+                .iter()
+                .any(|e| e.id == *nid && e.command == *ncmd)
+    })
 }
 
 /// Rows of the gear view: the plugin's settings, then sidebar options for sources.
