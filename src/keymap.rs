@@ -26,6 +26,15 @@ pub enum Action {
     /// N next, Shift+N previous.
     QueueStep,
     AbLoop,
+    /// Alt+A / Alt+B: loop point at the playhead (src/abloop.rs).
+    AbSetA,
+    AbSetB,
+    /// Alt+C: clear the A-B loop.
+    AbClear,
+    /// Alt+← / Alt+→: move the loop point set last by one frame.
+    AbNudge,
+    /// `,` / `.`: one frame back / forward while paused (1 s seek while playing).
+    FrameStep,
     Karaoke,
     FindLyrics,
     /// `[` `]` (Shift or `{` `}`: 0.5 s).
@@ -110,6 +119,16 @@ const fn b(
     }
 }
 
+impl Binding {
+    /// Not with Alt held (Alt+← / Alt+→ belong to [`Action::AbNudge`]).
+    const fn no_alt(self) -> Binding {
+        Binding {
+            alt: Mod::Off,
+            ..self
+        }
+    }
+}
+
 /// An Alt shortcut (Ctrl not held).
 const fn alt(
     action: Action,
@@ -135,8 +154,8 @@ pub const BINDINGS: &[Binding] = &[
     // Before Play / pause, whose K matches with any Ctrl state.
     b(A::Palette, &[T("k")], On, Any, "Command palette", "Ctrl+K"),
     b(A::PlayPause, &[T(" "), T("k")], Any, Any, "Play / pause", "Space  K"),
-    b(A::SeekForward, &[N(Key::RightArrow)], Any, Any, "Seek forward (Shift: long skip)", "→"),
-    b(A::SeekBack, &[N(Key::LeftArrow)], Any, Any, "Seek back (Shift: long skip)", "←"),
+    b(A::SeekForward, &[N(Key::RightArrow)], Any, Any, "Seek forward (Shift: long skip)", "→").no_alt(),
+    b(A::SeekBack, &[N(Key::LeftArrow)], Any, Any, "Seek back (Shift: long skip)", "←").no_alt(),
     b(A::VolumeUp, &[N(Key::UpArrow)], Any, Any, "Volume up", "↑"),
     b(A::VolumeDown, &[N(Key::DownArrow)], Any, Any, "Volume down", "↓"),
     b(A::Fullscreen, &[T("f")], Any, Any, "Fullscreen", "F"),
@@ -145,6 +164,13 @@ pub const BINDINGS: &[Binding] = &[
     b(A::Stop, &[T("s"), T("S")], Off, Any, "Stop", "S"),
     b(A::QueueStep, &[T("n"), T("N")], Off, Any, "Next / previous in queue", "N  Shift+N"),
     b(A::AbLoop, &[T("l"), T("L")], Off, On, "A-B loop: set A / set B / clear", "Shift+L"),
+    alt(A::AbSetA, &[T("a"), T("A")], Off, "A-B loop: set A here", "Alt+A"),
+    alt(A::AbSetB, &[T("b"), T("B")], Off, "A-B loop: set B here", "Alt+B"),
+    alt(A::AbClear, &[T("c"), T("C")], Off, "A-B loop: clear", "Alt+C"),
+    alt(A::AbNudge, &[N(Key::LeftArrow), N(Key::RightArrow)], Any,
+        "A-B loop: nudge the last set point by one frame", "Alt+←  Alt+→"),
+    b(A::FrameStep, &[T(","), T(".")], Off, Off,
+        "One frame back / forward (paused; 1 s while playing)", ",  ."),
     b(A::Karaoke, &[T("l"), T("L")], Off, Any, "Karaoke lyrics view", "L"),
     b(A::FindLyrics, &[T("l"), T("L")], On, Any, "Find lyrics", "Ctrl+L"),
     b(A::LyricsOffset, &[T("["), T("]"), T("{"), T("}")], Off, Any,
@@ -351,6 +377,36 @@ mod tests {
         // Plain bindings still match with Alt (the handler forwards those to mpv).
         assert_eq!(lookup("f", false, false, true), Some(A::Fullscreen));
         assert_eq!(shown(A::EqPreset), "Alt+E");
+        // A-B loop (from the A-B Loop & Frame Step package's keys).
+        assert_eq!(lookup("a", false, false, true), Some(A::AbSetA));
+        assert_eq!(lookup("b", false, false, true), Some(A::AbSetB));
+        assert_eq!(lookup("c", false, false, true), Some(A::AbClear));
+        assert_eq!(lookup("a", false, false, false), None);
+        assert_eq!(
+            lookup("c", false, true, true),
+            None,
+            "Ctrl+Alt+C stays with mpv"
+        );
+        assert_eq!(
+            lookup(&key(Key::LeftArrow), false, false, true),
+            Some(A::AbNudge)
+        );
+        assert_eq!(
+            lookup(&key(Key::RightArrow), false, false, true),
+            Some(A::AbNudge)
+        );
+        assert_eq!(
+            lookup(&key(Key::RightArrow), true, false, false),
+            Some(A::SeekForward)
+        );
+        assert_eq!(lookup(",", false, false, false), Some(A::FrameStep));
+        assert_eq!(lookup(".", false, false, false), Some(A::FrameStep));
+        assert_eq!(
+            lookup(",", false, true, false),
+            Some(A::Settings),
+            "Ctrl+, still Settings"
+        );
+        assert_eq!(lookup("<", true, false, false), None);
         assert_eq!(shown(A::EqToggle), "Alt+Shift+E");
     }
 

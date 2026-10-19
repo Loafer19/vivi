@@ -93,6 +93,7 @@ pub(crate) fn wire(
                         );
                         a.global::<crate::Playback>().set_range_a(-1.0);
                         a.global::<crate::Playback>().set_range_b(-1.0);
+                        abloop::reset(&a, &player);
                         let c = cfg.borrow();
                         let key = settings::apply_preset(&player, &c, log);
                         settings::sync_panel(&a, &player);
@@ -105,6 +106,7 @@ pub(crate) fn wire(
                         );
                     }
                     PlayerEvent::ListsChanged => refresh_lists(&a, &player, log),
+                    PlayerEvent::AbLoop => abloop::sync(&a, &player),
                     PlayerEvent::TrackCount(n) => {
                         if log {
                             eprintln!("tracks {n}");

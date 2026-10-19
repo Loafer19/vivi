@@ -185,7 +185,8 @@ pub struct Deprecation {
     pub since: String,
     #[serde(default)]
     pub message: String,
-    /// What replaces it: `builtin:equalizer` (a core feature) or `plugin:<id>`.
+    /// What replaces it: `builtin:equalizer` / `builtin:ab-loop` (a core feature) or
+    /// `plugin:<id>`.
     #[serde(default)]
     pub replacement: String,
     /// Button that opens the replacement ("Open Equalizer").
@@ -223,7 +224,10 @@ impl Deprecation {
 
     /// Whether this Vivi can open the replacement.
     pub fn can_open(&self) -> bool {
-        self.replacement == "builtin:equalizer" || self.replacement.starts_with("plugin:")
+        matches!(
+            self.replacement.as_str(),
+            "builtin:equalizer" | "builtin:ab-loop"
+        ) || self.replacement.starts_with("plugin:")
     }
 }
 
@@ -231,6 +235,9 @@ impl Deprecation {
 pub fn open_replacement(a: &AppWindow, replacement: &str) {
     if replacement == "builtin:equalizer" {
         crate::fx::open_panel(a);
+    } else if replacement == "builtin:ab-loop" {
+        // The built-in A-B loop is keys plus the seek-bar markers: show the shortcuts.
+        a.global::<crate::Overlays>().set_shortcuts_open(true);
     } else if let Some(id) = replacement.strip_prefix("plugin:") {
         crate::extwin::open(a, id, false);
     }
@@ -1185,6 +1192,16 @@ mod tests {
         };
         assert_eq!(custom.text("B"), "Use X.");
         assert!(!custom.can_open());
+        let ab = Deprecation {
+            since: "0.13.0".into(),
+            replacement: "builtin:ab-loop".into(),
+            ..Default::default()
+        };
+        assert!(ab.can_open());
+        assert_eq!(
+            ab.short("A-B Loop & Frame Step"),
+            "The A-B Loop & Frame Step plugin is deprecated: built into Vivi 0.13.0"
+        );
         assert_eq!(unseen("equalizer\n", ["equalizer", "b"]), ["b"]);
         assert!(unseen(" equalizer \nb\n", ["equalizer", "b"]).is_empty());
     }

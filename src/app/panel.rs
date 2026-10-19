@@ -146,19 +146,10 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     app.global::<crate::Panel>().on_run(move |cmd| {
         p.run(&cmd);
         if let Some(a) = weak.upgrade() {
-            let ab = |k| p.get(k).filter(|v| v != "no");
-            let st = match (ab("ab-loop-a"), ab("ab-loop-b")) {
-                (Some(x), Some(y)) => format!("Looping {x:.5}s → {y:.5}s"),
-                (Some(x), None) => format!("A = {x:.5}s, set B"),
-                _ => "Off".into(),
-            };
+            abloop::sync(&a, &p);
             if log {
-                eprintln!("ab-loop {st}");
+                eprintln!("ab-loop {}", a.global::<crate::Playback>().get_ab_state());
             }
-            a.global::<crate::Playback>().set_ab_state(st.into());
-            let f = |k| ab(k).and_then(|v| v.parse::<f32>().ok()).unwrap_or(-1.0);
-            a.global::<crate::Playback>().set_ab_a(f("ab-loop-a"));
-            a.global::<crate::Playback>().set_ab_b(f("ab-loop-b"));
         }
     });
     {
@@ -174,14 +165,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             p.set("ab-loop-a", &v(x));
             p.set("ab-loop-b", &v(y));
             if let Some(a) = w.upgrade() {
-                a.global::<crate::Playback>().set_ab_a(x);
-                a.global::<crate::Playback>().set_ab_b(y);
-                a.global::<crate::Playback>()
-                    .set_ab_state(if x >= 0.0 && y >= 0.0 {
-                        format!("Looping {x:.2}s → {y:.2}s").into()
-                    } else {
-                        "Off".into()
-                    });
+                abloop::sync(&a, &p);
             }
         });
     }

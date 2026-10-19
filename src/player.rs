@@ -19,6 +19,8 @@ pub enum PlayerEvent {
     FileLoaded,
     /// A list-like property changed (tracks, selection, chapters, devices).
     ListsChanged,
+    /// `ab-loop-a` / `ab-loop-b` changed (any source: keys, scripts, IPC).
+    AbLoop,
     /// The file ended; `true` when it failed to open or play.
     EndFile(bool),
     /// A new file starts loading.
@@ -107,6 +109,8 @@ impl Player {
             "audio-device-list",
             "playlist-count",
             "playlist-pos",
+            "ab-loop-a",
+            "ab-loop-b",
         ]
         .iter()
         .enumerate()
@@ -160,6 +164,7 @@ impl Player {
                                     | "audio-device-list" | "playlist-count" | "playlist-pos",
                                     _,
                                 ) => Some(PlayerEvent::ListsChanged),
+                                ("ab-loop-a" | "ab-loop-b", _) => Some(PlayerEvent::AbLoop),
                                 _ => None,
                             }
                         }

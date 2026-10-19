@@ -362,6 +362,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     if let Err(e) = player.mpv.set_property("user-data/vivi/playlists", 1i64) {
         eprintln!("vivi: set user-data/vivi/playlists: {e:?}");
     }
+    // The A-B loop keys and frame step are built in (src/abloop.rs): the deprecated
+    // A-B Loop package checks this and leaves keys and display to the core.
+    if let Err(e) = player.mpv.set_property("user-data/vivi/ab-loop", 1i64) {
+        eprintln!("vivi: set user-data/vivi/ab-loop: {e:?}");
+    }
     let entries: Vec<Entry> = builtin()
         .into_iter()
         .map(|p| Entry {

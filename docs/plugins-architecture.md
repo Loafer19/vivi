@@ -512,8 +512,9 @@ Dokploy redeploys plugins.viviplayer.app from the same push; the vivi-plugins Pa
   `"deprecated": {"since": "0.13.0", "message": "…", "replacement": "builtin:equalizer",
   "action": "Open Equalizer"}`. Vivi then hides it from *Available plugins* unless it is
   installed, shows the message in its Extensions tab with a button that opens the
-  replacement (`builtin:equalizer` = Audio panel → Equalizer, `plugin:<id>` = that
-  plugin's tab), and once (ids remembered in `~/.config/vivi/deprecation-notices.txt`) a
+  replacement (`builtin:equalizer` = Audio panel → Equalizer, `builtin:ab-loop` = the
+  keyboard shortcut list (A-B loop keys, `src/abloop.rs`; Vivi sets `user-data/vivi/ab-loop`
+  to 1 so the old package stays quiet), `plugin:<id>` = that plugin's tab), and once (ids remembered in `~/.config/vivi/deprecation-notices.txt`) a
   toast with the same button when a file plays.
 
 ## Future work

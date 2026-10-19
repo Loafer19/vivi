@@ -22,11 +22,38 @@ pub(crate) fn wire(
             );
         }
         use keymap::Action as A;
-        let action = keymap::lookup(s, shift, ctrl, alt);
+        let own_alt = |a: Option<A>| {
+            matches!(
+                a,
+                Some(
+                    A::Visualizer
+                        | A::EqPreset
+                        | A::EqToggle
+                        | A::AbSetA
+                        | A::AbSetB
+                        | A::AbClear
+                        | A::AbNudge
+                )
+            )
+        };
+        let mut action = keymap::lookup(s, shift, ctrl, alt);
+        // The player's Alt shortcuts by physical key, so Alt+A works on a Cyrillic (or
+        // any) layout like the mpv key names of packages do (`forward_key`).
+        if alt && !own_alt(action) {
+            let latin = LAST_PHYSICAL
+                .with(std::cell::Cell::get)
+                .and_then(|pk| crate::app::keys::physical_key(pk, s, false, false));
+            if let Some(l) = latin {
+                let alt_action = keymap::lookup(&l, shift, ctrl, alt);
+                if own_alt(alt_action) {
+                    action = alt_action;
+                }
+            }
+        }
         // Alt combinations belong to mpv scripts / plugin packages, except the player's
-        // own Alt shortcuts (equalizer) and V (the visualizer cycles with Alt held too,
-        // as it always did).
-        if alt && !matches!(action, Some(A::Visualizer | A::EqPreset | A::EqToggle)) {
+        // own Alt shortcuts (equalizer, A-B loop) and V (the visualizer cycles with Alt
+        // held too, as it always did).
+        if alt && !own_alt(action) {
             return forward_key(&p, s, ctrl, alt);
         }
         let Some(action) = action else {
@@ -60,6 +87,25 @@ pub(crate) fn wire(
             A::Stop => a.global::<crate::Playback>().invoke_stop(),
             A::QueueStep => p.playlist_step(!shift),
             A::AbLoop => a.global::<crate::Panel>().invoke_run("ab-loop".into()),
+            A::AbSetA | A::AbSetB | A::AbClear | A::AbNudge | A::FrameStep
+                if !a.global::<crate::Playback>().get_has_media() =>
+            {
+                forward_key(&p, s, ctrl, alt);
+                return false;
+            }
+            A::AbSetA => abloop::set(&a, &p, abloop::Point::A),
+            A::AbSetB => abloop::set(&a, &p, abloop::Point::B),
+            A::AbClear => abloop::clear(&a, &p),
+            A::AbNudge => abloop::nudge_last(
+                &a,
+                &p,
+                if s == slint::SharedString::from(slint::platform::Key::LeftArrow).as_str() {
+                    -1.0
+                } else {
+                    1.0
+                },
+            ),
+            A::FrameStep => abloop::step(&p, s == "."),
             A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "karaoke", &[]),
             A::FindLyrics => crate::plugins::command(plugins::lyrics::ID, "search-open", &[]),
             // [ ] lyrics timing offset (Shift or { }: 0.5 s).
