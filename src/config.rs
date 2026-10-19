@@ -454,28 +454,44 @@ pub fn show_key(path: &str) -> String {
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let norm: String = name
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                ' '
-            }
-        })
-        .collect();
+    // Release tags in square brackets ("[SubGroup]", "[1080p]", yt-dlp's "[video id]") and
+    // an episode number after " - " ("Show - 05", "Show - 12v2") are not the show's name.
+    let normalize = |s: &str| -> String {
+        s.chars()
+            .map(|c| {
+                if c.is_alphanumeric() {
+                    c.to_ascii_lowercase()
+                } else {
+                    ' '
+                }
+            })
+            .collect()
+    };
+    let mut short = strip_square_tags(&name);
+    if let Some(i) = dash_episode(&short) {
+        short.truncate(i);
+    }
+    let mut norm = normalize(&short);
+    if norm.trim().is_empty() {
+        norm = normalize(&name);
+    }
     let words: Vec<&str> = norm.split_whitespace().collect();
     // Cut at the first episode marker like s01e05, s01, e05, 1x05.
-    let is_marker = |w: &str| {
+    let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
+    let is_marker = |i: usize, w: &str| {
         let b = w.as_bytes();
-        (b.len() >= 2 && (b[0] == b's' || b[0] == b'e') && b[1].is_ascii_digit())
+        // "Episode 5", "Ep 5", "Ep05".
+        ((w == "episode" || w == "ep") && words.get(i + 1).is_some_and(|n| digits(n)))
+            || w.strip_prefix("ep").is_some_and(digits)
+            || (b.len() >= 2 && (b[0] == b's' || b[0] == b'e') && b[1].is_ascii_digit())
             || (w.contains('x')
                 && w.split('x')
                     .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())))
     };
     let end = words
         .iter()
-        .position(|w| is_marker(w))
+        .enumerate()
+        .position(|(i, w)| is_marker(i, w))
         .unwrap_or(words.len());
     let key = words[..end].join(" ");
     if key.is_empty() {
@@ -485,11 +501,57 @@ pub fn show_key(path: &str) -> String {
     }
 }
 
+/// `name` without `[...]` parts (unbalanced brackets are kept).
+fn strip_square_tags(name: &str) -> String {
+    let mut out = String::new();
+    let mut rest = name;
+    while let Some(a) = rest.find('[') {
+        let Some(b) = rest[a..].find(']') else { break };
+        out.push_str(&rest[..a]);
+        out.push(' ');
+        rest = &rest[a + b + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Byte index of " - <1-4 digits>" (optionally "v2") followed by nothing alphanumeric.
+fn dash_episode(name: &str) -> Option<usize> {
+    name.match_indices(" - ").find_map(|(i, _)| {
+        let after = &name[i + 3..];
+        let n = after.chars().take_while(|c| c.is_ascii_digit()).count();
+        let tail = &after[n..];
+        let tail = tail
+            .strip_prefix('v')
+            .map(|t| t.trim_start_matches(|c: char| c.is_ascii_digit()))
+            .unwrap_or(tail);
+        ((1..=4).contains(&n) && !tail.starts_with(char::is_alphanumeric)).then_some(i)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn show_keys() {
+        assert_eq!(
+            show_key("[SubsPlease] Frieren - 05 (1080p) [ABCD1234].mkv"),
+            "frieren"
+        );
+        assert_eq!(show_key("Frieren - 12v2.mkv"), "frieren");
+        assert_eq!(show_key("Show Episode 5.mkv"), "show");
+        assert_eq!(show_key("Show Ep05.mkv"), "show");
+        assert_eq!(
+            show_key("Big Buck Bunny (chapters) [aqz-KE-bpKQ].mkv"),
+            "big buck bunny chapters"
+        );
+        assert_eq!(show_key("The Wand - Pilot.mkv"), "the wand pilot");
+        assert_eq!(show_key("[Only Tags].mkv"), "only tags");
+        assert_eq!(show_key("Epic Movie.mkv"), "epic movie");
+        assert_eq!(
+            show_key("Spider-Man - Homecoming.mkv"),
+            "spider man homecoming"
+        );
         assert_eq!(show_key("/v/The_Wand_S01E05.mp4"), "the wand");
         assert_eq!(show_key("The.Wand.s02e11.1080p.mkv"), "the wand");
         assert_eq!(show_key("Show 1x05.mkv"), "show");

@@ -33,6 +33,8 @@ pub(crate) fn wire(
                         | A::AbSetB
                         | A::AbClear
                         | A::AbNudge
+                        | A::SkipSegment
+                        | A::UndoSkip
                 )
             )
         };
@@ -106,6 +108,17 @@ pub(crate) fn wire(
                 },
             ),
             A::FrameStep => abloop::step(&p, s == "."),
+            // Alt+K / Alt+Shift+K: the Skip button. With Skip Intro & Credits off they go
+            // to mpv, where packages such as SponsorBlock (older Vivi behaviour) bind them.
+            A::SkipSegment | A::UndoSkip
+                if !(a.global::<crate::Playback>().get_has_media()
+                    && plugins::active(plugins::skip_intro::ID)) =>
+            {
+                forward_key(&p, s, ctrl, alt);
+                return false;
+            }
+            A::SkipSegment => crate::plugins::command(plugins::skip_intro::ID, "key", &[]),
+            A::UndoSkip => crate::plugins::command(plugins::skip_intro::ID, "undo", &[]),
             A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "karaoke", &[]),
             A::FindLyrics => crate::plugins::command(plugins::lyrics::ID, "search-open", &[]),
             // [ ] lyrics timing offset (Shift or { }: 0.5 s).

@@ -272,6 +272,47 @@ YouTube & yt-dlp package's managed copy (`plugin-data/youtube/bin`); Vivi itself
 needs it at startup. Contribution points (`sidebar.source`, `palette.command`,
 `context.player`, …) come from `[[contributes]]` in the manifest, see above.
 
+### Skip ranges (one Skip button)
+
+Skip Intro & Credits (`src/plugins/skip_intro.rs`) owns the player's only Skip button. Besides
+chapter names and the user's per-show ranges it takes ranges that packages find for the current
+file, so a package such as SponsorBlock supplies segments and leaves the prompt, auto-skip, undo
+and mute to the core:
+
+```lua
+local function core_skip() -- 1 while Skip Intro & Credits is on (0 / unset: do it yourself)
+  return tostring(mp.get_property_native("user-data/vivi/skip-api", "")) == "1"
+end
+mp.commandv("script-message", "vivi-skip-ranges", "sponsorblock", utils.format_json({
+  { start = 12.5, ["end"] = 41.0, category = "sponsor", label = "sponsor", action = "skip" },
+  { start = 300, ["end"] = 304, category = "selfpromo", label = "self-promotion", action = "mute" },
+}))
+mp.commandv("script-message", "vivi-skip-ranges-clear", "sponsorblock")
+```
+
+* `vivi-skip-ranges <source> <json>` replaces every range of `<source>` (the package id) for the
+  file playing when it arrives; ranges of another file are dropped when the next one loads, and
+  `[]` or `vivi-skip-ranges-clear <source>` removes them. `chapters` and `show` are reserved.
+* Entry fields: `start`, `end` (seconds, `end > start`), `kind` or `category` (`sponsor`,
+  `intro`, …; default `segment`), `label` (what the button names: "Skip <label>", "Skipped
+  <label> · Undo"; default the kind; a leading "Skip " is dropped), `action`: `skip` (skip
+  automatically), `ask` (show the button), `mute` (mute while inside, sound back after;
+  "Unmute <label>" on the button), `off` (ignored). Missing `action` follows *Skip
+  automatically*. At most 500 entries per source.
+* `vivi-skip-undo`: the same as `Alt+Shift+K` (undo the last skip, or unmute).
+* Modes: the user's *Per category or source* setting (`intro=skip sponsorblock=ask
+  sponsorblock:filler=off`) wins over `action`; most specific first (`source:kind`, a show
+  remembered as "always skip", `kind`, `source`, then `action`).
+* One button per segment: ranges of the same action that overlap by at least half of the
+  shorter one are one segment; per-show ranges win over package ranges, package ranges over
+  chapter names. Chapters that start or end exactly where a submitted range does (the
+  "Intro" / "End of intro" chapters SponsorBlock writes for the seek bar) are left out of the
+  chapter-name detection, and titles such as "End of intro" or "Intro end" never start a
+  range.
+* `user-data/vivi/skip-api` is the integer `1` while Skip Intro & Credits is on and `0` while
+  it is off (unset in Vivi before 0.13.0): packages should then keep their own skipping. With it
+  off, `Alt+K` / `Alt+Shift+K` go to mpv like any unbound Alt key.
+
 ### Extensions window
 
 `ui/extensions.slint` + global `Extensions` (`ui/state/extensions.slint`), filled by

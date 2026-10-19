@@ -13,6 +13,8 @@ import { TagStatus } from "core/types.slint";
 // "Skip intro" / "Skip credits" pill, bottom right above the controls.
 export component SkipButton inherits Rectangle {
     in property <string> text;
+    // "skip" (next), "undo" (after an automatic skip), "unmute" / mute, "always" (remember).
+    in property <string> icon: "skip";
     callback clicked();
     callback dismiss();
     width: row.preferred-width; height: 44px;
@@ -22,7 +24,7 @@ export component SkipButton inherits Rectangle {
     row := HorizontalLayout {
         padding-left: 18px; padding-right: 6px; spacing: 10px;
         Text { text: root.text; color: ta.has-hover ? Theme.bg-b2 : Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; }
-        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/next.svg"); tint: ta.has-hover ? Theme.bg-b2 : Theme.accent; }
+        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon == "undo" ? @image-url("../assets/icons/replay.svg") : root.icon == "unmute" ? @image-url("../assets/icons/volume-high.svg") : root.icon == "always" ? @image-url("../assets/icons/check-active.svg") : @image-url("../assets/icons/next.svg"); tint: ta.has-hover ? Theme.bg-b2 : Theme.accent; }
         Rectangle {
             width: 28px;
             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/close.svg"); tint: xa.has-hover ? Theme.fg-1 : Theme.fg-a3; }

@@ -248,6 +248,11 @@ pub fn setting_value(c: &Config, m: &Manifest, key: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Whether built-in plugin `id` is on right now.
+pub fn active(id: &str) -> bool {
+    with(|r| r.entries.iter().any(|e| e.active && e.manifest.id == id)).unwrap_or(false)
+}
+
 /// Whether a plugin is enabled in the config.
 pub fn is_enabled(c: &Config, m: &Manifest) -> bool {
     c.plugins
@@ -678,6 +683,17 @@ pub fn client_message(args: &[String]) {
         Some(M::Wipe { id, path }) => {
             host::wipe(id, path);
         }
+        // Skip ranges from packages (SponsorBlock): one Skip button in Skip Intro &
+        // Credits. Ignored while it is off (`user-data/vivi/skip-api` is 0 then).
+        Some(M::SkipRanges { source, json }) => command(
+            skip_intro::ID,
+            "ranges",
+            &[source.to_string(), json.to_string()],
+        ),
+        Some(M::SkipRangesClear(source)) => {
+            command(skip_intro::ID, "ranges-clear", &[source.to_string()])
+        }
+        Some(M::SkipUndo) => command(skip_intro::ID, "undo", &[]),
         _ => {}
     }
 }

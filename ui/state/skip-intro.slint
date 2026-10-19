@@ -1,5 +1,7 @@
-// Skip Intro & Credits plugin: the Skip button label (empty = hidden) and the time it seeks to.
+// Skip Intro & Credits plugin: the one Skip button over the video. `label` "" = hidden;
+// `target` is the time a skip seeks to; `icon` is "skip", "undo", "unmute" or "always".
 export global SkipIntro {
     in-out property <string> label;
     in-out property <float> target;
+    in-out property <string> icon: "skip";
 }

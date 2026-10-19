@@ -114,6 +114,14 @@ pub enum ScriptMessage<'a> {
     Protect { id: &'a str, path: &'a str },
     /// `vivi-wipe <id> <path>`: overwrite and delete a file in the package's data folder.
     Wipe { id: &'a str, path: &'a str },
+    /// `vivi-skip-ranges <source> <json>`: the ranges `source` found for the current file
+    /// (a JSON array of `{start, end, kind, label, action}`, replacing its earlier ones),
+    /// shown by Skip Intro & Credits' one Skip button. Vivi sets `user-data/vivi/skip-api`.
+    SkipRanges { source: &'a str, json: &'a str },
+    /// `vivi-skip-ranges-clear <source>`: drop `source`'s ranges for the current file.
+    SkipRangesClear(&'a str),
+    /// `vivi-skip-undo`: undo the last skip or mute (like Alt+Shift+K).
+    SkipUndo,
 }
 
 impl<'a> ScriptMessage<'a> {
@@ -160,6 +168,9 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-media-meta", id, json] => M::MediaMeta { id, json },
             ["vivi-protect", id, path] => M::Protect { id, path },
             ["vivi-wipe", id, path] => M::Wipe { id, path },
+            ["vivi-skip-ranges", source, json] => M::SkipRanges { source, json },
+            ["vivi-skip-ranges-clear", source] => M::SkipRangesClear(source),
+            ["vivi-skip-undo", ..] => M::SkipUndo,
             _ => return None,
         })
     }
@@ -301,5 +312,18 @@ mod tests {
             },
         );
         assert_eq!(p(&["vivi-dialog", "p"]), None);
+        is(
+            &["vivi-skip-ranges", "sponsorblock", "[]"],
+            M::SkipRanges {
+                source: "sponsorblock",
+                json: "[]",
+            },
+        );
+        is(
+            &["vivi-skip-ranges-clear", "sponsorblock"],
+            M::SkipRangesClear("sponsorblock"),
+        );
+        is(&["vivi-skip-undo"], M::SkipUndo);
+        assert_eq!(p(&["vivi-skip-ranges", "sponsorblock"]), None);
     }
 }

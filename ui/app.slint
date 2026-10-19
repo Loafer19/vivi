@@ -930,6 +930,7 @@ export component AppWindow inherits Window {
         x: root.width - self.width - 24px;
         y: root.height - (root.show-ui ? root.bar-h : 0px) - self.height - 24px;
         text: SkipIntro.label;
+        icon: SkipIntro.icon;
         clicked => { root.plugin-command("skip-intro", "skip", ""); fs.focus(); }
         dismiss => { root.plugin-command("skip-intro", "dismiss", ""); fs.focus(); }
     }

@@ -58,6 +58,10 @@ pub enum Action {
     EqPreset,
     /// Alt+Shift+E: equalizer on / off.
     EqToggle,
+    /// Alt+K: press the Skip button (Skip Intro & Credits; to mpv while that is off).
+    SkipSegment,
+    /// Alt+Shift+K: undo the last skip or mute.
+    UndoSkip,
     Escape,
 }
 
@@ -153,7 +157,7 @@ use K::{Named as N, Text as T};
 pub const BINDINGS: &[Binding] = &[
     // Before Play / pause, whose K matches with any Ctrl state.
     b(A::Palette, &[T("k")], On, Any, "Command palette", "Ctrl+K"),
-    b(A::PlayPause, &[T(" "), T("k")], Any, Any, "Play / pause", "Space  K"),
+    b(A::PlayPause, &[T(" "), T("k")], Any, Any, "Play / pause", "Space  K").no_alt(),
     b(A::SeekForward, &[N(Key::RightArrow)], Any, Any, "Seek forward (Shift: long skip)", "→").no_alt(),
     b(A::SeekBack, &[N(Key::LeftArrow)], Any, Any, "Seek back (Shift: long skip)", "←").no_alt(),
     b(A::VolumeUp, &[N(Key::UpArrow)], Any, Any, "Volume up", "↑"),
@@ -188,6 +192,8 @@ pub const BINDINGS: &[Binding] = &[
     b(A::Shortcuts, &[T("?")], Off, Any, "Keyboard shortcuts", "?"),
     alt(A::EqPreset, &[T("e"), T("E")], Off, "Next equalizer preset (turns it on)", "Alt+E"),
     alt(A::EqToggle, &[T("e"), T("E")], On, "Equalizer on / off", "Alt+Shift+E"),
+    alt(A::SkipSegment, &[T("k"), T("K")], Off, "Skip intro, credits or segment (the Skip button)", "Alt+K"),
+    alt(A::UndoSkip, &[T("k"), T("K")], On, "Undo the last skip or mute", "Alt+Shift+K"),
     b(A::Escape, &[N(Key::Escape)], Any, Any,
         "Close the top dialog or panel, then leave miniplayer / fullscreen", "Esc"),
 ];
@@ -408,6 +414,15 @@ mod tests {
         );
         assert_eq!(lookup("<", true, false, false), None);
         assert_eq!(shown(A::EqToggle), "Alt+Shift+E");
+        // The Skip button (Skip Intro & Credits; SponsorBlock used these keys before).
+        assert_eq!(lookup("k", false, false, true), Some(A::SkipSegment));
+        assert_eq!(lookup("K", true, false, true), Some(A::UndoSkip));
+        assert_eq!(lookup("k", false, false, false), Some(A::PlayPause));
+        assert_eq!(
+            lookup("k", false, true, true),
+            Some(A::Palette),
+            "Ctrl+Alt+K"
+        );
     }
 
     #[test]
