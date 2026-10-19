@@ -24,6 +24,16 @@ fn flag(on: bool) -> &'static str {
 }
 
 /// `loop-file` value → repeat button state (`inf`, a count or `yes` are on).
+/// `user-data/vivi/shuffle` as text. mpv returns user-data as JSON when asked for a
+/// string (`"yes"`, quotes included), so a JSON string is unquoted here.
+fn shuffle_value(p: &Player) -> Option<String> {
+    p.get(SHUFFLE).map(|v| unquote(&v))
+}
+
+fn unquote(v: &str) -> String {
+    serde_json::from_str::<String>(v).unwrap_or_else(|_| v.to_owned())
+}
+
 pub fn looping(v: Option<&str>) -> bool {
     v.is_some_and(|v| !v.is_empty() && v != "no" && v != "0")
 }
@@ -46,7 +56,7 @@ pub fn set_shuffle(a: &AppWindow, p: &Player, on: bool) {
         });
         a.global::<crate::Playback>().set_shuffle_on(on);
     }
-    if p.get(SHUFFLE).as_deref() != Some(flag(on)) {
+    if shuffle_value(p).as_deref() != Some(flag(on)) {
         p.set(SHUFFLE, flag(on));
     }
 }
@@ -58,7 +68,7 @@ pub fn sync(a: &AppWindow, p: &Player) {
     if rep != pb.get_repeat_on() {
         pb.set_repeat_on(rep);
     }
-    match p.get(SHUFFLE).as_deref() {
+    match shuffle_value(p).as_deref() {
         Some("yes") => set_shuffle(a, p, true),
         Some("no") => set_shuffle(a, p, false),
         // Unset or garbage: put the real state back.
@@ -74,5 +84,8 @@ mod tests {
         assert!(looping(Some("inf")) && looping(Some("yes")) && looping(Some("3")));
         assert!(!looping(Some("no")) && !looping(Some("0")) && !looping(None));
         assert_eq!((super::flag(true), super::flag(false)), ("yes", "no"));
+        // mpv's string form of a user-data string is JSON.
+        assert_eq!(super::unquote("\"yes\""), "yes");
+        assert_eq!(super::unquote("no"), "no");
     }
 }
