@@ -359,6 +359,19 @@ fn lib_menu_for(
     v
 }
 
+/// "Sync" and "Open Source" after Play / Shuffle for a playlist an extension keeps in
+/// sync.
+fn synced_rows(v: &mut Vec<MenuItem>, synced: bool) {
+    if synced {
+        let at = v.len().min(2);
+        v.insert(at, row("lib:playlist-sync", "Sync", "resync", ""));
+        v.insert(
+            at + 1,
+            row("lib:playlist-open", "Open Source", "go-to-source", ""),
+        );
+    }
+}
+
 /// Context menu rows for a library item kind.
 fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<MenuItem> {
     let fav = if pinned {
@@ -502,6 +515,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                         // `context.item`: plugin actions for files and folders.
                         if matches!(g(1), "audio" | "video" | "folder") {
                             v.extend(grouped(plugin_rows(contrib::CONTEXT_ITEM, "plugins")));
+                        }
+                        if g(1) == "playlist" {
+                            let src = crate::store::playlist_source(std::path::Path::new(g(0)));
+                            synced_rows(&mut v, src.is_some());
                         }
                         v
                     }

@@ -186,6 +186,18 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 | `error` | Shown when failed |
 | `detail` | Free text instead of size / ETA (e.g. "Recording · 12:30") |
 | `can_pause` | Show Pause / Resume |
+| `parent` | Job id of a group row of the same plugin (e.g. the playlist this track belongs to) |
+| `items_done`, `items_total` | A group row's counts ("12 / 40"); without them Vivi counts the group's rows |
+
+**Groups** (playlist / album downloads): a job whose `parent` names another job of the
+same plugin is drawn indented under it. The group row shows "12 / 40" (its
+`items_done` / `items_total`, or its rows done / all), "· 2 failed", progress by items,
+and is active while any of its items runs; a chevron shows or hides all its items
+(collapsed, only the item downloading now is shown, so a 1000-track playlist stays one
+row). Items finish without a notification; the group's own `done` / `failed` notifies.
+Remove on the group removes its items; Cancel / Retry on it call the plugin with the
+group's job id. Group rows are not counted in the badge / tray line. Older Vivi shows
+items and group as separate rows.
 
 * **Built-in plugins** call `crate::downloads::report(ID, job, Report { … })` and
   `crate::downloads::remove(ID, job)`; safe from any plugin callback (the panel refreshes
@@ -232,6 +244,23 @@ Answers arrive as `script-message-to <script> vivi-ui <json>` with
 forwarded only to a package that opened a dialog or confirm in this run.
 
 Downloads go to the shared Downloads panel with `vivi-download` (see above).
+
+**Playlists from plugins** (`vivi-playlist <id> <json>`): a package that keeps a Vivi
+playlist in sync with an online list (YouTube Music's *Download playlist*) sends
+`{name, source, url, entries: [{path, title, duration}], files: [paths], cover}`.
+`source` is the plugin's opaque id of the list, `cover` a local image or http(s) URL.
+Vivi writes `<data>/playlists/<name>.m3u` (`store::save_owned_playlist`) with the header
+`#PLAYLIST:<name>`, `#VIVI-SOURCE:<plugin id> <source>` and `#VIVI-URL:<url>`, then the
+entries (`#EXTINF` when a title is given), sets the cover next to it and answers
+`script-message-to <script> playlist-saved <source> <path>` (or `playlist-failed <source>
+<error>`). The file is chosen so a user's playlist is never overwritten: the playlist that
+already carries this source (kept when the user renamed it), else `<name>.m3u`, else
+`<name> (<plugin name>).m3u`, `<name> (<plugin name> 2).m3u`, ... Edits to such a playlist
+are replaced on the next sync; deleting it ends the sync. The Playlists tab shows the
+plugin's name as a badge and in the subtitle, and its menu adds **Sync** (calls
+`playlist-sync <source>`) and **Open Source** (`playlist-open <source>`; the URL in the
+browser when the plugin is off). Vivi sets `user-data/vivi/playlists` to `1`; on older
+builds a package can write the same file format itself (`#VIVI-SOURCE` in the header).
 
 Playback stays in the package: it queues URLs with mpv's
 `loadfile <url> append-play -1 <options>` (mpv 0.38+ takes the index; older mpv does not)

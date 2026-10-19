@@ -89,6 +89,11 @@ pub struct Job {
     pub can_pause: bool,
     /// Unix seconds it was added.
     pub added: u64,
+    /// Job id of the group row this one belongs to (same plugin), e.g. a playlist.
+    pub parent: String,
+    /// A group row's items done / in total ("12 / 40"); 0 in total = count its rows.
+    pub items_done: u32,
+    pub items_total: u32,
 }
 
 /// What a plugin reports (fields left `None` keep their value).
@@ -107,6 +112,9 @@ pub struct Report {
     pub error: Option<String>,
     pub detail: Option<String>,
     pub can_pause: Option<bool>,
+    pub parent: Option<String>,
+    pub items_done: Option<u32>,
+    pub items_total: Option<u32>,
 }
 
 impl Report {
@@ -124,6 +132,13 @@ impl Report {
         set(&mut j.artwork, self.artwork);
         set(&mut j.error, self.error);
         set(&mut j.detail, self.detail);
+        set(&mut j.parent, self.parent);
+        if let Some(v) = self.items_done {
+            j.items_done = v;
+        }
+        if let Some(v) = self.items_total {
+            j.items_total = v;
+        }
         if let Some(s) = self.state.as_deref().and_then(State::parse) {
             j.state = s;
         }
@@ -165,6 +180,8 @@ struct Store {
     save: bool,
     /// Finished / failed since the last refresh: (title, ok, error).
     news: Vec<(String, bool, String)>,
+    /// Group rows shown with all their items (keys).
+    expanded: std::collections::HashSet<String>,
 }
 
 thread_local! {
@@ -272,7 +289,9 @@ pub fn report(plugin: &str, job: &str, r: Report) {
         if changed.is_some() {
             s.save = true;
             let j = &s.jobs[i];
+            // A group's items finish quietly; the group row notifies.
             let news = match j.state {
+                _ if !j.parent.is_empty() => None,
                 State::Done => Some((j.title.clone(), true, String::new())),
                 State::Failed => Some((j.title.clone(), false, j.error.clone())),
                 _ => None,
@@ -283,11 +302,12 @@ pub fn report(plugin: &str, job: &str, r: Report) {
     });
 }
 
-/// Drop a job from the list.
+/// Drop a job from the list (a group with its items).
 pub fn remove(plugin: &str, job: &str) {
     ST.with(|s| {
         let mut s = s.borrow_mut();
-        s.jobs.retain(|j| !(j.plugin == plugin && j.job == job));
+        s.jobs
+            .retain(|j| !(j.plugin == plugin && (j.job == job || j.parent == job)));
         s.dirty = true;
         s.save = true;
     });
@@ -295,7 +315,11 @@ pub fn remove(plugin: &str, job: &str) {
 
 /// Running (queued, active, paused) jobs and the overall share done (-1 = unknown).
 pub fn summary(jobs: &[Job]) -> (usize, f32) {
-    let run: Vec<&Job> = jobs.iter().filter(|j| j.state.running()).collect();
+    // Group rows stand for their items, which are counted themselves.
+    let run: Vec<&Job> = jobs
+        .iter()
+        .filter(|j| j.state.running() && !is_group(jobs, j))
+        .collect();
     let (d, t) = run
         .iter()
         .filter(|j| j.total > 0)
@@ -310,7 +334,11 @@ pub fn summary_line(jobs: &[Job]) -> String {
     if n == 0 {
         return String::new();
     }
-    let count = |s: State| jobs.iter().filter(|j| j.state == s).count();
+    let count = |s: State| {
+        jobs.iter()
+            .filter(|j| j.state == s && !is_group(jobs, j))
+            .count()
+    };
     let mut parts: Vec<String> = [
         (State::Active, "downloading"),
         (State::Queued, "queued"),
@@ -386,6 +414,87 @@ pub fn detail(j: &Job) -> String {
             }
         }
     }
+}
+
+/// Whether `j` is a group row (it has items, or counts them itself).
+fn is_group(jobs: &[Job], j: &Job) -> bool {
+    j.items_total > 0
+        || jobs
+            .iter()
+            .any(|k| k.plugin == j.plugin && k.parent == j.job && !j.job.is_empty())
+}
+
+/// A group row as drawn: "12 / 40" (the plugin's counts, or its rows done / all),
+/// failures, progress by items, and active while any item runs.
+pub fn group_view(g: &Job, items: &[&Job]) -> Job {
+    let mut v = g.clone();
+    let failed = items.iter().filter(|j| j.state == State::Failed).count();
+    let (d, t) = if g.items_total > 0 {
+        (g.items_done, g.items_total)
+    } else {
+        let d = items.iter().filter(|j| j.state == State::Done).count() as u32;
+        (d, items.len() as u32)
+    };
+    if items.iter().any(|j| j.state.running()) {
+        v.state = State::Active;
+    }
+    if t > 0 {
+        v.progress = (d as f32 / t as f32).min(1.0);
+        v.done = 0;
+        v.total = 0;
+        v.speed = items.iter().map(|j| j.speed).sum();
+        let mut line = vec![format!("{d} / {t}")];
+        if failed > 0 {
+            line.push(format!("{failed} failed"));
+        }
+        if v.state == State::Failed && !g.error.is_empty() {
+            line.push(g.error.clone());
+        } else if v.state.running() && !g.detail.is_empty() {
+            line.push(g.detail.clone());
+        }
+        if v.speed > 0 && v.state == State::Active {
+            line.push(format!("{}/s", size(v.speed)));
+        }
+        v.detail = line.join(" · ");
+        // A failed group reads "Failed · 38 / 40 · 2 failed".
+        v.error = v.detail.clone();
+    }
+    v
+}
+
+/// What the list shows, in order: each top-level job, then its items oldest first
+/// (all of them when the group is expanded, else only the running ones). Items whose
+/// group is gone show as top-level jobs. `(job, depth, item count)`.
+pub fn visible(
+    jobs: &[Job],
+    expanded: &std::collections::HashSet<String>,
+) -> Vec<(Job, u8, usize)> {
+    let has = |j: &Job| {
+        !j.parent.is_empty()
+            && jobs
+                .iter()
+                .any(|g| g.plugin == j.plugin && g.job == j.parent && g.parent.is_empty())
+    };
+    let mut out = Vec::new();
+    for g in jobs.iter().filter(|j| !has(j)) {
+        let items: Vec<&Job> = jobs
+            .iter()
+            .rev()
+            .filter(|k| k.plugin == g.plugin && k.parent == g.job && has(k))
+            .collect();
+        if items.is_empty() && g.items_total == 0 {
+            out.push((g.clone(), 0, 0));
+            continue;
+        }
+        out.push((group_view(g, &items), 0, items.len()));
+        let open = expanded.contains(&key(&g.plugin, &g.job));
+        for k in items {
+            if open || matches!(k.state, State::Active | State::Paused) {
+                out.push((k.clone(), 1, 0));
+            }
+        }
+    }
+    out
 }
 
 fn share(j: &Job) -> f32 {
@@ -505,12 +614,24 @@ fn act(id: &str, action: &str) {
             std::thread::spawn(move || crate::libview::reveal(&p));
         }
         "remove" => remove(plugin, job),
+        "expand" => ST.with(|s| {
+            let mut s = s.borrow_mut();
+            let k = key(plugin, job);
+            if !s.expanded.remove(&k) {
+                s.expanded.insert(k);
+            }
+            s.dirty = true;
+        }),
         _ => {}
     }
     refresh();
 }
 
-fn to_row(j: &Job, names: &[(String, String, String)]) -> crate::DlJob {
+fn to_row(
+    (j, depth, kids): &(Job, u8, usize),
+    names: &[(String, String, String)],
+    expanded: &std::collections::HashSet<String>,
+) -> crate::DlJob {
     let (name, icon) = names
         .iter()
         .find(|(id, _, _)| *id == j.plugin)
@@ -534,7 +655,10 @@ fn to_row(j: &Job, names: &[(String, String, String)]) -> crate::DlJob {
         progress: share(j),
         detail: detail.into(),
         can_pause: j.can_pause,
-        has_file: !j.path.is_empty() && j.state == State::Done,
+        has_file: !j.path.is_empty() && j.state == State::Done && *kids == 0,
+        child: *depth > 0,
+        kids: *kids as i32,
+        expanded: expanded.contains(&key(&j.plugin, &j.job)),
     }
 }
 
@@ -547,14 +671,19 @@ pub fn open(a: &AppWindow) {
 
 /// Push the list to the UI, save, notify and update the tray line.
 pub fn refresh() {
-    let (jobs, save, news) = ST.with(|s| {
+    let (jobs, save, news, expanded) = ST.with(|s| {
         let mut s = s.borrow_mut();
         if !s.dirty {
-            return (None, false, Vec::new());
+            return (None, false, Vec::new(), Default::default());
         }
         s.dirty = false;
         let save = std::mem::take(&mut s.save);
-        (Some(s.jobs.clone()), save, std::mem::take(&mut s.news))
+        (
+            Some(s.jobs.clone()),
+            save,
+            std::mem::take(&mut s.news),
+            s.expanded.clone(),
+        )
     });
     let Some(jobs) = jobs else { return };
     if save {
@@ -578,7 +707,10 @@ pub fn refresh() {
     }) else {
         return;
     };
-    let rows: Vec<crate::DlJob> = jobs.iter().map(|j| to_row(j, &names)).collect();
+    let rows: Vec<crate::DlJob> = visible(&jobs, &expanded)
+        .iter()
+        .map(|r| to_row(r, &names, &expanded))
+        .collect();
     if rows.len() == model.row_count() {
         for (i, r) in rows.into_iter().enumerate() {
             if model.row_data(i).as_ref() != Some(&r) {
@@ -707,5 +839,87 @@ mod tests {
         assert_eq!(art_file(&url), Some(f.clone()));
         assert_eq!(art_file(&f.display().to_string()), Some(f.clone()));
         let _ = std::fs::remove_file(f);
+    }
+
+    #[test]
+    fn groups_count_items_and_collapse() {
+        let job = |id: &str, parent: &str, state| Job {
+            plugin: "p".into(),
+            job: id.into(),
+            parent: parent.into(),
+            state,
+            ..Job::default()
+        };
+        // Newest first, as `report` inserts them.
+        let mut jobs = vec![
+            job("t3", "pl", State::Queued),
+            job("t2", "pl", State::Active),
+            job("t1", "pl", State::Done),
+            job("solo", "", State::Done),
+            job("pl", "", State::Queued),
+            job("lost", "gone", State::Failed),
+        ];
+        let none = Default::default();
+        let v = visible(&jobs, &none);
+        let ids: Vec<(&str, u8, usize)> =
+            v.iter().map(|(j, d, k)| (j.job.as_str(), *d, *k)).collect();
+        // Collapsed: the group, then only its running-now item; orphans stay visible.
+        assert_eq!(
+            ids,
+            [("solo", 0, 0), ("pl", 0, 3), ("t2", 1, 0), ("lost", 0, 0)]
+        );
+        assert_eq!(v[1].0.state, State::Active);
+        assert_eq!(v[1].0.detail, "1 / 3");
+        assert!((v[1].0.progress - 1.0 / 3.0).abs() < 1e-6);
+        let open: std::collections::HashSet<String> = [key("p", "pl")].into();
+        let ids: Vec<String> = visible(&jobs, &open)
+            .iter()
+            .map(|(j, _, _)| j.job.clone())
+            .collect();
+        // Expanded: items oldest first (queue order).
+        assert_eq!(ids, ["solo", "pl", "t1", "t2", "t3", "lost"]);
+        // Group rows are not counted in the summary.
+        assert_eq!(summary(&jobs).0, 2);
+        // The plugin's own counts win ("37 / 40": most tracks were on disk already).
+        jobs[4].items_done = 37;
+        jobs[4].items_total = 40;
+        jobs[0].state = State::Failed;
+        jobs[1].state = State::Done;
+        jobs[4].state = State::Failed;
+        jobs[4].error = "1 track failed".into();
+        let g = &visible(&jobs, &none)[1].0;
+        assert_eq!(g.state, State::Failed);
+        assert_eq!(detail(g), "Failed · 37 / 40 · 1 failed · 1 track failed");
+        // Items finish quietly; removing the group drops its items.
+        ST.with(|s| *s.borrow_mut() = Store::default());
+        report(
+            "p",
+            "pl",
+            Report {
+                title: Some("Mix".into()),
+                ..Report::default()
+            },
+        );
+        let item = |st: &str| Report {
+            parent: Some("pl".into()),
+            state: Some(st.into()),
+            ..Report::default()
+        };
+        report("p", "a", item("done"));
+        report(
+            "p",
+            "pl",
+            Report {
+                state: Some("done".into()),
+                ..Report::default()
+            },
+        );
+        ST.with(|s| {
+            let s = s.borrow();
+            assert_eq!(s.news.len(), 1);
+            assert_eq!(s.news[0].0, "Mix");
+        });
+        remove("p", "pl");
+        ST.with(|s| assert!(s.borrow().jobs.is_empty()));
     }
 }

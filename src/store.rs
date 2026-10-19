@@ -384,6 +384,161 @@ pub fn save_playlist(name: &str, files: &[String]) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+/// The extension that keeps a playlist in sync with an online list: the
+/// `#VIVI-SOURCE:<plugin id> <source id>` header (and `#VIVI-URL:` for "Open Source").
+/// Written by [`save_owned_playlist`] (and by packages on older Vivi builds).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PlaylistSource {
+    pub plugin: String,
+    pub source: String,
+    pub url: String,
+}
+
+/// The source header of a playlist's text (`None` for one the user made).
+pub fn parse_playlist_source(text: &str) -> Option<PlaylistSource> {
+    let mut s = PlaylistSource::default();
+    // The header sits before the first entry.
+    for l in text
+        .lines()
+        .take_while(|l| l.is_empty() || l.starts_with('#'))
+    {
+        if let Some(v) = l.strip_prefix("#VIVI-SOURCE:") {
+            let (p, src) = v.trim().split_once(' ')?;
+            s.plugin = p.trim().into();
+            s.source = src.trim().into();
+        } else if let Some(v) = l.strip_prefix("#VIVI-URL:") {
+            s.url = v.trim().into();
+        }
+    }
+    (!s.plugin.is_empty() && !s.source.is_empty()).then_some(s)
+}
+
+/// The source of a playlist file (reads only its first few KB).
+pub fn playlist_source(path: &Path) -> Option<PlaylistSource> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    fs::File::open(path)
+        .ok()?
+        .take(8192)
+        .read_to_end(&mut buf)
+        .ok()?;
+    parse_playlist_source(&String::from_utf8_lossy(&buf))
+}
+
+/// A playlist name made safe for a file name ("Playlist" when blank).
+pub fn playlist_file_name(name: &str) -> String {
+    let safe: String = name
+        .trim()
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | '\0') || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let safe = safe.trim().trim_start_matches('.').trim();
+    if safe.is_empty() {
+        "Playlist".into()
+    } else {
+        safe.chars().take(120).collect()
+    }
+}
+
+/// Where an extension's playlist goes in `dir`: the file that already carries its
+/// source (kept even when the user renamed it), else `<name>.m3u`, else, when a playlist
+/// the extension does not own has that name, `<name> (<label>).m3u`, `<name> (<label>
+/// 2).m3u`, ... A playlist the extension does not own is never picked.
+pub fn owned_playlist_path(
+    dir: &Path,
+    name: &str,
+    plugin: &str,
+    source: &str,
+    label: &str,
+) -> PathBuf {
+    let mine =
+        |p: &Path| playlist_source(p).is_some_and(|s| s.plugin == plugin && s.source == source);
+    let mut files: Vec<PathBuf> = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "m3u"))
+        .collect();
+    files.sort();
+    if let Some(p) = files.iter().find(|p| mine(p)) {
+        return p.clone();
+    }
+    let base = playlist_file_name(name);
+    let label = if label.trim().is_empty() {
+        plugin
+    } else {
+        label.trim()
+    };
+    (0..1000)
+        .map(|i| match i {
+            0 => base.clone(),
+            1 => format!("{base} ({label})"),
+            n => format!("{base} ({label} {n})"),
+        })
+        .map(|n| dir.join(format!("{n}.m3u")))
+        .find(|p| !p.exists())
+        .unwrap_or_else(|| dir.join(format!("{base} ({label} {source}).m3u")))
+}
+
+/// One entry of an extension's playlist: a file, with the title / seconds for
+/// `#EXTINF` when known.
+#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
+pub struct PlaylistEntry {
+    pub path: String,
+    pub title: String,
+    pub duration: f64,
+}
+
+/// The text of an extension's playlist (see [`PlaylistSource`]).
+pub fn owned_playlist_text(name: &str, src: &PlaylistSource, entries: &[PlaylistEntry]) -> String {
+    let one = |s: &str| s.replace(['\n', '\r'], " ");
+    let mut t = format!(
+        "#EXTM3U\n#PLAYLIST:{}\n#VIVI-SOURCE:{} {}\n",
+        one(name),
+        one(&src.plugin),
+        one(&src.source)
+    );
+    if !src.url.is_empty() {
+        t += &format!("#VIVI-URL:{}\n", one(&src.url));
+    }
+    for e in entries.iter().filter(|e| !e.path.trim().is_empty()) {
+        if !e.title.is_empty() {
+            let d = if e.duration > 0.0 {
+                e.duration.round() as i64
+            } else {
+                -1
+            };
+            t += &format!("#EXTINF:{d},{}\n", one(&e.title));
+        }
+        t += &one(&e.path);
+        t.push('\n');
+    }
+    t
+}
+
+/// Write (or rewrite) an extension's playlist in [`playlists_dir`]; see
+/// [`owned_playlist_path`] for the file it picks.
+pub fn save_owned_playlist(
+    name: &str,
+    src: &PlaylistSource,
+    label: &str,
+    entries: &[PlaylistEntry],
+) -> std::io::Result<PathBuf> {
+    let dir = playlists_dir();
+    fs::create_dir_all(&dir)?;
+    let path = owned_playlist_path(&dir, name, &src.plugin, &src.source, label);
+    write_atomic(&path, &owned_playlist_text(name, src, entries))?;
+    Ok(path)
+}
+
 pub fn delete_playlist(path: &Path) {
     let _ = fs::remove_file(path);
     if let Some(c) = playlist_cover(path) {
@@ -534,5 +689,81 @@ mod recent_tests {
         );
         assert_eq!(id("https://vimeo.com/123"), None);
         assert_eq!(id("https://www.youtube.com/watch?v=short"), None);
+    }
+}
+
+#[cfg(test)]
+mod owned_playlist_tests {
+    use super::*;
+
+    fn src(plugin: &str, source: &str) -> PlaylistSource {
+        PlaylistSource {
+            plugin: plugin.into(),
+            source: source.into(),
+            url: String::new(),
+        }
+    }
+
+    #[test]
+    fn writes_and_reads_the_source_header() {
+        let mut s = src("youtube-music", "VLPL1");
+        s.url = "https://music.youtube.com/playlist?list=PL1".into();
+        let entries = [
+            PlaylistEntry {
+                path: "/m/A/B/01 One.m4a".into(),
+                title: "A - One".into(),
+                duration: 200.4,
+            },
+            PlaylistEntry {
+                path: "/m/A/B/02 Two.m4a".into(),
+                ..Default::default()
+            },
+            PlaylistEntry::default(),
+        ];
+        let t = owned_playlist_text("Mix\nTape", &s, &entries);
+        assert_eq!(
+            t,
+            "#EXTM3U\n#PLAYLIST:Mix Tape\n#VIVI-SOURCE:youtube-music VLPL1\n\
+             #VIVI-URL:https://music.youtube.com/playlist?list=PL1\n\
+             #EXTINF:200,A - One\n/m/A/B/01 One.m4a\n/m/A/B/02 Two.m4a\n"
+        );
+        assert_eq!(parse_playlist_source(&t), Some(s));
+        assert_eq!(parse_playlist_source("#EXTM3U\n/a.mp3\n"), None);
+        // Only the header counts: a line after the first entry is not a source.
+        assert_eq!(
+            parse_playlist_source("#EXTM3U\n/a.mp3\n#VIVI-SOURCE:p s\n"),
+            None
+        );
+        assert_eq!(parse_playlist_source("#VIVI-SOURCE:nospace\n"), None);
+        assert_eq!(playlist_file_name(" a/b\\c\t "), "a_b_c");
+        assert_eq!(playlist_file_name(".."), "Playlist");
+    }
+
+    #[test]
+    fn picks_a_path_without_taking_user_playlists() {
+        let dir = std::env::temp_dir().join(format!("vivi-owned-pl-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let pick = |name: &str, source: &str| {
+            owned_playlist_path(&dir, name, "yt", source, "YouTube Music")
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        };
+        assert_eq!(pick("Mix", "VL1"), "Mix.m3u");
+        // The user's own "Mix" is never overwritten.
+        fs::write(dir.join("Mix.m3u"), "#EXTM3U\n/a.mp3\n").unwrap();
+        assert_eq!(pick("Mix", "VL1"), "Mix (YouTube Music).m3u");
+        let t = owned_playlist_text("Mix", &src("yt", "VL1"), &[]);
+        fs::write(dir.join("Mix (YouTube Music).m3u"), &t).unwrap();
+        // Its own file is reused, also after the user renamed it.
+        assert_eq!(pick("Mix", "VL1"), "Mix (YouTube Music).m3u");
+        fs::rename(dir.join("Mix (YouTube Music).m3u"), dir.join("Gym.m3u")).unwrap();
+        assert_eq!(pick("Mix", "VL1"), "Gym.m3u");
+        // Another list of the same name (or another plugin's) gets its own file.
+        fs::write(dir.join("Mix (YouTube Music).m3u"), "#EXTM3U\n").unwrap();
+        assert_eq!(pick("Mix", "VL2"), "Mix (YouTube Music 2).m3u");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

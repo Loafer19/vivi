@@ -399,19 +399,37 @@ impl Lib {
                     "Create playlist",
                     "add",
                 ));
+                let names: Vec<(String, String)> = crate::plugins::manifests()
+                    .into_iter()
+                    .map(|m| (m.id, m.name))
+                    .collect();
                 for (name, path) in store::playlists() {
-                    let n = std::fs::read_to_string(&path).map_or(0, |s| {
-                        s.lines()
-                            .filter(|l| !l.starts_with('#') && !l.is_empty())
-                            .count()
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    let n = text
+                        .lines()
+                        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+                        .count();
+                    // Kept in sync by an extension: its name as the badge and in the line.
+                    let owner = store::parse_playlist_source(&text).map(|s| {
+                        names
+                            .iter()
+                            .find(|(id, _)| *id == s.plugin)
+                            .map_or(s.plugin.clone(), |(_, n)| n.clone())
                     });
+                    let sub = match &owner {
+                        Some(o) => format!("{n} items · {o}"),
+                        None => format!("{n} items"),
+                    };
                     let mut it = Self::group(
                         path.to_string_lossy().into_owned(),
                         &name,
-                        format!("{n} items"),
+                        sub,
                         "playlist",
                         false,
                     );
+                    if let Some(o) = owner {
+                        it.badge = o.into();
+                    }
                     Self::cover(&mut it, &path);
                     out.push(it);
                 }
@@ -1030,6 +1048,28 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                                 ),
                                 Err(e) => eprintln!("vivi: export playlist: {e}"),
                             }
+                        }
+                    }
+                    // Playlists an extension keeps in sync (`#VIVI-SOURCE`).
+                    "playlist-sync" | "playlist-open" => {
+                        let Some(src) = store::playlist_source(Path::new(&path)) else {
+                            return;
+                        };
+                        let ok = crate::plugins::run(
+                            &src.plugin,
+                            &action,
+                            std::slice::from_ref(&src.source),
+                        );
+                        if !ok && action == "playlist-open" && !src.url.is_empty() {
+                            crate::settings::open_url(&src.url);
+                        } else if !ok {
+                            crate::plugins::toast(
+                                &a,
+                                "The extension that made this playlist is off",
+                            );
+                        } else if action == "playlist-sync" {
+                            a.global::<crate::Notices>()
+                                .set_resume_text(format!("Syncing “{}”…", name_of(&path)).into());
                         }
                     }
                     "delete" => {

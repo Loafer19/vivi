@@ -93,6 +93,9 @@ pub enum ScriptMessage<'a> {
     DownloadRemove { id: &'a str, job: &'a str },
     /// `vivi-downloads-show`: open Library → Downloads.
     DownloadsShow,
+    /// `vivi-playlist <plugin id> <json>`: write (or rewrite) a playlist the plugin keeps
+    /// in sync with an online list (see `crate::plugins::save_playlist`).
+    Playlist { id: &'a str, json: &'a str },
     /// `vivi-toast <text> [seconds]` with non-blank text (trimmed).
     Toast(&'a str),
     /// `vivi-dialog <id> <json>`: open / update the shared music dialog (see `host`).
@@ -149,6 +152,7 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-download", id, job, json] => M::Download { id, job, json },
             ["vivi-download-remove", id, job] => M::DownloadRemove { id, job },
             ["vivi-downloads-show", ..] => M::DownloadsShow,
+            ["vivi-playlist", id, json] => M::Playlist { id, json },
             ["vivi-toast", text, ..] if !text.trim().is_empty() => M::Toast(text.trim()),
             ["vivi-dialog", id, json] => M::Dialog { id, json },
             ["vivi-dialog-close", id] => M::DialogClose(id),
@@ -248,6 +252,14 @@ mod tests {
             M::DownloadRemove { id: "p", job: "j1" },
         );
         is(&["vivi-downloads-show"], M::DownloadsShow);
+        is(
+            &["vivi-playlist", "p", "{}"],
+            M::Playlist {
+                id: "p",
+                json: "{}",
+            },
+        );
+        assert_eq!(p(&["vivi-playlist", "p"]), None);
         assert_eq!(p(&["vivi-toast", "  "]), None);
         assert_eq!(p(&["vivi-setting", "p", "k"]), None);
         assert_eq!(p(&["other", "x"]), None);

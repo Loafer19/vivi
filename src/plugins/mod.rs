@@ -357,6 +357,11 @@ pub fn states() -> Vec<(Manifest, bool)> {
 
 /// Create the registry, enable plugins per config and start the tick timer.
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+    // Packages check this before sending `vivi-playlist` (older Vivi: unset; they write
+    // the playlist file themselves).
+    if let Err(e) = player.mpv.set_property("user-data/vivi/playlists", 1i64) {
+        eprintln!("vivi: set user-data/vivi/playlists: {e:?}");
+    }
     let entries: Vec<Entry> = builtin()
         .into_iter()
         .map(|p| Entry {
@@ -625,6 +630,10 @@ pub fn client_message(args: &[String]) {
             Err(e) => eprintln!("vivi: vivi-download {id} {job}: {e}"),
         },
         Some(M::DownloadRemove { id, job }) => crate::downloads::remove(id, job),
+        Some(M::Playlist { id, json }) => match serde_json::from_str(json) {
+            Ok(r) => save_playlist(id, r),
+            Err(e) => eprintln!("vivi: vivi-playlist {id}: {e}"),
+        },
         Some(M::DownloadsShow) => {
             if let Some(a) = with(|r| r.app.upgrade()).flatten() {
                 crate::downloads::open(&a);
@@ -1024,6 +1033,109 @@ pub fn run(id: &str, cmd: &str, args: &[String]) -> bool {
         }
     }
     true
+}
+
+/// Redraw the sidebar playlists and the Library (a plugin wrote a playlist).
+fn refresh_playlists() {
+    // Outside `with`: the Library render reads the plugin registry.
+    if let Some(a) = with(|r| r.app.upgrade()).flatten() {
+        a.global::<crate::Panel>()
+            .set_playlists(crate::playlist_items());
+        a.global::<crate::Library>().invoke_refresh();
+    }
+}
+
+/// A `vivi-playlist` message.
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct PlaylistMsg {
+    /// Display name (the file name unless that is taken by another playlist).
+    pub name: String,
+    /// Opaque id of the online list; the host passes it back in `playlist-sync` /
+    /// `playlist-open`.
+    pub source: String,
+    /// Web page of the list (opened by "Open Source" when the plugin is off).
+    pub url: String,
+    /// Plain file paths, or `entries` with titles.
+    pub files: Vec<String>,
+    pub entries: Vec<crate::store::PlaylistEntry>,
+    /// Local image (or http(s) URL) for the playlist cover.
+    pub cover: String,
+}
+
+/// Write a plugin's playlist, mark it with its source, set the cover, refresh the
+/// Playlists tab and answer `playlist-saved <source> <path>` (or `playlist-failed
+/// <source> <error>`).
+pub fn save_playlist(id: &str, m: PlaylistMsg) {
+    let label = manifests()
+        .into_iter()
+        .find(|x| x.id == id)
+        .map(|x| x.name)
+        .unwrap_or_default();
+    if label.is_empty() || m.source.trim().is_empty() {
+        eprintln!("vivi: vivi-playlist {id}: unknown plugin or no source");
+        return;
+    }
+    let src = crate::store::PlaylistSource {
+        plugin: id.into(),
+        source: m.source.trim().into(),
+        url: m.url.trim().into(),
+    };
+    let mut entries = m.entries;
+    entries.extend(m.files.into_iter().map(|path| crate::store::PlaylistEntry {
+        path,
+        ..Default::default()
+    }));
+    let name = if m.name.trim().is_empty() {
+        label.clone()
+    } else {
+        m.name.trim().to_string()
+    };
+    let path = match crate::store::save_owned_playlist(&name, &src, &label, &entries) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("vivi: vivi-playlist {id}: {e}");
+            run(id, "playlist-failed", &[src.source, e.to_string()]);
+            return;
+        }
+    };
+    let cover = m.cover.trim().to_string();
+    let set_cover =
+        |path: &std::path::Path, img: &std::path::Path| match crate::store::set_playlist_cover(
+            path, img,
+        ) {
+            Ok(p) => crate::images::forget(&p),
+            Err(e) => eprintln!("vivi: vivi-playlist cover: {e}"),
+        };
+    if cover.starts_with("https://") || cover.starts_with("http://") {
+        match host::cached_cover(&cover) {
+            Some(img) => set_cover(&path, &img),
+            None => {
+                // Fetched off the UI thread; the tab refreshes when it lands.
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    let Some(img) = host::fetch_cover(&cover) else {
+                        return;
+                    };
+                    let _ = slint::invoke_from_event_loop(move || {
+                        set_cover(&path, &img);
+                        refresh_playlists();
+                    });
+                });
+            }
+        }
+    } else if !cover.is_empty() {
+        let img = std::path::PathBuf::from(cover.strip_prefix("file://").unwrap_or(&cover));
+        if img.is_file() {
+            set_cover(&path, &img);
+        }
+    }
+    refresh_playlists();
+    run(
+        id,
+        "playlist-saved",
+        &[src.source, path.to_string_lossy().into_owned()],
+    );
 }
 
 /// Ask an enabled plugin for a value (see [`Plugin::query`]).

@@ -14,6 +14,9 @@ export struct DlJob {
     detail: string,  // size / speed / ETA, or the error
     can-pause: bool,
     has-file: bool,
+    child: bool,     // an item of the group row above (e.g. one song of a playlist)
+    kids: int,       // a group row: its item count (expand / collapse)
+    expanded: bool,
 }
 
 export global Downloads {
@@ -30,7 +33,7 @@ export global Downloads {
     in-out property <string> url-plugin;
     in-out property <string> url-command;
     in-out property <string> url-label;
-    // Row action: pause | resume | cancel | retry | play | open | folder | remove.
+    // Row action: pause | resume | cancel | retry | play | open | folder | remove | expand.
     callback act(string, string);
     callback clear-finished();
     // Run a plugin command (plugin, command, argument).
