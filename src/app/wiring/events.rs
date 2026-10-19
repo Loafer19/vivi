@@ -109,6 +109,7 @@ pub(crate) fn wire(
                     }
                     PlayerEvent::ListsChanged => refresh_lists(&a, &player, log),
                     PlayerEvent::AbLoop => abloop::sync(&a, &player),
+                    PlayerEvent::LoopShuffle => crate::loopsync::sync(&a, &player),
                     PlayerEvent::TrackCount(n) => {
                         if log {
                             eprintln!("tracks {n}");

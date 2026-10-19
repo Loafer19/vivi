@@ -351,10 +351,20 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         "Reverse scroll direction",
         &s(""),
         false,
-    )
-    .advanced()
-    .header("Remotes")
-    .stub_toggle("stub.controls.web", "Web remote control", &s(""), false);
+    );
+    // The phone remote is the Remote Control extension: a pointer with Install / Enable /
+    // Settings, like the seek-bar hint for Chapter Thumbnails.
+    let (rc_info, rc_label) = match remote_control_action(c) {
+        Some("Install") => ("Control Vivi from a phone or tablet browser on the same network (QR pairing, PIN). Installs the Remote Control extension.", "Install"),
+        Some(_) => ("Control Vivi from a phone or tablet browser on the same network (QR pairing, PIN). The Remote Control extension is installed but off.", "Enable"),
+        None => ("Remote Control is on: pair a phone, change the port or the PIN in its settings.", "Settings…"),
+    };
+    r.header("Remotes").action(
+        REMOTE_CONTROL_ROW,
+        "Phone remote control",
+        rc_info,
+        rc_label,
+    );
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];

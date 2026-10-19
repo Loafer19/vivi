@@ -799,14 +799,7 @@ fn handle(
         }
         "shuffle" => {
             let on = args["enabled"].as_bool().ok_or("missing \"enabled\"")?;
-            if on != a.global::<crate::Playback>().get_shuffle_on() {
-                p.run(if on {
-                    "playlist-shuffle"
-                } else {
-                    "playlist-unshuffle"
-                });
-                a.global::<crate::Playback>().set_shuffle_on(on);
-            }
+            crate::loopsync::set_shuffle(a, p, on);
             Ok(json!({ "shuffle": on }))
         }
         "open_saved_playlist" => {

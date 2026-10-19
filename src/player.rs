@@ -21,6 +21,8 @@ pub enum PlayerEvent {
     ListsChanged,
     /// `ab-loop-a` / `ab-loop-b` changed (any source: keys, scripts, IPC).
     AbLoop,
+    /// `loop-file`, `loop-playlist` or `user-data/vivi/shuffle` changed (see `loopsync`).
+    LoopShuffle,
     /// The file ended; `true` when it failed to open or play.
     EndFile(bool),
     /// A new file starts loading.
@@ -111,6 +113,9 @@ impl Player {
             "playlist-pos",
             "ab-loop-a",
             "ab-loop-b",
+            "loop-file",
+            "loop-playlist",
+            crate::loopsync::SHUFFLE,
         ]
         .iter()
         .enumerate()
@@ -165,6 +170,9 @@ impl Player {
                                     _,
                                 ) => Some(PlayerEvent::ListsChanged),
                                 ("ab-loop-a" | "ab-loop-b", _) => Some(PlayerEvent::AbLoop),
+                                ("loop-file" | "loop-playlist" | crate::loopsync::SHUFFLE, _) => {
+                                    Some(PlayerEvent::LoopShuffle)
+                                }
                                 _ => None,
                             }
                         }

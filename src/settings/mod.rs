@@ -21,6 +21,26 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+/// The Remote Control extension (phone remote), pointed to from Controls → Remotes.
+pub(crate) const REMOTE_CONTROL: &str = "remote-control";
+pub(crate) const REMOTE_CONTROL_ROW: &str = "controls.remote_control";
+
+/// What the Remotes row offers: "Install", "Enable", or `None` (on: open its settings).
+pub(crate) fn remote_control_action(c: &Config) -> Option<&'static str> {
+    let m = plugins::manifests()
+        .into_iter()
+        .find(|m| m.id == REMOTE_CONTROL);
+    remote_action(m.is_some(), m.is_some_and(|m| plugins::is_enabled(c, &m)))
+}
+
+fn remote_action(installed: bool, enabled: bool) -> Option<&'static str> {
+    match (installed, enabled) {
+        (false, _) => Some("Install"),
+        (true, false) => Some("Enable"),
+        (true, true) => None,
+    }
+}
+
 /// Seconds of inactivity before the controls hide (read by the auto-hide timer).
 pub static AUTOHIDE_SECS: AtomicU32 = AtomicU32::new(2);
 
@@ -82,12 +102,7 @@ fn bar_action(a: &AppWindow, p: &Player, id: &str) {
         }
         "shuffle" => {
             let on = !a.global::<crate::Playback>().get_shuffle_on();
-            p.run(if on {
-                "playlist-shuffle"
-            } else {
-                "playlist-unshuffle"
-            });
-            a.global::<crate::Playback>().set_shuffle_on(on);
+            crate::loopsync::set_shuffle(a, p, on);
         }
         _ => {
             // A plugin's button (`controlbar.button`).
@@ -274,6 +289,26 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     refresh();
                     return;
                 }
+                if id.as_str() == REMOTE_CONTROL_ROW {
+                    let action = remote_control_action(&cfg.borrow());
+                    match action {
+                        Some("Install") => {
+                            plugins::packages::install_and_enable(&a, REMOTE_CONTROL)
+                        }
+                        Some(_) => {
+                            let msg = plugins::setting_changed(
+                                &plugins::toggle_id(REMOTE_CONTROL),
+                                "true",
+                            );
+                            refresh();
+                            plugins::packages::toast(
+                                msg.as_deref().unwrap_or("Enabled Remote Control"),
+                            );
+                        }
+                        None => crate::extwin::open(&a, REMOTE_CONTROL, true),
+                    }
+                    return;
+                }
                 let mut rescan = false;
                 {
                     let mut c = cfg.borrow_mut();
@@ -450,6 +485,13 @@ fn bar_style(s: &str) -> crate::BarStyle {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn remote_control_row_offers_install_enable_or_settings() {
+        assert_eq!(super::remote_action(false, false), Some("Install"));
+        assert_eq!(super::remote_action(true, false), Some("Enable"));
+        assert_eq!(super::remote_action(true, true), None);
+    }
+
     use super::*;
     #[test]
     fn search_spans_categories() {

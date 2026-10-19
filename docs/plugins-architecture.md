@@ -515,8 +515,15 @@ Script messages Vivi handles for packages:
 | `vivi-tagger-acoustid <path> <json>` | open the auto-tagger review for `<path>` with AcoustID ids and a rename pattern (0.9.2) |
 | `vivi-setting <id> <key> <value>` | saves one of the package's declared settings (e.g. a generated PIN) and applies it as script-opt |
 | `vivi-pick-folder <id> <key>` | folder dialog; the result is saved as that setting and sent back as `script-message-to <script> folder-picked <path>` |
-| `vivi-qr <title> <text> [caption]` | dialog with `text` as a QR code (e.g. a pairing link), shown above Settings (0.10.1+) |
-| `vivi-fullscreen [toggle\|on\|off]` | switches Vivi's window fullscreen (0.10.1+) |
+| `vivi-qr <title> <text> [caption]` | dialog with `text` as a QR code (e.g. a pairing link), shown above Settings (0.11.0+) |
+| `vivi-fullscreen [toggle\|on\|off]` | switches Vivi's window fullscreen (0.11.0+) |
+
+**Repeat and shuffle** (after 0.12.0, `src/loopsync.rs`): Vivi's repeat button follows mpv's
+`loop-file` whoever sets it (mpv keys, scripts, IPC), so a package can just set `loop-file` /
+`loop-playlist`. mpv has no shuffle state, so Vivi publishes it as the string property
+`user-data/vivi/shuffle` (`yes` / `no`); setting it asks Vivi to shuffle or unshuffle the queue
+and its button follows. A package checks that the property exists before offering repeat /
+shuffle (older Vivi: the buttons would not follow).
 
 Vivi sends `script-message vivi-preview-wanted` on the first seek-bar hover of each local
 video while Chapter Thumbnails is enabled (its *On hover* mode starts rendering then).

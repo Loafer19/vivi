@@ -15,6 +15,7 @@ mod keymap;
 mod library;
 mod libview;
 mod loading;
+mod loopsync;
 mod menus;
 mod mini;
 #[cfg(target_os = "linux")]

@@ -392,6 +392,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     // The per-file subtitle offset is built in (src/suboffset.rs): Subtitle Auto-Sync
     // checks `user-data/vivi/sub-offset` and leaves Alt+Z / Alt+X and storage to it.
     crate::suboffset::setup(player);
+    // Repeat / shuffle follow mpv (src/loopsync.rs); packages offer shuffle when this exists.
+    crate::loopsync::setup(app, player);
     let entries: Vec<Entry> = builtin()
         .into_iter()
         .map(|p| Entry {
