@@ -1,8 +1,13 @@
-//! Thumbnails written by plugin packages, read here so the core needs no ffmpeg for them:
-//! `<data>/vivi/plugin-data/<plugin>/<key>/chapter-<n>.jpg` (n from 1) by Chapter
-//! Thumbnails (#75) or Scene Chapters (#62), and `seek-NN.jpg` (seek-bar previews, any
-//! count; `seek.meta` = "frames=<n>" once complete) by Chapter Thumbnails. The key is the
-//! packages' hash of "path|size|mtime".
+//! Thumbnails written by the Chapters & Previews package (`chapter-thumbnails`, #75), read
+//! here so the core needs no ffmpeg for them: `<data>/vivi/plugin-data/chapter-thumbnails/
+//! <key>/chapter-<n>.jpg` (n from 1, redone when chapters move, see its `chapters.meta`)
+//! and `seek-NN.jpg` (seek-bar previews, any count; `seek.meta` = "frames=<n>" once
+//! complete). The key is the package's hash of "path|size|mtime".
+//!
+//! Scene Chapters 1.0.x (#62) also saved `chapter-<n>.jpg` under `plugin-data/scene-chapters`;
+//! that folder is no longer read: 1.1+ makes no pictures (scene detection is now part of
+//! Chapters & Previews 1.2) and the old ones were not redone when chapters changed, so they
+//! could show the wrong picture.
 
 use std::path::{Path, PathBuf};
 
@@ -17,8 +22,9 @@ pub fn key(path: &str, size: u64, mtime: i64) -> String {
 
 /// Plugin caches with chapter thumbnails, preferred first.
 pub fn cache_roots() -> Vec<PathBuf> {
-    let d = crate::store::data_dir().join("plugin-data");
-    vec![d.join("chapter-thumbnails"), d.join("scene-chapters")]
+    vec![crate::store::data_dir()
+        .join("plugin-data")
+        .join("chapter-thumbnails")]
 }
 
 /// Cache folder of `path` under `root` (None when the file cannot be read).

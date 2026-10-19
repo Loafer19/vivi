@@ -145,6 +145,32 @@ pub fn known(v: Vec<Contribution>) -> Vec<Contribution> {
         .collect()
 }
 
+/// Entries that moved to another plugin: (old plugin, its command, new plugin, new command).
+/// Scene detection moved from Scene Chapters into Chapters & Previews (chapter-thumbnails
+/// 1.2.0, `scenes-detect`); the old package keeps its "Detect scene chapters" entries for
+/// Vivi with only it installed, and they are hidden while the new one offers the same.
+pub const MOVED: [(&str, &str, &str, &str); 1] = [(
+    "scene-chapters",
+    "detect",
+    "chapter-thumbnails",
+    "scenes-detect",
+)];
+
+/// Indices of `entries` (plugin id, command) at one point to leave out: old entries whose
+/// replacement (see [`MOVED`]) is there too.
+pub fn superseded(entries: &[(&str, &str)]) -> Vec<usize> {
+    entries
+        .iter()
+        .enumerate()
+        .filter(|(_, (id, cmd))| {
+            MOVED.iter().any(|(oid, ocmd, nid, ncmd)| {
+                id == oid && cmd == ocmd && entries.iter().any(|(i, c)| i == nid && c == ncmd)
+            })
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
 /// Role and entries for catalog packages released before manifests had them.
 pub fn known_defaults(id: &str) -> (Role, Vec<Contribution>) {
     let c = Contribution::new;
@@ -232,6 +258,23 @@ pub fn known_defaults(id: &str) -> (Role, Vec<Contribution>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moved_entries_hidden_only_with_the_replacement() {
+        let both = [
+            ("scene-chapters", "detect"),
+            ("chapter-thumbnails", "generate"),
+            ("chapter-thumbnails", "scenes-detect"),
+        ];
+        assert_eq!(superseded(&both), vec![0]);
+        // Chapter Thumbnails before 1.2 has no scenes-detect: the old entry stays.
+        assert!(superseded(&[
+            ("scene-chapters", "detect"),
+            ("chapter-thumbnails", "generate")
+        ])
+        .is_empty());
+        assert!(superseded(&[("chapter-thumbnails", "scenes-detect")]).is_empty());
+    }
 
     #[test]
     fn points_are_described_and_defaults_known() {

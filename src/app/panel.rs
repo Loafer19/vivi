@@ -16,7 +16,7 @@ pub(crate) fn items(v: impl IntoIterator<Item = (String, String, bool)>) -> slin
     slint::ModelRc::new(slint::VecModel::from(v))
 }
 
-/// Chapter thumbnails from the Scene Chapters package cache (empty images where missing).
+/// Chapter thumbnails from the Chapters & Previews package cache (empty images where missing).
 pub(crate) fn chapter_thumbs(a: &AppWindow, p: &Player) {
     let n = p.chapters().len();
     let path = p.get("path").unwrap_or_default();

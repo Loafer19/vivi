@@ -151,7 +151,9 @@ source; Subtitle Auto-Sync → `menu.subtitles`; Equalizer → `menu.audio`; Sce
 `menu.video`; A-B Loop, Cut & Export, AcoustID, SponsorBlock, Offline Downloads →
 `context.player`; …), and any other plugin is a feature with no entries (Extensions window
 only). A manifest that sets `contributes = []` opts out of the defaults. mpv user scripts
-are features.
+are features. `contrib::MOVED` lists entries that moved to another plugin (Scene Chapters'
+*Detect scene chapters* → Chapters & Previews' `scenes-detect`): while both are enabled
+only the new one is shown.
 
 **Sidebar order / hiding** is host state, not plugin settings: `[plugins.<id>]
 settings."ui.hidden" = "true"` hides a source, `[plugins.vivi-sources] settings.order =
@@ -293,13 +295,13 @@ once installed (the seek-bar hint in `src/preview.rs` uses it).
 | Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz, Cover Art Archive, Deezer, iTunes Search and LRCLIB need none; Last.fm API key (genres) and Discogs token optional (#79). Candidates from all sources are merged and ranked by confidence (`rank_candidates`, `Candidate::confidence`); disagreeing values become per-field alternatives (⇄ in the review); fingerprint matches propose a sanitized, opt-in file name (`sanitize_file_name`, `rename_to`). The review shows the source of every field; synced LRCLIB lyrics are embedded when *Embed synced lyrics* is on (MP3 SYLT+USLT, FLAC/Ogg/Opus `LYRICS`, M4A `©lyr`, #80) |
 | Equalizer (`equalizer`, #74) | script, **deprecated** since 0.13.0 | presets via mpv `equalizer`/`superequalizer` af; replaced by the built-in Equalizer (`Alt+E` / `Alt+Shift+E`, auto pre-amp) | none |
 | Subtitle sync (`subtitle-sync`, #72) | script | alass (system or managed download) + managed media ffmpeg | none |
-| Chapter thumbnails (`chapter-thumbnails`, #75) | script + core | managed media ffmpeg; core reads the cache (the only source of seek-bar previews; offered by a hint on the first seek-bar hover and marked *Recommended* in Browse) | none |
+| Chapters & Previews (`chapter-thumbnails`, #75, #62) | script + core | managed media ffmpeg; core reads the cache (the only source of seek-bar previews and chapter pictures; offered by a hint on the first seek-bar hover and marked *Recommended* in Browse); since 1.2.0 also scene chapters (`scenes-detect`, Video menu / palette via `[[contributes]]`) | none |
 | AcoustID (`acoustid`, #76) | script + tagger | fpcalc (system or Chromaprint download); results open in the tagger review with a rename proposal | AcoustID application key |
 | Scrobbler (`scrobbler`, #77) | script | Last.fm + ListenBrainz | Last.fm API key + secret, ListenBrainz token |
 | Free Music (`free-music`, #70) | built in | search/results/licence dialog; downloads are tagged with lofty | Jamendo `client_id` (optional, <https://devportal.jamendo.com>); Internet Archive needs none |
 | Subtitle Auto-Sync (`subtitle-sync`, #56) | package (mpv Lua) | runs an external tool and `sub-add`s the result; no UI | none; needs `alass`/`alass-cli` or `ffsubsync` in `PATH` |
 | SponsorBlock (`sponsorblock`, #64) | package (mpv Lua) | HTTP via `curl`, seeks and chapters; "ask" mode uses a toast + `Alt+K` instead of a Slint button | none |
-| Scene Chapters (`scene-chapters`, #62) | package (mpv Lua) | ffmpeg subprocess, `chapter-list`; thumbnails cached for a future Chapters-panel view | none; needs `ffmpeg` |
+| Scene Chapters (`scene-chapters`, #62) | package (mpv Lua), **deprecated** (→ `plugin:chapter-thumbnails`) | ffmpeg subprocess, `chapter-list`; 1.1.1 steps aside when Chapters & Previews 1.2 is loaded (`scene-chapters-superseded`), and its Video menu / palette entries are hidden then (`contrib::MOVED`) | none; needs `ffmpeg` |
 | ListenBrainz Scrobbler (`scrobbler`, #63) | package (mpv Lua) | no UI: settings, OSD status and HTTP via `curl` are enough | ListenBrainz user token (<https://listenbrainz.org/settings/>) |
 
 MusicBrainz calls share one process-wide limiter (at most one request per second) and send

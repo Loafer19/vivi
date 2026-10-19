@@ -990,6 +990,19 @@ pub fn contributions_all(point: &str) -> Vec<Contributed> {
 /// What a surface shows at `point` (entries the user hid left out).
 pub fn contributions(point: &str) -> Vec<Contributed> {
     let mut v = contributions_all(point);
+    // A plugin's entry that moved to another plugin, when both are enabled (contrib::MOVED).
+    let pairs: Vec<(&str, &str)> = v
+        .iter()
+        .map(|e| (e.id.as_str(), e.command.as_str()))
+        .collect();
+    let drop = contrib::superseded(&pairs);
+    if !drop.is_empty() {
+        let mut i = 0;
+        v.retain(|_| {
+            i += 1;
+            !drop.contains(&(i - 1))
+        });
+    }
     if layout(point).is_some() {
         with(|r| {
             let c = r.cfg.borrow();
