@@ -810,26 +810,38 @@ fn unseen<'a>(seen: &str, ids: impl IntoIterator<Item = &'a str>) -> Vec<&'a str
         .collect()
 }
 
+thread_local! { static NOTICE_DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
 /// One-time toast for an installed plugin the catalog marks deprecated, with a button
 /// that opens its replacement. Called when a file loads (the toast shows over media).
+/// It shares the notice line with the resume prompt, which a file load sets (or clears)
+/// right after: the toast waits until that line is free, else it would be wiped at once
+/// and still be counted as seen.
 pub fn deprecation_notice() {
-    thread_local! { static DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
-    if DONE.with(|d| d.get()) {
+    if NOTICE_DONE.with(|d| d.replace(true)) {
         return;
     }
+    slint::Timer::single_shot(Duration::from_millis(1500), || show_deprecation_notice(8));
+}
+
+fn show_deprecation_notice(tries: u32) {
     let Some(a) = APP.with(|a| a.borrow().as_ref().and_then(|w| w.upgrade())) else {
         return;
     };
+    if !a.global::<crate::Notices>().get_resume_text().is_empty() && tries > 0 {
+        slint::Timer::single_shot(Duration::from_secs(2), move || {
+            show_deprecation_notice(tries - 1)
+        });
+        return;
+    }
     let dep = deprecated_installed();
     let seen = fs::read_to_string(notices_file()).unwrap_or_default();
     let Some(id) = unseen(&seen, dep.iter().map(|(id, _, _)| id.as_str()))
         .first()
         .map(|s| s.to_string())
     else {
-        DONE.with(|d| d.set(true));
         return;
     };
-    DONE.with(|d| d.set(true));
     let Some((_, name, d)) = dep.into_iter().find(|(i, _, _)| *i == id) else {
         return;
     };
