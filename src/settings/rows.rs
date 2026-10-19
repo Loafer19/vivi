@@ -153,10 +153,6 @@ impl<'a> Rows<'a> {
         let v = self.stub_value(id, o[0]);
         self.choice(id, t, info, &v, o)
     }
-    pub(crate) fn stub_text(&mut self, id: &str, t: &str, info: &str, default: &str) -> &mut Self {
-        let v = self.stub_value(id, default);
-        self.text(id, t, info, &v, "")
-    }
 }
 
 /// Scrobbling is the Scrobbler extension's job: Settings → Privacy only points to it.

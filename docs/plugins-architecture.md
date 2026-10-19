@@ -234,9 +234,30 @@ still load. Packages that never send these messages are unaffected.
 | `vivi-dialog <id> <json>` | Open (`"open": true`) or update the shared music dialog owned by `id`. Fields: `title`, `placeholder`, `search_label`, `query`, `sources` + `source` (dropdown), `chips` + `chip`, `actions` (buttons), `filters` (`[{name, options, value}]` dropdowns), `rows`, `status`, `busy`, `detail` (side pane text), `detail_cover` (large cover above it, URL or path; a `detail` without it hides the cover), `primary` / `secondary` (button labels), `has_more` (infinite scroll), `grid_toggle` (offer list / grid), `grid`, `copy`. A row is `{title, sub, badge, chip, chip_ok, dur, cover, dl, saved, selected}` (`saved`: a check mark for an item downloaded already); `cover` is an http(s) URL or a local path, downloaded into the image cache (`<cache>/plugin-covers`) and decoded at row (48 px) or tile (256 px) size. The grid shows square cover tiles. Updates for a dialog that another plugin took over are dropped until the next `open`. |
 | `vivi-dialog-close <id>` | Close it if `id` still owns it. |
 | `vivi-confirm <id> <key> <json>` | Warning / confirm dialog `{title, heading, text, ok}` (Enter confirms, Esc cancels). |
-| `vivi-media-meta <id> <json>` | `{url, title, artist, album, cover, info}` or `{"items": [...]}` for URLs the package queued: Vivi shows them on the now-playing card (cover, title, artist · album, `info` · codec · bitrate) while one of them plays as audio, and uses the cover in Recent. At most 5000 URLs are kept. |
+| `vivi-media-meta <id> <json>` | `{url, title, artist, album, cover, info}` or `{"items": [...]}` for URLs the package queued: Vivi shows them on the now-playing card (cover, title, artist · album, `info` · codec · bitrate) while one of them plays as audio, uses the cover in Recent and merges them into `user-data/vivi/now-playing` (below). Optional for that: `album_artist`, `mbid` (MusicBrainz recording id), `duration` (s), `kind` (`music` / `video` / `podcast` / `stream`; e.g. `music` for a music video of a music service) and `service` (else `info`). At most 5000 URLs are kept. |
 | `vivi-protect <id> <path>` | `chmod 0600` (0700 for a folder) on a file inside the package's data folder `<data>/plugin-data/<id>` (credentials). Paths outside it are ignored. No-op on Windows. |
 | `vivi-wipe <id> <path>` | Overwrite a file in that folder with zeros, then delete it (sign out). |
+
+**Now playing** (`src/nowplaying.rs`, Vivi 0.13+): Vivi publishes the playing track,
+normalized, as one mpv node map `user-data/vivi/now-playing`, so packages do not each
+re-read tags, ICY titles and other packages' metadata. Per field the first non-empty value
+wins: the package metadata of the URL (`vivi-media-meta`), the file's tags, the stream
+title of Shoutcast / Icecast radio (`icy-title` "Artist - Title", station `icy-name`),
+the library database, then mpv's `media-title`. Keys: `title`, `artist`, `album`,
+`album_artist`, `genre` (strings, "" = unknown), `track` (int, 0 = unknown), `duration`
+(seconds, 0 = unknown / live), `cover` (http(s) URL from the package, else a `file://`
+PNG Vivi renders with ffmpeg; "" until ready), `kind` (`music`, `video` = a real video
+track, `podcast` = genre podcast / audiobook or `.m4b`, `stream` = a URL without length
+or with ICY titles; "" while idle), `source` (`plugin:<id>`, `tags`, `stream`, `library`
+or `file`), `path` (the mpv `path` the values describe), `mbid` (MusicBrainz recording id,
+lower case), `service` (music service / station) and `id`, a counter that grows on every
+change. The map is replaced whole once a file is loaded and whenever a value changes (a
+new ICY title, a cover rendered, metadata sent later); while a new file opens it still
+describes the old one, so compare `path` with mpv's `path`. Vivi sets
+`user-data/vivi/now-playing-api` to `1`; packages check it and keep their own logic for
+older Vivi. Lua: `mp.observe_property("user-data/vivi/now-playing", "native", fn)`;
+helpers: `get_property` / `observe_property` over mpv's JSON IPC; the control socket
+answers `now_playing`. MPRIS and the now-playing card read the same track.
 
 Answers arrive as `script-message-to <script> vivi-ui <json>` with
 `{"event", "args", "query", "source", "chip", "grid"}`; `event` is one of `search`,
@@ -445,6 +466,7 @@ icon = "night"                    # Settings icon key (ui/core/icons.slint Icons
 lucide = "moon"                   # docs site icon
 permissions = []                  # network | filesystem | subprocess
 default_enabled = true            # optional
+secrets_file = true               # optional: secret settings via a private file (0.13+)
 
 [[settings]]                      # optional, shown in Settings → Extensions
 key = "strength"
@@ -464,6 +486,18 @@ otherwise read `youtube-music-folder` as its own `music-folder`). New packages s
 read `mp.options.read_options(o, ("<id>"):gsub("-", "_"), on_update)` (Vivi 0.13+). An `action` setting sends
 `script-message-to <script> <key>` (mpv names the script after the entry file with `-`
 replaced by `_`, e.g. `ab_loop`).
+
+**Secret settings** (`type = "secret"`): mpv writes every `script-opts` change to its
+log with the value (`change-list` at debug level, property writes at verbose level, and a
+`--log-file` always records both), so tokens there end up in Vivi's log file. A package
+that sets `secrets_file = true` in its manifest (Vivi 0.13+) gets none of its `secret`
+settings as script-opts. Vivi writes them as a JSON object `{"<key>": "<value>", …}` to
+`<data>/plugin-data/<id>/vivi-secrets.json` (0600, folder 0700; written through a
+temp file created 0600) and sets the one script-opt `<id>-secrets=<revision>:<path>`
+instead. The package declares a `secrets = ""` option, reads the file at start and
+again whenever that option changes (`on_update`), and on an older Vivi (option empty)
+uses the script-opts values as before. `pkgdir` and `secrets` are reserved keys.
+`config.toml`, which holds the values, is written 0600 as well.
 
 Vivi turns off mpv's default key bindings and forwards keys it does not use itself (and
 every `Alt` combination) to mpv, so packages bind keys with `mp.add_forced_key_binding`
@@ -509,7 +543,7 @@ Script messages Vivi handles for packages:
 
 | Message | Effect |
 | --- | --- |
-| `vivi-toast <text>` | toast |
+| `vivi-toast <text> [seconds]` | toast on every screen (player, library, Settings, Extensions, dialogs); `seconds` is honored within 1.5–15 s (default 4; 0.13+, older Vivi shows 4 s) |
 | `vivi-preview-frames <dir>` | load cached seek-bar frames `seek-NN.jpg` from `<dir>` (0.9.2) |
 | `vivi-chapter-thumbs <dir>` | reload chapter thumbnails `chapter-N.jpg` from `<dir>` (0.9.2) |
 | `vivi-tagger-acoustid <path> <json>` | open the auto-tagger review for `<path>` with AcoustID ids and a rename pattern (0.9.2) |

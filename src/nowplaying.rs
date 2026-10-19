@@ -655,7 +655,8 @@ mod tests {
 
     #[test]
     fn node_fields_cover_every_key() {
-        let f = fields(&Track::default(), 3);
+        let t = Track::default();
+        let f = fields(&t, 3);
         let keys: Vec<&str> = f.iter().map(|(k, _)| *k).collect();
         for k in [
             "title",
