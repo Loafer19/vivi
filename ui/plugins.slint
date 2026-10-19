@@ -494,7 +494,7 @@ export component SubtitleDialog inherits Modal {
 
 // Free Music result row (src/plugins/free_music.rs): cover, title, artist · album,
 // source badge, licence chip (green when commercial use is allowed), duration.
-export struct FmRow { title: string, sub: string, badge: string, lic: string, free: bool, dur: string, cover: image, has-cover: bool, dl: bool, selected: bool }
+export struct FmRow { title: string, sub: string, badge: string, lic: string, free: bool, dur: string, cover: image, has-cover: bool, dl: bool, saved: bool, selected: bool }
 // A dropdown filter of the shared music dialog (Free Music: mood, licence, length, sort).
 export struct MdFilter { name: string, options: [string], value: string }
 
@@ -535,6 +535,7 @@ component TrackRow inherits Rectangle {
                 lt := Text { text: root.fm.lic; color: root.fm.free ? Theme.ok : Theme.fg-a2; font-size: Metrics.font-micro; horizontal-alignment: center; vertical-alignment: center; }
             }
         }
+        if root.fm.saved: VerticalLayout { alignment: center; Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.ok; } }
         Text { width: 40px; text: root.fm.dur; color: Theme.fg-a3; font-size: Metrics.font-sm; horizontal-alignment: right; vertical-alignment: center; }
         for b[k] in [
             { icon: @image-url("../assets/icons/play.svg"), tip: "Play", on: true },
@@ -549,7 +550,7 @@ component TrackRow inherits Rectangle {
                 clicked => { if k == 0 { root.play(); } else if k == 1 { root.queue(); } else { root.download(); } } }
         }
     }
-    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub; accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } z: -1; mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub + (root.fm.saved ? ", downloaded" : ""); accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } z: -1; mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
 }
 
 // Cover tile of the rich music dialog's grid (YouTube Music): square cover, title,
@@ -571,10 +572,16 @@ component CoverTile inherits Rectangle {
             background: Theme.bg-a3.with-alpha(0.85);
             tb := Text { text: root.fm.badge; color: Theme.fg-1; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
         }
+        // Downloaded already (offline copy).
+        if root.fm.saved: Rectangle {
+            x: parent.width - self.width - 6px; y: 6px; width: 22px; height: 22px; border-radius: self.height / 2;
+            background: Theme.bg-a3.with-alpha(0.85);
+            Icon { x: 3px; y: 3px; width: 16px; height: 16px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.ok; }
+        }
     }
     Text { x: 8px; y: root.cover-h + 14px; width: parent.width - 16px; text: root.fm.title; color: fm.selected ? Theme.accent-bright : Theme.fg-1; font-size: Metrics.font-sm; font-weight: 600; overflow: elide; }
     Text { x: 8px; y: root.cover-h + 32px; width: parent.width - 16px; text: root.fm.sub; color: Theme.fg-a2; font-size: Metrics.font-micro; overflow: elide; }
-    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub; accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub + (root.fm.saved ? ", downloaded" : ""); accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
 }
 
 // Shared dialog of the music plugins (Auto-tagger, Free Music): optional source
@@ -587,6 +594,8 @@ export component MusicDialog inherits Modal {
     in property <string> status;
     in property <bool> busy;
     in property <string> detail;
+    in property <image> detail-cover;  // optional large cover above the detail text
+    in property <bool> has-detail-cover;
     in property <string> placeholder;
     in property <string> search-label: "Search";
     in property <string> primary-text;
@@ -766,7 +775,7 @@ export component MusicDialog inherits Modal {
                                 x: 0; y: i * rk.stride; width: rk.inner; height: 52px;
                                 if i >= rk.lo && i < rk.hi: TrackRow {
                                     width: parent.width;
-                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, saved: r.saved, selected: r.selected || i == root.selected };
                                     clicked => { rk.focus(); root.selected = i; root.select(i); }
                                     activated => { root.selected = i; root.select(i); root.primary(i); }
                                     play => { root.selected = i; root.select(i); root.primary(i); }
@@ -786,7 +795,7 @@ export component MusicDialog inherits Modal {
                                 width: rk.tile-w; height: rk.tile-h;
                                 if i >= rk.lo && i < rk.hi: CoverTile {
                                     width: parent.width; height: parent.height; cover-h: rk.tile-w - 16px;
-                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, selected: r.selected || i == root.selected };
+                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, saved: r.saved, selected: r.selected || i == root.selected };
                                     clicked => { rk.focus(); root.selected = i; root.select(i); }
                                     activated => { root.selected = i; root.select(i); root.primary(i); }
                                 }
@@ -873,7 +882,11 @@ export component MusicDialog inherits Modal {
             Rectangle {
                 horizontal-stretch: root.rich ? 2 : 2; max-width: root.rich ? 300px : root.can-grid ? 340px : 2000px; border-radius: Metrics.radius-lg; background: Theme.bg-a3;
                 ScrollView {
-                    VerticalLayout { padding: 12px; alignment: start;
+                    VerticalLayout { padding: 12px; alignment: start; spacing: 10px;
+                        if root.has-detail-cover: Rectangle {
+                            height: self.width; border-radius: Metrics.radius-md; clip: true; background: Theme.bg-a4;
+                            Image { width: 100%; height: 100%; source: root.detail-cover; image-fit: cover; }
+                        }
                         Text { text: root.detail == "" ? "Select a result to see the details." : root.detail; wrap: word-wrap; color: root.detail == "" ? Theme.fg-a3 : Theme.fg-1; font-size: Metrics.font-sm; }
                     }
                 }

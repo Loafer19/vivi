@@ -232,6 +232,7 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
         }
     };
     let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    BOUND.store(true, std::sync::atomic::Ordering::Relaxed);
 
     type Req = (String, Value, mpsc::Sender<Result<Value, String>>);
     let (tx, rx) = mpsc::channel::<Req>();
@@ -320,6 +321,56 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
 
 #[cfg(not(unix))]
 pub fn setup(_: &crate::AppWindow, _: &std::rc::Rc<crate::player::Player>, _: bool) {}
+
+/// This instance owns the control socket (removed again on exit).
+static BOUND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// On exit: remove our control socket and the mpv IPC socket the Remote Control
+/// plugin opened (`$XDG_RUNTIME_DIR/vivi-mpv-<pid>.sock`).
+pub fn cleanup() {
+    if BOUND.load(std::sync::atomic::Ordering::Relaxed) {
+        let _ = std::fs::remove_file(socket_path());
+    }
+    if let Some(d) = runtime_dir() {
+        let _ = std::fs::remove_file(d.join(format!("vivi-mpv-{}.sock", std::process::id())));
+    }
+}
+
+fn runtime_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .map(std::path::PathBuf::from)
+}
+
+/// `vivi-mpv-<pid>.sock` files left by instances that were killed (no exit cleanup).
+pub fn sweep_stale() {
+    let Some(d) = runtime_dir() else { return };
+    let Ok(rd) = std::fs::read_dir(&d) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let name = e.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|n| n.strip_prefix("vivi-mpv-"))
+            .and_then(|n| n.strip_suffix(".sock"))
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if !stale_pid(pid) {
+            continue;
+        }
+        let _ = std::fs::remove_file(e.path());
+    }
+}
+
+/// No process with this pid (Linux: /proc); elsewhere nothing is treated as stale.
+fn stale_pid(pid: u32) -> bool {
+    pid != std::process::id()
+        && std::path::Path::new("/proc/self").exists()
+        && !std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
 
 #[cfg(unix)]
 fn target(args: &Value) -> Result<String, String> {

@@ -554,7 +554,7 @@ export component LibraryView inherits Rectangle {
                             title-clicked => { root.navigate("recent"); } action => { root.clear-recent(); } forget(it) => { root.forget-recent(it); }
                             open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                     }
-                    if root.nav == "downloads": DownloadsView { }
+                    if root.nav == "downloads": DownloadsView { narrow: root.sidebar; }
                     if (root.nav != "home" || root.query != "") && root.nav != "downloads" && !root.show-grid: Rows {
                         items: root.items; forget(it) => { root.forget-recent(it); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }

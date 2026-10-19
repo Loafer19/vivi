@@ -19,6 +19,10 @@ export global MusicDialogState {
     in-out property <string> status;
     in-out property <bool> busy;
     in-out property <string> detail;
+    // Large cover in the detail pane (packages: `detail_cover`), shown while its owner has the dialog.
+    in-out property <image> detail-cover;
+    in-out property <bool> has-detail-cover;
+    in-out property <string> detail-cover-owner;
     in-out property <string> placeholder;
     in-out property <string> search-label;
     in-out property <string> primary;

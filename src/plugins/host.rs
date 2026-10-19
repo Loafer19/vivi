@@ -42,6 +42,8 @@ pub struct Row {
     pub cover: String,
     /// The row's download button is enabled.
     pub dl: bool,
+    /// Already downloaded (offline): a check mark on the tile / row.
+    pub saved: bool,
     pub selected: bool,
 }
 
@@ -74,6 +76,9 @@ pub struct DialogUpdate {
     pub status: Option<String>,
     pub busy: Option<bool>,
     pub detail: Option<String>,
+    /// Large cover above the detail text (http(s) URL or local path); "" hides it.
+    /// A `detail` without it hides the cover too.
+    pub detail_cover: Option<String>,
     pub primary: Option<String>,
     pub secondary: Option<String>,
     pub has_more: Option<bool>,
@@ -130,6 +135,8 @@ struct Host {
     meta: HashMap<String, (String, Meta)>,
     np_url: String,
     np_shown: bool,
+    /// Cover of the detail pane (`detail_cover`).
+    detail_cover: String,
     timer: Option<slint::Timer>,
 }
 
@@ -247,6 +254,7 @@ fn schedule_refresh() {
             HOST.with(|h| h.borrow_mut().refresh_queued = false);
             refresh_rows();
             refresh_np_cover();
+            refresh_detail_cover();
         });
     }
 }
@@ -328,6 +336,7 @@ fn refresh_rows() {
                 has_cover: img.is_some(),
                 cover: img.unwrap_or_default(),
                 dl: r.dl,
+                saved: r.saved,
                 selected: r.selected,
             }
         })
@@ -404,6 +413,15 @@ pub fn dialog(a: &crate::AppWindow, id: &str, u: DialogUpdate) {
                 st.$s(v.as_str().into());
             }
         };
+    }
+    if u.detail_cover.is_some() || u.detail.is_some() {
+        let c = u.detail_cover.clone().unwrap_or_default();
+        HOST.with(|h| h.borrow_mut().detail_cover = c.clone());
+        st.set_detail_cover_owner(id.into());
+        if !c.is_empty() {
+            want_covers(vec![c]);
+        }
+        refresh_detail_cover();
     }
     set!(title, set_title);
     set!(placeholder, set_placeholder);
@@ -624,6 +642,20 @@ fn refresh_np_cover() {
     }
 }
 
+/// The detail pane's cover, once fetched and decoded (asked again by `schedule_refresh`).
+fn refresh_detail_cover() {
+    let Some(a) = app() else { return };
+    let url = HOST.with(|h| h.borrow().detail_cover.clone());
+    let img = (!url.is_empty())
+        .then(|| cover(&url, crate::images::TILE))
+        .flatten();
+    let st = a.global::<crate::MusicDialogState>();
+    st.set_has_detail_cover(img.is_some());
+    if let Some(i) = img {
+        st.set_detail_cover(i);
+    }
+}
+
 /// The data folder of package `id` (`<data>/plugin-data/<id>`).
 pub fn data_dir(id: &str) -> PathBuf {
     crate::store::data_dir().join("plugin-data").join(id)
@@ -678,8 +710,9 @@ mod tests {
     #[test]
     fn dialog_json() {
         let u: DialogUpdate = serde_json::from_str(
-            r#"{"open":true,"title":"T","rows":[{"title":"a","sub":"b","cover":"https://x/y.jpg","dl":true}],
-                "filters":[{"name":"Add to","options":["A","B"]}],"grid_toggle":true,"unknown":1}"#,
+            r#"{"open":true,"title":"T","rows":[{"title":"a","sub":"b","cover":"https://x/y.jpg","dl":true,"saved":true}],
+                "filters":[{"name":"Add to","options":["A","B"]}],"grid_toggle":true,"unknown":1,
+                "detail_cover":"https://x/big.jpg"}"#,
         )
         .unwrap();
         assert!(u.open);
@@ -687,6 +720,8 @@ mod tests {
         assert_eq!(u.query, None);
         let r = &u.rows.as_ref().unwrap()[0];
         assert_eq!((r.title.as_str(), r.dl, r.chip.as_str()), ("a", true, ""));
+        assert!(r.saved);
+        assert_eq!(u.detail_cover.as_deref(), Some("https://x/big.jpg"));
         assert_eq!(u.filters.unwrap()[0].options, ["A", "B"]);
         assert_eq!(u.grid_toggle, Some(true));
         let d: DialogUpdate = serde_json::from_str("{}").unwrap();

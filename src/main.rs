@@ -134,6 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     slint::run_event_loop_until_quit()?;
     let _ = app.hide();
     player.save_position();
+    ipc::cleanup();
     Ok(())
 }
 

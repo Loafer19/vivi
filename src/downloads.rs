@@ -182,6 +182,8 @@ struct Store {
     news: Vec<(String, bool, String)>,
     /// Group rows shown with all their items (keys).
     expanded: std::collections::HashSet<String>,
+    /// Running groups: items_done when the run started, and whether an item finished since.
+    runs: std::collections::HashMap<String, (u32, bool)>,
 }
 
 thread_local! {
@@ -286,12 +288,38 @@ pub fn report(plugin: &str, job: &str, r: Report) {
                 s.rate.push((k, Instant::now(), done));
             }
         }
+        let (parent, items_done, group) = {
+            let j = &s.jobs[i];
+            (j.parent.clone(), j.items_done, j.items_total > 0)
+        };
+        // The item count of a running group when it first has one (a sync reports the
+        // track list after "active", without a state change).
+        if group && parent.is_empty() && state.running() {
+            s.runs
+                .entry(key(plugin, job))
+                .or_insert((items_done, false));
+        }
         if changed.is_some() {
             s.save = true;
+            if !parent.is_empty() && state == State::Done {
+                if let Some(r) = s.runs.get_mut(&key(plugin, &parent)) {
+                    r.1 = true;
+                }
+            }
+            // A sync that found nothing new finishes the group again: no "Download finished".
+            let quiet = if !parent.is_empty() || state.running() {
+                false
+            } else {
+                s.runs
+                    .remove(&key(plugin, job))
+                    .is_some_and(|(base, fresh)| {
+                        group && state == State::Done && !fresh && items_done <= base
+                    })
+            };
             let j = &s.jobs[i];
             // A group's items finish quietly; the group row notifies.
             let news = match j.state {
-                _ if !j.parent.is_empty() => None,
+                _ if !j.parent.is_empty() || quiet => None,
                 State::Done => Some((j.title.clone(), true, String::new())),
                 State::Failed => Some((j.title.clone(), false, j.error.clone())),
                 _ => None,
@@ -921,5 +949,59 @@ mod tests {
         });
         remove("p", "pl");
         ST.with(|s| assert!(s.borrow().jobs.is_empty()));
+    }
+
+    #[test]
+    fn resync_without_new_items_is_quiet() {
+        ST.with(|s| *s.borrow_mut() = Store::default());
+        let group = |st: &str, n: u32| Report {
+            title: Some("Mix".into()),
+            state: Some(st.into()),
+            items_done: Some(n),
+            items_total: Some(3),
+            ..Report::default()
+        };
+        let news = || ST.with(|s| std::mem::take(&mut s.borrow_mut().news).len());
+        report("p", "pl", group("active", 0));
+        report("p", "pl", group("done", 3));
+        assert_eq!(news(), 1, "first download notifies");
+        report("p", "pl", group("active", 3));
+        report("p", "pl", group("done", 3));
+        assert_eq!(news(), 0, "nothing new: quiet");
+        report("p", "pl", group("active", 3));
+        report(
+            "p",
+            "x",
+            Report {
+                parent: Some("pl".into()),
+                state: Some("done".into()),
+                ..Report::default()
+            },
+        );
+        report("p", "pl", group("done", 3));
+        assert_eq!(news(), 1, "an item finished: notifies");
+        // The plugin's order: "active" with no items yet, then the track list (no state change).
+        let fetching = Report {
+            state: Some("active".into()),
+            items_done: Some(0),
+            items_total: Some(0),
+            ..Report::default()
+        };
+        report("p", "pl", fetching);
+        report("p", "pl", group("active", 3));
+        report("p", "pl", group("done", 3));
+        assert_eq!(news(), 0, "track list after active, nothing new: quiet");
+        report("p", "pl", group("active", 3));
+        report("p", "pl", group("failed", 3));
+        assert_eq!(news(), 1, "failures always notify");
+        report(
+            "p",
+            "one",
+            Report {
+                state: Some("done".into()),
+                ..Report::default()
+            },
+        );
+        assert_eq!(news(), 1, "single downloads notify");
     }
 }

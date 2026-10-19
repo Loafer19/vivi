@@ -418,6 +418,7 @@ impl FreeMusic {
                     has_cover: img.is_some(),
                     cover: img.unwrap_or_default(),
                     dl: !t.download.is_empty(),
+                    saved: false,
                     selected: sel.as_ref() == Some(&t.id),
                 }
             })

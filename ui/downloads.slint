@@ -13,6 +13,7 @@ component Act inherits IconButton {
 
 component JobRow inherits Rectangle {
     in property <DlJob> job;
+    in property <bool> narrow; // docked sidebar: no plugin name, the title gets the room
     property <bool> running: job.state == "queued" || job.state == "active" || job.state == "paused";
     height: root.job.child ? 52px : 64px; border-radius: Metrics.radius-md;
     background: ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
@@ -34,7 +35,7 @@ component JobRow inherits Rectangle {
             HorizontalLayout {
                 spacing: 8px;
                 Text { text: root.job.title; color: Theme.fg-1; font-size: Metrics.font-base; overflow: elide; horizontal-stretch: 1; }
-                Text { text: root.job.child ? "" : root.job.plugin; color: Theme.fg-a3; font-size: Metrics.font-sm; }
+                Text { text: root.job.child || root.narrow ? "" : root.job.plugin; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; max-width: 140px; }
             }
             if root.job.state == "active" || root.job.state == "paused": Rectangle {
                 height: 4px; border-radius: 2px; background: Theme.bg-a1;
@@ -66,22 +67,35 @@ component JobRow inherits Rectangle {
 
 export component DownloadsView inherits VerticalLayout {
     spacing: 12px; alignment: start;
+    // The docked Library sidebar (~330 px of content) next to the player.
+    in property <bool> narrow;
     property <string> url;
-    HorizontalLayout {
-        spacing: 8px; alignment: start;
-        if Downloads.url-plugin != "": TextField {
-            width: 340px; text <=> root.url;
+    // Two rows: the Library side pane (media playing) is ~330 px wide, and one row with a
+    // fixed 340 px field made the whole view wider than the pane (row buttons cut off).
+    if Downloads.url-plugin != "": HorizontalLayout {
+        spacing: 8px;
+        TextField {
+            min-width: 120px; max-width: 480px; horizontal-stretch: 1; text <=> root.url;
             placeholder: Downloads.url-label != "" ? Downloads.url-label : "Paste a link to download";
             label: "Link to download";
             accepted(t) => { if (t != "") { Downloads.run(Downloads.url-plugin, Downloads.url-command, t); root.url = ""; } }
         }
-        if Downloads.url-plugin != "": SecondaryButton {
+        SecondaryButton {
             text: "Add"; size: ButtonSize.sm; enabled: root.url != "";
             clicked => { Downloads.run(Downloads.url-plugin, Downloads.url-command, root.url); root.url = ""; }
         }
+    }
+    if !root.narrow: HorizontalLayout {
+        spacing: 8px; alignment: start;
         for a in Downloads.actions: SecondaryButton { text: a.label; size: ButtonSize.sm; clicked => { Downloads.run(a.id, a.title, ""); } }
         Rectangle { horizontal-stretch: 1; }
         if Downloads.finished: SecondaryButton { text: "Clear finished"; size: ButtonSize.sm; clicked => { Downloads.clear-finished(); } }
+    }
+    // Docked Library sidebar: one button per line, so none pushes the rows out of view.
+    if root.narrow: VerticalLayout {
+        spacing: 6px;
+        for a in Downloads.actions: HorizontalLayout { alignment: start; SecondaryButton { text: a.label; size: ButtonSize.sm; clicked => { Downloads.run(a.id, a.title, ""); } } }
+        if Downloads.finished: HorizontalLayout { alignment: start; SecondaryButton { text: "Clear finished"; size: ButtonSize.sm; clicked => { Downloads.clear-finished(); } } }
     }
     if Downloads.line != "": Text { text: Downloads.line; color: Theme.fg-a2; font-size: Metrics.font-sm; }
     if Downloads.jobs.length == 0: VerticalLayout {
@@ -89,5 +103,5 @@ export component DownloadsView inherits VerticalLayout {
         Text { text: "No downloads yet"; color: Theme.fg-1; font-size: Metrics.font-lg; horizontal-alignment: center; }
         Text { text: "Downloads from Free Music, Offline Downloads and other extensions show up here."; color: Theme.fg-a3; horizontal-alignment: center; wrap: word-wrap; }
     }
-    for j in Downloads.jobs: JobRow { job: j; }
+    for j in Downloads.jobs: JobRow { job: j; narrow: root.narrow; }
 }
