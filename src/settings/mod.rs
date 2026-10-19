@@ -389,6 +389,31 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                                 .set_status("Recent files cleared".into());
                             return;
                         }
+                        "privacy.scrobbler" => {
+                            let id = rows::SCROBBLER;
+                            match rows::scrobbler_action(&c) {
+                                "Install" => {
+                                    drop(c);
+                                    crate::plugins::packages::install_and_enable(&a, id);
+                                }
+                                "Enable" => {
+                                    drop(c);
+                                    let msg = crate::plugins::setting_changed(
+                                        &crate::plugins::toggle_id(id),
+                                        "true",
+                                    );
+                                    crate::settings::refresh_ui();
+                                    crate::plugins::packages::toast(
+                                        msg.as_deref().unwrap_or("Enabled Scrobbler"),
+                                    );
+                                }
+                                _ => {
+                                    drop(c);
+                                    crate::extwin::open(&a, id, true);
+                                }
+                            }
+                            return;
+                        }
                         "privacy.watch_later" => {
                             let _ = std::fs::remove_dir_all(store::watch_later_dir());
                             let _ = std::fs::create_dir_all(store::watch_later_dir());

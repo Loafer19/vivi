@@ -31,6 +31,7 @@ pub(crate) fn setup_features(
     settings::setup(app, player, cfg.clone(), log);
     libview::setup(app, player, cfg.clone(), log);
     menus::setup(app, player, cfg.clone());
+    crate::nowplaying::setup(player);
     desktop::setup(app, player, log);
     mini::setup(app, cfg.clone());
     viz::setup(app, player);

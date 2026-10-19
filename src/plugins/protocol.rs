@@ -99,8 +99,9 @@ pub enum ScriptMessage<'a> {
     /// `vivi-playlist <plugin id> <json>`: write (or rewrite) a playlist the plugin keeps
     /// in sync with an online list (see `crate::plugins::save_playlist`).
     Playlist { id: &'a str, json: &'a str },
-    /// `vivi-toast <text> [seconds]` with non-blank text (trimmed).
-    Toast(&'a str),
+    /// `vivi-toast <text> [seconds]` with non-blank text (trimmed); `secs` is the asked
+    /// duration when it is a positive number (the host clamps it, see `plugins::toast_for`).
+    Toast { text: &'a str, secs: Option<f64> },
     /// `vivi-dialog <id> <json>`: open / update the shared music dialog (see `host`).
     Dialog { id: &'a str, json: &'a str },
     /// `vivi-dialog-close <id>`.
@@ -165,7 +166,13 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-download-remove", id, job] => M::DownloadRemove { id, job },
             ["vivi-downloads-show", ..] => M::DownloadsShow,
             ["vivi-playlist", id, json] => M::Playlist { id, json },
-            ["vivi-toast", text, ..] if !text.trim().is_empty() => M::Toast(text.trim()),
+            ["vivi-toast", text, rest @ ..] if !text.trim().is_empty() => M::Toast {
+                text: text.trim(),
+                secs: rest
+                    .first()
+                    .and_then(|s| s.trim().parse::<f64>().ok())
+                    .filter(|s| s.is_finite() && *s > 0.0),
+            },
             ["vivi-dialog", id, json] => M::Dialog { id, json },
             ["vivi-dialog-close", id] => M::DialogClose(id),
             ["vivi-confirm", id, key, json] => M::Confirm { id, key, json },
@@ -245,7 +252,27 @@ mod tests {
                 caption: "",
             },
         );
-        is(&["vivi-toast", " hi ", "3"], M::Toast("hi"));
+        is(
+            &["vivi-toast", " hi ", "3"],
+            M::Toast {
+                text: "hi",
+                secs: Some(3.0),
+            },
+        );
+        is(
+            &["vivi-toast", "hi"],
+            M::Toast {
+                text: "hi",
+                secs: None,
+            },
+        );
+        is(
+            &["vivi-toast", "hi", "-2"],
+            M::Toast {
+                text: "hi",
+                secs: None,
+            },
+        );
         is(
             &["vivi-notify", "p", "Done", "a.mp3"],
             M::Notify {

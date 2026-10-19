@@ -111,6 +111,14 @@ pub struct Meta {
     pub cover: String,
     /// First part of the card's info line (e.g. the service name).
     pub info: String,
+    /// Optional, for `user-data/vivi/now-playing` (`crate::nowplaying`): album artist,
+    /// MusicBrainz recording id, length in seconds, kind (`music` / `video` / `podcast`
+    /// / `stream`) and service name (else `info`).
+    pub album_artist: String,
+    pub mbid: String,
+    pub duration: f64,
+    pub kind: String,
+    pub service: String,
     pub items: Vec<Meta>,
 }
 
@@ -134,6 +142,10 @@ struct Host {
     files: HashMap<String, PathBuf>,
     meta: HashMap<String, (String, Meta)>,
     np_url: String,
+    /// `nowplaying::current_id` the card shows (-1: the package's own metadata).
+    np_id: i64,
+    /// Cover URL of the card.
+    np_cover: String,
     np_shown: bool,
     /// Cover of the detail pane (`detail_cover`).
     detail_cover: String,
@@ -148,6 +160,11 @@ thread_local! {
 /// drawn here, not by Network Streams).
 pub fn has_meta(url: &str) -> bool {
     HOST.with(|h| h.borrow().meta.contains_key(url))
+}
+
+/// The package metadata of `url` (package id, metadata), if one sent it.
+pub fn meta_for(url: &str) -> Option<(String, Meta)> {
+    HOST.with(|h| h.borrow().meta.get(url).cloned())
 }
 
 /// Whether package `id` owns host UI this run (its dialog callbacks are forwarded).
@@ -562,6 +579,8 @@ pub fn media_meta(id: &str, m: Meta) {
             h.timer = Some(t);
         }
     });
+    // The shared now-playing track picks it up (also when it describes the playing URL).
+    crate::nowplaying::refresh();
 }
 
 /// The now-playing card for URLs a package described.
@@ -584,22 +603,33 @@ fn now_playing() {
         }
         return;
     };
+    // Title, artist, album and cover come from the shared now-playing track (the
+    // package's metadata merged with tags and stream titles), once it describes `path`.
+    let t = crate::nowplaying::current();
+    let t = (t.path == path).then_some(t);
+    let np_id = t.as_ref().map_or(-1, |_| crate::nowplaying::current_id());
     let changed = HOST.with(|h| {
         let mut h = h.borrow_mut();
         h.np_shown = true;
-        let c = h.np_url != path;
+        let c = h.np_url != path || h.np_id != np_id;
         h.np_url = path.clone();
+        h.np_id = np_id;
         c
     });
     if changed {
-        np.set_station(m.title.as_str().into());
-        let sub: Vec<&str> = [m.artist.as_str(), m.album.as_str()]
+        let (title, artist, album, cover) = match &t {
+            Some(t) => (&t.title, &t.artist, &t.album, &t.cover),
+            None => (&m.title, &m.artist, &m.album, &m.cover),
+        };
+        np.set_station(title.as_str().into());
+        let sub: Vec<&str> = [artist.as_str(), album.as_str()]
             .into_iter()
             .filter(|s| !s.is_empty())
             .collect();
         np.set_track(sub.join(" · ").into());
         np.set_has_logo(false);
-        want_covers(vec![m.cover.clone()]);
+        HOST.with(|h| h.borrow_mut().np_cover = cover.clone());
+        want_covers(vec![cover.clone()]);
         refresh_np_cover();
     }
     let g = |k: &str| player.get(k).filter(|v| !v.trim().is_empty());
@@ -625,12 +655,7 @@ fn now_playing() {
 fn refresh_np_cover() {
     let (url, shown) = HOST.with(|h| {
         let h = h.borrow();
-        let url = h
-            .meta
-            .get(&h.np_url)
-            .map(|m| m.1.cover.clone())
-            .unwrap_or_default();
-        (url, h.np_shown)
+        (h.np_cover.clone(), h.np_shown)
     });
     if !shown || url.is_empty() {
         return;
@@ -677,6 +702,11 @@ pub fn protect(id: &str, path: &str) -> bool {
         return false;
     };
     private(&p)
+}
+
+/// Owner-only permissions on a package data file or folder (see [`protect`]).
+pub fn make_private(p: &Path) -> bool {
+    private(p)
 }
 
 #[cfg(unix)]

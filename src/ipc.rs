@@ -678,6 +678,16 @@ fn handle(
             }
             ok()
         }
+        "now_playing" => {
+            let t = crate::nowplaying::current();
+            Ok(
+                json!({ "id": crate::nowplaying::current_id(), "title": t.title,
+                "artist": t.artist, "album": t.album, "album_artist": t.album_artist,
+                "genre": t.genre, "track": t.track, "duration": t.duration, "cover": t.cover,
+                "kind": t.kind, "source": t.source, "path": t.path, "mbid": t.mbid,
+                "service": t.service }),
+            )
+        }
         "plugins" => Ok(json!(crate::plugins::states()
             .into_iter()
             .map(

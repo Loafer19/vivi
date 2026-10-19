@@ -24,6 +24,9 @@ pub const GLOBAL_ID: &str = "mpv-scripts";
 pub struct Script {
     pub path: PathBuf,
     pub manifest: Manifest,
+    /// The package reads its `secret` settings from a private file, not from script-opts
+    /// (`secrets_file = true` in its manifest; see `Registry::hand_secrets`).
+    pub secrets_file: bool,
 }
 
 pub fn load_on_startup(c: &Config) -> bool {
@@ -63,6 +66,7 @@ pub fn scan(dir: &Path) -> Vec<Script> {
             Some(Script {
                 manifest: manifest_from(&stem, &main, &head),
                 path: p,
+                secrets_file: false,
             })
         })
         .collect();

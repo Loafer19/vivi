@@ -1298,38 +1298,6 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ---------- Toast / resume prompt (above dialogs; also without media, e.g. plugin
-    // results while browsing the library or Extensions) ----------
-    if Notices.resume-text != "": Rectangle {
-        width: toast.preferred-width; height: 52px;
-        x: (root.width - self.width) / 2;
-        y: root.height - (Playback.has-media ? root.bar-h : 0px) - self.height - 16px;
-        border-radius: Metrics.radius-xxl;
-        background: Theme.bar;
-        toast := HorizontalLayout {
-            padding-left: 20px; padding-right: 10px; spacing: 24px;
-            Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
-            HorizontalLayout {
-                spacing: 10px; padding-top: 10px; padding-bottom: 10px;
-                if Notices.toast-action != "" && Notices.toast-action-text == Notices.resume-text: Rectangle {
-                    width: ta-label.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
-                    ta-label := Text { text: Notices.toast-action; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; clicked => { Notices.toast-run(Notices.toast-action-id); } }
-                }
-                if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
-                    width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
-                    so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; clicked => { Notices.start-over(); } }
-                }
-                Rectangle {
-                    width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;
-                    Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: "OK"; mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
-                }
-            }
-        }
-    }
-
     // ---------- Find Lyrics (Lyrics plugin) ----------
     if Overlays.ls-open: LyricsSearchDialog {
         width: root.width; height: root.height;
@@ -1408,6 +1376,38 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         actions: Settings.shortcut-actions; keys: Settings.shortcut-keys;
         close => { Overlays.shortcuts-open = false; fs.focus(); }
+    }
+
+    // ---------- Toast / resume prompt (above every screen and dialog, below the menus;
+    // also without media, e.g. plugin results while browsing the library or Extensions) ----------
+    if Notices.resume-text != "": Rectangle {
+        width: toast.preferred-width; height: 52px;
+        x: (root.width - self.width) / 2;
+        y: root.height - (Playback.has-media ? root.bar-h : 0px) - self.height - 16px;
+        border-radius: Metrics.radius-xxl;
+        background: Theme.bar;
+        toast := HorizontalLayout {
+            padding-left: 20px; padding-right: 10px; spacing: 24px;
+            Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
+            HorizontalLayout {
+                spacing: 10px; padding-top: 10px; padding-bottom: 10px;
+                if Notices.toast-action != "" && Notices.toast-action-text == Notices.resume-text: Rectangle {
+                    width: ta-label.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
+                    ta-label := Text { text: Notices.toast-action; color: Theme.accent-bright; vertical-alignment: center; }
+                    TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; clicked => { Notices.toast-run(Notices.toast-action-id); } }
+                }
+                if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
+                    width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
+                    so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
+                    TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; clicked => { Notices.start-over(); } }
+                }
+                Rectangle {
+                    width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;
+                    Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
+                    TouchArea { accessible-role: button; accessible-label: "OK"; mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
+                }
+            }
+        }
     }
 
     // ---------- Menus (topmost) ----------

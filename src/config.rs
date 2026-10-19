@@ -434,17 +434,11 @@ impl Config {
         self
     }
 
+    /// Write config.toml owner-only (0600 on Unix): package settings in it can be API keys,
+    /// tokens or session keys. Atomic (temp file + rename).
     pub fn save(&self) -> std::io::Result<()> {
-        let p = path();
-        if let Some(d) = p.parent() {
-            std::fs::create_dir_all(d)?;
-        }
-        let tmp = p.with_extension("toml.tmp");
-        std::fs::write(
-            &tmp,
-            toml::to_string_pretty(self).map_err(std::io::Error::other)?,
-        )?;
-        std::fs::rename(tmp, p)
+        let text = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
+        crate::store::write_private(&path(), text.as_bytes())
     }
 }
 

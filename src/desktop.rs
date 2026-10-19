@@ -21,7 +21,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
         eprintln!("mpris: registered");
     }
     let mpris = RefCell::new(mpris);
-    let art: Rc<RefCell<(String, String)>> = Rc::default(); // (path, art url)
     let last_pos = std::cell::Cell::new(0.0f64);
     let w = app.as_weak();
     let p = player.clone();
@@ -64,34 +63,30 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     }
                 }
             }
+            // Title, artist, album and cover from the shared now-playing track
+            // (src/nowplaying.rs: tags, package metadata, stream titles, library).
             let path = p.get("path").unwrap_or_default();
-            // Cover art / video frame as a PNG for widgets (generated once per file, in background).
-            {
-                let mut ar = art.borrow_mut();
-                let out = crate::store::cache_dir()
-                    .join("art")
-                    .join(format!("{:x}.png", md5::compute(path.as_bytes())));
-                if ar.0 != path {
-                    ar.0 = path.clone();
-                    ar.1.clear();
-                    if std::path::Path::new(&path).is_file() && !out.exists() {
-                        let (pc, o) = (path.clone(), out.clone());
-                        std::thread::spawn(move || crate::library::make_art(&pc, &o));
-                    }
-                }
-                if ar.1.is_empty() && !path.is_empty() && out.exists() {
-                    ar.1 = format!("file://{}", out.display());
-                }
-            }
+            let t = crate::nowplaying::current();
+            let t = if t.path == path {
+                t
+            } else {
+                Default::default()
+            };
             let n: i64 = p.mpv.get_property("playlist-count").unwrap_or(0);
             let i: i64 = p.mpv.get_property("playlist-pos").unwrap_or(-1);
             let pos = a.global::<crate::Playback>().get_position() as f64;
             let st = State {
                 playing: a.global::<crate::Playback>().get_playing(),
                 has_media: a.global::<crate::Playback>().get_has_media(),
-                title: a.global::<crate::Playback>().get_media_title().to_string(),
-                artist: p.get("metadata/by-key/artist").unwrap_or_default(),
-                album: p.get("metadata/by-key/album").unwrap_or_default(),
+                title: if t.title.is_empty() {
+                    a.global::<crate::Playback>().get_media_title().to_string()
+                } else {
+                    t.title.clone()
+                },
+                artist: t.artist.clone(),
+                album: t.album.clone(),
+                album_artist: t.album_artist.clone(),
+                track: t.track,
                 url: if path.contains("://") {
                     path.clone()
                 } else if path.is_empty() {
@@ -99,7 +94,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
                 } else {
                     format!("file://{path}")
                 },
-                art_url: art.borrow().1.clone(),
+                art_url: t.cover.clone(),
                 length: a.global::<crate::Playback>().get_duration() as f64,
                 position: pos,
                 volume: a.global::<crate::Playback>().get_volume() as f64,

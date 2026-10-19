@@ -510,6 +510,7 @@ fn all_scripts(entries: &[Entry]) -> Vec<scripts::Script> {
         v.push(scripts::Script {
             path: p.entry_path(),
             manifest: p.manifest.to_manifest(),
+            secrets_file: p.manifest.secrets_file,
         });
     }
     v
@@ -552,11 +553,71 @@ fn script_opts<'a>(
     out
 }
 
+/// Private file with the `secret` settings of package `id` (`secrets_file = true`).
+pub fn secrets_path(id: &str) -> std::path::PathBuf {
+    host::data_dir(id).join("vivi-secrets.json")
+}
+
+/// JSON object of `secret` setting values for [`secrets_path`].
+fn secrets_json(c: &Config, m: &Manifest) -> String {
+    let map: serde_json::Map<String, serde_json::Value> = m
+        .settings
+        .iter()
+        .filter(|st| matches!(st.kind, SettingKind::Secret))
+        .map(|st| (st.key.clone(), setting_value(c, m, &st.key).into()))
+        .collect();
+    serde_json::Value::Object(map).to_string()
+}
+
+/// Revision of the secrets files, so `<id>-secrets` changes on every write.
+static SECRETS_REV: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 impl Registry {
-    /// Set a package option in mpv's `script-opts` (see [`script_opts`]).
+    /// Set a package option in mpv's `script-opts` (see [`script_opts`]). `secret`
+    /// settings of packages with `secrets_file` go to [`Registry::hand_secrets`] instead:
+    /// mpv logs every `script-opts` change with its value (`change-list` at debug level,
+    /// property writes at verbose level, and a log file always gets both).
     fn set_opt(&self, id: &str, key: &str, value: &str) {
+        let s = self.scripts.iter().find(|s| s.manifest.id == id);
+        let secret = s.is_some_and(|s| {
+            s.secrets_file
+                && s.manifest
+                    .settings
+                    .iter()
+                    .any(|st| st.key == key && matches!(st.kind, SettingKind::Secret))
+        });
+        if secret {
+            if let Some(s) = s {
+                self.hand_secrets(&s.manifest);
+            }
+            return;
+        }
         let ids = self.scripts.iter().map(|s| s.manifest.id.as_str());
         for o in script_opts(id, key, value, ids) {
+            self.player
+                .cmd("change-list", &["script-opts", "append", &o]);
+        }
+    }
+
+    /// Write the `secret` settings of package `m` to its private file (0600 in a 0700
+    /// folder) and tell the package with `<id>-secrets=<revision>:<path>` (no secret in
+    /// mpv, so none in its log). The package reads the file on start and whenever that
+    /// option changes.
+    fn hand_secrets(&self, m: &Manifest) {
+        let path = secrets_path(&m.id);
+        let json = secrets_json(&self.cfg.borrow(), m);
+        if let Some(d) = path.parent() {
+            let _ = std::fs::create_dir_all(d);
+            host::make_private(d);
+        }
+        if let Err(e) = crate::store::write_private(&path, json.as_bytes()) {
+            eprintln!("vivi: {}: write secrets: {e}", m.id);
+            return;
+        }
+        let rev = SECRETS_REV.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let v = format!("{rev}:{}", path.display());
+        let ids = self.scripts.iter().map(|s| s.manifest.id.as_str());
+        for o in script_opts(&m.id, "secrets", &v, ids) {
             self.player
                 .cmd("change-list", &["script-opts", "append", &o]);
         }
@@ -570,11 +631,16 @@ impl Registry {
         if s.manifest.origin == Origin::Package {
             let c = self.cfg.borrow().clone();
             for st in &s.manifest.settings {
-                if matches!(st.kind, SettingKind::Action(_)) {
+                if matches!(st.kind, SettingKind::Action(_))
+                    || (s.secrets_file && matches!(st.kind, SettingKind::Secret))
+                {
                     continue;
                 }
                 let v = setting_value(&c, &s.manifest, &st.key);
                 self.set_opt(&s.manifest.id, &st.key, &v);
+            }
+            if s.secrets_file {
+                self.hand_secrets(&s.manifest);
             }
             // Where the package lives (helpers are in `<pkgdir>/bin`).
             if let Some(dir) = s.path.parent() {
@@ -612,7 +678,7 @@ pub fn script_status(id: &str) -> Option<String> {
 #[cfg(test)]
 fn toast_text(args: &[String]) -> Option<&str> {
     match protocol::ScriptMessage::parse(args)? {
-        protocol::ScriptMessage::Toast(text) => Some(text),
+        protocol::ScriptMessage::Toast { text, .. } => Some(text),
         _ => None,
     }
 }
@@ -681,10 +747,10 @@ pub fn client_message(args: &[String]) {
                 crate::downloads::open(&a);
             }
         }
-        Some(M::Toast(text)) => {
+        Some(M::Toast { text, secs }) => {
             with(|r| {
                 if let Some(a) = r.app.upgrade() {
-                    toast(&a, text);
+                    toast_for(&a, text, toast_secs(secs));
                 }
             });
         }
@@ -835,12 +901,32 @@ pub fn mpv_log(prefix: &str, text: &str) {
     });
 }
 
-/// Show `msg` in the player toast for 4 s.
+/// Default toast duration, and the range a plugin's `vivi-toast <text> <seconds>` is
+/// clamped to (a toast is not a dialog: long messages belong in a notification).
+pub const TOAST_SECS: f64 = 4.0;
+pub const TOAST_MIN_SECS: f64 = 1.5;
+pub const TOAST_MAX_SECS: f64 = 15.0;
+
+/// How long a plugin toast stays: the asked seconds within [`TOAST_MIN_SECS`]..
+/// [`TOAST_MAX_SECS`], [`TOAST_SECS`] when it asked for none.
+pub fn toast_secs(asked: Option<f64>) -> f64 {
+    asked
+        .map(|s| s.clamp(TOAST_MIN_SECS, TOAST_MAX_SECS))
+        .unwrap_or(TOAST_SECS)
+}
+
+/// Show `msg` in the toast for 4 s (on every screen: library, player, Settings,
+/// Extensions and the other dialogs).
 pub fn toast(app: &AppWindow, msg: &str) {
+    toast_for(app, msg, TOAST_SECS);
+}
+
+/// Show `msg` in the toast for `secs` seconds.
+pub fn toast_for(app: &AppWindow, msg: &str, secs: f64) {
     app.global::<crate::Notices>().set_resume_text(msg.into());
     let w = app.as_weak();
     let m = msg.to_string();
-    slint::Timer::single_shot(Duration::from_secs(4), move || {
+    slint::Timer::single_shot(Duration::from_secs_f64(secs), move || {
         if let Some(a) = w.upgrade() {
             if a.global::<crate::Notices>().get_resume_text().as_str() == m {
                 a.global::<crate::Notices>().set_resume_text("".into());
@@ -1466,6 +1552,10 @@ mod tests {
         );
         assert_eq!(toast_text(&m(&["vivi-toast", "  "])), None);
         assert_eq!(toast_text(&m(&["other", "x"])), None);
+        assert_eq!(toast_secs(None), TOAST_SECS);
+        assert_eq!(toast_secs(Some(8.0)), 8.0);
+        assert_eq!(toast_secs(Some(0.1)), TOAST_MIN_SECS);
+        assert_eq!(toast_secs(Some(600.0)), TOAST_MAX_SECS);
     }
 
     /// End to end with real libmpv: load the packaged scripts the way Vivi does, send the

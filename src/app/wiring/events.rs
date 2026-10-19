@@ -100,6 +100,7 @@ pub(crate) fn wire(
                         drop(c);
                         // After the preset, so the file's own offset wins.
                         suboffset::file_loaded(&a, &player);
+                        crate::nowplaying::file_loaded();
                         plugins::file_loaded();
                         a.global::<crate::Panel>().set_preset_name(
                             key.or_else(|| player.get("path").map(|p| config::show_key(&p)))

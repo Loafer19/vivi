@@ -352,10 +352,15 @@ pub struct PkgManifest {
     /// `[[contributes]]` entries (point, label, command, icon).
     #[serde(default)]
     pub contributes: Option<Vec<super::contrib::Contribution>>,
+    /// `secret` settings reach the package through a private file instead of mpv's
+    /// `script-opts`, which mpv writes to its log (Vivi 0.13+; see
+    /// docs/plugins-architecture.md, "Secret settings").
+    #[serde(default)]
+    pub secrets_file: bool,
 }
 
-/// Setting keys Vivi passes to every package itself (`<id>-pkgdir`).
-pub const RESERVED_KEYS: [&str; 1] = ["pkgdir"];
+/// Setting keys Vivi passes to every package itself (`<id>-pkgdir`, `<id>-secrets`).
+pub const RESERVED_KEYS: [&str; 2] = ["pkgdir", "secrets"];
 
 fn safe_name(n: &str) -> bool {
     !n.is_empty()
@@ -1094,7 +1099,7 @@ pub fn install(id: &str) {
 }
 
 /// Plugins the Extensions catalog marks "Recommended" (by id).
-pub const RECOMMENDED: &[&str] = &["chapter-thumbnails"];
+pub const RECOMMENDED: &[&str] = &["chapter-thumbnails", "scrobbler"];
 
 pub fn is_recommended(id: &str) -> bool {
     RECOMMENDED.contains(&id)

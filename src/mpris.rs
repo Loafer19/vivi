@@ -39,6 +39,9 @@ pub struct State {
     pub title: String,
     pub artist: String,
     pub album: String,
+    pub album_artist: String,
+    /// Track number (0 = unknown).
+    pub track: i64,
     pub url: String,
     pub art_url: String,
     pub length: f64,
@@ -208,6 +211,15 @@ impl Player {
             }
             if !s.album.is_empty() {
                 put("xesam:album", Value::from(s.album.clone()));
+            }
+            if !s.album_artist.is_empty() {
+                put(
+                    "xesam:albumArtist",
+                    Value::from(vec![s.album_artist.clone()]),
+                );
+            }
+            if s.track > 0 {
+                put("xesam:trackNumber", Value::from(s.track as i32));
             }
             if !s.url.is_empty() {
                 put("xesam:url", Value::from(s.url.clone()));

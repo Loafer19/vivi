@@ -48,6 +48,39 @@ pub fn write_atomic(path: &Path, data: &str) -> std::io::Result<()> {
     fs::rename(tmp, path)
 }
 
+/// [`write_atomic`] for files with secrets (config.toml, package secrets): the temp file
+/// is created owner-only (0600 on Unix) before anything is written, so the data is never
+/// readable by others, not even for a moment, and the rename keeps that mode.
+pub fn write_private(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    let tmp = path.with_file_name(name);
+    let _ = fs::remove_file(&tmp);
+    let mut o = fs::OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600);
+    }
+    let mut f = o.open(&tmp)?;
+    // A umask cannot widen 0600, but an old file of the same name could have kept wider
+    // bits: set them explicitly.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        f.set_permissions(fs::Permissions::from_mode(0o600))?;
+    }
+    f.write_all(data)?;
+    f.sync_all()?;
+    drop(f);
+    fs::rename(tmp, path)
+}
+
 // ---- Recent ----
 //
 // `recent.json` (newest first) replaces the old one-path-per-line `recent.txt`, which is
@@ -764,6 +797,26 @@ mod owned_playlist_tests {
         // Another list of the same name (or another plugin's) gets its own file.
         fs::write(dir.join("Mix (YouTube Music).m3u"), "#EXTM3U\n").unwrap();
         assert_eq!(pick("Mix", "VL2"), "Mix (YouTube Music 2).m3u");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn private_files_are_owner_only() {
+        let dir = std::env::temp_dir().join(format!("vivi-private-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let f = dir.join("config.toml");
+        // An older, world-readable file is replaced by an owner-only one.
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(&f, "old").unwrap();
+        write_private(&f, b"token = \"x\"").unwrap();
+        assert_eq!(fs::read_to_string(&f).unwrap(), "token = \"x\"");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&f).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        assert!(!dir.join("config.toml.tmp").exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }

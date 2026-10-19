@@ -193,6 +193,30 @@ pub fn all(conn: &Connection) -> Vec<Media> {
     .unwrap_or_default()
 }
 
+/// The library row of `path`, if it is in the library.
+pub fn by_path(conn: &Connection, path: &str) -> Option<Media> {
+    conn.query_row(
+        "SELECT path, kind, title, artist, album, genre, track, duration, size, mtime
+         FROM media WHERE path = ?1",
+        [path],
+        |r| {
+            Ok(Media {
+                path: r.get(0)?,
+                kind: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                title: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                artist: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                genre: r.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                track: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
+                duration: r.get::<_, Option<f64>>(7)?.unwrap_or(0.0),
+                size: r.get::<_, Option<i64>>(8)?.unwrap_or(0),
+                mtime: r.get::<_, Option<i64>>(9)?.unwrap_or(0),
+            })
+        },
+    )
+    .ok()
+}
+
 /// Fraction watched (0..1) from mpv's watch-later data.
 pub fn progress(m: &Media) -> f32 {
     match store::resume_position(&m.path) {
@@ -318,8 +342,8 @@ pub fn make_thumb(m: &Media) -> Option<PathBuf> {
     Some(out)
 }
 
-/// Cover art (audio) or a frame at ~10 % (video) as a 256 px PNG, for MPRIS widgets.
-#[cfg(target_os = "linux")]
+/// Cover art (audio) or a frame at 5 s (video) as a 256 px PNG, for the shared
+/// now-playing track (`crate::nowplaying`: MPRIS widgets, plugins).
 pub fn make_art(path: &str, out: &Path) {
     if let Some(d) = out.parent() {
         let _ = std::fs::create_dir_all(d);
@@ -390,6 +414,8 @@ mod tests {
         assert_eq!(a.len(), 1);
         assert_eq!(a[0].kind, "video");
         assert_eq!(a[0].title, "e01");
+        assert_eq!(by_path(&c, &a[0].path), Some(a[0].clone()));
+        assert_eq!(by_path(&c, "/nope.mp3"), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

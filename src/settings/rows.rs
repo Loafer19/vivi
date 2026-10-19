@@ -159,6 +159,35 @@ impl<'a> Rows<'a> {
     }
 }
 
+/// Scrobbling is the Scrobbler extension's job: Settings → Privacy only points to it.
+pub(crate) const SCROBBLER: &str = "scrobbler";
+
+/// State of the Scrobbler extension: (installed, enabled).
+fn scrobbler_state(c: &Config) -> (bool, bool) {
+    let m = crate::plugins::manifests()
+        .into_iter()
+        .find(|m| m.id == SCROBBLER);
+    let on = m.as_ref().is_some_and(|m| crate::plugins::is_enabled(c, m));
+    (m.is_some(), on)
+}
+
+/// Button of the Privacy row: Install / Enable / Settings.
+pub(crate) fn scrobbler_action(c: &Config) -> &'static str {
+    match scrobbler_state(c) {
+        (false, _) => "Install",
+        (true, false) => "Enable",
+        (true, true) => "Settings",
+    }
+}
+
+fn scrobbler_info(c: &Config) -> String {
+    match scrobbler_state(c) {
+        (false, _) => "Played tracks are sent by the Scrobbler extension (Last.fm, ListenBrainz). It is not installed: Install opens it in Extensions, where it asks for its permissions first.".into(),
+        (true, false) => "Played tracks are sent by the Scrobbler extension (Last.fm, ListenBrainz). It is installed but off.".into(),
+        (true, true) => "The Scrobbler extension is on: accounts, filters and the offline queue are in its settings.".into(),
+    }
+}
+
 pub(crate) const SOON: &str = " (Not available yet.)";
 
 /// All rows; the bool marks "advanced" rows hidden behind "Advanced Options".
@@ -300,13 +329,12 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             &s(""),
             false,
         )
-        .stub_toggle(
-            "stub.privacy.lastfm",
-            "Submit played tracks to last.fm",
-            &s(""),
-            false,
-        )
-        .stub_text("stub.privacy.lastfm_user", "Last.fm username", &s(""), "");
+        .action(
+            "privacy.scrobbler",
+            "Submit played tracks to Last.fm / ListenBrainz",
+            &scrobbler_info(c),
+            scrobbler_action(c),
+        );
 
     // ---------- Controls ----------
     r.cat("Controls")
