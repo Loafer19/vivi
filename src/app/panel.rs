@@ -115,11 +115,9 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
         .on_set_prop(move |name, value| {
             p.set(&name, &value);
             if name == "sub-delay" {
-                crate::plugins::command(
-                    plugins::subtitle_search::ID,
-                    "offset-changed",
-                    &[value.to_string()],
-                );
+                if let Some(a) = weak.upgrade() {
+                    suboffset::changed(&a, &p, &value);
+                }
             }
             if log {
                 eprintln!("set {name}={value} -> {:?}", p.get(&name));
@@ -168,6 +166,19 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                 abloop::sync(&a, &p);
             }
         });
+    }
+    {
+        // The side panel's subtitle Offset group (buttons, reset, Auto-sync).
+        let (p, w) = (player.clone(), app.as_weak());
+        app.global::<crate::Panel>()
+            .on_sub_offset(move |name, arg| {
+                if let Some(a) = w.upgrade() {
+                    match name.as_str() {
+                        "sync" => suboffset::sync(&a, &p),
+                        _ => suboffset::command(&a, &p, &arg),
+                    }
+                }
+            });
     }
     let p = player.clone();
     app.global::<crate::Panel>().on_load_sub(move || {

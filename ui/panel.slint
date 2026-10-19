@@ -504,7 +504,7 @@ export component SidePanel inherits Rectangle {
                         if root.subs-has-pick: Line { label: "OpenSubtitles Pick"; hint: root.subs-pick-label;
                             SecondaryButton { size: ButtonSize.sm; width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }
                     }
-                    if root.subs-enabled: Group { title: "Offset";
+                    Group { title: "Offset";
                         Line { label: "Offset"; hint: "Saved per file";
                             HorizontalLayout { spacing: 4px;
                                 for d in [-1, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: soa.has-hover ? Theme.field-raised : Theme.field;
@@ -517,7 +517,7 @@ export component SidePanel inherits Rectangle {
                                     Text { text: "+" + d; font-size: Metrics.font-xs; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
                                     sob := TouchArea { accessible-role: button; accessible-label: "Subtitle delay +" + d + " s"; mouse-cursor: pointer; clicked => { root.subs("offset", d); } } }
                             } }
-                        Text { text: "Z / X ±0.1 s, Shift ±1 s · Lyrics keep [ ]"; color: Theme.fg-a3; font-size: Metrics.font-xs; }
+                        Text { text: "Z / X or Alt+Z / X ±0.1 s, Shift ±1 s"; color: Theme.fg-a3; font-size: Metrics.font-xs; }
                         HorizontalLayout { spacing: 8px;
                             SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Reset offset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.subs("offset", "reset"); } }
                             SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: root.subs-sync ? "Auto-sync to audio" : "Auto-sync (plugin)"; icon: @image-url("../assets/icons/waveform-twotone.svg"); clicked => { root.subs("sync", ""); } }

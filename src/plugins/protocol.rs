@@ -65,8 +65,11 @@ pub enum ScriptMessage<'a> {
     },
     /// `vivi-pick-folder <id> <key>`: folder dialog for a package setting.
     PickFolder { id: &'a str, key: &'a str },
-    /// `vivi-sub-offset <value>` (Subtitle Auto-Sync 1.2+).
+    /// `vivi-sub-offset <value>` (Subtitle Auto-Sync 1.2+): `reset`, `set:<s>` or a
+    /// delta, saved per file by the player (src/suboffset.rs).
     SubOffset(&'a str),
+    /// `vivi-sub-offset-import`: import the Auto-Sync package's own `offsets.json` once.
+    SubOffsetImport,
     /// `vivi-tagger-acoustid <path> <json>` (AcoustID package).
     TaggerAcoustid { path: &'a str, json: &'a str },
     /// `vivi-qr <title> <text> [caption]`: show `text` as a QR code.
@@ -146,6 +149,7 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-setting", id, key, value] => M::Setting { id, key, value },
             ["vivi-pick-folder", id, key] => M::PickFolder { id, key },
             ["vivi-sub-offset", v] => M::SubOffset(v),
+            ["vivi-sub-offset-import"] => M::SubOffsetImport,
             ["vivi-tagger-acoustid", path, json] => M::TaggerAcoustid { path, json },
             ["vivi-qr", title, text, rest @ ..] => M::Qr {
                 title,
@@ -232,6 +236,7 @@ mod tests {
             M::PickFolder { id: "p", key: "k" },
         );
         is(&["vivi-sub-offset", "0.5"], M::SubOffset("0.5"));
+        is(&["vivi-sub-offset-import"], M::SubOffsetImport);
         is(
             &["vivi-qr", "T", "x"],
             M::Qr {

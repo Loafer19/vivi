@@ -19,7 +19,7 @@ Status: implemented in v0.9.0. Developer-facing guide: <https://plugins.viviplay
 | Music Visualizer | Core feature; renders through the Rust FFT/`viz` pipeline and Slint, 60 fps. |
 | Skip Intro & Credits | Draws a Slint button over the video; needs the Rust UI. |
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
-| Subtitle Search | Lives inside the Add Subtitles dialog (Slint): results with badges, details and preview; per-file offset (`z` / `x`, side panel) in `subtitle-offsets.json`, picks in `subtitle-picks.json`; `script-message vivi-sub-offset <delta\|set:v\|reset>` lets the Subtitle Auto-Sync package hand over its offset keys. |
+| Subtitle Search | Lives inside the Add Subtitles dialog (Slint): results with badges, details and preview; picks in `subtitle-picks.json`. The per-file subtitle offset is core (src/suboffset.rs, below), not part of this plugin. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
 | Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
 | Free Music | Shared music dialog in rich mode (`FmRow` rows with covers, badges and licence chips, `MdFilter` dropdowns, infinite scroll); Jamendo + Internet Archive searched in parallel and merged; download queue writes tags with lofty. |
@@ -44,14 +44,14 @@ struct and manifest ID agree. `mod.rs` holds the plugin itself (state, UI update
 | `free_music` (`free-music`) | `catalog.rs` track / licence / query model · `api.rs` Internet Archive + Jamendo clients, downloader |
 | `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded / cache / LRCLIB, offsets · `radio.rs` stream-title lookups |
 | `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists |
-| `subtitle_search` (`subtitle-search`) | `api.rs` OpenSubtitles hash, search, download · `files.rs` offsets, picks, folder pairing |
+| `subtitle_search` (`subtitle-search`) | `api.rs` OpenSubtitles hash, search, download · `files.rs` picks, folder pairing |
 | `skip_intro`, `epg`, `tagsources` | single files |
 
 Wire formats live in `plugins/protocol.rs`: `PluginCommand` for the UI's
 `plugin-command(id, name, args)` callback (arguments packed with U+001F, see `split_args`
 / `join`) and `ScriptMessage`, the one enum of every `script-message vivi-*` a package can
 send (`vivi-toast`, `vivi-setting`, `vivi-pick-folder`, `vivi-range`, `vivi-fullscreen`,
-`vivi-qr`, `vivi-sub-offset`, `vivi-tagger-acoustid`, `vivi-preview-frames`,
+`vivi-qr`, `vivi-sub-offset`, `vivi-sub-offset-import`, `vivi-tagger-acoustid`, `vivi-preview-frames`,
 `vivi-chapter-thumbs`). A new message is a variant plus a `parse` arm and a test.
 Background lookups return through `util::Task<T>`.
 
@@ -312,6 +312,34 @@ mp.commandv("script-message", "vivi-skip-ranges-clear", "sponsorblock")
 * `user-data/vivi/skip-api` is the integer `1` while Skip Intro & Credits is on and `0` while
   it is off (unset in Vivi before 0.13.0): packages should then keep their own skipping. With it
   off, `Alt+K` / `Alt+Shift+K` go to mpv like any unbound Alt key.
+
+### Per-file subtitle offset
+
+The subtitle offset is the player's own (`src/suboffset.rs`), with or without Subtitle Search:
+`z` / `x` and `Alt+Z` / `Alt+X` move subtitles 0.1 s (`Shift`: 1 s), the side panel's
+Subtitles → Offset group has the same buttons, a reset and the delay slider, and the control
+socket / MCP have `sub_offset` (`set_subtitle_offset`). The value is mpv's `sub-delay`, saved
+per file (canonical path, or the URL) in `$XDG_DATA_HOME/vivi/subtitle-offsets.json` and
+applied when the file opens, after a per-show preset.
+
+```lua
+local function core_offset() -- 1: Vivi keeps the offset (keys, storage, side panel)
+  return tostring(mp.get_property_native("user-data/vivi/sub-offset", "")) == "1"
+end
+mp.commandv("script-message", "vivi-sub-offset", "-0.1")     -- or "set:2.5", "reset"
+mp.commandv("script-message", "vivi-sub-offset-import")      -- hand over offsets.json once
+```
+
+* `user-data/vivi/sub-offset` is the integer `1` (unset before Vivi 0.13.0). Vivi also sets the
+  script-opt `vivi-sub-offsets=1` for Subtitle Auto-Sync 1.2, which checked that instead.
+* `vivi-sub-offset <delta|set:seconds|reset>` changes the playing file's offset and saves it
+  (a toast says so); Subtitle Auto-Sync sends `reset` after loading a synced copy.
+* Handover: offsets Subtitle Auto-Sync kept itself on older Vivi
+  (`plugin-data/subtitle-sync/offsets.json`, `"<path>|<size>": seconds`) are imported at
+  startup and on `vivi-sub-offset-import`; entries Vivi already has win, files whose size
+  changed are skipped, and `plugin-data/subtitle-sync/offsets.imported` marks it done (the
+  package may then delete its file).
+* `Alt+Z` / `Alt+X` without media go to mpv, like other unbound Alt keys.
 
 ### Extensions window
 

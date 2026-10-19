@@ -1,4 +1,4 @@
-//! Subtitle search, per-file offset and picks.
+//! Subtitle search and picks.
 //!
 //! **OpenSubtitles** (REST API): the playing file is searched by its OpenSubtitles
 //! hash first (exact release matches), then by a query built from the file name, an
@@ -14,11 +14,9 @@
 //! entered in Settings → Extensions (or `VIVI_OPENSUBTITLES_KEY`). Username and
 //! password are optional; logged-in users get more downloads per day.
 //!
-//! **Offset**: `z` / `x` move subtitles 0.1 s earlier / later (`Shift`: 1 s), the side
-//! panel has the same buttons and a reset; the value is the mpv `sub-delay`, saved per
-//! file in `$XDG_DATA_HOME/vivi/subtitle-offsets.json` and applied when the file opens.
-//! Lyrics keep `[` / `]`. *Auto-sync* hands the subtitle to the Subtitle Auto-Sync
-//! package (alass / ffsubsync with the shared media ffmpeg); Vivi itself ships no ffmpeg.
+//! The per-file **offset** (`z` / `x`, `Alt+Z` / `Alt+X`, side panel) is the player's
+//! own (src/suboffset.rs) and works with this plugin off; *Auto-sync* hands the subtitle
+//! to the Subtitle Auto-Sync package (alass / ffsubsync with the shared media ffmpeg).
 
 use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use crate::{Item, SubHit};
@@ -40,7 +38,7 @@ pub const NO_KEY: &str = "OpenSubtitles needs an API key. Get a free one at open
 /// Environment fallback for the API key (Settings wins).
 const KEY_ENV: &str = "VIVI_OPENSUBTITLES_KEY";
 /// Package that aligns subtitles to the audio (alass / ffsubsync + shared ffmpeg).
-const SYNC_PACKAGE: &str = "subtitle-sync";
+use crate::suboffset::SYNC_PACKAGE;
 
 /// Language chips of the dialog: OpenSubtitles code and name.
 pub const LANGS: &[(&str, &str)] = &[
@@ -82,8 +80,6 @@ pub struct SubtitleSearch {
     /// The playing file's key (path) and its remembered pick.
     key: Option<String>,
     pick: Option<Pick>,
-    /// Offset this plugin applied to the current file (to undo it for the next one).
-    applied: Option<f64>,
     /// "From Computer": scanned folder, its subtitle files (To This File) with the
     /// checked ones, or its videos paired with subtitles (To This Folder).
     dir: Option<PathBuf>,
@@ -373,7 +369,7 @@ impl SubtitleSearch {
         cx.set("languages", &l);
         Self::show_langs(cx, &l);
     }
-    /// Key of the playing file for offsets and picks (canonical path or URL).
+    /// Key of the playing file for picks (canonical path or URL).
     fn file_key(cx: &Ctx) -> Option<String> {
         if let Some(p) = cx.local_path() {
             let p = std::fs::canonicalize(&p).unwrap_or(p);
@@ -388,44 +384,6 @@ impl SubtitleSearch {
                 .unwrap_or_default()
                 .into(),
         );
-    }
-    fn show_offset(cx: &Ctx, o: f64) {
-        cx.app
-            .global::<crate::Subtitles>()
-            .set_offset(offset_label(o).into());
-        cx.app.global::<crate::Panel>().set_pv_sub_delay(o as f32);
-    }
-    /// Set (`save`: and remember) the offset of the playing file.
-    fn set_offset(&mut self, cx: &Ctx, o: f64, toast: bool) {
-        let o = clamp_offset(o);
-        cx.player.set("sub-delay", &format!("{o}"));
-        if let Some(k) = &self.key {
-            crate::plugins::lyrics::save_offset(&offsets_file(), k, o);
-        }
-        self.applied = Some(o);
-        Self::show_offset(cx, o);
-        if toast {
-            let what = if o == 0.0 {
-                "Subtitle offset reset".to_string()
-            } else {
-                format!(
-                    "Subtitle offset {}{}",
-                    offset_label(o),
-                    if self.key.is_some() {
-                        " · saved for this file"
-                    } else {
-                        ""
-                    }
-                )
-            };
-            cx.toast(&what);
-        }
-    }
-    fn current_offset(cx: &Ctx) -> f64 {
-        cx.player
-            .get("sub-delay")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0.0)
     }
     fn sync_available(cx: &Ctx) -> Option<String> {
         cx.package_script(SYNC_PACKAGE)
@@ -632,7 +590,7 @@ impl Plugin for SubtitleSearch {
         Manifest::builtin(
             ID,
             "Subtitle Search",
-            "Find subtitles on OpenSubtitles (by file hash, name or IMDb id) in the Add Subtitles dialog, and keep a subtitle offset per file (z / x).",
+            "Find subtitles on OpenSubtitles (by file hash, name or IMDb id) in the Add Subtitles dialog; the pick is remembered per file.",
             "subtitles",
         )
         .contribute(contrib::MENU_SUBTITLES, "Search online…", "search-online")
@@ -667,19 +625,10 @@ impl Plugin for SubtitleSearch {
     }
     fn enable(&mut self, cx: &Ctx) {
         cx.app.global::<crate::Subtitles>().set_plugin(true);
-        // Tells the Subtitle Auto-Sync package that Vivi keeps the per-file offsets.
-        cx.player.cmd(
-            "change-list",
-            &["script-opts", "append", "vivi-sub-offsets=1"],
-        );
     }
     fn disable(&mut self, cx: &Ctx) {
         cx.app.global::<crate::Subtitles>().set_plugin(false);
         cx.app.global::<crate::Overlays>().set_subs_open(false);
-        cx.player.cmd(
-            "change-list",
-            &["script-opts", "append", "vivi-sub-offsets=0"],
-        );
         self.rx = None;
     }
     fn command(&mut self, cx: &Ctx, name: &str, args: &[String]) {
@@ -777,20 +726,6 @@ impl Plugin for SubtitleSearch {
                 cx.app.global::<crate::Subtitles>().set_has_pick(false);
                 cx.toast("Subtitle pick forgotten for this file");
             }
-            // z / x, side panel buttons, `vivi-sub-offset` from the Auto-Sync package.
-            "offset" => {
-                let o = match arg {
-                    "reset" => 0.0,
-                    a if a.starts_with("set:") => a[4..].parse().unwrap_or(0.0),
-                    a => Self::current_offset(cx) + a.parse::<f64>().unwrap_or(0.0),
-                };
-                self.set_offset(cx, o, true);
-            }
-            // The side panel's delay slider (already applied to mpv).
-            "offset-changed" => {
-                let o = arg.parse().unwrap_or(0.0);
-                self.set_offset(cx, o, false);
-            }
             "sync" => match Self::sync_available(cx) {
                 Some(script) => cx.player.cmd("script-message-to", &[&script, "sync"]),
                 None => cx.toast(
@@ -803,35 +738,12 @@ impl Plugin for SubtitleSearch {
     fn query(&mut self, cx: &Ctx, name: &str) -> Option<Box<dyn std::any::Any>> {
         match name {
             "mcp-context" => Some(Box::new(Self::mcp_context(cx))),
-            "offset" => Some(Box::new(Self::current_offset(cx))),
             _ => None,
         }
     }
     fn file_loaded(&mut self, cx: &Ctx) {
         self.key = Self::file_key(cx);
         self.fetched.clear();
-        // Offset saved for this file; otherwise undo the previous file's one.
-        let saved = self
-            .key
-            .as_ref()
-            .and_then(|k| crate::plugins::lyrics::load_offsets(&offsets_file()).remove(k));
-        match saved {
-            Some(o) => {
-                cx.player.set("sub-delay", &format!("{o}"));
-                self.applied = Some(o);
-                Self::show_offset(cx, o);
-            }
-            None => {
-                let cur = Self::current_offset(cx);
-                if self.applied.is_some_and(|a| (a - cur).abs() < 1e-6) {
-                    cx.player.set("sub-delay", "0");
-                    Self::show_offset(cx, 0.0);
-                } else {
-                    Self::show_offset(cx, cur);
-                }
-                self.applied = None;
-            }
-        }
         cx.app
             .global::<crate::Subtitles>()
             .set_sync(Self::sync_available(cx).is_some());
@@ -1068,17 +980,6 @@ mod tests {
         let ass = "[Script Info]\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,{\\i1}One\\Ntwo, three\n";
         assert_eq!(preview_text(ass, 5), "0:00:03  One two, three");
         assert_eq!(decode(&[0x48, 0xe9]), "Hé");
-    }
-
-    #[test]
-    fn offsets_and_labels() {
-        assert_eq!(clamp_offset(0.123), 0.1);
-        assert_eq!(clamp_offset(0.13), 0.15);
-        assert_eq!(clamp_offset(-9999.0), -600.0);
-        assert_eq!(offset_label(0.0), "0.0 s");
-        assert_eq!(offset_label(0.1), "+0.1 s");
-        assert_eq!(offset_label(-1.25), "−1.25 s");
-        assert_eq!(offset_label(2.0), "+2.0 s");
     }
 
     #[test]

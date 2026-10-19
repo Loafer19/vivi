@@ -98,6 +98,8 @@ pub(crate) fn wire(
                         let key = settings::apply_preset(&player, &c, log);
                         settings::sync_panel(&a, &player);
                         drop(c);
+                        // After the preset, so the file's own offset wins.
+                        suboffset::file_loaded(&a, &player);
                         plugins::file_loaded();
                         a.global::<crate::Panel>().set_preset_name(
                             key.or_else(|| player.get("path").map(|p| config::show_key(&p)))

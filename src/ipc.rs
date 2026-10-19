@@ -737,24 +737,17 @@ fn handle(
             } else {
                 return Err("give \"seconds\", \"delta\" or \"reset\": true".into());
             };
-            let id = crate::plugins::subtitle_search::ID;
-            if !a.global::<crate::Subtitles>().get_plugin() {
-                return Err("the Subtitle Search plugin is turned off".into());
-            }
-            crate::plugins::command(id, "offset", &[arg]);
-            let o = crate::plugins::query::<f64>(id, "offset").unwrap_or(0.0);
+            crate::suboffset::command(a, p, &arg);
+            let o = crate::suboffset::current(p);
             Ok(
                 json!({ "offset_seconds": o, "saved_for_file": !p.get("path").unwrap_or_default().is_empty() }),
             )
         }
         "sub_sync" => {
-            if !a.global::<crate::Subtitles>().get_plugin() {
-                return Err("the Subtitle Search plugin is turned off".into());
-            }
-            if !a.global::<crate::Subtitles>().get_sync() {
+            if crate::plugins::package_script(crate::suboffset::SYNC_PACKAGE).is_none() {
                 return Err("install and enable the Subtitle Auto-Sync plugin (subtitle-sync) to align subtitles to the audio".into());
             }
-            crate::plugins::command(crate::plugins::subtitle_search::ID, "sync", &[]);
+            crate::suboffset::sync(a, p);
             Ok(
                 json!({ "started": true, "note": "alignment runs in the background; the synced copy is loaded when done" }),
             )

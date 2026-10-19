@@ -1,33 +1,11 @@
-//! Per-file offsets and picks, and local video / subtitle folder pairing.
+//! Per-file picks and local video / subtitle folder pairing.
 
 use super::*;
 
-// ---------- per-file offsets and picks ----------
+// ---------- per-file picks ----------
 
-pub(crate) fn offsets_file() -> PathBuf {
-    crate::store::data_dir().join("subtitle-offsets.json")
-}
 pub(crate) fn picks_file() -> PathBuf {
     crate::store::data_dir().join("subtitle-picks.json")
-}
-
-/// Round to 0.05 s and clamp to ±10 min.
-pub fn clamp_offset(o: f64) -> f64 {
-    ((o * 20.0).round() / 20.0).clamp(-600.0, 600.0)
-}
-
-/// "+0.1 s", "−1.25 s", "0.0 s".
-pub fn offset_label(o: f64) -> String {
-    if o.abs() < 0.025 {
-        return "0.0 s".into();
-    }
-    let a = o.abs();
-    let n = if ((a * 10.0).round() - a * 10.0).abs() < 1e-6 {
-        format!("{a:.1}")
-    } else {
-        format!("{a:.2}")
-    };
-    format!("{}{n} s", if o > 0.0 { "+" } else { "−" })
 }
 
 /// The subtitle chosen for a file (remembered and loaded again).

@@ -35,6 +35,7 @@ pub(crate) fn wire(
                         | A::AbNudge
                         | A::SkipSegment
                         | A::UndoSkip
+                        | A::SubtitleOffsetAlt
                 )
             )
         };
@@ -128,12 +129,18 @@ pub(crate) fn wire(
                 let d = if s == "[" || s == "{" { -d } else { d };
                 crate::plugins::command(plugins::lyrics::ID, "offset", &[d.to_string()]);
             }
-            // z / x subtitle offset −0.1 / +0.1 s (Shift: 1 s), saved per file.
-            A::SubtitleOffset => {
+            // Alt+Z / Alt+X without media go to mpv (older packages bind them there).
+            A::SubtitleOffsetAlt if !a.global::<crate::Playback>().get_has_media() => {
+                forward_key(&p, s, ctrl, alt);
+                return false;
+            }
+            // z / x and Alt+Z / Alt+X: subtitle offset −0.1 / +0.1 s (Shift: 1 s), saved
+            // per file by the player itself (with or without Subtitle Search).
+            A::SubtitleOffset | A::SubtitleOffsetAlt => {
                 let big = shift || s == "Z" || s == "X";
                 let d = if big { 1.0 } else { 0.1 };
                 let d = if s.eq_ignore_ascii_case("z") { -d } else { d };
-                crate::plugins::command(plugins::subtitle_search::ID, "offset", &[d.to_string()]);
+                suboffset::command(&a, &p, &d.to_string());
             }
             A::Visualizer => {
                 let n = a.global::<crate::Viz>().get_modes().row_count() as i32;

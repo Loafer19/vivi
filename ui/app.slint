@@ -842,7 +842,7 @@ export component AppWindow inherits Window {
         lyrics-offset: Lyrics.offset-label; lyrics-can-save: Lyrics.can-save; lyrics-manual: Lyrics.manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         subs-enabled: Subtitles.plugin; subs-offset: Subtitles.offset; subs-has-pick: Subtitles.has-pick; subs-pick-label: Subtitles.pick-label; subs-sync: Subtitles.sync;
-        subs(n, a) => { root.plugin-command("subtitle-search", n, a); }
+        subs(n, a) => { if (n == "offset" || n == "sync") { Panel.sub-offset(n, a); } else { root.plugin-command("subtitle-search", n, a); } }
         find-subs() => { root.add-subs(); }
         open-settings(c) => { Settings.category = c; Overlays.settings-open = true; Settings.refresh(c, "", false); }
         queue: Panel.queue; playlists: Panel.playlists;

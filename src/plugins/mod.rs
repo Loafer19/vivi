@@ -234,6 +234,23 @@ impl Ctx<'_> {
     }
 }
 
+/// The mpv script name of package `id` when it is installed and enabled (outside
+/// plugin callbacks; inside use [`Ctx::package_script`]).
+pub fn package_script(id: &str) -> Option<String> {
+    with(|r| {
+        let c = r.cfg.borrow();
+        let name = r
+            .scripts
+            .iter()
+            .find(|s| s.manifest.id == id && s.manifest.origin == Origin::Package)
+            .filter(|s| is_enabled(&c, &s.manifest))
+            .and_then(|s| s.path.file_stem())
+            .map(|n| n.to_string_lossy().replace('-', "_"));
+        name
+    })
+    .flatten()
+}
+
 /// Value of a plugin setting from the config, falling back to the manifest default.
 pub fn setting_value(c: &Config, m: &Manifest, key: &str) -> String {
     c.plugins
@@ -372,6 +389,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     if let Err(e) = player.mpv.set_property("user-data/vivi/ab-loop", 1i64) {
         eprintln!("vivi: set user-data/vivi/ab-loop: {e:?}");
     }
+    // The per-file subtitle offset is built in (src/suboffset.rs): Subtitle Auto-Sync
+    // checks `user-data/vivi/sub-offset` and leaves Alt+Z / Alt+X and storage to it.
+    crate::suboffset::setup(player);
     let entries: Vec<Entry> = builtin()
         .into_iter()
         .map(|p| Entry {
@@ -612,7 +632,17 @@ pub fn client_message(args: &[String]) {
         Some(M::Setting { id, key, value }) => store_setting(id, key, value),
         Some(M::PickFolder { id, key }) => pick_folder(id, key),
         // Subtitle Auto-Sync 1.2+: offset keys and sync results, saved per file by Vivi.
-        Some(M::SubOffset(v)) => command(subtitle_search::ID, "offset", &[v.to_string()]),
+        Some(M::SubOffset(v)) => {
+            if let Some((a, p)) = with(|r| r.app.upgrade().map(|a| (a, r.player.clone()))).flatten()
+            {
+                crate::suboffset::command(&a, &p, v);
+            }
+        }
+        Some(M::SubOffsetImport) => {
+            if let Some(n) = crate::suboffset::import_package_offsets() {
+                eprintln!("vivi: imported {n} subtitle offset(s) from Subtitle Auto-Sync");
+            }
+        }
         Some(M::TaggerAcoustid { path, json }) => tagger_acoustid(path, json),
         Some(M::Qr {
             title,

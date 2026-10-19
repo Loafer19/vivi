@@ -35,6 +35,8 @@ export global Panel {
     callback set-prop(string, string);
     callback run(string);
     callback load-sub();
+    // Subtitle Offset group: ("offset", delta | "reset") or ("sync", ""); src/suboffset.rs.
+    callback sub-offset(string, string);
     callback sleep(int);
     callback add-bookmark();
     callback remove-bookmark();

@@ -39,8 +39,11 @@ pub enum Action {
     FindLyrics,
     /// `[` `]` (Shift or `{` `}`: 0.5 s).
     LyricsOffset,
-    /// `z` `x` (Shift: 1 s).
+    /// `z` `x` (Shift: 1 s), saved per file (src/suboffset.rs).
     SubtitleOffset,
+    /// Alt+Z / Alt+X (Alt+Shift: 1 s): the same, on the keys of the Subtitle Auto-Sync
+    /// package (which leaves them to the player since `user-data/vivi/sub-offset`).
+    SubtitleOffsetAlt,
     Record,
     HideUi,
     Quit,
@@ -179,6 +182,9 @@ pub const BINDINGS: &[Binding] = &[
     b(A::FindLyrics, &[T("l"), T("L")], On, Any, "Find lyrics", "Ctrl+L"),
     b(A::LyricsOffset, &[T("["), T("]"), T("{"), T("}")], Off, Any,
         "Lyrics timing offset ±0.1 s (Shift: 0.5 s)", "[  ]"),
+    // Before the plain z / x row, which matches with Alt held too.
+    alt(A::SubtitleOffsetAlt, &[T("z"), T("x"), T("Z"), T("X")], Any,
+        "Subtitle offset ±0.1 s (Alt+Shift: 1 s), per file", "Alt+Z  Alt+X"),
     b(A::SubtitleOffset, &[T("z"), T("x"), T("Z"), T("X")], Off, Any,
         "Subtitle offset ±0.1 s (Shift: 1 s), per file", "Z  X"),
     b(A::Visualizer, &[T("v")], Off, Any, "Next visualizer mode (audio files)", "V"),
@@ -418,6 +424,16 @@ mod tests {
         assert_eq!(lookup("k", false, false, true), Some(A::SkipSegment));
         assert_eq!(lookup("K", true, false, true), Some(A::UndoSkip));
         assert_eq!(lookup("k", false, false, false), Some(A::PlayPause));
+        // Per-file subtitle offset: z / x and Alt+Z / Alt+X (Subtitle Auto-Sync's keys).
+        assert_eq!(lookup("z", false, false, true), Some(A::SubtitleOffsetAlt));
+        assert_eq!(lookup("X", true, false, true), Some(A::SubtitleOffsetAlt));
+        assert_eq!(lookup("x", false, false, false), Some(A::SubtitleOffset));
+        assert_eq!(
+            lookup("z", false, true, true),
+            None,
+            "Ctrl+Alt+Z stays with mpv"
+        );
+        assert_eq!(shown(A::SubtitleOffsetAlt), "Alt+Z  Alt+X");
         assert_eq!(
             lookup("k", false, true, true),
             Some(A::Palette),
