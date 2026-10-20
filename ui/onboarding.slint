@@ -63,7 +63,7 @@ export component OnboardingDialog inherits Modal {
         padding-left: root.compact ? 16px : 60px; padding-right: self.padding-left; spacing: 18px; alignment: center;
         if root.step == 0: VerticalLayout {
             spacing: 18px; alignment: center;
-            HorizontalLayout { alignment: center; Image { source: @image-url("../assets/icons/vlc.svg"); width: root.compact ? 56px : 96px; height: self.width; } }
+            HorizontalLayout { alignment: center; Image { source: @image-url("../packaging/vivi.svg"); width: root.compact ? 56px : 96px; height: self.width; } }
             Text { text: "Welcome to Vivi!"; color: Theme.fg-1; font-size: root.compact ? Metrics.font-xxl : Metrics.font-display; font-weight: 600; horizontal-alignment: center; }
             Text {
                 text: "A fast, minimal media player built on mpv. It plays nearly any video or audio file, remembers where you stopped, and stays out of your way.";
