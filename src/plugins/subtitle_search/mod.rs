@@ -464,6 +464,8 @@ impl SubtitleSearch {
     /// load it, remember it for this file and close the dialog.
     /// `auto`: loaded by *Load exact matches automatically* (the dialog stays as it is).
     fn use_file(&mut self, cx: &Ctx, cachedp: &Path, file_id: i64, lang: &str, auto: bool) {
+        // From the API or an MCP client: only a plain code goes in file names and picks.
+        let lang = &safe_lang(lang);
         let mut path = cachedp.to_path_buf();
         let mut note = String::new();
         if cx.flag("save-next") {
@@ -900,6 +902,10 @@ impl Plugin for SubtitleSearch {
             }
         } else {
             self.auto_exact(cx);
+        }
+        // The dialog open while the next file starts: its results were for the old one.
+        if cx.app.global::<crate::Overlays>().get_subs_open() {
+            self.command(cx, "open", &[]);
         }
     }
     fn tick(&mut self, cx: &Ctx) {

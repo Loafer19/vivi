@@ -130,7 +130,7 @@ fix. Results always carry `structuredContent`; list tools take `offset` / `limit
 | `list_subtitle_tracks` / `set_subtitle_track` | `id` (integer, `auto` or `no`) | Subtitle tracks (embedded and external); `no` turns them off |
 | `set_subtitles` | `enabled` | Show/hide subtitles |
 | `set_subtitle_offset` | `seconds` *or* `delta` *or* `reset` | Subtitle timing (positive = later), saved per file |
-| `search_subtitles` | `query` (title, episode or IMDb id `tt…`), `languages` (`en,uk`), `limit` | OpenSubtitles results for the playing file: hash matches first (`hash_match`), then by name/IMDb; `file_id`, `language`, `downloads`, `rating`, `hearing_impaired`, `fps`, `trusted`, `machine_translated`. Needs the API key in the Subtitle Search plugin |
+| `search_subtitles` | `query` (title, episode or IMDb id `tt…`), `languages` (`en,uk`), `limit` | OpenSubtitles results for the playing file: hash matches first (`hash_match`), then by name/IMDb (`Show S01E05` and `Movie (2020)` are searched by season / episode or year); `file_id`, `language`, `downloads`, `rating`, `hearing_impaired`, `fps`, `trusted`, `machine_translated`. Needs the API key in the Subtitle Search plugin |
 | `load_subtitle` | `file_id`, `language` | Download (one from the daily quota; cached copies are free) and show it |
 | `sync_subtitles` | – | Align the external subtitle to the audio (Subtitle Auto-Sync plugin, background) |
 | `get_chapters` | – | `current` index and `chapters` (`index`, `title`, `start` s) |

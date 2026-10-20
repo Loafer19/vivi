@@ -336,6 +336,22 @@ component LangChip inherits Rectangle {
     ca := TouchArea { accessible-role: button; accessible-label: root.item.label; accessible-checked: root.item.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
+// Checkbox with its text for the dialog footer; the whole row toggles it.
+component FooterCheck inherits Rectangle {
+    in property <string> text;
+    in property <string> label;      // accessible label
+    in property <bool> checked;
+    callback toggled();
+    horizontal-stretch: 0;
+    HorizontalLayout { spacing: 8px;
+        Rectangle { y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: Metrics.radius-sm;
+            background: root.checked ? Theme.accent : Theme.field; border-width: 1px; border-color: root.checked ? Theme.accent : Theme.divider;
+            if root.checked: Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/check-selected.svg"); tint: Theme.bg-b2; } }
+        Text { text: root.text; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; }
+    }
+    TouchArea { accessible-role: checkbox; accessible-label: root.label; accessible-checked: root.checked; mouse-cursor: pointer; clicked => { root.toggled(); } }
+}
+
 // Add Subtitles (Figma "Add Subtitles to Playlist/Folder"): target (this file / this
 // folder) and source (OpenSubtitles / Computer) dropdowns. OpenSubtitles: query (name,
 // episode or IMDb id), language chips (remembered), results with badges, details +
@@ -475,19 +491,13 @@ export component SubtitleDialog inherits Modal {
         HorizontalLayout {
             padding: 12px; padding-left: 16px; spacing: 10px;
             Text { horizontal-stretch: 1; text: root.source == 0 && root.hits.length > 0 ? root.status : ""; color: Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
-            if root.source == 0: HorizontalLayout { spacing: 8px;
-                Rectangle { y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: Metrics.radius-sm;
-                    background: root.auto-exact ? Theme.accent : Theme.field; border-width: 1px; border-color: root.auto-exact ? Theme.accent : Theme.divider;
-                    if root.auto-exact: Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/check-selected.svg"); tint: Theme.bg-b2; } }
-                Text { text: "Auto-load exact matches"; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; }
-                TouchArea { accessible-role: checkbox; accessible-label: "Load exact matches automatically when a file opens"; accessible-checked: root.auto-exact; mouse-cursor: pointer; clicked => { root.cmd("auto-exact", ""); } }
+            if root.source == 0: FooterCheck {
+                text: "Auto-load exact matches"; label: "Load exact matches automatically when a video opens without subtitles";
+                checked: root.auto-exact; toggled => { root.cmd("auto-exact", ""); }
             }
-            if root.source == 0: HorizontalLayout { spacing: 8px;
-                Rectangle { y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: Metrics.radius-sm;
-                    background: root.save-next ? Theme.accent : Theme.field; border-width: 1px; border-color: root.save-next ? Theme.accent : Theme.divider;
-                    if root.save-next: Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/check-selected.svg"); tint: Theme.bg-b2; } }
-                Text { text: "Save next to the video"; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; }
-                TouchArea { accessible-role: checkbox; accessible-label: "Save next to the video"; accessible-checked: root.save-next; mouse-cursor: pointer; clicked => { root.cmd("save-next", ""); } }
+            if root.source == 0: FooterCheck {
+                text: "Save next to the video"; label: "Save next to the video";
+                checked: root.save-next; toggled => { root.cmd("save-next", ""); }
             }
             FlatButton { text: "Cancel"; clicked => { root.close(); } }
             Rectangle {
