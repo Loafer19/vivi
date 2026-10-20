@@ -435,7 +435,7 @@ export component SubtitleDialog inherits Modal {
                     Text { text: "Languages"; color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; }
                     for l in root.langs: LangChip { item: l; clicked => { root.cmd("lang", l.key); } }
                     Rectangle { horizontal-stretch: 1; }
-                    TextField { width: 110px; height: 26px; text <=> root.lang; placeholder: "Other codes…"; accepted(t) => { root.cmd("lang-text", t); } }
+                    TextField { width: 110px; height: 26px; background: Theme.bg-a3; text <=> root.lang; placeholder: "Other codes…"; accepted(t) => { root.cmd("lang-text", t); } }
                 }
             }
         }
