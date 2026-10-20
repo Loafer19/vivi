@@ -192,6 +192,25 @@ impl Player {
     }
 
     /// Save the resume position of the current file (no-op when idle).
+    /// Stop mpv before Vivi exits. `quit` sends every script its `shutdown` event, and as
+    /// each script goes away mpv aborts its async commands, which kills their
+    /// subprocesses (an extension's curl / yt-dlp / ffmpeg download). Without it the
+    /// process ended with mpv still running: scripts never heard of the quit and their
+    /// tools kept running, orphaned. Waits (at most `max`) until Vivi has no child
+    /// processes left; elsewhere than Linux a short fixed wait.
+    pub fn shutdown(&self, max: std::time::Duration) {
+        let _ = self.mpv.command("quit", &[]);
+        let t0 = std::time::Instant::now();
+        #[cfg(target_os = "linux")]
+        while t0.elapsed() < max && has_children() {
+            thread::sleep(std::time::Duration::from_millis(50));
+        }
+        #[cfg(not(target_os = "linux"))]
+        thread::sleep(
+            max.min(std::time::Duration::from_millis(300))
+                .saturating_sub(t0.elapsed()),
+        );
+    }
     pub fn save_position(&self) {
         if self.get("path").is_some() {
             let _ = self.mpv.command("write-watch-later-config", &[]);
@@ -404,6 +423,18 @@ fn sort_moves(v: &[String]) -> Vec<(usize, usize)> {
         }
     }
     out
+}
+
+/// Whether this process has a child process (Linux: `/proc/self/task/*/children`).
+#[cfg(target_os = "linux")]
+fn has_children() -> bool {
+    std::fs::read_dir("/proc/self/task")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|t| {
+            std::fs::read_to_string(t.path().join("children")).is_ok_and(|c| !c.trim().is_empty())
+        })
 }
 
 #[cfg(test)]

@@ -138,6 +138,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     slint::run_event_loop_until_quit()?;
     let _ = app.hide();
     player.save_position();
+    // Scripts get their shutdown event and their download tools are stopped.
+    player.shutdown(std::time::Duration::from_secs(3));
     ipc::cleanup();
     Ok(())
 }
