@@ -141,6 +141,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Scripts get their shutdown event and their download tools are stopped.
     player.shutdown(std::time::Duration::from_secs(3));
     ipc::cleanup();
+    // mpv waits for every script to finish; one stuck in a loop must not keep Vivi running.
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        std::process::exit(0);
+    });
     Ok(())
 }
 

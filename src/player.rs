@@ -192,18 +192,39 @@ impl Player {
     }
 
     /// Save the resume position of the current file (no-op when idle).
-    /// Stop mpv before Vivi exits. `quit` sends every script its `shutdown` event, and as
-    /// each script goes away mpv aborts its async commands, which kills their
-    /// subprocesses (an extension's curl / yt-dlp / ffmpeg download). Without it the
-    /// process ended with mpv still running: scripts never heard of the quit and their
-    /// tools kept running, orphaned. Waits (at most `max`) until Vivi has no child
-    /// processes left; elsewhere than Linux a short fixed wait.
+    /// Stop mpv before Vivi exits. `quit` sends every script its `shutdown` event, so a
+    /// script can stop its own tools (an extension's curl / yt-dlp / ffmpeg download).
+    /// Without it the process ended with mpv still running: scripts never heard of the quit
+    /// and their tools kept running, orphaned. On Linux it waits (at most `max`) until Vivi
+    /// has no child processes left, then stops the ones still running (TERM, then KILL):
+    /// mpv would otherwise wait for such a tool before it lets the script go. Elsewhere a
+    /// short fixed wait.
     pub fn shutdown(&self, max: std::time::Duration) {
         let _ = self.mpv.command("quit", &[]);
         let t0 = std::time::Instant::now();
         #[cfg(target_os = "linux")]
-        while t0.elapsed() < max && has_children() {
-            thread::sleep(std::time::Duration::from_millis(50));
+        {
+            while t0.elapsed() < max && !children().is_empty() {
+                thread::sleep(std::time::Duration::from_millis(50));
+            }
+            // A tool a script did not stop (a download that would run for hours) also keeps
+            // mpv from finishing its shutdown: stop it and everything it started.
+            for (sig, wait) in [(libc::SIGTERM, 1500), (libc::SIGKILL, 300)] {
+                let left = descendants();
+                if left.is_empty() {
+                    break;
+                }
+                for p in left {
+                    // SAFETY: kill(2) on our own (direct or indirect) child processes.
+                    unsafe { libc::kill(p, sig) };
+                }
+                let t1 = std::time::Instant::now();
+                while t1.elapsed() < std::time::Duration::from_millis(wait)
+                    && !children().is_empty()
+                {
+                    thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
         }
         #[cfg(not(target_os = "linux"))]
         thread::sleep(
@@ -427,14 +448,40 @@ fn sort_moves(v: &[String]) -> Vec<(usize, usize)> {
 
 /// Whether this process has a child process (Linux: `/proc/self/task/*/children`).
 #[cfg(target_os = "linux")]
-fn has_children() -> bool {
-    std::fs::read_dir("/proc/self/task")
+fn children_of(path: &std::path::Path) -> Vec<i32> {
+    std::fs::read_dir(path.join("task"))
         .into_iter()
         .flatten()
         .flatten()
-        .any(|t| {
-            std::fs::read_to_string(t.path().join("children")).is_ok_and(|c| !c.trim().is_empty())
+        .filter_map(|t| std::fs::read_to_string(t.path().join("children")).ok())
+        .flat_map(|c| {
+            c.split_whitespace()
+                .filter_map(|p| p.parse().ok())
+                .collect::<Vec<i32>>()
         })
+        .collect()
+}
+
+/// This process's direct children.
+#[cfg(target_os = "linux")]
+fn children() -> Vec<i32> {
+    children_of(std::path::Path::new("/proc/self"))
+}
+
+/// This process's children and their children, deepest first.
+#[cfg(target_os = "linux")]
+fn descendants() -> Vec<i32> {
+    let mut out = Vec::new();
+    let mut todo = children();
+    while let Some(p) = todo.pop() {
+        if out.contains(&p) {
+            continue;
+        }
+        todo.extend(children_of(std::path::Path::new(&format!("/proc/{p}"))));
+        out.push(p);
+    }
+    out.reverse();
+    out
 }
 
 #[cfg(test)]
