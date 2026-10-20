@@ -42,7 +42,7 @@ struct and manifest ID agree. `mod.rs` holds the plugin itself (state, UI update
 | --- | --- |
 | `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply · `cache.rs` per-file AcoustID answers (path + size + mtime, 300 files, 0600) · `mod.rs` also identifies untagged songs while playing (`auto-identify`) |
 | `free_music` (`free-music`) | `catalog.rs` track / licence / query model · `api.rs` Internet Archive + Jamendo clients, downloader |
-| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded / cache / LRCLIB, offsets · `radio.rs` stream-title lookups |
+| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded / cache / LRCLIB (instrumental, "not found" expiry), offsets · `radio.rs` stream-title lookups · `mod.rs` songs from the shared now-playing track (music services, Auto-tagger) |
 | `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists |
 | `subtitle_search` (`subtitle-search`) | `api.rs` OpenSubtitles hash, search, download · `files.rs` picks, folder pairing |
 | `skip_intro`, `epg`, `tagsources` | single files |

@@ -34,9 +34,9 @@ export component SkipButton inherits Rectangle {
     ta := TouchArea { accessible-role: button; accessible-label: root.text; width: parent.width - 34px; x: 0; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
-// A lyrics line of a live stream: click it, or focus it (Tab) and press Enter / Space,
-// when it is being sung to sync the lyrics to it. `label` "" = hit area only (drawn over
-// the animated karaoke lines).
+// A clickable lyrics line: on a live stream click it, or focus it (Tab) and press Enter /
+// Space, when it is being sung to sync the lyrics to it; on a file it jumps there
+// (`verb`). `label` "" = hit area only (drawn over the animated karaoke lines).
 component SyncLine inherits Rectangle {
     in property <string> label;
     in property <length> size: 16px;
@@ -44,6 +44,7 @@ component SyncLine inherits Rectangle {
     in property <color> fg: Theme.stage-fg;
     in property <float> dim: 0.86;
     in property <string> name: root.label; // screen-reader text
+    in property <string> verb: "Sync lyrics to this line: ";
     callback activated();
     callback moved(); // pointer moved over the line: keep the player chrome shown
     // Player chrome shown: when it auto-hides the pointer is hidden, so is the hover.
@@ -62,7 +63,7 @@ component SyncLine inherits Rectangle {
         }
     }
     ta := TouchArea {
-        accessible-role: button; accessible-label: "Sync lyrics to this line: " + root.name;
+        accessible-role: button; accessible-label: root.verb + root.name;
         accessible-action-default => { root.activated(); }
         mouse-cursor: root.chrome ? MouseCursor.pointer : MouseCursor.none; clicked => { root.activated(); }
         changed mouse-x => { root.moved(); }
@@ -100,6 +101,8 @@ export component LyricsView inherits Rectangle {
     in property <bool> plain;
     // Live stream with synced lyrics: lines can be clicked to sync (see SyncLine).
     in property <bool> live;
+    // Synced lyrics of a file: a click on a line jumps there.
+    in property <bool> seekable;
     callback cmd(string, string);
     callback activity(); // pointer moved over a line
     in property <bool> chrome: true; // player chrome shown (hover hides with it)
@@ -130,14 +133,15 @@ export component LyricsView inherits Rectangle {
             opacity: i == root.index ? 1 : max(0.15, 0.7 - self.d * 0.2);
             animate opacity, color { duration: 200ms; }
         }
-        // Live stream: click another line to re-sync.
-        if root.live: Rectangle {
+        // Live stream: click another line to re-sync; a file: click a line to jump there.
+        if root.live || root.seekable: Rectangle {
             for l[i] in root.lines: SyncLine {
                 visible: abs(i - root.index) <= 2;
                 x: (root.width - self.width) / 2; width: min(root.width, 760px);
                 y: (i - root.index + 2) * root.line-h; height: root.line-h;
                 animate y { duration: 260ms; easing: ease-out; }
-                name: l; activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
+                name: l == "" ? "instrumental" : l; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
+                activated => { root.cmd(root.live ? "sync-line" : "seek-line", i); } moved => { root.activity(); } chrome: root.chrome;
             }
         }
     }
@@ -1241,7 +1245,7 @@ component KPill inherits Rectangle {
 // the list glides as lines change. Header: track, source, timing offset, search, save.
 /// What the lyrics plugin currently has for the track (typed, so views never
 /// compare display strings).
-export enum LyricsState { found, searching, missing }
+export enum LyricsState { found, searching, missing, instrumental }
 
 export component KaraokeView inherits Rectangle {
     in property <LyricsState> state: LyricsState.missing;
@@ -1252,14 +1256,18 @@ export component KaraokeView inherits Rectangle {
     // Live stream with synced lyrics: lines are clickable to sync (the offset stepper
     // fine-tunes it once synced).
     in property <bool> live;
-    property <bool> can-offset: !(root.live && root.plain);
+    // Synced lyrics of a file: a click on a line jumps there.
+    in property <bool> seekable;
+    // The offset needs synced lyrics (and, on a stream, a first sync).
+    property <bool> can-offset: root.lines.length > 0 && !root.plain;
     in property <[KWord]> words;
     in property <int> rows;
     in property <string> title;
     in property <string> artist;
     in property <string> source;
     in property <string> offset;
-    in property <bool> can-save;
+    in property <bool> can-save-lrc;
+    in property <bool> can-embed;
     in property <bool> manual;
     in property <length> big: 48px;
     // Player chrome shown (follows the UI auto-hide): header, hint and cursor hide with it.
@@ -1351,8 +1359,9 @@ export component KaraokeView inherits Rectangle {
                     }
                 }
             }
-            // Live stream: click another line to re-sync (hit areas over the lines).
-            if root.live: Rectangle {
+            // Live stream: click another line to re-sync; a file: click a line to jump
+            // there (hit areas over the lines).
+            if root.live || root.seekable: Rectangle {
                 for l[i] in root.lines: SyncLine {
                     property <int> d: i - root.index;
                     property <bool> cur: i == root.index;
@@ -1363,8 +1372,8 @@ export component KaraokeView inherits Rectangle {
                         : self.d < 0 ? area.mid - root.cur-h / 2 + self.d * root.pitch
                         : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
                     animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
-                    name: l == "" ? "instrumental" : l;
-                    activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
+                    name: l == "" ? "instrumental" : l; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
+                    activated => { root.cmd(root.live ? "sync-line" : "seek-line", i); } moved => { root.activity(); } chrome: root.chrome;
                 }
             }
         }
@@ -1404,8 +1413,8 @@ export component KaraokeView inherits Rectangle {
             HorizontalLayout { alignment: center;
                 Rectangle { width: 76px; height: 76px; border-radius: self.height / 2; background: Theme.accent.with-alpha(0.14);
                     Icon { width: 34px; height: 34px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; } } }
-            Text { text: root.state == LyricsState.searching ? "Looking for lyrics…" : "No lyrics for this track"; color: Theme.stage-fg; font-size: Metrics.font-xxl; font-weight: 700; horizontal-alignment: center; }
-            Text { text: "Search LRCLIB by artist and title, or put a .lrc file next to the song."; color: Theme.fg-a2; font-size: Metrics.font-base; horizontal-alignment: center; }
+            Text { text: root.state == LyricsState.searching ? "Looking for lyrics…" : root.state == LyricsState.instrumental ? "Instrumental" : "No lyrics for this track"; color: Theme.stage-fg; font-size: Metrics.font-xxl; font-weight: 700; horizontal-alignment: center; }
+            Text { text: root.state == LyricsState.instrumental ? "LRCLIB lists this track as instrumental. If it has words, search for them." : "Search LRCLIB by artist and title, or put a .lrc file next to the song."; color: Theme.fg-a2; font-size: Metrics.font-base; horizontal-alignment: center; }
             HorizontalLayout { alignment: center; padding-top: 6px;
                 KPill { primary: true; text: "Search lyrics…"; has-icon: true; icon: @image-url("../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
         }
@@ -1450,9 +1459,9 @@ export component KaraokeView inherits Rectangle {
                 KPill { text: "Search"; has-icon: true; icon: @image-url("../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
             if root.manual: VerticalLayout { alignment: center;
                 KPill { text: "Reset pick"; has-icon: true; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.cmd("forget", ""); } } }
-            if root.can-save: VerticalLayout { alignment: center;
+            if root.can-save-lrc: VerticalLayout { alignment: center;
                 KPill { text: "Save .lrc"; has-icon: true; icon: @image-url("../assets/icons/save.svg"); clicked => { root.cmd("save-lrc", ""); } } }
-            if root.can-save: VerticalLayout { alignment: center;
+            if root.can-embed: VerticalLayout { alignment: center;
                 KPill { text: "Embed"; clicked => { root.cmd("embed", ""); } } }
             VerticalLayout { alignment: center;
                 Rectangle { width: 34px; height: 34px; border-radius: self.height / 2; background: xa.has-hover ? Theme.stage-chip-hover : Theme.stage-chip;
@@ -1466,7 +1475,8 @@ export component KaraokeView inherits Rectangle {
         y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
         text: root.live && root.plain ? "Click or Enter on the line being sung to sync   ·   L  close   ·   Ctrl L  search"
             : root.live ? "Click a line to re-sync   ·   [  ]  fine-tune ±0.1 s   ·   Shift  ±0.5 s   ·   L  close"
-            : "L  close   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   Ctrl L  search";
+            : root.seekable ? "Click a line to jump there   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   L  close   ·   Ctrl L  search"
+            : "L  close   ·   Ctrl L  search";
         color: Theme.stage-fg.with-alpha(0.33); font-size: Metrics.font-sm;
     }
 }

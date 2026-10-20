@@ -725,18 +725,18 @@ export component AppWindow inherits Window {
         y: Viz.audio && Viz.mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
         backdrop: !(Viz.audio && Viz.mode > 0);
-        live: Lyrics.live; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); } activity => { root.activity(); } chrome: root.show-ui;
+        live: Lyrics.live; seekable: Lyrics.seekable; cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); } activity => { root.activity(); } chrome: root.show-ui;
     }
 
     // ---------- Full-screen karaoke (Lyrics plugin; L or side panel) ----------
     if Playback.has-media && Overlays.karaoke-open && !Overlays.library-open && !root.mini: KaraokeView {
         width: root.width; height: root.height;
-        lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain; live: Lyrics.live;
+        lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain; live: Lyrics.live; seekable: Lyrics.seekable;
         words: Lyrics.words; rows: Lyrics.rows; big: root.karaoke-big;
         chrome: root.show-ui; activity => { root.activity(); }
         title: Lyrics.title; artist: Lyrics.artist; source: Lyrics.source;
         state: Lyrics.state; offset-s: Lyrics.offset;
-        offset: Lyrics.offset-label; can-save: Lyrics.can-save; manual: Lyrics.manual;
+        offset: Lyrics.offset-label; can-save-lrc: Lyrics.can-save-lrc; can-embed: Lyrics.can-embed; manual: Lyrics.manual;
         cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); }
     }
 
@@ -839,7 +839,7 @@ export component AppWindow inherits Window {
         viz-select(i) => { Viz.select(i); }
         lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: Lyrics.source;
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
-        lyrics-offset: Lyrics.offset-label; lyrics-can-save: Lyrics.can-save; lyrics-manual: Lyrics.manual;
+        lyrics-offset: Lyrics.offset-label; lyrics-can-save-lrc: Lyrics.can-save-lrc; lyrics-can-embed: Lyrics.can-embed; lyrics-manual: Lyrics.manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         subs-enabled: Subtitles.plugin; subs-offset: Subtitles.offset; subs-has-pick: Subtitles.has-pick; subs-pick-label: Subtitles.pick-label; subs-sync: Subtitles.sync;
         subs(n, a) => { if (n == "offset" || n == "sync") { Panel.sub-offset(n, a); } else { root.plugin-command("subtitle-search", n, a); } }

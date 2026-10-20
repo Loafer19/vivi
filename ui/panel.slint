@@ -273,7 +273,8 @@ export component SidePanel inherits Rectangle {
     in property <string> lyrics-offset;
     in property <float> lyrics-offset-s;
     in property <float> subs-offset-s;
-    in property <bool> lyrics-can-save;
+    in property <bool> lyrics-can-save-lrc;
+    in property <bool> lyrics-can-embed;
     in property <bool> lyrics-manual;
     callback lyrics(string, string);
     // Subtitle Search plugin: per-file offset, Auto-sync, remembered pick (cmd → plugin-command).
@@ -410,9 +411,9 @@ export component SidePanel inherits Rectangle {
                             HorizontalLayout { spacing: 6px;
                                 if root.lyrics-manual: SecondaryButton { size: ButtonSize.sm; width: 86px; text: "Reset"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { root.lyrics("forget", ""); } }
                                 SecondaryButton { size: ButtonSize.sm; width: 110px; text: "Search…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.lyrics("search-open", ""); } } } }
-                        if root.lyrics-can-save: HorizontalLayout { spacing: 8px;
-                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Save as .lrc"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.lyrics("save-lrc", ""); } }
-                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Embed in tags"; icon: @image-url("../assets/icons/music.svg"); clicked => { root.lyrics("embed", ""); } } }
+                        if root.lyrics-can-save-lrc || root.lyrics-can-embed: HorizontalLayout { spacing: 8px;
+                            if root.lyrics-can-save-lrc: SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Save as .lrc"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.lyrics("save-lrc", ""); } }
+                            if root.lyrics-can-embed: SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Embed in tags"; icon: @image-url("../assets/icons/music.svg"); clicked => { root.lyrics("embed", ""); } } }
                     }
                     AdvancedLink { clicked => { root.open-settings(4); } }
                 }

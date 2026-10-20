@@ -17,7 +17,11 @@ export global Lyrics {
     in-out property <string> offset-label: "0.0 s";
     in-out property <string> title;
     in-out property <string> artist;
-    in-out property <bool> can-save;
+    // Save as .lrc / embed in tags offered (not when the lyrics already come from there).
+    in-out property <bool> can-save-lrc;
+    in-out property <bool> can-embed;
+    // Synced lyrics of a file: clicking a line seeks there ("seek-line").
+    in-out property <bool> seekable;
     in-out property <bool> manual;
     in-out property <string> search-artist;
     in-out property <string> search-title;
@@ -26,4 +30,6 @@ export global Lyrics {
     in-out property <string> search-status;
     in-out property <string> search-preview;
     in-out property <bool> search-busy;
+    // Plugin command from views without their own callback (side drawer).
+    callback cmd(string, string);
 }

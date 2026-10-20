@@ -333,7 +333,7 @@ pub fn enrich(c: &mut Candidate, o: &Opts, duration: f64) -> Vec<String> {
             duration,
         };
         note(lyrics::fetch_lrclib(&t).map(|l| {
-            if let Some(l) = l {
+            if let lyrics::Fetched::Lyrics(l) = l {
                 let synced = !super::auto_tagger::lrc_lines(&l).is_empty();
                 c.tags.lyrics = l;
                 c.sources.push((

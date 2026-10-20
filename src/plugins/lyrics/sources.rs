@@ -120,7 +120,8 @@ pub(crate) fn lyrics_dir() -> PathBuf {
     crate::store::cache_dir().join("lyrics")
 }
 
-/// Cache file stem for a track: `<md5>.lrc` (synced), `.txt` (plain), `.missing`.
+/// Cache file stem for a track: `<md5>.lrc` (synced), `.txt` (plain), `.missing` (not
+/// found, retried after [`MISS_DAYS`]), `.instrumental` (LRCLIB lists it as instrumental).
 pub(crate) fn cache_file(t: &Track) -> PathBuf {
     lyrics_dir().join(format!("{:x}.lrc", md5::compute(cache_key(t))))
 }
@@ -133,19 +134,54 @@ pub(crate) fn read_cache(stem: &Path) -> Option<String> {
         .filter(|s| !s.trim().is_empty())
 }
 
-pub(crate) fn write_cache(stem: &Path, text: Option<&str>) {
+pub(crate) fn write_cache(stem: &Path, found: &Fetched) {
     if let Some(d) = stem.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    match text {
-        Some(s) => {
-            let ext = if is_synced(s) { "lrc" } else { "txt" };
-            let _ = std::fs::write(stem.with_extension(ext), s);
-        }
-        None => {
-            let _ = std::fs::write(stem.with_extension("missing"), b"");
-        }
+    let (ext, text) = match found {
+        Fetched::Lyrics(s) if is_synced(s) => ("lrc", s.as_str()),
+        Fetched::Lyrics(s) => ("txt", s.as_str()),
+        Fetched::Instrumental => ("instrumental", ""),
+        Fetched::NotFound => ("missing", ""),
+    };
+    let _ = std::fs::write(stem.with_extension(ext), text);
+}
+
+/// A "not found" answer is trusted for a week, then LRCLIB is asked again (it keeps
+/// growing); "instrumental" for a month.
+pub const MISS_DAYS: u64 = 7;
+pub const INSTRUMENTAL_DAYS: u64 = 30;
+
+/// Whether `p` exists and was written less than `days` ago.
+pub(crate) fn fresh(p: &Path, days: u64) -> bool {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < Duration::from_secs(days * 86_400))
+}
+
+/// A remembered negative answer for a track: instrumental or not found (while fresh).
+pub(crate) fn cached_miss(stem: &Path) -> Option<Fetched> {
+    if fresh(&stem.with_extension("instrumental"), INSTRUMENTAL_DAYS) {
+        Some(Fetched::Instrumental)
+    } else if fresh(&stem.with_extension("missing"), MISS_DAYS) {
+        Some(Fetched::NotFound)
+    } else {
+        None
     }
+}
+
+/// Local lyrics files larger than this are ignored (a real LRC is a few KB).
+pub const MAX_LYRICS_FILE: u64 = 1 << 20;
+
+/// Text of a lyrics file, unless it is missing, not UTF-8 or larger than
+/// [`MAX_LYRICS_FILE`].
+pub(crate) fn read_lyrics_file(p: &Path) -> Option<String> {
+    let len = std::fs::metadata(p).ok()?.len();
+    (len <= MAX_LYRICS_FILE)
+        .then(|| std::fs::read_to_string(p).ok())
+        .flatten()
 }
 
 /// Manual pick for a track key (file path or radio "artist\u{1f}title").
@@ -234,6 +270,16 @@ impl LrclibItem {
     }
 }
 
+/// What an LRCLIB lookup found for a track.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Fetched {
+    /// LRC text (synced) or plain text.
+    Lyrics(String),
+    /// LRCLIB lists the track as instrumental: there are no lyrics to look for.
+    Instrumental,
+    NotFound,
+}
+
 /// Order search results: synced first, then by distance to the track's duration.
 pub fn rank(items: &mut [LrclibItem], duration: f64) {
     let diff = |i: &LrclibItem| match (i.duration, duration > 0.0) {
@@ -282,8 +328,17 @@ pub(crate) fn err(e: ureq::Error) -> String {
     }
 }
 
-/// LRCLIB `/api/search` by artist and title (title only when the artist is empty).
+/// LRCLIB `/api/search` by artist and title (title only when the artist is empty);
+/// only entries with lyrics.
 pub fn search_lrclib(artist: &str, title: &str) -> Result<Vec<LrclibItem>, String> {
+    Ok(search_all(artist, title)?
+        .into_iter()
+        .filter(|i| i.has_lyrics())
+        .collect())
+}
+
+/// LRCLIB `/api/search`, every entry (instrumental ones too).
+fn search_all(artist: &str, title: &str) -> Result<Vec<LrclibItem>, String> {
     let a = agent();
     let mut r = call(|| {
         let req = a.get("https://lrclib.net/api/search");
@@ -295,13 +350,13 @@ pub fn search_lrclib(artist: &str, title: &str) -> Result<Vec<LrclibItem>, Strin
         .call()
     })
     .map_err(err)?;
-    let items: Vec<LrclibItem> = r.body_mut().read_json().map_err(|e| e.to_string())?;
-    Ok(items.into_iter().filter(|i| i.has_lyrics()).collect())
+    r.body_mut().read_json().map_err(|e| e.to_string())
 }
 
 /// Lyrics from LRCLIB: `/api/get` (exact match), then `/api/search` (synced first,
-/// closest duration). Plain lyrics are returned when no synced ones exist.
-pub fn fetch_lrclib(t: &Track) -> Result<Option<String>, String> {
+/// closest duration). Plain lyrics are returned when no synced ones exist;
+/// [`Fetched::Instrumental`] when LRCLIB marks the track as instrumental.
+pub fn fetch_lrclib(t: &Track) -> Result<Fetched, String> {
     let a = agent();
     let get = || {
         let mut req = a
@@ -316,25 +371,51 @@ pub fn fetch_lrclib(t: &Track) -> Result<Option<String>, String> {
         }
         req.call()
     };
-    let mut plain = None;
-    match call(get) {
+    let exact = match call(get) {
         Ok(mut r) => {
             let it: LrclibItem = r.body_mut().read_json().map_err(|e| e.to_string())?;
             if let Some(s) = non_empty(&it.synced) {
-                return Ok(Some(s.to_string()));
+                return Ok(Fetched::Lyrics(s.to_string()));
             }
-            plain = non_empty(&it.plain).map(String::from);
+            Some(it)
         }
-        Err(ureq::Error::StatusCode(404)) => {}
+        Err(ureq::Error::StatusCode(404)) => None,
         Err(e) => return Err(err(e)),
-    }
-    let mut items = search_lrclib(&t.artist, &t.title)?;
-    rank(&mut items, t.duration);
-    Ok(items
+    };
+    let items = search_all(&t.artist, &t.title)?;
+    Ok(pick(exact, items, t.duration))
+}
+
+/// The answer for a track of `duration` s from the `/api/get` match (`exact`, if any) and
+/// the search results: synced lyrics of the best-ranked result, else plain lyrics (the
+/// exact match's first), else instrumental when the exact match, or a search result
+/// within 3 s of the track's length, is marked instrumental.
+pub fn pick(exact: Option<LrclibItem>, items: Vec<LrclibItem>, duration: f64) -> Fetched {
+    let instrumental = |i: &LrclibItem| i.instrumental == Some(true) && !i.has_lyrics();
+    let close = |i: &LrclibItem| match (i.duration, duration > 0.0) {
+        (Some(d), true) => (d - duration).abs() <= 3.0,
+        _ => false,
+    };
+    let (mut lyr, other): (Vec<LrclibItem>, Vec<LrclibItem>) =
+        items.into_iter().partition(|i| i.has_lyrics());
+    rank(&mut lyr, duration);
+    let plain = exact
+        .as_ref()
+        .and_then(|e| non_empty(&e.plain))
+        .map(String::from);
+    if let Some(s) = lyr
         .first()
         .and_then(|i| non_empty(&i.synced).map(String::from))
         .or(plain)
-        .or_else(|| items.first().and_then(|i| i.best_text())))
+        .or_else(|| lyr.first().and_then(|i| i.best_text()))
+    {
+        return Fetched::Lyrics(s);
+    }
+    if exact.as_ref().is_some_and(instrumental) || other.iter().any(|i| instrumental(i) && close(i))
+    {
+        return Fetched::Instrumental;
+    }
+    Fetched::NotFound
 }
 
 /// Artist/title/album/duration from tags (lofty), falling back to mpv metadata.

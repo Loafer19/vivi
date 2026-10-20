@@ -8,6 +8,7 @@ import { SecondaryButton } from "core/buttons.slint";
 import { SectionHeader } from "core/rows.slint";
 import { Drawer } from "state/drawer.slint";
 import { Lyrics } from "state/lyrics.slint";
+import { LyricsState } from "plugins.slint";
 
 component DrawerTab inherits Rectangle {
     in property <string> label;
@@ -52,13 +53,28 @@ export component SideDrawer inherits Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 alignment: start; padding: 16px; spacing: 10px;
-                if Drawer.tab == "lyrics" && Lyrics.lines.length == 0: Text { text: "No lyrics for this track yet."; color: Theme.fg-a3; wrap: word-wrap; }
+                if Drawer.tab == "lyrics" && Lyrics.lines.length == 0: Text { text: Lyrics.state == LyricsState.instrumental ? "Instrumental track: LRCLIB lists no lyrics for it." : "No lyrics for this track yet."; color: Theme.fg-a3; wrap: word-wrap; }
                 if Drawer.tab == "lyrics": VerticalLayout {
-                    spacing: 6px;
-                    for l[i] in Lyrics.lines: Text {
-                        text: l == "" ? "♪" : l; wrap: word-wrap;
-                        font-size: Metrics.font-md; font-weight: i == Lyrics.index ? 700 : 400;
-                        color: i == Lyrics.index ? Theme.accent : (i < Lyrics.index ? Theme.fg-a3 : Theme.fg-a1);
+                    spacing: 2px;
+                    // Synced lyrics of a file: click a line to jump there.
+                    for l[i] in Lyrics.lines: Rectangle {
+                        border-radius: Metrics.radius-sm;
+                        property <bool> hover;
+                        background: self.hover && Lyrics.seekable ? Theme.bg-a1 : transparent;
+                        HorizontalLayout { padding-top: 2px; padding-bottom: 2px; padding-left: 4px; padding-right: 4px;
+                            Text {
+                                text: l == "" ? "♪" : l; wrap: word-wrap;
+                                font-size: Metrics.font-md; font-weight: i == Lyrics.index ? 700 : 400;
+                                color: i == Lyrics.index ? Theme.accent : (i < Lyrics.index ? Theme.fg-a3 : Theme.fg-a1);
+                            } }
+                        if Lyrics.seekable: TouchArea {
+                            accessible-role: button;
+                            accessible-label: "Jump to this line: " + (l == "" ? "instrumental" : l);
+                            accessible-action-default => { Lyrics.cmd("seek-line", i); }
+                            mouse-cursor: pointer;
+                            changed has-hover => { parent.hover = self.has-hover; }
+                            clicked => { Lyrics.cmd("seek-line", i); }
+                        }
                     }
                 }
                 if Drawer.tab != "lyrics": Text { text: Drawer.info; color: Theme.fg-a1; font-size: Metrics.font-sm; wrap: word-wrap; }

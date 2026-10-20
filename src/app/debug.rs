@@ -157,6 +157,15 @@ pub(crate) fn debug_ui(app: &AppWindow) {
             }
         });
     }
+    // VIVI_DRAWER=<plugin id> (or "" for the first): the player side drawer on that panel.
+    if let Some(id) = var("VIVI_DRAWER") {
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(3000), move || {
+            if let Some(a) = w.upgrade() {
+                crate::drawer::open(&a, &id);
+            }
+        });
+    }
     if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
         app.global::<crate::Settings>().set_onboarding_step(n);
         app.global::<crate::Overlays>().set_onboarding_open(true);

@@ -10,8 +10,10 @@
 //! scrollable block.
 //!
 //! A manual timing offset (`[` / `]` ±0.1 s, with Shift ±0.5 s) is saved per track.
+//! Clicking a line of synced lyrics (karaoke view, overlay, side drawer) seeks there.
 //! Fetched lyrics can be saved as `song.lrc` or embedded in the tags (Auto-tagger code,
-//! with a tag backup).
+//! with a tag backup). Tracks LRCLIB marks as instrumental say so instead of "no lyrics";
+//! "not found" is remembered for a week, then asked again.
 //!
 //! Network streams (radio): whenever the stream title (`icy-title`, else `media-title`,
 //! usually "Artist - Title") changes, it is parsed and looked up on LRCLIB; ads, jingles
@@ -63,6 +65,30 @@ struct Search {
     task: crate::util::Task<Result<Vec<LrclibItem>, String>>,
 }
 
+/// Player time at which lyrics line time `line_t` is shown, with the track's `offset`
+/// (positive = lyrics later).
+pub fn line_seek(line_t: f64, offset: f64) -> f64 {
+    (line_t + offset).max(0.0)
+}
+
+/// The song to look up from the shared now-playing track `np` of `path`: only metadata a
+/// plugin sent (music services, the Auto-tagger's identification) for a song with a
+/// known length; live radio and plain tags / file names are handled elsewhere.
+pub fn np_track(np: &crate::nowplaying::Track, path: Option<&str>) -> Option<Track> {
+    let ok = path.is_some_and(|p| p == np.path)
+        && np.source.starts_with("plugin:")
+        && np.kind == "music"
+        && np.duration > 0.0
+        && !np.artist.trim().is_empty()
+        && !np.title.trim().is_empty();
+    ok.then(|| Track {
+        artist: np.artist.trim().to_string(),
+        title: np.title.trim().to_string(),
+        album: np.album.trim().to_string(),
+        duration: np.duration,
+    })
+}
+
 fn mmss(s: f64) -> String {
     let s = s.round() as u64;
     format!("{}:{:02}", s / 60, s % 60)
@@ -72,7 +98,11 @@ fn mmss(s: f64) -> String {
 pub struct Lyrics {
     lrc: Option<Lrc>,
     index: Option<usize>,
-    task: crate::util::Task<(String, Option<String>)>,
+    task: crate::util::Task<(String, Option<Fetched>)>,
+    /// LRCLIB lists the track as instrumental (nothing shown, said so in the view).
+    instrumental: bool,
+    /// Change counter of the shared now-playing track last looked at.
+    np_id: i64,
     path: Option<String>,
     /// Some while a network stream plays.
     radio: Option<Radio>,
@@ -94,6 +124,7 @@ pub struct Lyrics {
 impl Lyrics {
     fn show(&mut self, cx: &Ctx, lrc: Option<Lrc>) {
         self.index = None;
+        self.instrumental = false;
         self.live = false;
         self.anchor.clear();
         self.word_line = None;
@@ -185,6 +216,7 @@ impl Lyrics {
     fn update_info(&self, cx: &Ctx) {
         let state = match &self.current {
             Some(_) => crate::LyricsState::Found,
+            None if self.instrumental => crate::LyricsState::Instrumental,
             None if self.task.is_running()
                 || self.radio.as_ref().is_some_and(|r| r.task.is_running()) =>
             {
@@ -210,6 +242,7 @@ impl Lyrics {
             {
                 "Searching LRCLIB…".into()
             }
+            None if self.instrumental => "Instrumental · LRCLIB".into(),
             None => "No lyrics found".into(),
         };
         cx.app.global::<crate::Lyrics>().set_source(src.into());
@@ -237,9 +270,36 @@ impl Lyrics {
         };
         cx.app.global::<crate::Lyrics>().set_artist(artist.into());
         cx.app.global::<crate::Lyrics>().set_title(title.into());
-        cx.app.global::<crate::Lyrics>().set_can_save(
-            self.current.is_some() && self.radio.is_none() && cx.local_path().is_some(),
-        );
+        // Save / embed: a local file's lyrics, unless that is where they came from (and
+        // no offset is waiting to be baked in).
+        let save = self.radio.is_none() && cx.local_path().is_some();
+        let from = |s: Source| {
+            self.current
+                .as_ref()
+                .is_some_and(|c| c.source == s && self.offset == 0.0)
+        };
+        let l = cx.app.global::<crate::Lyrics>();
+        l.set_can_save_lrc(save && self.current.is_some() && !from(Source::LocalFile));
+        l.set_can_embed(save && self.current.is_some() && !from(Source::Embedded));
+        l.set_seekable(self.seekable());
+    }
+
+    /// Synced lyrics of a file: a click on a line seeks there.
+    fn seekable(&self) -> bool {
+        self.radio.is_none() && self.lrc.is_some() && !self.plain()
+    }
+
+    /// Seek to the start of line `i` (with the track's offset).
+    fn seek_line(&mut self, cx: &Ctx, i: usize) {
+        if !self.seekable() {
+            return;
+        }
+        let Some(t) = self.lrc.as_ref().and_then(|l| l.lines.get(i)).map(|l| l.0) else {
+            return;
+        };
+        cx.player.seek_abs(line_seek(t, self.offset));
+        self.index = None;
+        self.word_line = None;
     }
 
     fn apply_size(&self, cx: &Ctx) {
@@ -273,17 +333,20 @@ impl Lyrics {
             .as_deref()
             .is_some_and(|p| p.contains("://") && !p.starts_with("file://"));
         if stream {
-            // Stream titles are polled in `tick`.
+            // Stream titles are polled in `tick`; a music service's song info (shared
+            // now-playing track) turns it into a normal song.
             self.radio = Some(Radio::default());
+            self.np_id = crate::nowplaying::current_id();
+            self.now_playing(cx);
             return;
         }
         let mut found = Vec::new();
-        if let Ok(s) = std::fs::read_to_string(manual_file(&self.key)) {
+        if let Some(s) = read_lyrics_file(&manual_file(&self.key)) {
             found.extend(Found::new(Source::Manual, s));
         }
         let local = cx.local_path();
         if let Some(p) = &local {
-            if let Some(l) = local_lrc(p).and_then(|f| std::fs::read_to_string(f).ok()) {
+            if let Some(l) = local_lrc(p).and_then(|f| read_lyrics_file(&f)) {
                 found.extend(Found::new(Source::LocalFile, l));
             }
         }
@@ -292,7 +355,17 @@ impl Lyrics {
         if let (Some(p), true) = (&local, music) {
             found.extend(embedded(p).and_then(|s| Found::new(Source::Embedded, s)));
         }
-        self.track = if music { track_info(cx) } else { None };
+        let track = if music { track_info(cx) } else { None };
+        self.lookup(cx, track, found);
+        // A music service may already have described the stream (see `now_playing`).
+        self.np_id = crate::nowplaying::current_id();
+        self.now_playing(cx);
+    }
+
+    /// Show the best of `found` and the cache of `track`, then ask LRCLIB when nothing
+    /// synced is known yet.
+    fn lookup(&mut self, cx: &Ctx, track: Option<Track>, mut found: Vec<Found>) {
+        self.track = track;
         let cache = self.track.as_ref().map(cache_file);
         if let Some(c) = &cache {
             found.extend(read_cache(c).and_then(|s| Found::new(Source::Cache, s)));
@@ -305,27 +378,83 @@ impl Lyrics {
         let (Some(t), Some(cache)) = (self.track.clone(), cache) else {
             return;
         };
-        if done || !cx.flag("online") || cache.with_extension("missing").exists() {
+        if done || !cx.flag("online") {
             return;
         }
         // Cached plain lyrics: no need to ask again.
         if found.iter().any(|f| f.source == Source::Cache) {
             return;
         }
+        // Remembered as instrumental / not found (until it is stale).
+        if let Some(miss) = cached_miss(&cache) {
+            if miss == Fetched::Instrumental && self.current.is_none() {
+                self.instrumental = true;
+                self.update_info(cx);
+            }
+            return;
+        }
         let key = self.path.clone().unwrap_or_default();
         self.task = crate::util::Task::spawn(move || {
             let res = fetch_lrclib(&t);
             match &res {
-                Ok(s) => write_cache(&cache, s.as_deref()),
+                Ok(f) => write_cache(&cache, f),
                 Err(e) => eprintln!("vivi: lyrics: {e}"),
             }
-            (key, res.ok().flatten())
+            (key, res.ok())
         });
         self.update_info(cx);
     }
 
+    /// The shared now-playing track changed. A song a music service (`vivi-media-meta`) or
+    /// the Auto-tagger described, with a known length, is looked up like a tagged file:
+    /// a stream then plays as a song (synced from its start, not the radio list) and an
+    /// untagged file gets lyrics once it is identified. Lyrics from your pick, a .lrc file
+    /// or the tags are kept.
+    fn now_playing(&mut self, cx: &Ctx) {
+        let np = crate::nowplaying::current();
+        let Some(track) = np_track(&np, self.path.as_deref()) else {
+            return;
+        };
+        if self.track.as_ref() == Some(&track) {
+            return;
+        }
+        let local_lyrics = self
+            .current
+            .as_ref()
+            .is_some_and(|c| c.source <= Source::Embedded);
+        if self.radio.is_none() && local_lyrics {
+            return;
+        }
+        self.task.cancel();
+        if let Some(r) = self.radio.as_mut() {
+            r.task.cancel();
+        }
+        self.radio = None;
+        self.show(cx, None);
+        // Streams: offsets and picks follow the song (the URL may change).
+        if cx.local_path().is_none() {
+            self.set_key(
+                cx,
+                crate::plugins::protocol::join(&["song", track.artist.as_str(), &track.title]),
+            );
+        }
+        let mut found = Vec::new();
+        if let Some(s) = read_lyrics_file(&manual_file(&self.key)) {
+            found.extend(Found::new(Source::Manual, s));
+        }
+        self.lookup(cx, Some(track), found);
+    }
+
     /// Online result: shown unless a better local source is already displayed.
-    fn online_result(&mut self, cx: &Ctx, text: Option<String>) {
+    fn online_result(&mut self, cx: &Ctx, res: Option<Fetched>) {
+        let text = match res {
+            Some(Fetched::Lyrics(t)) => Some(t),
+            Some(Fetched::Instrumental) => {
+                self.instrumental = self.current.is_none();
+                None
+            }
+            _ => None,
+        };
         let Some(online) = text.and_then(|t| Found::new(Source::Online, t)) else {
             self.update_info(cx);
             return;
@@ -345,6 +474,14 @@ impl Lyrics {
     }
 
     fn set_offset(&mut self, cx: &Ctx, o: f64) {
+        if self.lrc.is_none() {
+            cx.toast("No lyrics to shift for this track");
+            return;
+        }
+        if self.radio.is_none() && self.plain() {
+            cx.toast("Plain lyrics have no timing to shift");
+            return;
+        }
         if self.radio.is_some() && !self.anchor.synced() {
             if self.live {
                 cx.toast("Click the line being sung to sync the lyrics first");
@@ -590,11 +727,14 @@ impl Lyrics {
         let Some(f) = text.and_then(|t| Found::new(Source::Manual, t)) else {
             return;
         };
-        let file = manual_file(&self.key);
-        if let Some(d) = file.parent() {
-            let _ = std::fs::create_dir_all(d);
+        // Remembered for the track (nothing to remember it by without one).
+        if !self.key.is_empty() {
+            let file = manual_file(&self.key);
+            if let Some(d) = file.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            let _ = std::fs::write(&file, &f.text);
         }
-        let _ = std::fs::write(&file, &f.text);
         cx.app.global::<crate::Overlays>().set_ls_open(false);
         if let Some(r) = self.radio.as_mut() {
             r.mem.remove(&r.key);
@@ -735,7 +875,7 @@ impl Lyrics {
             return;
         };
         self.set_key(cx, crate::plugins::protocol::join(&["radio", key.as_str()]));
-        if let Ok(s) = std::fs::read_to_string(manual_file(&self.key)) {
+        if let Some(s) = read_lyrics_file(&manual_file(&self.key)) {
             let it = if is_synced(&s) {
                 LrclibItem {
                     synced: Some(s),
@@ -804,6 +944,10 @@ impl Lyrics {
     fn show_radio(&mut self, cx: &Ctx, it: Option<&LrclibItem>, source: Source) {
         let Some(it) = it.filter(|i| i.has_lyrics()) else {
             self.show(cx, None);
+            if it.is_some_and(|i| i.instrumental == Some(true)) {
+                self.instrumental = true;
+                self.update_info(cx);
+            }
             return;
         };
         let synced = non_empty(&it.synced)
@@ -838,7 +982,7 @@ impl Plugin for Lyrics {
         Manifest::builtin(
             ID,
             "Lyrics",
-            "Synced lyrics as a karaoke overlay or a full-screen karaoke view with word highlight, from a .lrc file, the file's tags or LRCLIB; manual search, per-track timing offset, save as .lrc or embed.",
+            "Synced lyrics as a karaoke overlay, a full-screen karaoke view with word highlight or a side-drawer list, from your pick, a .lrc file, the file's tags or LRCLIB; click a line to jump there, per-track timing offset, save as .lrc or embed, radio lyrics by stream title, instrumental tracks recognised.",
             "lyrics",
         )
         .contribute(contrib::PALETTE_COMMAND, "Find lyrics", "search-open")
@@ -849,7 +993,7 @@ impl Plugin for Lyrics {
         .setting(SettingSpec::toggle(
             "online",
             "Search lyrics online (LRCLIB)",
-            "Sends artist, title, album and duration to lrclib.net. Results are cached.",
+            "Sends artist, title, album and duration to lrclib.net (radio: the stream title). Results are cached; songs not found are asked again after a week.",
             true,
         ))
         .setting(SettingSpec::choice(
@@ -879,6 +1023,10 @@ impl Plugin for Lyrics {
     }
     fn enable(&mut self, cx: &Ctx) {
         cx.app.global::<crate::Lyrics>().set_enabled(true);
+        // Side drawer lines (a click seeks there).
+        cx.app
+            .global::<crate::Lyrics>()
+            .on_cmd(|n, a| crate::plugins::command(ID, &n, &[a.to_string()]));
         self.apply_size(cx);
         if cx.app.global::<crate::Playback>().get_has_media() {
             self.load(cx);
@@ -934,6 +1082,11 @@ impl Plugin for Lyrics {
                     self.sync_line(cx, i);
                 }
             }
+            "seek-line" => {
+                if let Some(i) = idx {
+                    self.seek_line(cx, i);
+                }
+            }
             "search-open" => self.search_open(cx),
             "search" => self.search_run(cx),
             "search-select" => {
@@ -968,6 +1121,11 @@ impl Plugin for Lyrics {
     }
     fn tick(&mut self, cx: &Ctx) {
         self.search_tick(cx);
+        let np = crate::nowplaying::current_id();
+        if np != self.np_id {
+            self.np_id = np;
+            self.now_playing(cx);
+        }
         if self.radio.is_some() && cx.get("radio-mode") != "Off" {
             self.radio_result(cx);
             self.radio_tick(cx);
@@ -1261,6 +1419,155 @@ mod tests {
         assert!(!LrclibItem::default().has_lyrics());
     }
 
+    #[test]
+    fn pick_lyrics_or_instrumental() {
+        let it = |d: f64, synced: Option<&str>, plain: Option<&str>, inst: bool| LrclibItem {
+            duration: Some(d),
+            synced: synced.map(String::from),
+            plain: plain.map(String::from),
+            instrumental: Some(inst),
+            ..Default::default()
+        };
+        // Synced lyrics of the closest result win over the exact match's plain ones.
+        let exact = it(180.0, None, Some("plain"), false);
+        let v = vec![
+            it(300.0, Some("[00:01.00]far"), None, false),
+            it(181.0, Some("[00:01.00]near"), None, false),
+        ];
+        assert_eq!(
+            pick(Some(exact.clone()), v, 180.0),
+            Fetched::Lyrics("[00:01.00]near".into())
+        );
+        // Only plain lyrics: the exact match's first.
+        let v = vec![it(181.0, None, Some("other"), false)];
+        assert_eq!(
+            pick(Some(exact), v.clone(), 180.0),
+            Fetched::Lyrics("plain".into())
+        );
+        assert_eq!(pick(None, v, 180.0), Fetched::Lyrics("other".into()));
+        // Instrumental: the exact match says so, or a result of about the same length.
+        assert_eq!(
+            pick(Some(it(67.0, None, None, true)), vec![], 67.0),
+            Fetched::Instrumental
+        );
+        assert_eq!(
+            pick(None, vec![it(68.5, None, None, true)], 67.0),
+            Fetched::Instrumental
+        );
+        assert_eq!(
+            pick(None, vec![it(120.0, None, None, true)], 67.0),
+            Fetched::NotFound,
+            "other length"
+        );
+        // Any lyrics beat an instrumental flag.
+        let v = vec![
+            it(67.0, None, None, true),
+            it(90.0, None, Some("words"), false),
+        ];
+        assert_eq!(pick(None, v, 67.0), Fetched::Lyrics("words".into()));
+        assert_eq!(pick(None, vec![], 67.0), Fetched::NotFound);
+    }
+
+    #[test]
+    fn cache_misses_expire() {
+        let d = std::env::temp_dir().join(format!("vivi-lyr-miss-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let stem = d.join("abc.lrc");
+        assert_eq!(cached_miss(&stem), None);
+        write_cache(&stem, &Fetched::NotFound);
+        assert_eq!(cached_miss(&stem), Some(Fetched::NotFound));
+        // A week-old "not found" is asked again.
+        let old = std::time::SystemTime::now() - Duration::from_secs(MISS_DAYS * 86_400 + 60);
+        std::fs::File::options()
+            .write(true)
+            .open(stem.with_extension("missing"))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        assert_eq!(cached_miss(&stem), None);
+        write_cache(&stem, &Fetched::Instrumental);
+        assert_eq!(cached_miss(&stem), Some(Fetched::Instrumental));
+        write_cache(&stem, &Fetched::Lyrics("[00:01.00]x".into()));
+        assert_eq!(read_cache(&stem).as_deref(), Some("[00:01.00]x"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn lyrics_file_size_cap() {
+        let d = std::env::temp_dir().join(format!("vivi-lyr-cap-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let ok = d.join("a.lrc");
+        std::fs::write(&ok, "[00:01.00]x").unwrap();
+        assert_eq!(read_lyrics_file(&ok).as_deref(), Some("[00:01.00]x"));
+        let big = d.join("b.lrc");
+        std::fs::write(&big, vec![b'a'; MAX_LYRICS_FILE as usize + 1]).unwrap();
+        assert_eq!(read_lyrics_file(&big), None);
+        assert_eq!(read_lyrics_file(&d.join("none.lrc")), None);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn now_playing_songs() {
+        let np = crate::nowplaying::Track {
+            title: "Song ".into(),
+            artist: "Band".into(),
+            album: "LP".into(),
+            duration: 201.0,
+            kind: "music".into(),
+            source: "plugin:youtube-music".into(),
+            path: "https://example.org/v".into(),
+            ..Default::default()
+        };
+        let t = np_track(&np, Some("https://example.org/v")).unwrap();
+        assert_eq!(
+            (t.artist.as_str(), t.title.as_str(), t.duration),
+            ("Band", "Song", 201.0)
+        );
+        assert!(
+            np_track(&np, Some("https://example.org/other")).is_none(),
+            "stale path"
+        );
+        assert!(np_track(&np, None).is_none());
+        let live = crate::nowplaying::Track {
+            duration: 0.0,
+            ..np.clone()
+        };
+        assert!(
+            np_track(&live, Some("https://example.org/v")).is_none(),
+            "live radio"
+        );
+        let tags = crate::nowplaying::Track {
+            source: "tags".into(),
+            ..np.clone()
+        };
+        assert!(
+            np_track(&tags, Some("https://example.org/v")).is_none(),
+            "tags: track_info"
+        );
+        let video = crate::nowplaying::Track {
+            kind: "video".into(),
+            ..np.clone()
+        };
+        assert!(np_track(&video, Some("https://example.org/v")).is_none());
+        let no_artist = crate::nowplaying::Track {
+            artist: " ".into(),
+            ..np
+        };
+        assert!(np_track(&no_artist, Some("https://example.org/v")).is_none());
+    }
+
+    #[test]
+    fn seek_to_line() {
+        let l = Lrc::parse("[00:10.00]A\n[00:20.00]B");
+        // No offset: the line's own time; +0.5 s (lyrics later): half a second later.
+        assert_eq!(line_seek(l.lines[1].0, 0.0), 20.0);
+        assert_eq!(line_seek(l.lines[1].0, 0.5), 20.5);
+        assert_eq!(line_seek(0.2, -1.0), 0.0, "never before the start");
+        // After the seek the clicked line is the one highlighted.
+        let now = line_seek(l.lines[1].0, 0.5);
+        assert_eq!(l.index_at(now - 0.5 + 0.15), Some(1));
+    }
+
     /// Network test; run with `cargo test -- --ignored`.
     #[test]
     #[ignore]
@@ -1281,6 +1588,6 @@ mod tests {
             album: "Baldur's Gate 3 (Original Game Soundtrack)".into(),
             duration: 233.0,
         };
-        assert!(fetch_lrclib(&t).unwrap().is_some());
+        assert!(matches!(fetch_lrclib(&t).unwrap(), Fetched::Lyrics(_)));
     }
 }
