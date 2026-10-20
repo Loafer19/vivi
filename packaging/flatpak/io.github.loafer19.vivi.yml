@@ -54,7 +54,6 @@ modules:
     sources:
       - type: git
         url: https://github.com/LuaJIT/LuaJIT.git
-        branch: v2.1
         commit: 2a8e017ef1ece6a95b983ffca073d30609dce7c4
       - type: shell
         commands:
