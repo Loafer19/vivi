@@ -753,13 +753,7 @@ pub fn client_message(args: &[String]) {
                 crate::downloads::open(&a);
             }
         }
-        Some(M::Toast { text, secs }) => {
-            with(|r| {
-                if let Some(a) = r.app.upgrade() {
-                    toast_for(&a, text, toast_secs(secs));
-                }
-            });
-        }
+        Some(M::Toast { text, secs }) => toast_after_resume(text.to_string(), toast_secs(secs), 10),
         Some(m @ (M::Dialog { .. } | M::DialogClose(_) | M::Confirm { .. })) => {
             let Some(a) = with(|r| r.app.upgrade()).flatten() else {
                 return;
@@ -949,6 +943,24 @@ pub fn toast_for(app: &AppWindow, msg: &str, secs: f64) {
             }
         }
     });
+}
+
+/// A plugin toast (`vivi-toast`) waits, up to `tries` seconds, while the resume prompt
+/// ("Resumed from …" with *Start over*) holds the shared notice line: shown at once it
+/// would take the prompt and its button away (packages often toast at `file-loaded`).
+fn toast_after_resume(text: String, secs: f64, tries: u32) {
+    let Some(a) = with(|r| r.app.upgrade()).flatten() else {
+        return;
+    };
+    let n = a.global::<crate::Notices>();
+    let offer = n.get_resume_offer();
+    if tries > 0 && !offer.is_empty() && n.get_resume_text() == offer {
+        slint::Timer::single_shot(Duration::from_secs(1), move || {
+            toast_after_resume(text, secs, tries - 1)
+        });
+        return;
+    }
+    toast_for(&a, &text, secs);
 }
 
 /// mpv loaded a new file.

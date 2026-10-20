@@ -54,6 +54,7 @@
 - **Radio lyrics setting**: *Approximate sync* (synced lyrics timed from the title change) and the *Radio sync offset* setting are replaced by click-to-sync; the setting's choices are now *Click a line to sync* (default), *Plain lyrics* and *Off*.
 
 ### Fixed
+- **Plugin toasts no longer take the resume prompt away**: a `vivi-toast` that arrives while *Resumed from … · Start over* is showing (packages often toast when a file loads) waits until the prompt is gone (at most 10 s) instead of replacing it and its button.
 - **Auto-tagger, identified songs**: playing an identified song again in the same session shows its title in the player and window title again (the now-playing card and MPRIS kept it, mpv's file-local title did not). The now-playing card shows a music icon instead of the radio one for songs without a cover. Plural fixes in the candidates and folder summaries ("1 candidate", "1 audio file: 1 confident match").
 - **Accessibility**: the shared text and icon buttons and the toast buttons (*Review tags*, *Open Auto-tagger*, *Start over*) can be pressed by screen readers and other assistive tools (AT-SPI *click*); before, they were announced but had no action.
 - **Auto-tagger: AcoustID key out of URLs**: the lookup now sends the application key and fingerprint in a POST body (it used the query string), masks the key in any error text, and asks for recording titles in the same request; a recording listed under two AcoustID results keeps its best score.
