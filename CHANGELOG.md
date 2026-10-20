@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-20
+
 ### Fixed
 - **Windows build**: 0.13.0 did not compile for Windows (the exit cleanup removed the control socket, which exists only on Unix), so the release had no Windows zip.
 - **Flatpak build**: the LuaJIT source was pinned to both the `v2.1` branch and a commit, so the build broke as soon as upstream `v2.1` moved on and 0.13.0 had no Flatpak; it is pinned to the commit only, like the Flathub manifest.

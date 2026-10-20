@@ -45,6 +45,9 @@
     <binary>vivi</binary>
   </provides>
   <releases>
+    <release version="0.13.1" date="2026-10-20">
+      <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.13.1</url>
+    </release>
     <release version="0.13.0" date="2026-10-20">
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.13.0</url>
     </release>
