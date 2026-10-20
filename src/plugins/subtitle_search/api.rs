@@ -237,6 +237,59 @@ pub(crate) fn agent() -> ureq::Agent {
     crate::plugins::web::agent_as(20, &format!("Vivi v{}", env!("CARGO_PKG_VERSION")), false)
 }
 
+/// The API base: [`API`], or `VIVI_OPENSUBTITLES_API` (a local mock or a mirror) when it
+/// passes [`safe_url`].
+pub(crate) fn api_base() -> String {
+    std::env::var(API_ENV)
+        .ok()
+        .map(|s| s.trim().trim_end_matches('/').to_string())
+        .filter(|s| safe_url(s))
+        .unwrap_or_else(|| API.to_string())
+}
+
+/// URLs Vivi sends the API key to or downloads from: https, or plain http only to this
+/// machine (`localhost`, `127.0.0.1`, `[::1]`). No user info in the authority.
+pub(crate) fn safe_url(u: &str) -> bool {
+    let l = u.trim().to_ascii_lowercase();
+    let (https, rest) = match (l.strip_prefix("https://"), l.strip_prefix("http://")) {
+        (Some(r), _) => (true, r),
+        (_, Some(r)) => (false, r),
+        _ => return false,
+    };
+    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if auth.is_empty() || auth.contains('@') {
+        return false;
+    }
+    if https {
+        return true;
+    }
+    let host = if auth.starts_with('[') {
+        auth.split(']')
+            .next()
+            .map(|h| format!("{h}]"))
+            .unwrap_or_default()
+    } else {
+        auth.split(':').next().unwrap_or("").to_string()
+    };
+    matches!(host.as_str(), "localhost" | "127.0.0.1" | "[::1]")
+}
+
+/// A network error as a short message, never with a URL (download links carry a
+/// one-time token).
+pub(crate) fn net_err(e: ureq::Error) -> String {
+    use ureq::Error as E;
+    match e {
+        E::StatusCode(c) => api_err(c, ""),
+        E::Timeout(_) => "OpenSubtitles did not answer in time; try again".into(),
+        E::HostNotFound | E::ConnectionFailed | E::Io(_) => {
+            "Could not reach OpenSubtitles; check the internet connection".into()
+        }
+        E::TooManyRedirects | E::RedirectFailed => "OpenSubtitles: unexpected redirect".into(),
+        E::BodyExceedsLimit(_) => "OpenSubtitles: answer too large".into(),
+        _ => "OpenSubtitles: network error".into(),
+    }
+}
+
 pub(crate) fn api_err(code: u16, body: &str) -> String {
     let msg = serde_json::from_str::<serde_json::Value>(body)
         .ok()
@@ -257,17 +310,98 @@ pub(crate) fn api_err(code: u16, body: &str) -> String {
     }
 }
 
-/// What to search for: the file hash, an IMDb id or a text query (any combination).
+/// What to search for: the file hash, an IMDb id or a text query (any combination),
+/// with the season / episode or year found in the text.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Query {
     pub hash: Option<String>,
     pub imdb: Option<u64>,
     pub text: String,
+    pub season: Option<u32>,
+    pub episode: Option<u32>,
+    pub year: Option<u32>,
+}
+
+/// Season and episode of a word: `S01E05`, `s1e5`, `S01E05E06` (first one), `1x05`.
+fn episode_of(w: &str) -> Option<(u32, u32)> {
+    let w = w.to_ascii_lowercase();
+    let num = |s: &str, max: usize| -> Option<(u32, usize)> {
+        let d: String = s.chars().take_while(char::is_ascii_digit).collect();
+        if d.is_empty() || d.len() > max {
+            return None;
+        }
+        Some((d.parse().ok()?, d.len()))
+    };
+    if let Some(r) = w.strip_prefix('s') {
+        let (se, n) = num(r, 2)?;
+        let r = r[n..].strip_prefix('e')?;
+        let (ep, m) = num(r, 3)?;
+        let rest = &r[m..];
+        return (rest.is_empty() || rest.starts_with('e') || rest.starts_with('-'))
+            .then_some((se, ep));
+    }
+    let (se, n) = num(&w, 2)?;
+    let r = w[n..].strip_prefix('x')?;
+    let (ep, m) = num(r, 3)?;
+    r[m..].is_empty().then_some((se, ep))
+}
+
+impl Query {
+    /// Text query split into the title and its season / episode ("The Wand S01E05",
+    /// "Show 2x03") or release year ("Movie (2020)", "Movie 2020"). A year alone stays the
+    /// title ("1917"); IMDb ids are kept as they are.
+    pub fn from_text(text: &str) -> Query {
+        let mut q = Query {
+            imdb: imdb_id(text),
+            text: text.trim().to_string(),
+            ..Default::default()
+        };
+        if q.imdb.is_some() {
+            return q;
+        }
+        let words: Vec<&str> = q.text.split_whitespace().collect();
+        if let Some(i) = words.iter().position(|w| episode_of(w).is_some()) {
+            if i > 0 {
+                let (se, ep) = episode_of(words[i]).unwrap_or_default();
+                q.season = Some(se);
+                q.episode = Some(ep);
+                q.text = words[..i].join(" ");
+            }
+            return q;
+        }
+        if words.len() > 1 {
+            let last = words[words.len() - 1].trim_matches(['(', ')', '[', ']']);
+            if let Ok(y) = last.parse::<u32>() {
+                if last.len() == 4 && (1900..=2099).contains(&y) {
+                    q.year = Some(y);
+                    q.text = words[..words.len() - 1].join(" ");
+                }
+            }
+        }
+        q
+    }
+    /// Whether a season, episode or year narrows the text search.
+    pub fn narrowed(&self) -> bool {
+        self.season.is_some() || self.episode.is_some() || self.year.is_some()
+    }
+    /// The same search with the plain text only (when the narrowed one finds nothing).
+    pub fn plain(&self, text: &str) -> Query {
+        Query {
+            hash: self.hash.clone(),
+            imdb: self.imdb,
+            text: text.trim().to_string(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Query parameters in the order the API wants (alphabetical, lowercase values).
 pub(crate) fn search_params(q: &Query, langs: &str) -> Vec<(&'static str, String)> {
     let mut p = Vec::new();
+    let text = q.imdb.is_none() && !q.text.trim().is_empty();
+    if let Some(e) = q.episode.filter(|_| text) {
+        p.push(("episode_number", e.to_string()));
+    }
     if let Some(i) = q.imdb {
         p.push(("imdb_id", i.to_string()));
     }
@@ -278,8 +412,14 @@ pub(crate) fn search_params(q: &Query, langs: &str) -> Vec<(&'static str, String
     if let Some(h) = &q.hash {
         p.push(("moviehash", h.to_lowercase()));
     }
-    if q.imdb.is_none() && !q.text.trim().is_empty() {
+    if text {
         p.push(("query", q.text.trim().to_lowercase()));
+    }
+    if let Some(s) = q.season.filter(|_| text) {
+        p.push(("season_number", s.to_string()));
+    }
+    if let Some(y) = q.year.filter(|_| text) {
+        p.push(("year", y.to_string()));
     }
     p
 }
@@ -287,19 +427,20 @@ pub(crate) fn search_params(q: &Query, langs: &str) -> Vec<(&'static str, String
 pub(crate) fn search(c: &Creds, q: &Query, langs: &str) -> Result<Vec<Hit>, String> {
     let a = agent();
     let mut req = a
-        .get(format!("{API}/subtitles"))
+        .get(format!("{}/subtitles", api_base()))
         .header("Api-Key", &c.key)
         .header("Accept", "application/json");
     // OpenSubtitles answers 301 unless parameters are lowercase and sorted by name.
     for (k, v) in search_params(q, langs) {
         req = req.query(k, v);
     }
-    let mut r = req.call().map_err(|e| e.to_string())?;
-    let body = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
+    let mut r = req.call().map_err(net_err)?;
+    let body = r.body_mut().read_to_string().map_err(net_err)?;
     if !r.status().is_success() {
         return Err(api_err(r.status().as_u16(), &body));
     }
-    let v: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let v: serde_json::Value =
+        serde_json::from_str(&body).map_err(|_| "OpenSubtitles: unreadable answer".to_string())?;
     Ok(parse_search(&v))
 }
 
@@ -330,19 +471,51 @@ pub fn search_all(
             Err(_) => {}
         }
     }
-    let q = Query {
-        hash: None,
-        imdb: imdb_id(text),
-        text: text.to_string(),
-    };
+    let q = Query::from_text(text);
     if q.imdb.is_none() && q.text.trim().is_empty() {
         return Ok(by_hash);
     }
-    match search(c, &q, langs) {
+    // A season / episode or year that matches nothing: the plain text instead.
+    let found = match search(c, &q, langs) {
+        Ok(v) if v.is_empty() && q.narrowed() => search(c, &q.plain(text), langs),
+        r => r,
+    };
+    match found {
         Ok(v) => Ok(merge_hits(by_hash, v)),
         Err(_) if !by_hash.is_empty() => Ok(merge_hits(by_hash, Vec::new())),
         Err(e) => Err(e),
     }
+}
+
+/// The exact (hash) match to load automatically: made for this file, not machine
+/// translated, most downloaded (hearing-impaired ones only when there is nothing else).
+pub fn best_exact(hits: &[Hit]) -> Option<Hit> {
+    hits.iter()
+        .filter(|h| h.hash_match && !h.machine)
+        .max_by_key(|h| (!h.hearing_impaired, h.downloads))
+        .cloned()
+}
+
+/// *Load exact matches automatically*: search `path` by its hash in `langs` and download
+/// the [`best_exact`] match into `dir`. `None` when there is no exact match.
+pub fn auto_pick(
+    c: &Creds,
+    path: &Path,
+    langs: &str,
+    dir: &Path,
+) -> Result<Option<(Hit, PathBuf, Option<i64>)>, String> {
+    let Ok(hash) = moviehash(path) else {
+        return Ok(None);
+    };
+    let q = Query {
+        hash: Some(hash),
+        ..Default::default()
+    };
+    let Some(best) = best_exact(&search(c, &q, langs)?) else {
+        return Ok(None);
+    };
+    let (p, left) = download(c, best.file_id, dir)?;
+    Ok(Some((best, p, left)))
 }
 
 /// A subtitle already downloaded into the cache (`<file_id>-<name>`).
@@ -354,69 +527,198 @@ pub(crate) fn cached(dir: &Path, file_id: i64) -> Option<PathBuf> {
     })
 }
 
+/// A login: its token and the API base it belongs to (VIP accounts get their own host).
+#[derive(Clone)]
+struct Session {
+    who: u64,
+    token: String,
+    base: String,
+    at: std::time::Instant,
+}
+
+/// Logins are reused for 12 hours (OpenSubtitles asks clients not to log in for every
+/// download; tokens last 24 hours). In memory only.
+static SESSION: std::sync::Mutex<Option<Session>> = std::sync::Mutex::new(None);
+const SESSION_TTL: std::time::Duration = std::time::Duration::from_secs(12 * 3600);
+
+fn who(c: &Creds, base: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (base, &c.key, &c.user, &c.pass).hash(&mut h);
+    h.finish()
+}
+
+/// POST JSON to the API; errors keep the HTTP status (0: network) for retries.
+fn post(
+    a: &ureq::Agent,
+    key: &str,
+    url: &str,
+    token: Option<&str>,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, (u16, String)> {
+    let mut req = a
+        .post(url)
+        .header("Api-Key", key)
+        .header("Accept", "application/json");
+    if let Some(t) = token {
+        req = req.header("Authorization", format!("Bearer {t}"));
+    }
+    let mut r = req.send_json(body).map_err(|e| (0, net_err(e)))?;
+    let code = r.status().as_u16();
+    let s = r.body_mut().read_to_string().map_err(|e| (0, net_err(e)))?;
+    if !r.status().is_success() {
+        return Err((code, api_err(code, &s)));
+    }
+    serde_json::from_str::<serde_json::Value>(&s)
+        .map_err(|_| (code, "OpenSubtitles: unreadable answer".into()))
+}
+
+/// The cached login for these credentials, or a new one (`fresh`: always log in again).
+fn login(a: &ureq::Agent, c: &Creds, base: &str, fresh: bool) -> Result<Session, String> {
+    let id = who(c, base);
+    let mut cache = SESSION.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(s) = cache
+        .as_ref()
+        .filter(|s| !fresh && s.who == id && s.at.elapsed() < SESSION_TTL)
+    {
+        return Ok(s.clone());
+    }
+    let v = post(
+        a,
+        &c.key,
+        &format!("{base}/login"),
+        None,
+        serde_json::json!({ "username": c.user, "password": c.pass }),
+    )
+    .map_err(|(_, m)| m)?;
+    let token = v["token"]
+        .as_str()
+        .filter(|t| !t.is_empty())
+        .ok_or("OpenSubtitles: login failed")?
+        .to_string();
+    let s = Session {
+        who: id,
+        token,
+        base: session_base(base, v["base_url"].as_str().unwrap_or("")),
+        at: std::time::Instant::now(),
+    };
+    *cache = Some(s.clone());
+    Ok(s)
+}
+
+/// API base after a login: the account's own host (`vip-api.opensubtitles.com`) when
+/// it is an OpenSubtitles host and the default API is used; else `base`.
+pub(crate) fn session_base(base: &str, host: &str) -> String {
+    let h = host
+        .trim()
+        .trim_start_matches("https://")
+        .trim_end_matches('/');
+    let h = h.split('/').next().unwrap_or("").to_ascii_lowercase();
+    let ours = h == "opensubtitles.com" || h.ends_with(".opensubtitles.com");
+    if base == API
+        && ours
+        && h.chars()
+            .all(|c| c.is_ascii_alphanumeric() || ".-".contains(c))
+    {
+        format!("https://{h}/api/v1")
+    } else {
+        base.to_string()
+    }
+}
+
 /// Download a subtitle into `dir` (reusing a cached copy). Returns the file and the
 /// downloads left today when the API said so.
 pub fn download(c: &Creds, file_id: i64, dir: &Path) -> Result<(PathBuf, Option<i64>), String> {
+    download_from(&api_base(), c, file_id, dir)
+}
+
+/// [`download`] from the API at `base`.
+pub(crate) fn download_from(
+    base: &str,
+    c: &Creds,
+    file_id: i64,
+    dir: &Path,
+) -> Result<(PathBuf, Option<i64>), String> {
     if let Some(p) = cached(dir, file_id) {
         return Ok((p, None));
     }
     let a = agent();
-    let post = |path: &str, token: Option<&str>, body: serde_json::Value| {
-        let mut req = a
-            .post(format!("{API}{path}"))
-            .header("Api-Key", &c.key)
-            .header("Accept", "application/json");
-        if let Some(t) = token {
-            req = req.header("Authorization", format!("Bearer {t}"));
-        }
-        let mut r = req.send_json(body).map_err(|e| e.to_string())?;
-        let s = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
-        if !r.status().is_success() {
-            return Err(api_err(r.status().as_u16(), &s));
-        }
-        serde_json::from_str::<serde_json::Value>(&s).map_err(|e| e.to_string())
-    };
-    let token = if c.user.is_empty() {
-        None
+    let body = serde_json::json!({ "file_id": file_id });
+    let v = if c.user.is_empty() {
+        post(&a, &c.key, &format!("{base}/download"), None, body).map_err(|(_, m)| m)?
     } else {
-        let v = post(
-            "/login",
-            None,
-            serde_json::json!({ "username": c.user, "password": c.pass }),
-        )?;
-        v["token"].as_str().map(String::from)
+        let s = login(&a, c, base, false)?;
+        let url = |s: &Session| format!("{}/download", s.base);
+        match post(&a, &c.key, &url(&s), Some(&s.token), body.clone()) {
+            // An expired or revoked token: log in once more.
+            Err((401, _)) => {
+                let s = login(&a, c, base, true)?;
+                post(&a, &c.key, &url(&s), Some(&s.token), body).map_err(|(_, m)| m)?
+            }
+            r => r.map_err(|(_, m)| m)?,
+        }
     };
-    let v = post(
-        "/download",
-        token.as_deref(),
-        serde_json::json!({ "file_id": file_id }),
-    )?;
     let link = v["link"]
         .as_str()
+        .filter(|l| safe_url(l))
         .ok_or_else(|| api_err(0, &v.to_string()))?;
     let remaining = v["remaining"].as_i64();
     let name = v["file_name"].as_str().unwrap_or("subtitle.srt");
     let mut name: String = name
         .chars()
-        .map(|ch| if "/\\:".contains(ch) { '_' } else { ch })
+        .map(|ch| {
+            if "/\\:".contains(ch) || ch.is_control() {
+                '_'
+            } else {
+                ch
+            }
+        })
+        .take(120)
         .collect();
     if !has_ext(Path::new(&name), SUB_EXT) {
         name.push_str(".srt");
     }
-    let mut r = a.get(link).call().map_err(|e| e.to_string())?;
+    let mut r = a.get(link).call().map_err(net_err)?;
     if !r.status().is_success() {
-        return Err(format!("download failed ({})", r.status()));
+        return Err(format!(
+            "Subtitle download failed (HTTP {})",
+            r.status().as_u16()
+        ));
     }
     let bytes = r
         .body_mut()
         .with_config()
         .limit(20 * 1024 * 1024)
         .read_to_vec()
-        .map_err(|e| e.to_string())?;
+        .map_err(net_err)?;
+    if bytes.is_empty() {
+        return Err("OpenSubtitles sent an empty subtitle file".into());
+    }
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let out = dir.join(format!("{file_id}-{name}"));
-    std::fs::write(&out, bytes).map_err(|e| e.to_string())?;
+    // Temp file + rename: a cut-off download is never taken for a cached subtitle (the
+    // temp name does not start with the file id).
+    let tmp = dir.join(format!(".{file_id}.part"));
+    std::fs::write(&tmp, &bytes)
+        .and_then(|_| std::fs::rename(&tmp, &out))
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            e.to_string()
+        })?;
     Ok((out, remaining))
+}
+
+/// A language code safe for a file name: lowercase letters, digits and `-` (at most 12).
+pub(crate) fn safe_lang(lang: &str) -> String {
+    let l = lang.trim().to_lowercase();
+    if l.is_empty()
+        || l.len() > 12
+        || !l.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        || l.starts_with('-')
+    {
+        return String::new();
+    }
+    l
 }
 
 /// Where to save a subtitle next to `video`: `<stem>.<lang>.<ext>`, or with the
@@ -433,7 +735,7 @@ pub fn sidecar_path(
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "subtitle".into());
     let dir = video.parent().unwrap_or(Path::new("."));
-    let lang = lang.trim().to_lowercase();
+    let lang = safe_lang(lang);
     let base = if lang.is_empty() {
         stem
     } else {

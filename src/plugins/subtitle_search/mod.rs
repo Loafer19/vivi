@@ -8,11 +8,20 @@
 //! once into `$XDG_CACHE_HOME/vivi/subtitles` and shows its first lines; *Load* reuses
 //! that copy (one download from the daily quota per subtitle). Optionally the file is
 //! saved next to the video as `<video>.<lang>.<ext>` (setting *Save next to the video*).
-//! The pick is remembered per file and loaded again the next time it plays.
+//! The pick is remembered per file and loaded again the next time it plays. A query
+//! with an episode (`Show S01E05`, `Show 1x05`) or a year (`Movie (2020)`) is sent as the
+//! title plus `season_number` / `episode_number` or `year` (the plain text again when that
+//! finds nothing). *Load exact matches automatically* (off by default): a local video that
+//! opens without subtitles in the chosen languages gets the most downloaded exact (hash)
+//! match, one download per new file, tried once per file and session.
 //!
 //! The API needs a (free) API key from <https://www.opensubtitles.com/consumers>,
 //! entered in Settings → Extensions (or `VIVI_OPENSUBTITLES_KEY`). Username and
-//! password are optional; logged-in users get more downloads per day.
+//! password are optional; logged-in users get more downloads per day. A login is reused
+//! for 12 hours (in memory) and VIP accounts use their own API host. The key goes in the
+//! `Api-Key` header only, never in a URL, a log line or an error message; download links
+//! (one-time tokens) are not shown either. `VIVI_OPENSUBTITLES_API` points the plugin at
+//! another API base (https, or http on this machine only; for tests with a local mock).
 //!
 //! The per-file **offset** (`z` / `x`, `Alt+Z` / `Alt+X`, side panel) is the player's
 //! own (src/suboffset.rs) and works with this plugin off; *Auto-sync* hands the subtitle
@@ -37,6 +46,8 @@ const API: &str = "https://api.opensubtitles.com/api/v1";
 pub const NO_KEY: &str = "OpenSubtitles needs an API key. Get a free one at opensubtitles.com/consumers and enter it in Settings → Extensions → Subtitle Search.";
 /// Environment fallback for the API key (Settings wins).
 const KEY_ENV: &str = "VIVI_OPENSUBTITLES_KEY";
+/// Environment override of the API base (see [`api_base`]).
+const API_ENV: &str = "VIVI_OPENSUBTITLES_API";
 /// Package that aligns subtitles to the audio (alass / ffsubsync + shared ffmpeg).
 use crate::suboffset::SYNC_PACKAGE;
 
@@ -70,6 +81,12 @@ enum Msg {
     },
 }
 
+/// Result of *Load exact matches automatically* for the file with key `key`.
+struct Auto {
+    key: String,
+    r: Result<Option<(Hit, PathBuf, Option<i64>)>, String>,
+}
+
 #[derive(Default)]
 pub struct SubtitleSearch {
     hits: Vec<Hit>,
@@ -88,6 +105,45 @@ pub struct SubtitleSearch {
     pairs: Vec<(PathBuf, Option<PathBuf>)>,
     /// Subtitles assigned with "To This Folder", attached when that video loads.
     assigned: HashMap<PathBuf, PathBuf>,
+    /// Automatic exact-match lookup running for the playing file.
+    auto_rx: Option<Receiver<Auto>>,
+    /// Files tried automatically this session (one lookup per file).
+    auto_tried: std::collections::HashSet<String>,
+}
+
+/// mpv / Matroska track languages (ISO 639-2) for the chip codes.
+const ISO3: &[(&str, &[&str])] = &[
+    ("en", &["eng"]),
+    ("uk", &["ukr"]),
+    ("es", &["spa"]),
+    ("fr", &["fre", "fra"]),
+    ("de", &["ger", "deu"]),
+    ("it", &["ita"]),
+    ("pt", &["por"]),
+    ("pl", &["pol"]),
+    ("nl", &["dut", "nld"]),
+    ("tr", &["tur"]),
+    ("ru", &["rus"]),
+    ("ar", &["ara"]),
+    ("zh", &["chi", "zho"]),
+    ("ja", &["jpn"]),
+    ("ko", &["kor"]),
+];
+
+/// Whether a track language (`en`, `eng`, `pt-BR`, `por`) is one of the codes in `langs`.
+pub(crate) fn track_lang_in(track: &str, langs: &str) -> bool {
+    let t = track.trim().to_lowercase();
+    let t = t.split(['-', '_']).next().unwrap_or("");
+    norm_langs(langs)
+        .split(',')
+        .filter(|c| !c.is_empty())
+        .any(|c| {
+            let base = c.split('-').next().unwrap_or(c);
+            t == base
+                || ISO3
+                    .iter()
+                    .any(|(two, three)| *two == base && three.contains(&t))
+        })
 }
 
 fn lang_name(code: &str) -> String {
@@ -406,16 +462,18 @@ impl SubtitleSearch {
     }
     /// Put a downloaded subtitle in place (next to the video when that setting is on),
     /// load it, remember it for this file and close the dialog.
-    fn use_file(&mut self, cx: &Ctx, cachedp: &Path, file_id: i64, lang: &str) {
+    /// `auto`: loaded by *Load exact matches automatically* (the dialog stays as it is).
+    fn use_file(&mut self, cx: &Ctx, cachedp: &Path, file_id: i64, lang: &str, auto: bool) {
         let mut path = cachedp.to_path_buf();
         let mut note = String::new();
         if cx.flag("save-next") {
-            if let Some(video) = cx.local_path() {
+            let data = std::fs::read(cachedp).ok().filter(|d| !d.is_empty());
+            if let (Some(video), Some(data)) = (cx.local_path(), data) {
                 let ext = cachedp
                     .extension()
                     .map(|e| e.to_string_lossy().to_lowercase())
+                    .filter(|e| has_ext(Path::new(&format!("x.{e}")), SUB_EXT))
                     .unwrap_or_else(|| "srt".into());
-                let data = std::fs::read(cachedp).unwrap_or_default();
                 let dest = sidecar_path(&video, lang, &ext, file_id, |p| {
                     p.exists() && std::fs::read(p).ok().as_deref() != Some(&data[..])
                 });
@@ -441,9 +499,64 @@ impl SubtitleSearch {
             cx.app.global::<crate::Subtitles>().set_has_pick(true);
             Self::show_pick(cx, self.pick.as_ref(), cx.local_path().as_deref());
         }
+        if auto {
+            let l = Some(lang)
+                .filter(|l| !l.is_empty())
+                .map(|l| format!(": {}", lang_name(l)))
+                .unwrap_or_default();
+            cx.toast(&format!("Exact-match subtitles loaded{l}{note}"));
+            return;
+        }
         Self::status(cx, "", false);
         cx.app.global::<crate::Overlays>().set_subs_open(false);
         cx.toast(&format!("Subtitles loaded{note}"));
+    }
+    /// Whether the playing file has a subtitle track that may be in `langs` (one with
+    /// another known language does not count; external files and unknown languages do).
+    fn has_sub_in(cx: &Ctx, langs: &str) -> bool {
+        let n: usize = cx
+            .player
+            .get("track-list/count")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        (0..n).any(|i| {
+            let g = |k: &str| {
+                cx.player
+                    .get(&format!("track-list/{i}/{k}"))
+                    .unwrap_or_default()
+            };
+            if g("type") != "sub" {
+                return false;
+            }
+            let lang = g("lang");
+            g("external") == "yes"
+                || lang.is_empty()
+                || langs.is_empty()
+                || track_lang_in(&lang, langs)
+        })
+    }
+    /// *Load exact matches automatically*: look up the playing local file by its hash
+    /// once per session, in the background.
+    fn auto_exact(&mut self, cx: &Ctx) {
+        if !cx.flag("auto-exact") || self.pick.is_some() {
+            return;
+        }
+        let (Some(key), Some(path)) = (self.key.clone(), cx.local_path()) else {
+            return;
+        };
+        let langs = norm_langs(&cx.get("languages"));
+        let c = Self::creds(cx);
+        if c.key.is_empty() || Self::has_sub_in(cx, &langs) || !self.auto_tried.insert(key.clone())
+        {
+            return;
+        }
+        let (tx, rx) = channel();
+        self.auto_rx = Some(rx);
+        let dir = crate::store::cache_dir().join("subtitles");
+        std::thread::spawn(move || {
+            let r = auto_pick(&c, &path, &langs, &dir);
+            let _ = tx.send(Auto { key, r });
+        });
     }
     fn fetch(&mut self, cx: &Ctx, i: Option<usize>, preview: bool) {
         let Some(h) = i.and_then(|i| self.hits.get(i)).cloned() else {
@@ -459,7 +572,7 @@ impl SubtitleSearch {
             if preview {
                 self.select(cx, i);
             } else {
-                self.use_file(cx, &p, h.file_id, &h.language);
+                self.use_file(cx, &p, h.file_id, &h.language, false);
             }
             return;
         }
@@ -622,6 +735,12 @@ impl Plugin for SubtitleSearch {
             "Keep downloaded subtitles as <video>.<lang>.srt beside the file (else in the cache).",
             false,
         ))
+        .setting(SettingSpec::toggle(
+            "auto-exact",
+            "Load exact matches automatically",
+            "When a local video opens without subtitles in your languages, load the most downloaded subtitle made for that exact file (hash match). Uses one download per new file.",
+            false,
+        ))
     }
     fn enable(&mut self, cx: &Ctx) {
         cx.app.global::<crate::Subtitles>().set_plugin(true);
@@ -645,6 +764,7 @@ impl Plugin for SubtitleSearch {
                 cx.app.global::<crate::Subtitles>().set_query(query_from_name(&path).into());
                 Self::show_langs(cx, &cx.get("languages"));
                 cx.app.global::<crate::Subtitles>().set_save_next(cx.flag("save-next"));
+                cx.app.global::<crate::Subtitles>().set_auto_exact(cx.flag("auto-exact"));
                 cx.app.global::<crate::Subtitles>().set_sync(Self::sync_available(cx).is_some());
                 self.set_hits(cx, Vec::new());
                 self.dir = cx
@@ -677,6 +797,11 @@ impl Plugin for SubtitleSearch {
                 let on = !cx.flag("save-next");
                 cx.set("save-next", if on { "true" } else { "false" });
                 cx.app.global::<crate::Subtitles>().set_save_next(on);
+            }
+            "auto-exact" => {
+                let on = !cx.flag("auto-exact");
+                cx.set("auto-exact", if on { "true" } else { "false" });
+                cx.app.global::<crate::Subtitles>().set_auto_exact(on);
             }
             "mode" => {
                 if cx.app.global::<crate::Subtitles>().get_source() == 1 {
@@ -716,7 +841,7 @@ impl Plugin for SubtitleSearch {
                     return;
                 };
                 let lang = args.get(2).cloned().unwrap_or_default();
-                self.use_file(cx, Path::new(p), id, &lang);
+                self.use_file(cx, Path::new(p), id, &lang, false);
             }
             "forget" => {
                 if let Some(k) = &self.key {
@@ -744,6 +869,7 @@ impl Plugin for SubtitleSearch {
     fn file_loaded(&mut self, cx: &Ctx) {
         self.key = Self::file_key(cx);
         self.fetched.clear();
+        self.auto_rx = None;
         cx.app
             .global::<crate::Subtitles>()
             .set_sync(Self::sync_available(cx).is_some());
@@ -772,9 +898,22 @@ impl Plugin for SubtitleSearch {
             if !loaded.contains(&c) {
                 cx.player.cmd("sub-add", &[&s.to_string_lossy(), "select"]);
             }
+        } else {
+            self.auto_exact(cx);
         }
     }
     fn tick(&mut self, cx: &Ctx) {
+        if let Some(a) = self.auto_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.auto_rx = None;
+            // Still the same file, and nothing picked meanwhile.
+            if Some(&a.key) == self.key.as_ref() && self.pick.is_none() {
+                match a.r {
+                    Ok(Some((h, p, _))) => self.use_file(cx, &p, h.file_id, &h.language, true),
+                    Ok(None) => {}
+                    Err(e) => eprintln!("vivi: subtitle-search: automatic lookup: {e}"),
+                }
+            }
+        }
         loop {
             let Some(rx) = &self.rx else { return };
             let Ok(m) = rx.try_recv() else { return };
@@ -836,7 +975,7 @@ impl Plugin for SubtitleSearch {
                                     .find(|h| h.file_id == file_id)
                                     .map(|h| h.language.clone())
                                     .unwrap_or_default();
-                                self.use_file(cx, &p, file_id, &lang);
+                                self.use_file(cx, &p, file_id, &lang, false);
                             }
                         }
                         Err(e) => Self::status(cx, &e, false),
@@ -890,8 +1029,8 @@ mod tests {
     fn params_sorted() {
         let q = Query {
             hash: Some("ABC".into()),
-            imdb: None,
             text: " Sintel ".into(),
+            ..Default::default()
         };
         let p = search_params(&q, "uk, EN");
         let keys: Vec<&str> = p.iter().map(|(k, _)| *k).collect();
@@ -902,13 +1041,123 @@ mod tests {
         assert_eq!(p[1].1, "abc");
         assert_eq!(p[2], ("query", "sintel".to_string()));
         // An IMDb id replaces the text query and sorts first.
-        let q = Query {
-            hash: None,
-            imdb: Some(133093),
-            text: "tt0133093".into(),
-        };
+        let q = Query::from_text("tt0133093");
         let p = search_params(&q, "");
         assert_eq!(p, vec![("imdb_id", "133093".to_string())]);
+        // Season / episode and year go in their own parameters, still sorted.
+        let p = search_params(&Query::from_text("The Wand S01E05"), "en");
+        assert_eq!(
+            p,
+            vec![
+                ("episode_number", "5".to_string()),
+                ("languages", "en".to_string()),
+                ("query", "the wand".to_string()),
+                ("season_number", "1".to_string()),
+            ]
+        );
+        let p = search_params(&Query::from_text("Sintel (2010)"), "");
+        assert_eq!(
+            p,
+            vec![
+                ("query", "sintel".to_string()),
+                ("year", "2010".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn episode_and_year_queries() {
+        let q = |t: &str| {
+            let q = Query::from_text(t);
+            (q.text, q.season, q.episode, q.year)
+        };
+        assert_eq!(
+            q("The Wand S01E05"),
+            ("The Wand".into(), Some(1), Some(5), None)
+        );
+        assert_eq!(q("show s2e10e11"), ("show".into(), Some(2), Some(10), None));
+        assert_eq!(q("Show 3x07"), ("Show".into(), Some(3), Some(7), None));
+        assert_eq!(q("Movie (2020)"), ("Movie".into(), None, None, Some(2020)));
+        assert_eq!(
+            q("Blade Runner 2049"),
+            ("Blade Runner".into(), None, None, Some(2049))
+        );
+        // A year alone is a title; a leading episode code keeps the text; others stay.
+        assert_eq!(q("1917"), ("1917".into(), None, None, None));
+        assert_eq!(q("S01E05"), ("S01E05".into(), None, None, None));
+        assert_eq!(q("Room 101"), ("Room 101".into(), None, None, None));
+        assert_eq!(
+            q("Sex Education 4x"),
+            ("Sex Education 4x".into(), None, None, None)
+        );
+        assert!(!Query::from_text("Sintel").narrowed());
+        let n = Query::from_text("Movie 2020");
+        assert!(n.narrowed());
+        assert!(!n.plain("Movie 2020").narrowed());
+        assert_eq!(n.plain("Movie 2020").text, "Movie 2020");
+    }
+
+    #[test]
+    fn urls_and_languages_are_checked() {
+        assert!(safe_url("https://api.opensubtitles.com/api/v1"));
+        assert!(safe_url("http://127.0.0.1:8099/api/v1"));
+        assert!(safe_url("http://localhost/x"));
+        assert!(safe_url("http://[::1]:80/x"));
+        assert!(!safe_url("http://example.com/api"));
+        assert!(!safe_url("http://127.0.0.1.evil.net/api"));
+        assert!(!safe_url("https://user:pw@host/x"));
+        assert!(!safe_url("http://localhost@evil.net/x"));
+        assert!(!safe_url("file:///etc/passwd"));
+        assert!(!safe_url("ftp://x"));
+        assert_eq!(safe_lang(" EN "), "en");
+        assert_eq!(safe_lang("pt-BR"), "pt-br");
+        assert_eq!(safe_lang("../../x"), "");
+        assert_eq!(safe_lang("en/../../x"), "");
+        assert_eq!(safe_lang("-rf"), "");
+        // A hostile language never leaves the video's folder.
+        assert_eq!(
+            sidecar_path(Path::new("/m/a.mkv"), "/../../evil", "srt", 1, |_| false),
+            PathBuf::from("/m/a.srt")
+        );
+        assert_eq!(
+            session_base(API, "vip-api.opensubtitles.com"),
+            "https://vip-api.opensubtitles.com/api/v1"
+        );
+        assert_eq!(session_base(API, "evil.net"), API);
+        assert_eq!(session_base(API, "opensubtitles.com.evil.net"), API);
+        assert_eq!(session_base(API, ""), API);
+        assert_eq!(
+            session_base("http://127.0.0.1:1/api/v1", "vip-api.opensubtitles.com"),
+            "http://127.0.0.1:1/api/v1"
+        );
+    }
+
+    #[test]
+    fn auto_pick_choice() {
+        let h = |id, dl, hash, machine, hi| Hit {
+            file_id: id,
+            downloads: dl,
+            hash_match: hash,
+            machine,
+            hearing_impaired: hi,
+            ..Default::default()
+        };
+        let v = vec![
+            h(1, 900, false, false, false),
+            h(2, 500, true, true, false),
+            h(3, 300, true, false, true),
+            h(4, 100, true, false, false),
+        ];
+        assert_eq!(best_exact(&v).map(|x| x.file_id), Some(4));
+        assert_eq!(best_exact(&v[..3]).map(|x| x.file_id), Some(3));
+        assert_eq!(best_exact(&v[..2]), None);
+        assert!(track_lang_in("eng", "en,uk"));
+        assert!(track_lang_in("ukr", "en,uk"));
+        assert!(track_lang_in("pt-BR", "pt-br"));
+        assert!(track_lang_in("por", "pt-br"));
+        assert!(track_lang_in("ger", "de"));
+        assert!(!track_lang_in("fre", "en,uk"));
+        assert!(!track_lang_in("eng", ""));
     }
 
     #[test]
@@ -1110,6 +1359,155 @@ mod tests {
         );
         // Human translation first even with fewer downloads.
         assert_eq!(h[0].file_id, 4);
+    }
+}
+
+/// Download against a local mock of the OpenSubtitles API (no network, no account).
+#[cfg(test)]
+mod mock {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+
+    /// Serve `n` requests; `answer(method, path, auth)` gives the status and body.
+    /// Returns the base URL and the log of "METHOD path auth api-key" lines.
+    fn serve(
+        n: usize,
+        answer: impl Fn(&str, &str, &str, u16) -> (u16, String) + Send + 'static,
+    ) -> (String, Arc<Mutex<Vec<String>>>) {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let lg = log.clone();
+        std::thread::spawn(move || {
+            for s in l.incoming().take(n) {
+                let mut s = s.unwrap();
+                let mut r = BufReader::new(s.try_clone().unwrap());
+                let mut first = String::new();
+                r.read_line(&mut first).unwrap();
+                let (mut auth, mut key, mut len) = (String::new(), String::new(), 0usize);
+                loop {
+                    let mut h = String::new();
+                    r.read_line(&mut h).unwrap();
+                    let h = h.trim_end().to_string();
+                    if h.is_empty() {
+                        break;
+                    }
+                    let (k, v) = h.split_once(':').unwrap_or((&h, ""));
+                    match k.to_ascii_lowercase().as_str() {
+                        "authorization" => auth = v.trim().to_string(),
+                        "api-key" => key = v.trim().to_string(),
+                        "content-length" => len = v.trim().parse().unwrap_or(0),
+                        _ => {}
+                    }
+                }
+                let mut body = vec![0u8; len];
+                std::io::Read::read_exact(&mut r, &mut body).unwrap();
+                let mut it = first.split_whitespace();
+                let (m, path) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
+                lg.lock().unwrap().push(format!("{m} {path} {auth} {key}"));
+                let (code, out) = answer(m, path, &auth, port);
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 {code} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                    out.len()
+                );
+            }
+        });
+        (format!("http://127.0.0.1:{port}/api/v1"), log)
+    }
+
+    fn creds(user: &str) -> Creds {
+        Creds {
+            key: "KEY123".into(),
+            user: user.into(),
+            pass: "pw".into(),
+        }
+    }
+
+    fn tmp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("vivi-subs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    #[test]
+    fn login_reused_and_renewed_once() {
+        let logins = Arc::new(Mutex::new(0));
+        let lg = logins.clone();
+        let (base, log) = serve(7, move |m, path, auth, port| match (m, path) {
+            ("POST", "/api/v1/login") => {
+                let mut n = lg.lock().unwrap();
+                *n += 1;
+                (
+                    200,
+                    format!(r#"{{"token":"T{n}","base_url":"evil.example"}}"#),
+                )
+            }
+            // The first token is refused (expired): Vivi logs in again once.
+            ("POST", "/api/v1/download") if auth == "Bearer T1" => (401, "{}".into()),
+            ("POST", "/api/v1/download") => (
+                200,
+                format!(
+                    r#"{{"link":"http://127.0.0.1:{port}/f/tok","file_name":"../a/b.srt","remaining":7}}"#
+                ),
+            ),
+            ("GET", "/f/tok") => (200, "1\n00:00:01,000 --> 00:00:02,000\nHi\n".into()),
+            _ => (404, "{}".into()),
+        });
+        let d = tmp("login");
+        let (p, left) = download_from(&base, &creds("u"), 7, &d).unwrap();
+        assert_eq!(p, d.join("7-.._a_b.srt"));
+        assert_eq!(left, Some(7));
+        assert!(std::fs::read_to_string(&p).unwrap().contains("Hi"));
+        // A second file reuses the new login (no third login).
+        download_from(&base, &creds("u"), 8, &d).unwrap();
+        assert_eq!(*logins.lock().unwrap(), 2);
+        let log = log.lock().unwrap().join("\n");
+        // The key only ever went in the Api-Key header, never in a path.
+        assert!(
+            !log.contains("/api/v1/download KEY123") && !log.contains("?"),
+            "{log}"
+        );
+        assert!(log
+            .lines()
+            .filter(|l| l.starts_with("POST"))
+            .all(|l| l.ends_with("KEY123")));
+        assert!(log
+            .lines()
+            .filter(|l| l.starts_with("GET"))
+            .all(|l| !l.contains("KEY123")));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn unsafe_link_and_errors_hide_secrets() {
+        let (base, _) = serve(1, |_, _, _, _| {
+            (
+                200,
+                r#"{"link":"http://example.com/f/SECRETTOKEN","file_name":"x.srt"}"#.into(),
+            )
+        });
+        let d = tmp("link");
+        let e = download_from(&base, &creds(""), 9, &d).unwrap_err();
+        assert!(
+            !e.contains("SECRETTOKEN") && !e.contains("example.com"),
+            "{e}"
+        );
+        assert!(cached(&d, 9).is_none());
+        // Quota answers keep the API's message; network errors name no URL.
+        let (base, _) = serve(1, |_, _, _, _| {
+            (
+                406,
+                r#"{"message":"You have downloaded your allowed 20 subtitles"}"#.into(),
+            )
+        });
+        let e = download_from(&base, &creds(""), 10, &d).unwrap_err();
+        assert!(e.contains("allowed 20 subtitles"), "{e}");
+        let e = download_from("http://127.0.0.1:9/api/v1", &creds(""), 11, &d).unwrap_err();
+        assert!(!e.contains("127.0.0.1") && !e.contains("KEY123"), "{e}");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
 

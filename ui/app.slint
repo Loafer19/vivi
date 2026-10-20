@@ -1250,7 +1250,7 @@ export component AppWindow inherits Window {
     if Overlays.subs-open: SubtitleDialog {
         width: root.width; height: root.height;
         hits: Subtitles.hits; langs: Subtitles.langs; selected: Subtitles.selected;
-        details: Subtitles.details; preview: Subtitles.preview; save-next: Subtitles.save-next;
+        details: Subtitles.details; preview: Subtitles.preview; save-next: Subtitles.save-next; auto-exact: Subtitles.auto-exact;
         status: Subtitles.status; busy: Subtitles.busy;
         query <=> Subtitles.query; lang <=> Subtitles.lang;
         local: Subtitles.local; folder: Subtitles.folder;

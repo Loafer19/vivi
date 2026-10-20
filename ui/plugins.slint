@@ -348,6 +348,7 @@ export component SubtitleDialog inherits Modal {
     in property <string> details;
     in property <string> preview;
     in property <bool> save-next;
+    in property <bool> auto-exact;   // load exact (hash) matches when a file opens
     in property <[Item]> local;      // From Computer rows (see subtitles.rs)
     in property <string> folder;     // breadcrumb of the scanned folder
     in property <string> status;
@@ -474,6 +475,13 @@ export component SubtitleDialog inherits Modal {
         HorizontalLayout {
             padding: 12px; padding-left: 16px; spacing: 10px;
             Text { horizontal-stretch: 1; text: root.source == 0 && root.hits.length > 0 ? root.status : ""; color: Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
+            if root.source == 0: HorizontalLayout { spacing: 8px;
+                Rectangle { y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: Metrics.radius-sm;
+                    background: root.auto-exact ? Theme.accent : Theme.field; border-width: 1px; border-color: root.auto-exact ? Theme.accent : Theme.divider;
+                    if root.auto-exact: Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/check-selected.svg"); tint: Theme.bg-b2; } }
+                Text { text: "Auto-load exact matches"; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; }
+                TouchArea { accessible-role: checkbox; accessible-label: "Load exact matches automatically when a file opens"; accessible-checked: root.auto-exact; mouse-cursor: pointer; clicked => { root.cmd("auto-exact", ""); } }
+            }
             if root.source == 0: HorizontalLayout { spacing: 8px;
                 Rectangle { y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: Metrics.radius-sm;
                     background: root.save-next ? Theme.accent : Theme.field; border-width: 1px; border-color: root.save-next ? Theme.accent : Theme.divider;
