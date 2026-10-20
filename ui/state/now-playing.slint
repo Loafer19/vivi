@@ -6,4 +6,7 @@ export global NowPlaying {
     in-out property <string> info;
     in-out property <image> logo;
     in-out property <bool> has-logo;
+    // A song (package metadata such as an Auto-tagger match): a music icon instead of
+    // the radio one when there is no cover.
+    in-out property <bool> music;
 }

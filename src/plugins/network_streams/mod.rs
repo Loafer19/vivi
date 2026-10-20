@@ -726,6 +726,7 @@ impl NetworkStreams {
                 .or_else(|| self.list.iter().find(|s| s.url == path).cloned())
                 .or_else(|| known_station(&path));
             a.global::<crate::NowPlaying>().set_has_logo(false);
+            a.global::<crate::NowPlaying>().set_music(false);
             self.logo_task.cancel();
             let name = st
                 .as_ref()

@@ -924,6 +924,7 @@ export component NowPlayingCard inherits Rectangle {
     in property <string> info;
     in property <image> logo;
     in property <bool> has-logo;
+    in property <bool> music;
     height: 120px;
     border-radius: Metrics.radius-xxl;
     background: Theme.bg-a4.with-alpha(0.88);
@@ -935,7 +936,7 @@ export component NowPlayingCard inherits Rectangle {
             width: 88px; height: 88px; border-radius: Metrics.radius-xl; clip: true;
             background: Theme.accent.with-alpha(0.18);
             if root.has-logo: Image { width: parent.width; height: parent.height; source: root.logo; image-fit: contain; }
-            if !root.has-logo: Icon { x: 22px; y: 22px; width: 44px; height: 44px; source: @image-url("../assets/icons/streaming.svg"); tint: Theme.accent; }
+            if !root.has-logo: Icon { x: 22px; y: 22px; width: 44px; height: 44px; source: root.music ? @image-url("../assets/icons/music.svg") : @image-url("../assets/icons/streaming.svg"); tint: Theme.accent; }
         }
         VerticalLayout {
             alignment: center; spacing: 4px;

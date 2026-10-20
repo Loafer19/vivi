@@ -121,6 +121,9 @@ struct Auto {
     job: Option<AutoJob>,
     /// The last song identified (path, match), for *Review*.
     last: Option<(String, Match)>,
+    /// Songs identified this run, so playing one again gets its title back (the
+    /// now-playing metadata stays, mpv's file-local title does not).
+    shown: std::collections::HashMap<String, Match>,
     /// "No key" was said once this run.
     warned: bool,
 }
@@ -724,6 +727,13 @@ impl AutoTagger {
         if id != self.auto.seen {
             self.auto.seen = id;
             let t = crate::nowplaying::current();
+            if t.path == playing {
+                if let Some(m) = self.auto.shown.get(&t.path).cloned() {
+                    // Played again this run: no new lookup, only the title again.
+                    Self::set_title(cx, &m);
+                    self.auto.last = Some((t.path.clone(), m));
+                }
+            }
             self.auto.pending = (t.path == playing
                 && untagged_song(&t)
                 && !self.auto.tried.contains(&t.path)
@@ -765,8 +775,30 @@ impl AutoTagger {
     /// Show an automatic match as now playing and offer the review.
     fn auto_show(&mut self, cx: &Ctx, path: &str, m: Match) {
         crate::plugins::host::media_meta(ID, now_playing_meta(path, &m));
-        // The player's title line and the window title read mpv's media-title.
-        let title = display_title(&m);
+        Self::set_title(cx, &m);
+        let msg = format!("Identified: {} ({}%)", display_title(&m), m.score);
+        toast_with_action(cx.app, &msg, "Review tags", REVIEW_ACTION, 10.0);
+        if self.auto.shown.len() >= cache::CACHE_MAX {
+            self.auto.shown.clear();
+        }
+        self.auto.shown.insert(path.to_string(), m.clone());
+        self.auto.last = Some((path.to_string(), m));
+    }
+
+    /// The player's title line and the window title (they read mpv's media-title), for
+    /// the playing file only; left alone when it already reads so.
+    fn set_title(cx: &Ctx, m: &Match) {
+        let title = display_title(m);
+        if cx
+            .player
+            .mpv
+            .get_property::<String>("media-title")
+            .ok()
+            .as_deref()
+            == Some(&title)
+        {
+            return;
+        }
         if let Err(e) = cx
             .player
             .mpv
@@ -774,9 +806,6 @@ impl AutoTagger {
         {
             eprintln!("vivi: auto-tagger: set the title: {e:?}");
         }
-        let msg = format!("Identified: {title} ({}%)", m.score);
-        toast_with_action(cx.app, &msg, "Review tags", REVIEW_ACTION, 10.0);
-        self.auto.last = Some((path.to_string(), m));
     }
 
     fn start(&mut self, cx: &Ctx) {
@@ -1052,8 +1081,11 @@ fn batch(dir: &Path, key: &str, pattern: &str, cancel: &AtomicBool, tx: &Sender<
             Err(_) => skipped += 1,
         }
     }
+    let pl = |n: usize| if n == 1 { "" } else { "es" };
     let _ = tx.send(Msg::Done(format!(
-        "{total} audio files: {found} confident matches to review, {skipped} unchanged or not found"
+        "{total} audio file{}: {found} confident match{} to review, {skipped} unchanged or not found",
+        if total == 1 { "" } else { "s" },
+        pl(found)
     )));
 }
 
@@ -1352,8 +1384,9 @@ impl Plugin for AutoTagger {
                         "No match found on MusicBrainz".to_string()
                     } else {
                         format!(
-                            "{} candidates. Select one to preview the changes.",
-                            self.rows.len()
+                            "{} candidate{}. Select one to preview the changes.",
+                            self.rows.len(),
+                            if self.rows.len() == 1 { "" } else { "s" }
                         )
                     };
                     let s = if note.is_empty() {

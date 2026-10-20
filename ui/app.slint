@@ -716,7 +716,7 @@ export component AppWindow inherits Window {
         y: Viz.mode > 0 ? 64px : (root.height - self.height) / 2;
         width: min(460px, root.width - self.left - 48px);
         station: NowPlaying.station; track: NowPlaying.track; info: NowPlaying.info;
-        logo: NowPlaying.logo; has-logo: NowPlaying.has-logo;
+        logo: NowPlaying.logo; has-logo: NowPlaying.has-logo; music: NowPlaying.music;
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
@@ -1394,12 +1394,12 @@ export component AppWindow inherits Window {
                 if Notices.toast-action != "" && Notices.toast-action-text == Notices.resume-text: Rectangle {
                     width: ta-label.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
                     ta-label := Text { text: Notices.toast-action; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; clicked => { Notices.toast-run(Notices.toast-action-id); } }
+                    TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; accessible-action-default => { Notices.toast-run(Notices.toast-action-id); } clicked => { Notices.toast-run(Notices.toast-action-id); } }
                 }
                 if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
                     width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
                     so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; clicked => { Notices.start-over(); } }
+                    TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; accessible-action-default => { Notices.start-over(); } clicked => { Notices.start-over(); } }
                 }
                 Rectangle {
                     width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;

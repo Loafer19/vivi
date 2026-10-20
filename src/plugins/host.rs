@@ -628,6 +628,7 @@ fn now_playing() {
             .collect();
         np.set_track(sub.join(" · ").into());
         np.set_has_logo(false);
+        np.set_music(m.kind == "music" || !path.contains("://"));
         HOST.with(|h| h.borrow_mut().np_cover = cover.clone());
         want_covers(vec![cover.clone()]);
         refresh_np_cover();
