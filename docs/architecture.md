@@ -91,6 +91,8 @@ banner with Retry / Copy), and others listed there.
   Lookups that feed these take names too: `Tools.duo(id)`, `Icons.plugin-duo(key)`,
   `Icons.kind-duo(kind)`. New art: `<name>-twotone.svg` with the accent parts in `#D37918`
   and dim parts in `#AB6314`, then run the script (see docs/design/icon-map.md).
+* Player top / bottom bar buttons set `IconButton { bar: true; }`: they follow `Theme.bar-duo`
+  (Settings → *Player bar icons*); `TriIcon { flat: true; }` draws the name single-tone (`Duo.single`).
 
 ## Conventions
 

@@ -223,6 +223,13 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     r.last().swatches = ModelRc::new(VecModel::from(
         ACCENTS.iter().map(|a| hex(a)).collect::<Vec<_>>(),
     ));
+    r.seg(
+        "interface.bar_icons",
+        "Player bar icons",
+        "Icons on the player's top and bottom bars: two-tone with an accent detail, or single-tone. Other icons stay two-tone; small icons are always single-tone.",
+        &schema::get(c, "interface.bar_icons"),
+        &crate::config::BAR_ICONS,
+    );
     r.header("Startup")
         .stub_toggle(
             "stub.general.dialogs",

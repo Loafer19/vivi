@@ -22,6 +22,13 @@ gets a smaller dim fill inside its outline. Left single-tone: `eq` and `remove` 
 all-accent stroke reads as an active state). `eq-*` presets are drawn at 16 px in the preset list, so they
 stay single-tone there.
 
+Player bars: Settings → General → Appearance → **Player bar icons** (`interface.bar_icons`, *Two-tone* by
+default, or *Single-tone*) sets `Theme.bar-duo`. Buttons of the player's top bar (open, library, miniplayer,
+settings, fullscreen, close) and bottom bar (play / pause, previous / next, ±10 s, volume, the toolbar
+items, plugin buttons, ⋯) are `IconButton { bar: true }`; with Single-tone their `TriIcon` is `flat` and
+draws `Duo.single(name)`, the plain `<name>.svg` (or every layer in the text colour when a name has no
+plain file). Everything else stays two-tone, and 16 px icons are single-tone either way.
+
 Comparison for #82: `docs/design/compare/icons-two-tone.jpg` (before | after, dark and light theme).
 
 Comparison: `docs/design/compare/icons.png` (old left, new right).
@@ -72,6 +79,8 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `close-medium-twotone.svg` | r03c07 + dim waves (#82) |
 | `close-none.svg` | r03c09 |
 | `close-none-twotone.svg` | r03c09 + dim × (#82) |
+| `close-window.svg` | r03c11 at 10 px, the top-bar close button in Single-tone |
+| `close-window-twotone.svg` | dim circle around a 6 px × (top-bar close button) |
 | `collapse-sidebar.svg` | r05c04 |
 | `disc.svg` | r16c00 |
 | `disc-twotone.svg` | r16c01 |

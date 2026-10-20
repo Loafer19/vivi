@@ -75,6 +75,8 @@ export component IconButton inherits Rectangle {
     in property <image> icon;
     // Two-tone icon by name (see TriIcon / Duo); used instead of `icon` when set.
     in property <string> duo;
+    // Player top / bottom bar button: follows Theme.bar-duo (two-tone or single-tone).
+    in property <bool> bar: false;
     in property <bool> primary: false;
     in property <bool> active: false;
     in property <string> tip;
@@ -107,6 +109,7 @@ export component IconButton inherits Rectangle {
             tint: root.tint;
             accent-tint: root.primary ? Theme.bg-b2 : Theme.accent;
             dim-tint: root.primary ? Theme.bg-b2 : Theme.accent-dim;
+            flat: root.bar && !Theme.bar-duo;
         }
     }
     ta := TouchArea {

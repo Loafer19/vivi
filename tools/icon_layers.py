@@ -10,6 +10,8 @@ TriIcon { name: "..." } and IconButton { duo: "..." }. A name resolves to the la
 <name>-twotone.svg when it has both text-coloured and accent parts, else to the layers of
 <name>.svg when it has accent parts, else to the plain <name>.svg (single-tone, no accent layers).
 All-accent art (record-twotone, menu rows) is never picked for a plain name: it reads as "active".
+`Duo.single(name)` is the plain <name>.svg of a two-tone name, for TriIcon `flat` (player bars set
+to Single-tone).
 Run after changing an icon:  python3 tools/icon_layers.py
 """
 import re, pathlib
@@ -26,8 +28,9 @@ def layer(svg, keep):
         return m.group(0) if kind == keep else m.group(1) + "none" + m.group(3)
     return PAINT.sub(sub, svg)
 
-def duo_slint(layered, plain):
-    """layered: name -> layer stem; plain: name -> svg path relative to assets/icons."""
+def duo_slint(layered, plain, single):
+    """layered: name -> layer stem; plain: name -> svg path relative to assets/icons;
+    single: name -> its single-tone svg (for TriIcon `flat`)."""
     url = lambda p: f'@image-url("../../assets/icons/{p}")'
     def fn(fname, entries, fallback):
         lines = [f"    pure public function {fname}(name: string) -> image {{"]
@@ -43,6 +46,9 @@ def duo_slint(layered, plain):
     out += fn("base", base, '@image-url("")')
     out += fn("accent", [(n, f"layers/{layered[n]}-a.svg") for n in names], '@image-url("")')
     out += fn("dim", [(n, f"layers/{layered[n]}-d.svg") for n in names], '@image-url("")')
+    # Single-tone art of a two-tone name (TriIcon `flat`, e.g. the player bars set to
+    # Single-tone); names without one draw their layers in one colour.
+    out += fn("single", [(n, single[n]) for n in names if n in single], '@image-url("")')
     out.append("}")
     return "\n".join(out) + "\n"
 
@@ -73,8 +79,9 @@ def main():
                 layered[s[: -len("-twotone")]] = s
         elif s + "-twotone" not in mixed:
             layered[s] = s
+    single = {n: plain[n] for n in layered if n in plain}
     plain = {n: f for n, f in plain.items() if n not in layered and not n.endswith("-twotone")}
-    DUO.write_text(duo_slint(layered, plain))
+    DUO.write_text(duo_slint(layered, plain, single))
 
 if __name__ == "__main__":
     main()
