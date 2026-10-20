@@ -1,3 +1,5 @@
+import { Duo } from "duo.slint";
+
 // Design tokens from Figma "VLC Redesign" (Dark/* and Light/* styles). Switched at runtime.
 export global Theme {
     in-out property <bool> dark: true;
@@ -141,13 +143,18 @@ export component Icon inherits Image {
 
 // Two-tone icon drawn from the colour layers made by tools/icon_layers.py:
 // base follows the text colour, accent/dim follow the theme accent.
+// Set `name` (an icon in assets/icons, looked up in Duo) or the three layers directly.
 export component TriIcon inherits Rectangle {
-    in property <image> base;
-    in property <image> accent;
-    in property <image> dim;
+    in property <string> name;
+    in property <image> base: Duo.base(root.name);
+    in property <image> accent: Duo.accent(root.name);
+    in property <image> dim: Duo.dim(root.name);
     in property <color> tint: Theme.fg-a2;
+    // On an accent fill (primary buttons) the accent layers take the tint too.
+    in property <color> accent-tint: Theme.accent;
+    in property <color> dim-tint: Theme.accent-dim;
     width: 24px; height: 24px;
     Image { width: 100%; height: 100%; source: root.base; colorize: root.tint; image-fit: contain; }
-    Image { width: 100%; height: 100%; source: root.dim; colorize: Theme.accent-dim; image-fit: contain; }
-    Image { width: 100%; height: 100%; source: root.accent; colorize: Theme.accent; image-fit: contain; }
+    Image { width: 100%; height: 100%; source: root.dim; colorize: root.dim-tint; image-fit: contain; }
+    Image { width: 100%; height: 100%; source: root.accent; colorize: root.accent-tint; image-fit: contain; }
 }

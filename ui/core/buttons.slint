@@ -5,7 +5,7 @@
 //   FlatButton      no fill until hovered
 //   IconButton      square icon-only button (player bar, toolbars)
 // Sizes: sm 30px (dense dialogs), md 34px (default), lg 38px (onboarding).
-import { Theme, Metrics, Icon } from "theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "theme.slint";
 
 export enum ButtonSize { sm, md, lg }
 export enum ButtonKind { secondary, primary, flat }
@@ -73,6 +73,8 @@ export component FlatButton inherits ButtonBase { kind: ButtonKind.flat; }
 // md the regular one (36x32, play 44x36). `primary` is the accent play button.
 export component IconButton inherits Rectangle {
     in property <image> icon;
+    // Two-tone icon by name (see TriIcon / Duo); used instead of `icon` when set.
+    in property <string> duo;
     in property <bool> primary: false;
     in property <bool> active: false;
     in property <string> tip;
@@ -80,6 +82,8 @@ export component IconButton inherits Rectangle {
     in property <bool> tab-focus: true;
     callback clicked();
     property <bool> compact: root.size == ButtonSize.sm;
+    property <length> glyph: root.compact ? (root.primary ? 16px : 18px) : (root.primary ? 22px : 20px);
+    property <color> tint: root.primary ? Theme.bg-b2 : (root.active ? Theme.accent : (ta.has-hover ? Theme.fg-1 : Theme.fg-2));
     width: compact ? (primary ? 36px : 28px) : (primary ? 44px : 36px);
     height: compact ? (primary ? 24px : 26px) : (primary ? 36px : 32px);
     border-radius: Metrics.radius-md;
@@ -88,12 +92,21 @@ export component IconButton inherits Rectangle {
                         : (ta.has-hover ? Theme.bg-a1 : transparent);
     HorizontalLayout {
         alignment: center;
-        Icon {
+        if root.duo == "": Icon {
             source: root.icon;
             y: (root.height - self.height) / 2;
-            width: root.compact ? (root.primary ? 16px : 18px) : (root.primary ? 22px : 20px);
+            width: root.glyph;
             height: self.width;
-            tint: root.primary ? Theme.bg-b2 : (root.active ? Theme.accent : (ta.has-hover ? Theme.fg-1 : Theme.fg-2));
+            tint: root.tint;
+        }
+        if root.duo != "": TriIcon {
+            name: root.duo;
+            y: (root.height - self.height) / 2;
+            width: root.glyph;
+            height: self.width;
+            tint: root.tint;
+            accent-tint: root.primary ? Theme.bg-b2 : Theme.accent;
+            dim-tint: root.primary ? Theme.bg-b2 : Theme.accent-dim;
         }
     }
     ta := TouchArea {
