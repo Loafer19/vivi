@@ -13,7 +13,7 @@
 - **Equalizer & effects**, seek-bar previews (Chapter Thumbnails extension), miniplayer, music visualizer, MPRIS, light/dark themes
 - **Lyrics karaoke**: full-screen synced lyrics with word highlight, Find Lyrics, save as `.lrc` or embed
 - **Subtitles**: OpenSubtitles hash-first search, language chips, preview, one-click load, per-file offset, auto-sync
-- **Auto-tagger**: AcoustID + MusicBrainz and more, confidence-ranked, per-field alternatives, undo
+- **Auto-tagger**: AcoustID + MusicBrainz and more, confidence-ranked, per-field alternatives, undo; can name untagged songs as they play (nothing is written until you review)
 - **Free Music**: Jamendo + Internet Archive/FMA search, album/artist pages, download queue
 - **Network Streams / IPTV**: radio, iptv-org TV, M3U playlists, XMLTV now/next guide, favorites
 - **Remote Control**: control playback from your phone, pair with a QR code

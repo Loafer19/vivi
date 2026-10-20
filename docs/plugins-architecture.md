@@ -40,7 +40,7 @@ struct and manifest ID agree. `mod.rs` holds the plugin itself (state, UI update
 
 | Module (ID) | Files |
 | --- | --- |
-| `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply |
+| `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply · `cache.rs` per-file AcoustID answers (path + size + mtime, 300 files, 0600) · `mod.rs` also identifies untagged songs while playing (`auto-identify`) |
 | `free_music` (`free-music`) | `catalog.rs` track / licence / query model · `api.rs` Internet Archive + Jamendo clients, downloader |
 | `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded / cache / LRCLIB, offsets · `radio.rs` stream-title lookups |
 | `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists |
@@ -382,11 +382,11 @@ once installed (the seek-bar hint in `src/preview.rs` uses it).
 
 | Plugin | Where | Why | Keys |
 | --- | --- | --- | --- |
-| Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz, Cover Art Archive, Deezer, iTunes Search and LRCLIB need none; Last.fm API key (genres) and Discogs token optional (#79). Candidates from all sources are merged and ranked by confidence (`rank_candidates`, `Candidate::confidence`); disagreeing values become per-field alternatives (⇄ in the review); fingerprint matches propose a sanitized, opt-in file name (`sanitize_file_name`, `rename_to`). The review shows the source of every field; synced LRCLIB lyrics are embedded when *Embed synced lyrics* is on (MP3 SYLT+USLT, FLAC/Ogg/Opus `LYRICS`, M4A `©lyr`, #80) |
+| Auto-tagger (`auto-tagger`, #69 incl. #65) | built in | preview/diff dialog; tag writing and fingerprinting need lofty and Chromaprint, not available to scripts | AcoustID application key (optional, <https://acoustid.org/new-application>); MusicBrainz, Cover Art Archive, Deezer, iTunes Search and LRCLIB need none; Last.fm API key (genres) and Discogs token optional (#79). Candidates from all sources are merged and ranked by confidence (`rank_candidates`, `Candidate::confidence`); disagreeing values become per-field alternatives (⇄ in the review); fingerprint matches propose a sanitized, opt-in file name (`sanitize_file_name`, `rename_to`). AcoustID answers are cached per file (`cache.rs`, `tagger-cache.json`); the key goes in a POST body and is masked in errors. *Identify untagged songs while playing* (0.13, off by default) watches the shared now-playing track: kind `music` + source `file` (no tags, no library row, no package metadata) starts a low-priority background lookup after 3 s; a match scoring ≥ 70 is published like `vivi-media-meta` from `auto-tagger` (plus mpv `force-media-title` for the file) with a *Review tags* toast; tags are only written from the review. The review shows the source of every field; synced LRCLIB lyrics are embedded when *Embed synced lyrics* is on (MP3 SYLT+USLT, FLAC/Ogg/Opus `LYRICS`, M4A `©lyr`, #80) |
 | Equalizer (`equalizer`, #74) | script, **deprecated** since 0.13.0 | presets via mpv `equalizer`/`superequalizer` af; replaced by the built-in Equalizer (`Alt+E` / `Alt+Shift+E`, auto pre-amp) | none |
 | Subtitle sync (`subtitle-sync`, #72) | script | alass (system or managed download) + managed media ffmpeg | none |
 | Chapters & Previews (`chapter-thumbnails`, #75, #62) | script + core | managed media ffmpeg; core reads the cache (the only source of seek-bar previews and chapter pictures; offered by a hint on the first seek-bar hover and marked *Recommended* in Browse); since 1.2.0 also scene chapters (`scenes-detect`, Video menu / palette via `[[contributes]]`) | none |
-| AcoustID (`acoustid`, #76) | script + tagger | fpcalc (system or Chromaprint download); results open in the tagger review with a rename proposal | AcoustID application key |
+| AcoustID (`acoustid`, #76) | script + tagger, **deprecated** (1.1.1, `builtin:auto-tagger`) | fpcalc (system or Chromaprint download); results open in the tagger review with a rename proposal; its auto-identify and answer cache are built into the Auto-tagger since 0.13 | AcoustID application key |
 | Scrobbler (`scrobbler`, #77) | script | Last.fm + ListenBrainz | Last.fm API key + secret, ListenBrainz token |
 | Free Music (`free-music`, #70) | built in | search/results/licence dialog; downloads are tagged with lofty | Jamendo `client_id` (optional, <https://devportal.jamendo.com>); Internet Archive needs none |
 | Subtitle Auto-Sync (`subtitle-sync`, #56) | package (mpv Lua) | runs an external tool and `sub-add`s the result; no UI | none; needs `alass`/`alass-cli` or `ffsubsync` in `PATH` |
@@ -546,7 +546,7 @@ Script messages Vivi handles for packages:
 | `vivi-toast <text> [seconds]` | toast on every screen (player, library, Settings, Extensions, dialogs); `seconds` is honored within 1.5–15 s (default 4; 0.13+, older Vivi shows 4 s) |
 | `vivi-preview-frames <dir>` | load cached seek-bar frames `seek-NN.jpg` from `<dir>` (0.9.2) |
 | `vivi-chapter-thumbs <dir>` | reload chapter thumbnails `chapter-N.jpg` from `<dir>` (0.9.2) |
-| `vivi-tagger-acoustid <path> <json>` | open the auto-tagger review for `<path>` with AcoustID ids and a rename pattern (0.9.2) |
+| `vivi-tagger-acoustid <path> <json>` | open the auto-tagger review for `<path>` with AcoustID ids and a rename pattern (0.9.2); since 0.13 the answer is also stored in the Auto-tagger's per-file cache |
 | `vivi-setting <id> <key> <value>` | saves one of the package's declared settings (e.g. a generated PIN) and applies it as script-opt |
 | `vivi-pick-folder <id> <key>` | folder dialog; the result is saved as that setting and sent back as `script-message-to <script> folder-picked <path>` |
 | `vivi-qr <title> <text> [caption]` | dialog with `text` as a QR code (e.g. a pairing link), shown above Settings (0.11.0+) |
@@ -626,7 +626,8 @@ Dokploy redeploys plugins.viviplayer.app from the same push; the vivi-plugins Pa
   installed, shows the message in its Extensions tab with a button that opens the
   replacement (`builtin:equalizer` = Audio panel → Equalizer, `builtin:ab-loop` = the
   keyboard shortcut list (A-B loop keys, `src/abloop.rs`; Vivi sets `user-data/vivi/ab-loop`
-  to 1 so the old package stays quiet), `plugin:<id>` = that plugin's tab), and once (ids remembered in `~/.config/vivi/deprecation-notices.txt`) a
+  to 1 so the old package stays quiet), `builtin:auto-tagger` = the Auto-tagger's settings in
+  the Extensions window (AcoustID package), `plugin:<id>` = that plugin's tab), and once (ids remembered in `~/.config/vivi/deprecation-notices.txt`) a
   toast with the same button when a file plays.
 
 ## Future work

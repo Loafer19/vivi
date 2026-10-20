@@ -5460,6 +5460,7 @@ version = "0.12.0"
 dependencies = [
  "flate2",
  "image",
+ "libc",
  "libmpv2",
  "libmpv2-sys",
  "lofty",

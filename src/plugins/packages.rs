@@ -185,8 +185,8 @@ pub struct Deprecation {
     pub since: String,
     #[serde(default)]
     pub message: String,
-    /// What replaces it: `builtin:equalizer` / `builtin:ab-loop` (a core feature) or
-    /// `plugin:<id>`.
+    /// What replaces it: `builtin:equalizer` / `builtin:ab-loop` / `builtin:auto-tagger`
+    /// (a core feature) or `plugin:<id>`.
     #[serde(default)]
     pub replacement: String,
     /// Button that opens the replacement ("Open Equalizer").
@@ -226,14 +226,21 @@ impl Deprecation {
     pub fn can_open(&self) -> bool {
         matches!(
             self.replacement.as_str(),
-            "builtin:equalizer" | "builtin:ab-loop"
+            "builtin:equalizer" | "builtin:ab-loop" | "builtin:auto-tagger"
         ) || self.replacement.starts_with("plugin:")
     }
 }
 
-/// Open what replaces a deprecated plugin (see [`Deprecation::replacement`]).
+/// Open what replaces a deprecated plugin (see [`Deprecation::replacement`]), or run
+/// another toast button (`Notices.toast-run`): the Auto-tagger's *Review tags* after an
+/// automatic identification.
 pub fn open_replacement(a: &AppWindow, replacement: &str) {
-    if replacement == "builtin:equalizer" {
+    if replacement == crate::plugins::auto_tagger::REVIEW_ACTION {
+        crate::plugins::command(crate::plugins::auto_tagger::ID, "review-identified", &[]);
+    } else if replacement == "builtin:auto-tagger" {
+        // AcoustID package: the Auto-tagger's settings (fingerprinting, auto-identify).
+        crate::extwin::open(a, crate::plugins::auto_tagger::ID, true);
+    } else if replacement == "builtin:equalizer" {
         crate::fx::open_panel(a);
     } else if replacement == "builtin:ab-loop" {
         // The built-in A-B loop is keys plus the seek-bar markers: show the shortcuts.
@@ -1406,10 +1413,17 @@ mod tests {
             assert!(e.url.contains(&format!("plugin-{}-v{}", e.id, e.version)));
             assert!(dir.join(&m.entry).is_file());
             assert_eq!(Path::new(&m.entry).file_stem().unwrap(), e.id.as_str());
-            // At most the next patch release (packages may need unreleased core support).
-            let (a, b, c) = parse_version(env!("CARGO_PKG_VERSION")).unwrap();
-            let next = format!("{a}.{b}.{}", c + 1);
+            // At most the next minor release: packages may need core support that is on
+            // master but not released yet (e.g. 0.13.0 while the crate is still 0.12.x).
+            let (a, b, _) = parse_version(env!("CARGO_PKG_VERSION")).unwrap();
+            let next = format!("{a}.{}.0", b + 1);
             assert!(cmp_version(&e.min_vivi, &next).is_le(), "{}", e.id);
+            // A core replacement must be one this Vivi can open.
+            if let Some(d) = &e.deprecated {
+                if d.replacement.starts_with("builtin:") {
+                    assert!(d.can_open(), "{}: {}", e.id, d.replacement);
+                }
+            }
             assert_eq!(m.binaries, e.needs, "{}", e.id);
         }
     }

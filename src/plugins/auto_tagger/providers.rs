@@ -258,42 +258,129 @@ pub fn search_musicbrainz(title: &str, artist: &str, dur: f64) -> Result<Vec<Can
     Ok(out)
 }
 
-/// AcoustID lookup: (recording id, score 0–100), best first.
-pub fn acoustid_lookup(key: &str, dur: u32, fp: &str) -> Result<Vec<(String, u32)>, String> {
+/// AcoustID lookup of a fingerprint: the recording matches, best first.
+///
+/// The key and the fingerprint go in a POST body, never in the URL, so neither ends up in
+/// an error message or a log line; the key is also masked in any error text.
+pub fn acoustid_lookup(key: &str, dur: u32, fp: &str) -> Result<Vec<Match>, String> {
     let d = dur.to_string();
-    let v = web::get_json(
-        "https://api.acoustid.org/v2/lookup",
-        &[
+    let mask = |e: String| redact(&e, key);
+    let mut r = web::agent_as(30, &web::user_agent(), false)
+        .post("https://api.acoustid.org/v2/lookup")
+        .header("Accept", "application/json")
+        .send_form([
             ("client", key),
-            ("meta", "recordingids"),
-            ("duration", &d),
+            ("meta", "recordings releasegroups"),
+            ("duration", d.as_str()),
             ("fingerprint", fp),
-        ],
-        "AcoustID",
-    )?;
+        ])
+        .map_err(|e| mask(format!("AcoustID: {e}")))?;
+    let status = r.status().as_u16();
+    let body = r
+        .body_mut()
+        .with_config()
+        .limit(8 * 1024 * 1024)
+        .read_to_string()
+        .map_err(|e| mask(format!("AcoustID: {e}")))?;
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
     if v["status"] != "ok" {
-        return Err(format!(
-            "AcoustID: {}",
-            v["error"]["message"].as_str().unwrap_or("lookup failed")
-        ));
+        let msg = v["error"]["message"].as_str().unwrap_or(match status {
+            429 | 503 => "rate limited, try again in a moment",
+            _ => "lookup failed",
+        });
+        return Err(mask(format!("AcoustID: {msg}")));
     }
-    Ok(parse_acoustid(&v))
+    Ok(parse_acoustid_matches(&v))
 }
 
+/// `s` with every occurrence of the secret `key` replaced by `***`.
+pub fn redact(s: &str, key: &str) -> String {
+    if key.trim().is_empty() {
+        s.to_string()
+    } else {
+        s.replace(key.trim(), "***")
+    }
+}
+
+/// (recording id, score 0–100) of an AcoustID lookup answer, best first.
 pub fn parse_acoustid(v: &serde_json::Value) -> Vec<(String, u32)> {
-    let mut out: Vec<(String, u32)> = Vec::new();
-    for r in v["results"].as_array().into_iter().flatten() {
-        let s = (r["score"].as_f64().unwrap_or(0.0) * 100.0).round() as u32;
+    parse_acoustid_matches(v)
+        .into_iter()
+        .map(|m| (m.id, m.score))
+        .collect()
+}
+
+/// The recordings of an AcoustID lookup answer (with or without `meta=recordings`),
+/// each once with its best score, best first. The album is the first release group of
+/// type Album, else the first one.
+pub fn parse_acoustid_matches(v: &serde_json::Value) -> Vec<Match> {
+    let score = |r: &serde_json::Value| {
+        (r["score"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
+    };
+    let mut results: Vec<&serde_json::Value> =
+        v["results"].as_array().into_iter().flatten().collect();
+    // Best result first, so a recording listed twice keeps its best score.
+    results.sort_by_key(|r| std::cmp::Reverse(score(r)));
+    let mut out: Vec<Match> = Vec::new();
+    for r in results {
+        let s = score(r);
         for rec in r["recordings"].as_array().into_iter().flatten() {
-            if let Some(id) = rec["id"].as_str() {
-                if !out.iter().any(|(i, _)| i == id) {
-                    out.push((id.into(), s));
-                }
+            let Some(id) = rec["id"].as_str() else {
+                continue;
+            };
+            if out.iter().any(|m| m.id == id) {
+                continue;
             }
+            let groups: Vec<&serde_json::Value> = rec["releasegroups"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .collect();
+            let album = groups
+                .iter()
+                .find(|g| g["type"].as_str() == Some("Album"))
+                .or(groups.first())
+                .and_then(|g| g["title"].as_str())
+                .unwrap_or("");
+            out.push(Match {
+                id: id.into(),
+                score: s,
+                title: rec["title"].as_str().unwrap_or("").into(),
+                artist: credit(&rec["artists"]),
+                album: album.into(),
+                duration: rec["duration"].as_f64().unwrap_or(0.0),
+            });
         }
     }
-    out.sort_by_key(|r| std::cmp::Reverse(r.1));
     out
+}
+
+/// Fingerprint `path` and look it up on AcoustID, or take the cached answer for this
+/// file (same path, size and modification time). Fresh answers, including "no match",
+/// are cached. Returns the matches and how they were obtained (for the notes).
+pub fn acoustid_matches(path: &Path, key: &str) -> Result<(Vec<Match>, String), String> {
+    if let Some(m) = cache::cached(path) {
+        return Ok((m, "cached AcoustID answer".into()));
+    }
+    let (d, fp, how) = fingerprint_with(path)?;
+    let m = acoustid_lookup(key.trim(), d, &fp)?;
+    cache::remember(path, &m);
+    Ok((m, format!("Fingerprint: {how}")))
+}
+
+/// The best match whose score is at least `min` (0–100) and that has a recording id;
+/// among equal scores the first one with a title (AcoustID lists the best first).
+pub fn best_confident(matches: &[Match], min: u32) -> Option<Match> {
+    let ok: Vec<&Match> = matches
+        .iter()
+        .filter(|m| m.score >= min && !m.id.is_empty())
+        .collect();
+    let top = ok.iter().map(|m| m.score).max()?;
+    ok.iter()
+        .filter(|m| m.score == top)
+        .find(|m| !m.title.is_empty())
+        .or_else(|| ok.iter().find(|m| m.score == top))
+        .map(|m| (*m).clone())
 }
 
 /// Full MusicBrainz recording lookup.
@@ -304,27 +391,25 @@ pub fn lookup_recording(id: &str) -> Result<serde_json::Value, String> {
     )
 }
 
-/// Identify one file: AcoustID (when `key` is set) then MusicBrainz search.
-/// Returns the current tags and the candidates, best first.
+/// Identify one file: AcoustID (when `key` is set; answers cached per file) then
+/// MusicBrainz search. Returns the current tags and the candidates, best first.
 pub fn identify(path: &Path, key: &str) -> Result<(Tags, Vec<Candidate>, Vec<String>), String> {
     let (old, dur) = read_tags(path)?;
     let mut notes = Vec::new();
     let mut out = Vec::new();
     if !key.trim().is_empty() {
-        match fingerprint_with(path).and_then(|(d, fp, how)| {
-            notes.push(format!("Fingerprint: {how}"));
-            acoustid_lookup(key.trim(), d, &fp)
-        }) {
-            Ok(ids) => {
-                for (id, score) in ids.into_iter().filter(|(_, s)| *s >= 50).take(3) {
-                    let rec = lookup_recording(&id)?;
-                    out.extend(candidates_from_recording(&rec, score, "AcoustID", 4));
+        match acoustid_matches(path, key) {
+            Ok((ids, how)) => {
+                notes.push(how);
+                for m in ids.into_iter().filter(|m| m.score >= 50).take(3) {
+                    let rec = lookup_recording(&m.id)?;
+                    out.extend(candidates_from_recording(&rec, m.score, "AcoustID", 4));
                 }
                 if out.is_empty() {
                     notes.push("AcoustID: no match for the fingerprint".to_string());
                 }
             }
-            Err(e) => notes.push(e),
+            Err(e) => notes.push(redact(&e, key)),
         }
     } else {
         notes.push("No AcoustID key: matched by tags/file name only".into());

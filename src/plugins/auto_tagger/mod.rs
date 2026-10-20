@@ -23,6 +23,20 @@
 //! are looked up on MusicBrainz here, and each candidate also proposes a new file name
 //! from the pattern, shown as a "File name" row in the review and renamed on apply
 //! (Undo renames back).
+//!
+//! **Result cache** ([`cache`]): each file's AcoustID answer is kept by path, size and
+//! modification time (at most 300 files, `<data>/vivi/tagger-cache.json`, 0600), so
+//! identifying a file again, playing it again or tagging its folder does not fingerprint
+//! it again. *Forget cached results* clears it.
+//!
+//! **Identify untagged songs while playing** (setting `auto-identify`, off by default):
+//! when a local song Vivi knows nothing about starts (the shared now-playing track says
+//! kind `music`, source `file`: no title / artist tags, not in the library, no package
+//! metadata), it is fingerprinted in a background thread at low priority a few seconds
+//! after it starts. When AcoustID is at least [`AUTO_MIN_SCORE`] sure, the match (title,
+//! artist, album, duration, MusicBrainz id) becomes the track's now-playing metadata, like
+//! a package's `vivi-media-meta` (player title, now-playing card, MPRIS, extensions), and a
+//! toast offers *Review* to open the tag review. The file is never written automatically.
 
 use super::web;
 use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
@@ -41,10 +55,21 @@ use std::sync::Arc;
 pub const ID: &str = "auto-tagger";
 /// Seconds of audio fingerprinted (same as `fpcalc`'s default).
 const FP_SECONDS: u32 = 120;
+/// Lowest AcoustID score (0–100) shown as now playing by the automatic identification
+/// (the AcoustID package's 0.7).
+pub const AUTO_MIN_SCORE: u32 = 70;
+/// How long a song plays before it is identified automatically (skipping through a
+/// folder does not fingerprint every file).
+const AUTO_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
+/// Toast button id that opens the review of the song identified last
+/// (`crate::plugins::packages::open_replacement`).
+pub const REVIEW_ACTION: &str = "builtin:auto-tagger/review";
 
+mod cache;
 mod files;
 mod providers;
 mod review;
+pub use cache::{forget as forget_cached, Match};
 pub use files::*;
 pub use providers::*;
 pub use review::*;
@@ -69,6 +94,35 @@ pub struct AutoTagger {
     session: Option<(PathBuf, Vec<PathBuf>)>,
     /// Per-file results of the last apply (summary, per-file Undo).
     results: Vec<FileResult>,
+    /// Automatic identification of untagged songs.
+    auto: Auto,
+    /// Open the review of the best candidate as soon as the candidates arrive (the
+    /// *Review* button of an automatic identification).
+    straight_to_review: bool,
+}
+
+/// A running automatic lookup: its path, answer channel and cancel flag.
+type AutoJob = (
+    String,
+    Receiver<Result<Option<Match>, String>>,
+    Arc<AtomicBool>,
+);
+
+/// State of the automatic identification (see the module docs).
+#[derive(Default)]
+struct Auto {
+    /// `nowplaying::current_id` last looked at.
+    seen: i64,
+    /// Untagged song waiting for [`AUTO_DELAY`] and when it was seen first.
+    pending: Option<(String, std::time::Instant)>,
+    /// Paths identified (or tried) this run.
+    tried: std::collections::HashSet<String>,
+    /// The running lookup: its path, answer and cancel flag.
+    job: Option<AutoJob>,
+    /// The last song identified (path, match), for *Review*.
+    last: Option<(String, Match)>,
+    /// "No key" was said once this run.
+    warned: bool,
 }
 
 fn cover_cache() -> PathBuf {
@@ -582,6 +636,10 @@ impl AutoTagger {
         let pattern = v["pattern"].as_str().unwrap_or("").to_string();
         let ids = parse_acoustid(&v["acoustid"]);
         let target = PathBuf::from(path);
+        // The package's answer serves the next identify / auto-identify / folder run too.
+        if v["acoustid"]["status"] == "ok" {
+            cache::remember(&target, &parse_acoustid_matches(&v["acoustid"]));
+        }
         self.cancel.store(true, Ordering::Relaxed);
         self.cancel = Arc::new(AtomicBool::new(false));
         let a = cx.app;
@@ -627,6 +685,98 @@ impl AutoTagger {
             };
             let _ = tx.send(m);
         });
+    }
+
+    fn auto_cancel(&mut self) {
+        if let Some((_, _, c)) = self.auto.job.take() {
+            c.store(true, Ordering::Relaxed);
+        }
+        self.auto.pending = None;
+    }
+
+    /// Automatic identification: collect a finished lookup, then look at the shared
+    /// now-playing track for a new untagged song (see the module docs).
+    fn auto_tick(&mut self, cx: &Ctx) {
+        let playing = cx.player.get("path").unwrap_or_default();
+        if let Some((path, rx, cancel)) = &self.auto.job {
+            if *path != playing {
+                // Skipped to another file: the answer is still cached when it comes.
+                cancel.store(true, Ordering::Relaxed);
+            }
+            match rx.try_recv() {
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(_) => {}
+                Ok(Ok(Some(m))) if *path == playing => {
+                    let path = path.clone();
+                    self.auto_show(cx, &path, m);
+                }
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => eprintln!("vivi: auto-tagger: automatic identification: {e}"),
+            }
+            self.auto.job = None;
+            self.auto.seen = -1; // the song may have changed meanwhile
+        }
+        if !cx.flag("auto-identify") {
+            self.auto.pending = None;
+            return;
+        }
+        let id = crate::nowplaying::current_id();
+        if id != self.auto.seen {
+            self.auto.seen = id;
+            let t = crate::nowplaying::current();
+            self.auto.pending = (t.path == playing
+                && untagged_song(&t)
+                && !self.auto.tried.contains(&t.path)
+                && Path::new(&t.path).is_file())
+            .then(|| (t.path.clone(), std::time::Instant::now()));
+        }
+        let Some((path, since)) = self.auto.pending.clone() else {
+            return;
+        };
+        if path != playing {
+            self.auto.pending = None;
+            return;
+        }
+        if since.elapsed() < AUTO_DELAY {
+            return;
+        }
+        self.auto.pending = None;
+        let key = Self::secret(
+            cx,
+            "acoustid-key",
+            &["VIVI_ACOUSTID_KEY", "ACOUSTID_API_KEY"],
+        );
+        if key.trim().is_empty() {
+            if !std::mem::replace(&mut self.auto.warned, true) {
+                cx.toast("Auto-tagger: identifying untagged songs needs an AcoustID key (Extensions → Auto-tagger)");
+            }
+            return;
+        }
+        self.auto.tried.insert(path.clone());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = channel();
+        self.auto.job = Some((path.clone(), rx, cancel.clone()));
+        std::thread::spawn(move || {
+            lower_priority();
+            let _ = tx.send(auto_identify(Path::new(&path), &key, &cancel));
+        });
+    }
+
+    /// Show an automatic match as now playing and offer the review.
+    fn auto_show(&mut self, cx: &Ctx, path: &str, m: Match) {
+        crate::plugins::host::media_meta(ID, now_playing_meta(path, &m));
+        // The player's title line and the window title read mpv's media-title.
+        let title = display_title(&m);
+        if let Err(e) = cx
+            .player
+            .mpv
+            .set_property("file-local-options/force-media-title", title.as_str())
+        {
+            eprintln!("vivi: auto-tagger: set the title: {e:?}");
+        }
+        let msg = format!("Identified: {title} ({}%)", m.score);
+        toast_with_action(cx.app, &msg, "Review tags", REVIEW_ACTION, 10.0);
+        self.auto.last = Some((path.to_string(), m));
     }
 
     fn start(&mut self, cx: &Ctx) {
@@ -691,6 +841,87 @@ impl AutoTagger {
             Self::ui(cx, "Choose an audio file or a folder", false);
             self.rx = None;
         }
+    }
+}
+
+/// Whether the shared now-playing track is a local song Vivi knows nothing about: music,
+/// title / artist from the file name only (no tags, library row or package metadata).
+pub fn untagged_song(t: &crate::nowplaying::Track) -> bool {
+    !t.path.is_empty() && !t.path.contains("://") && t.kind == "music" && t.source == "file"
+}
+
+/// The background half of the automatic identification: the cached or fresh AcoustID
+/// answer, its best match when it scores at least [`AUTO_MIN_SCORE`], completed from
+/// MusicBrainz (rate limited) when AcoustID has no title for it.
+fn auto_identify(path: &Path, key: &str, cancel: &AtomicBool) -> Result<Option<Match>, String> {
+    let (ms, _) = acoustid_matches(path, key).map_err(|e| redact(&e, key))?;
+    let Some(mut m) = best_confident(&ms, AUTO_MIN_SCORE) else {
+        return Ok(None);
+    };
+    if m.title.is_empty() || m.artist.is_empty() {
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
+        let rec = lookup_recording(&m.id)?;
+        let Some(c) = candidates_from_recording(&rec, m.score, "AcoustID", 1)
+            .into_iter()
+            .next()
+        else {
+            return Ok(None);
+        };
+        m.title = c.tags.title;
+        m.artist = c.tags.artist;
+        if m.album.is_empty() {
+            m.album = c.tags.album;
+        }
+        if m.duration <= 0.0 {
+            m.duration = rec["length"].as_f64().unwrap_or(0.0) / 1000.0;
+        }
+    }
+    Ok((!m.title.is_empty()).then_some(m))
+}
+
+/// "Artist – Title" (or the title alone).
+pub fn display_title(m: &Match) -> String {
+    if m.artist.is_empty() {
+        m.title.clone()
+    } else {
+        format!("{} – {}", m.artist, m.title)
+    }
+}
+
+/// The now-playing metadata of an automatic match (as a package's `vivi-media-meta`).
+pub fn now_playing_meta(path: &str, m: &Match) -> crate::plugins::host::Meta {
+    crate::plugins::host::Meta {
+        url: path.to_string(),
+        title: m.title.clone(),
+        artist: m.artist.clone(),
+        album: m.album.clone(),
+        mbid: m.id.clone(),
+        duration: m.duration.max(0.0),
+        kind: "music".into(),
+        ..Default::default()
+    }
+}
+
+/// A toast with a button (`Notices.toast-run(id)`), shown for `secs` seconds.
+fn toast_with_action(app: &crate::AppWindow, msg: &str, label: &str, id: &str, secs: f64) {
+    let n = app.global::<crate::Notices>();
+    n.set_toast_action(label.into());
+    n.set_toast_action_id(id.into());
+    n.set_toast_action_text(msg.into());
+    super::toast_for(app, msg, secs);
+}
+
+/// Run the calling thread (and the `fpcalc` it starts) at a lower CPU priority, so the
+/// background fingerprint never competes with playback. Linux only (the nice value is
+/// per thread there); elsewhere a no-op.
+fn lower_priority() {
+    #[cfg(target_os = "linux")]
+    // SAFETY: plain syscalls on the calling thread; failure only leaves the priority as is.
+    unsafe {
+        let tid = libc::syscall(libc::SYS_gettid) as libc::id_t;
+        libc::setpriority(libc::PRIO_PROCESS, tid, 10);
     }
 }
 
@@ -914,8 +1145,28 @@ impl Plugin for AutoTagger {
             "Puts back the tags of the playing file from before the first auto-tag.",
             "Restore",
         ))
+        .setting(SettingSpec::toggle(
+            "auto-identify",
+            "Identify untagged songs while playing",
+            "When a local song without title / artist tags starts, identify it in the background by its audio fingerprint (AcoustID). When the match is at least 70% sure, the player, the now-playing card, MPRIS and extensions show its title, artist and album; the file is not changed until you review and apply the tags.",
+            false,
+        ))
+        .setting(SettingSpec::action(
+            "forget",
+            "Forget cached results",
+            "Each file's AcoustID answer is remembered (by path, size and modification time, at most 300 files) so identifying it again, playing it again or tagging its folder needs no new fingerprint. Clear it to look every file up again.",
+            "Forget",
+        ))
+    }
+    fn setting_changed(&mut self, _cx: &Ctx, key: &str) {
+        if key == "auto-identify" {
+            // Look at the playing song again (it may be untagged).
+            self.auto.seen = -1;
+            self.auto.warned = false;
+        }
     }
     fn disable(&mut self, cx: &Ctx) {
+        self.auto_cancel();
         self.cancel.store(true, Ordering::Relaxed);
         self.rx = None;
         if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
@@ -967,6 +1218,28 @@ impl Plugin for AutoTagger {
             },
             "search" => self.start(cx),
             "acoustid" => self.external(cx, args),
+            // Toast button of an automatic identification: the tag review of that song.
+            "review-identified" => {
+                let path = self.auto.last.as_ref().map(|(p, _)| p.clone());
+                match path.filter(|p| Path::new(p).is_file()) {
+                    Some(p) => {
+                        cx.app.global::<crate::Overlays>().set_settings_open(false);
+                        self.straight_to_review = true;
+                        self.open(cx, p);
+                    }
+                    None => cx.toast("Auto-tagger: the identified file is gone"),
+                }
+            }
+            "forget" => {
+                self.auto.tried.clear();
+                match forget_cached() {
+                    Ok(n) => cx.toast(&format!(
+                        "Auto-tagger: forgot the cached results of {n} file{}",
+                        if n == 1 { "" } else { "s" }
+                    )),
+                    Err(e) => cx.toast(&format!("Auto-tagger: could not clear the cache: {e}")),
+                }
+            }
             "select" => {
                 if let Some(i) = idx() {
                     cx.app
@@ -1058,6 +1331,7 @@ impl Plugin for AutoTagger {
         }
     }
     fn tick(&mut self, cx: &Ctx) {
+        self.auto_tick(cx);
         let Some(rx) = &self.rx else { return };
         while let Ok(m) = rx.try_recv() {
             match m {
@@ -1094,8 +1368,12 @@ impl Plugin for AutoTagger {
                             .set_detail(self.detail(0).into());
                     }
                     self.rx = None;
-                    // Screenshots/tests: go straight to the review of the best match.
-                    if std::env::var_os("VIVI_TAGREVIEW").is_some() && !self.rows.is_empty() {
+                    // *Review* of an automatic identification, screenshots/tests: go
+                    // straight to the review of the best match.
+                    let straight = std::mem::take(&mut self.straight_to_review);
+                    if (straight || std::env::var_os("VIVI_TAGREVIEW").is_some())
+                        && !self.rows.is_empty()
+                    {
                         self.review(cx, vec![0]);
                     }
                     return;
@@ -1547,8 +1825,116 @@ mod tests {
         ]});
         assert_eq!(
             parse_acoustid(&v),
-            vec![("a".to_string(), 97), ("b".to_string(), 50)]
+            vec![("a".to_string(), 97), ("b".to_string(), 97)]
         );
+    }
+
+    #[test]
+    fn parse_acoustid_matches_with_metadata() {
+        let v = serde_json::json!({"status": "ok", "results": [
+            {"score": 0.42, "recordings": [{"id": "low", "title": "Other"}]},
+            {"score": 0.931, "recordings": [{
+                "id": "rec-1", "title": "Song", "duration": 201.5,
+                "artists": [{"name": "A", "joinphrase": " & "}, {"name": "B"}],
+                "releasegroups": [{"title": "Single", "type": "Single"}, {"title": "LP", "type": "Album"}]
+            }, {"id": "rec-2"}]}
+        ]});
+        let m = parse_acoustid_matches(&v);
+        assert_eq!(m.len(), 3);
+        assert_eq!(
+            m[0],
+            Match {
+                id: "rec-1".into(),
+                score: 93,
+                title: "Song".into(),
+                artist: "A & B".into(),
+                album: "LP".into(),
+                duration: 201.5,
+            }
+        );
+        assert_eq!(
+            (m[1].id.as_str(), m[1].score, m[1].title.as_str()),
+            ("rec-2", 93, "")
+        );
+        assert_eq!((m[2].id.as_str(), m[2].score), ("low", 42));
+        // Threshold: 0.7 score (70) like the AcoustID plugin.
+        assert_eq!(best_confident(&m, AUTO_MIN_SCORE).unwrap().id, "rec-1");
+        assert_eq!(best_confident(&m[2..], AUTO_MIN_SCORE), None);
+        assert_eq!(best_confident(&[], AUTO_MIN_SCORE), None);
+        let edge = [Match {
+            id: "e".into(),
+            score: 70,
+            ..Default::default()
+        }];
+        assert!(best_confident(&edge, AUTO_MIN_SCORE).is_some());
+        // Equal scores: the one with a title wins, wherever it is listed.
+        let tie = [m[1].clone(), m[0].clone()];
+        assert_eq!(best_confident(&tie, AUTO_MIN_SCORE).unwrap().id, "rec-1");
+        assert!(parse_acoustid_matches(&serde_json::json!({"status": "error"})).is_empty());
+    }
+
+    #[test]
+    fn auto_identify_targets_and_now_playing() {
+        use crate::nowplaying::{merge, Sources, Track};
+        let local = |kind: &str, source: &str| Track {
+            path: "/music/x.mp3".into(),
+            kind: kind.into(),
+            source: source.into(),
+            ..Default::default()
+        };
+        assert!(untagged_song(&local("music", "file")));
+        assert!(!untagged_song(&local("music", "tags")));
+        assert!(!untagged_song(&local("music", "library")));
+        assert!(!untagged_song(&local("music", "plugin:youtube-music")));
+        assert!(!untagged_song(&local("video", "file")));
+        assert!(!untagged_song(&local("podcast", "file")));
+        assert!(!untagged_song(&Track {
+            path: "https://example.com/a.mp3".into(),
+            ..local("music", "file")
+        }));
+        assert!(!untagged_song(&Track::default()));
+        let m = Match {
+            id: "8f3471b5-7e6a-48da-86a9-c1c07a0f47ae".into(),
+            score: 91,
+            title: "Song".into(),
+            artist: "Band".into(),
+            album: "LP".into(),
+            duration: 0.0,
+        };
+        assert_eq!(display_title(&m), "Band – Song");
+        assert_eq!(
+            display_title(&Match {
+                artist: String::new(),
+                ..m.clone()
+            }),
+            "Song"
+        );
+        // The match becomes the shared now-playing track (tags win nowhere: there are none).
+        let t = merge(&Sources {
+            path: "/music/x.mp3".into(),
+            media_title: "x.mp3".into(),
+            duration: 200.0,
+            plugin: Some((ID.into(), now_playing_meta("/music/x.mp3", &m))),
+            ..Default::default()
+        });
+        assert_eq!(
+            (t.title.as_str(), t.artist.as_str(), t.album.as_str()),
+            ("Song", "Band", "LP")
+        );
+        assert_eq!(t.source, "plugin:auto-tagger");
+        assert_eq!(t.kind, "music");
+        assert_eq!(t.mbid, m.id);
+        assert_eq!(t.duration, 200.0);
+    }
+
+    #[test]
+    fn redact_masks_the_key() {
+        assert_eq!(
+            redact("AcoustID: bad client=abc123 abc123", "abc123"),
+            "AcoustID: bad client=*** ***"
+        );
+        assert_eq!(redact("no key here", ""), "no key here");
+        assert_eq!(redact("x k y", " k "), "x *** y");
     }
 
     #[test]
