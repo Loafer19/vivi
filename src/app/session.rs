@@ -141,7 +141,12 @@ pub(crate) fn on_file_loaded(a: &AppWindow, p: &Rc<Player>, log: bool) {
                 }
             });
         } else {
-            a.global::<crate::Notices>().set_resume_text("".into());
+            // Hide the previous file's resume prompt, not a toast shown since the file
+            // loaded (a subtitle Subtitle Search loaded from its cache at once).
+            let n = a.global::<crate::Notices>();
+            if n.get_resume_text() == n.get_resume_offer() {
+                n.set_resume_text("".into());
+            }
         }
     });
 }

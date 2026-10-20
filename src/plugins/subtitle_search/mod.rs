@@ -705,7 +705,7 @@ impl Plugin for SubtitleSearch {
         Manifest::builtin(
             ID,
             "Subtitle Search",
-            "Find subtitles on OpenSubtitles (by file hash, name or IMDb id) in the Add Subtitles dialog; the pick is remembered per file.",
+            "Find subtitles on OpenSubtitles in the Add Subtitles dialog: by file hash first, then by name, episode (S01E05), year or IMDb id, with a text preview. The pick is remembered per file, and exact matches can load by themselves when a video opens without subtitles.",
             "subtitles",
         )
         .contribute(contrib::MENU_SUBTITLES, "Search online…", "search-online")
