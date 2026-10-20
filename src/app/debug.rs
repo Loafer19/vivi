@@ -14,8 +14,8 @@ pub(crate) fn screenshot_mode() -> bool {
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
 /// VIVI_MENU, VIVI_SUB, VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
-/// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] (a plugin dialog, searched when a query or
-/// source is given).
+/// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] [VIVI_MUSICPLAY=row] (a plugin dialog,
+/// searched when a query or source is given, then a result row played).
 /// Show plugin `id` in Settings → Extensions → Browse (search filtered to its name).
 pub(crate) fn open_plugin_link(app: &AppWindow, id: &str) {
     use plugins::packages;
@@ -78,6 +78,7 @@ pub(crate) fn debug_ui(app: &AppWindow) {
     if let Some(id) = var("VIVI_MUSIC") {
         let q = var("VIVI_MUSICQ");
         let src = var("VIVI_MUSICSRC");
+        let play = var("VIVI_MUSICPLAY");
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(2000), move || {
             plugins::command(&id, "open", &[]);
@@ -92,6 +93,12 @@ pub(crate) fn debug_ui(app: &AppWindow) {
             }
             if src.is_some() || q.is_some() {
                 plugins::command(&id, "search", &[]);
+            }
+            // VIVI_MUSICPLAY=<row>: play that result row once the search had time to answer.
+            if let Some(row) = play {
+                slint::Timer::single_shot(Duration::from_secs(12), move || {
+                    plugins::command(&id, "primary", &[row]);
+                });
             }
         });
     }

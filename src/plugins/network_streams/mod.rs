@@ -906,7 +906,7 @@ impl Plugin for NetworkStreams {
         Manifest::builtin(
             ID,
             "Network Streams",
-            "Internet radio (radio-browser.info, SomaFM), iptv-org TV by country and category, your own M3U/IPTV playlists that refresh themselves, favorites, groups, channel logos, an XMLTV program guide (now / next) and stream info.",
+            "Internet radio (radio-browser.info, SomaFM), iptv-org TV by country and category, your own M3U/IPTV playlists that refresh themselves, favorites, Search all (TV + radio), group and category chips, channel logos as a list or a grid, an XMLTV program guide (now / next) and stream info.",
             "streams",
         )
         .source("open")
