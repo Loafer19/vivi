@@ -16,8 +16,9 @@ file mixes text-coloured and accent parts, else to `<name>.svg`'s own layers, el
 
 Two-tone rule used for the files marked #82: the outline stays in the text colour and one secondary part
 (the note, the plus, the needle, the arrow head, the second bar) turns dim accent; glyphs that are a single
-shape (play, stop, the pointer) get a dim fill inset inside the outline, so the visual weight matches the
-filled single-tone glyph. Left single-tone: `eq` and `remove` (a single stroke has no second part, and an
+shape get a dim fill: play and stop keep their solid shape (a 2 px outline over a dim fill of the same
+path, so a primary button that draws both tones in one colour still shows the solid glyph), the pointer
+gets a smaller dim fill inside its outline. Left single-tone: `eq` and `remove` (a single stroke has no second part, and an
 all-accent stroke reads as an active state). `eq-*` presets are drawn at 16 px in the preset list, so they
 stay single-tone there.
 
@@ -152,7 +153,7 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `pip.svg` | r13c06 |
 | `pip-twotone.svg` | r13c06, inner window dim (#82) |
 | `play.svg` | r01c09 |
-| `play-twotone.svg` | r01c09 outline + dim fill inside (#82) |
+| `play-twotone.svg` | r01c09 outline (2 px) over a dim fill of the same shape, solid on primary buttons (#82) |
 | `playback.svg` | r01c10 |
 | `playback-active.svg` | r01c10 |
 | `playback-twotone.svg` | r01c11 |
@@ -220,7 +221,7 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `speed-active.svg` | r12c02 |
 | `speed-twotone.svg` | r12c01, needle dim (#82) |
 | `stop.svg` | r02c05 |
-| `stop-twotone.svg` | r02c05 outline + dim fill inside (#82; the sheet cell r02c06 was all dim accent) |
+| `stop-twotone.svg` | r02c05 outline (2 px) over a dim fill of the same shape (#82; the sheet cell r02c06 was all dim accent) |
 | `streaming.svg` | r06c04 |
 | `streaming-active.svg` | r06c06 |
 | `streaming-selected.svg` | r06c06 |
