@@ -389,6 +389,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     if let Err(e) = player.mpv.set_property("user-data/vivi/ab-loop", 1i64) {
         eprintln!("vivi: set user-data/vivi/ab-loop: {e:?}");
     }
+    // The equalizer is built in (src/fx.rs): the deprecated Equalizer package checks this,
+    // stops applying its own filter and hands its preset over (`vivi-eq-preset` /
+    // `vivi-eq-import`).
+    if let Err(e) = player.mpv.set_property("user-data/vivi/equalizer", 1i64) {
+        eprintln!("vivi: set user-data/vivi/equalizer: {e:?}");
+    }
     // The per-file subtitle offset is built in (src/suboffset.rs): Subtitle Auto-Sync
     // checks `user-data/vivi/sub-offset` and leaves Alt+Z / Alt+X and storage to it.
     crate::suboffset::setup(player);
@@ -792,6 +798,16 @@ pub fn client_message(args: &[String]) {
             command(skip_intro::ID, "ranges-clear", &[source.to_string()])
         }
         Some(M::SkipUndo) => command(skip_intro::ID, "undo", &[]),
+        Some(M::EqPreset(name)) => {
+            if let Some(a) = with(|r| r.app.upgrade()).flatten() {
+                crate::fx::preset_action(&a, "select", name, "");
+            }
+        }
+        Some(M::EqImport(json)) => {
+            if let Some(a) = with(|r| r.app.upgrade()).flatten() {
+                crate::fx::preset_action(&a, "import-text", "", json);
+            }
+        }
         _ => {}
     }
 }

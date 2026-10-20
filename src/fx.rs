@@ -681,6 +681,14 @@ pub fn open_panel(a: &crate::AppWindow) {
 }
 
 /// Wire the FxState global: apply saved effects now and on every change.
+/// Run an equalizer preset action as the Audio panel would (`select`, `import-text`, …);
+/// used by `vivi-eq-preset` / `vivi-eq-import` from packages.
+pub fn preset_action(a: &crate::AppWindow, action: &str, name: &str, arg: &str) {
+    use slint::ComponentHandle;
+    a.global::<crate::FxState>()
+        .invoke_preset_action(action.into(), name.into(), arg.into());
+}
+
 pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>) {
     use crate::FxState;
     use slint::ComponentHandle;
@@ -837,6 +845,13 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                     "select" => {
                         fx.select_preset(&name);
                     }
+                    // Presets JSON from a package (`vivi-eq-import`): add, select the first.
+                    "import-text" => match fx.import_json(&arg) {
+                        Ok(names) => {
+                            fx.select_preset(&names[0]);
+                        }
+                        Err(e) => eprintln!("vivi: import presets: {e}"),
+                    },
                     "new" => {
                         fx.new_preset();
                     }

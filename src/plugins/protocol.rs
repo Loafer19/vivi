@@ -126,6 +126,12 @@ pub enum ScriptMessage<'a> {
     SkipRangesClear(&'a str),
     /// `vivi-skip-undo`: undo the last skip or mute (like Alt+Shift+K).
     SkipUndo,
+    /// `vivi-eq-preset <name>`: select a built-in or custom preset of the built-in
+    /// equalizer and turn it on (the deprecated Equalizer package hands over its preset).
+    EqPreset(&'a str),
+    /// `vivi-eq-import <json>`: add presets in the `vivi-eq-presets` export format (or one
+    /// preset) to the built-in equalizer, select the first and turn it on.
+    EqImport(&'a str),
 }
 
 impl<'a> ScriptMessage<'a> {
@@ -182,6 +188,8 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-skip-ranges", source, json] => M::SkipRanges { source, json },
             ["vivi-skip-ranges-clear", source] => M::SkipRangesClear(source),
             ["vivi-skip-undo", ..] => M::SkipUndo,
+            ["vivi-eq-preset", name] if !name.trim().is_empty() => M::EqPreset(name.trim()),
+            ["vivi-eq-import", json] => M::EqImport(json),
             _ => return None,
         })
     }
@@ -356,6 +364,9 @@ mod tests {
             M::SkipRangesClear("sponsorblock"),
         );
         is(&["vivi-skip-undo"], M::SkipUndo);
+        is(&["vivi-eq-preset", " Bass "], M::EqPreset("Bass"));
+        assert_eq!(p(&["vivi-eq-preset", " "]), None);
+        is(&["vivi-eq-import", "{}"], M::EqImport("{}"));
         assert_eq!(p(&["vivi-skip-ranges", "sponsorblock"]), None);
     }
 }

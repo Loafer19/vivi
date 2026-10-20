@@ -52,7 +52,7 @@ Wire formats live in `plugins/protocol.rs`: `PluginCommand` for the UI's
 / `join`) and `ScriptMessage`, the one enum of every `script-message vivi-*` a package can
 send (`vivi-toast`, `vivi-setting`, `vivi-pick-folder`, `vivi-range`, `vivi-fullscreen`,
 `vivi-qr`, `vivi-sub-offset`, `vivi-sub-offset-import`, `vivi-tagger-acoustid`, `vivi-preview-frames`,
-`vivi-chapter-thumbs`). A new message is a variant plus a `parse` arm and a test.
+`vivi-chapter-thumbs`, `vivi-eq-preset`, `vivi-eq-import`). A new message is a variant plus a `parse` arm and a test.
 Background lookups return through `util::Task<T>`.
 
 Built-in plugins hand the UI typed state rather than display strings: the tag review
@@ -624,7 +624,11 @@ Dokploy redeploys plugins.viviplayer.app from the same push; the vivi-plugins Pa
   `"deprecated": {"since": "0.13.0", "message": "…", "replacement": "builtin:equalizer",
   "action": "Open Equalizer"}`. Vivi then hides it from *Available plugins* unless it is
   installed, shows the message in its Extensions tab with a button that opens the
-  replacement (`builtin:equalizer` = Audio panel → Equalizer, `builtin:ab-loop` = the
+  replacement (`builtin:equalizer` = Audio panel → Equalizer; Vivi sets
+  `user-data/vivi/equalizer` to 1 so the old package stops applying its own filter, and the
+  package hands its preset over with `vivi-eq-preset <name>` or `vivi-eq-import <json>`
+  (the *Export* presets format; added, the first selected, the equalizer turned on),
+  `builtin:ab-loop` = the
   keyboard shortcut list (A-B loop keys, `src/abloop.rs`; Vivi sets `user-data/vivi/ab-loop`
   to 1 so the old package stays quiet), `builtin:auto-tagger` = the Auto-tagger's settings in
   the Extensions window (AcoustID package), `plugin:<id>` = that plugin's tab), and once (ids remembered in `~/.config/vivi/deprecation-notices.txt`) a
