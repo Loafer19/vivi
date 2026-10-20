@@ -3,7 +3,7 @@
   {"id": "1532771", "name": "That&#039;s Life", "duration": 187, "artist_id": "7123", "artist_name": "Yellow Faces",
    "album_name": "Season One", "album_id": "104336", "releasedate": "2018-03-02",
    "license_ccurl": "http://creativecommons.org/licenses/by-sa/3.0/", "position": 1,
-   "audio": "https://prod-1.storage.jamendo.com/?trackid=1532771&format=mp31",
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=1532771&format=mp31&from=app-abc123",
    "audiodownload": "https://prod-1.storage.jamendo.com/download/track/1532771/mp32/", "audiodownload_allowed": true,
    "image": "https://usercontent.jamendo.com?type=album&id=104336&width=300&trackid=1532771",
    "shareurl": "https://www.jamendo.com/track/1532771",

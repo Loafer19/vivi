@@ -37,6 +37,8 @@ export global MusicDialogState {
     in-out property <[MdFilter]> filters;
     in-out property <string> copy;
     in-out property <bool> has-more;
+    // Highlighted row of the dialog (-1 = none); reset each time the dialog opens.
+    in-out property <int> selected: -1;
     // Visible part of the rich list / grid (first index, count): covers are decoded only
     // around it (src/plugins/host.rs).
     in-out property <int> win-first;

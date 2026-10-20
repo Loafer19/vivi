@@ -22,7 +22,7 @@ Status: implemented in v0.9.0. Developer-facing guide: <https://plugins.viviplay
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint): results with badges, details and preview; picks in `subtitle-picks.json`. The per-file subtitle offset is core (src/suboffset.rs, below), not part of this plugin. |
 | Auto-tagger | Preview dialog with candidates and a per-field diff; fingerprints audio and writes tags/covers in Rust (lofty, rusty-chromaprint). |
 | Network Streams | Browser dialog with sources, results and details; plays through the player and keeps saved/recent lists. |
-| Free Music | Shared music dialog in rich mode (`FmRow` rows with covers, badges and licence chips, `MdFilter` dropdowns, infinite scroll); Jamendo + Internet Archive searched in parallel and merged; download queue writes tags with lofty. |
+| Free Music | Shared music dialog in rich mode (`FmRow` rows with covers, badges, licence chips and downloaded check marks, `MdFilter` dropdowns, infinite scroll, a detail cover; the row model is updated in place); Jamendo + Internet Archive searched in parallel and merged; download queue writes tags with lofty; tracks described with `host::media_meta` (licence on the now-playing card). |
 
 These use the Rust UI directly. Discord Rich Presence (#57) and Remote Control (#58) were
 built in until 0.9.0; they need a socket client / server that Lua cannot do, so they are now
@@ -69,7 +69,9 @@ search as `search-*`) and `Subtitles` (Add Subtitles dialog, sync / pick state).
 plugin that opens it sets `owner` (its id, for routing `plugin-command`) and `caps`,
 an `MdCaps { logos, chips, rich, grid }` saying which parts of the dialog it uses, so the
 UI never compares plugin ids (`grid` adds the header's list / grid toggle, its state in
-`MusicDialogState.grid`). `TagReview` holds the review dialog's files and
+`MusicDialogState.grid`). `MusicDialogState.selected` is the highlighted row (reset to -1
+when the dialog opens); an owner that re-sorts or replaces its rows sets it so the
+highlight, Enter and the footer buttons stay on the same item (Free Music). `TagReview` holds the review dialog's files and
 results; `NowPlaying` holds the radio now-playing card (station, track, info, logo). `SkipIntro` holds the Skip button's label and target. Plugin
 code writes them with `cx.app.global::<crate::Lyrics>().set_lines(...)`, and
 `ui/app.slint` binds the plugin's dialog properties to that global, so a new field

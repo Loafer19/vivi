@@ -651,7 +651,10 @@ export component MusicDialog inherits Modal {
     callback primary(int);
     callback secondary(int);
     callback close();
-    property <int> selected: -1;
+    // Highlighted result. Bound to MusicDialogState.selected, so an owner that re-sorts or
+    // replaces its rows (Free Music) keeps the highlight on the same item, or clears it.
+    in-out property <int> selected: -1;
+    init => { root.selected = -1; }
     // The station browser grows with the window (the modal still keeps it inside).
     card-width: root.rich ? 1060px : root.can-grid ? max(900px, min(1400px, root.width * 0.86)) : 900px;
     card-height: root.rich ? 720px : root.can-grid ? max(640px, min(960px, root.height * 0.88)) : 640px;

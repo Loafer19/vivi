@@ -253,11 +253,20 @@ pub fn ia_tracks(m: &serde_json::Value, max: usize) -> Vec<Track> {
     };
     // Item artwork: a JPEG/PNG original (cover.jpg, folder.jpg, …), else the thumbnail.
     let thumb = format!("https://archive.org/services/img/{}", urlencode(&id));
+    // Not the waveform PNG the Archive derives from each audio file ("<track>.png",
+    // `source: derivative`, `original: <track>.mp3`): it is no cover.
+    let is_img = |n: &str| {
+        let n = n.to_lowercase();
+        [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+            .iter()
+            .any(|e| n.ends_with(e))
+    };
     let art = files
         .iter()
         .filter(|f| {
-            let f = fmt(f);
-            f == "JPEG" || f == "PNG" || f == "Item Image"
+            let k = fmt(f);
+            (k == "JPEG" || k == "PNG" || k == "Item Image")
+                && (s(&f["source"]) != "derivative" || is_img(&s(&f["original"])))
         })
         .max_by_key(|f| {
             let n = s(&f["name"]).to_lowercase();
@@ -492,6 +501,24 @@ pub fn jamendo_search(key: &str, q: &Query) -> Result<(Vec<Track>, bool), String
     }
 }
 
+/// Drop Jamendo's `from=app-<client id>` parameter from a stream / download URL: the
+/// file plays without it, and the URL is kept in Recent, the history, playlists, MPRIS
+/// and error messages, which must not carry the client ID.
+pub fn strip_app(url: &str) -> String {
+    let Some((base, query)) = url.split_once('?') else {
+        return url.to_string();
+    };
+    let keep: Vec<&str> = query
+        .split('&')
+        .filter(|p| !p.is_empty() && !p.starts_with("from=app-") && !p.starts_with("client_id="))
+        .collect();
+    if keep.is_empty() {
+        base.to_string()
+    } else {
+        format!("{base}?{}", keep.join("&"))
+    }
+}
+
 pub fn jamendo_tracks(v: &serde_json::Value) -> Vec<Track> {
     v["results"]
         .as_array()
@@ -512,11 +539,11 @@ pub fn jamendo_tracks(v: &serde_json::Value) -> Vec<Track> {
                 genres: strings(&mi["genres"]),
                 tags: strings(&mi["vartags"]),
                 license_url: s(&r["license_ccurl"]),
-                stream: s(&r["audio"]),
+                stream: strip_app(&s(&r["audio"])),
                 download: if r["audiodownload_allowed"].as_bool() == Some(false) {
                     String::new()
                 } else {
-                    s(&r["audiodownload"])
+                    strip_app(&s(&r["audiodownload"]))
                 },
                 cover_full: if image.contains("width=") {
                     image.replace("width=300", "width=600")

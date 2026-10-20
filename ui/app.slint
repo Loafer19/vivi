@@ -1266,7 +1266,7 @@ export component AppWindow inherits Window {
         detail: MusicDialogState.detail; placeholder: MusicDialogState.placeholder;
         detail-cover: MusicDialogState.detail-cover; has-detail-cover: MusicDialogState.has-detail-cover && MusicDialogState.detail-cover-owner == MusicDialogState.owner; search-label: MusicDialogState.search-label;
         primary-text: MusicDialogState.primary; secondary-text: MusicDialogState.secondary; sources: MusicDialogState.sources;
-        source <=> MusicDialogState.source; query <=> MusicDialogState.query;
+        source <=> MusicDialogState.source; query <=> MusicDialogState.query; selected <=> MusicDialogState.selected;
         chips: MusicDialogState.caps.chips ? MusicDialogState.chips : []; chip: MusicDialogState.chip;
         actions: MusicDialogState.caps.chips ? MusicDialogState.actions : [];
         rich: MusicDialogState.caps.rich; tracks: MusicDialogState.caps.rich ? MusicDialogState.tracks : [];

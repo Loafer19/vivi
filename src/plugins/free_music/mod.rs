@@ -6,12 +6,14 @@
 //! licence, length), sort, infinite scroll, album / artist pages and "play similar".
 //! Downloads land in a library folder with tags, cover, licence and attribution (in the
 //! tags and in a `<file>.licence.txt`), through a built-in queue or the Offline
-//! Downloads plugin.
+//! Downloads plugin; downloaded tracks are marked and play from the file. The licence
+//! is shown on every row, in the detail pane and on the now-playing card.
 
 use super::auto_tagger::{self, Tags};
 use super::web;
 use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use slint::ComponentHandle;
+use slint::Model;
 use slint::{ModelRc, SharedString, VecModel};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -27,6 +29,7 @@ pub const FMA: &str = "Free Music Archive";
 /// Source dropdown; FMA is searched through its Internet Archive mirror.
 pub const SOURCES: [&str; 4] = ["All sources", JAMENDO, IA, FMA];
 const NO_KEY: &str = "Jamendo needs a client ID (free at devportal.jamendo.com → Settings → Extensions → Free Music). Showing the Internet Archive only.";
+const NO_KEY_NOTE: &str = "Jamendo is off (no client ID in the settings).";
 pub const PAGE: usize = 24;
 
 /// Browse chips: three lists, then genres (label, Jamendo tag / IA subject).
@@ -88,6 +91,8 @@ enum Msg {
         err: String,
     },
     Cover(String, Option<PathBuf>),
+    /// Large cover of the detail pane: URL, cached file.
+    Detail(String, Option<PathBuf>),
     /// Track id, title, result.
     Saved(String, String, Result<PathBuf, String>),
 }
@@ -128,6 +133,14 @@ pub struct FreeMusic {
     dl_done: usize,
     dl_last: String,
     note: String,
+    /// The dialog's row model, updated in place (a new model rebuilds every row).
+    model: Option<std::rc::Rc<VecModel<crate::FmRow>>>,
+    /// Track id → downloaded already (file in the download folder), checked once.
+    saved: HashMap<String, bool>,
+    /// Source dropdown value last searched (a change searches again).
+    last_source: String,
+    /// Cover URL wanted in the detail pane.
+    detail_url: String,
 }
 
 impl Default for FreeMusic {
@@ -158,6 +171,10 @@ impl Default for FreeMusic {
             dl_done: 0,
             dl_last: String::new(),
             note: String::new(),
+            model: None,
+            saved: HashMap::new(),
+            last_source: String::new(),
+            detail_url: String::new(),
         }
     }
 }
@@ -192,7 +209,8 @@ pub(crate) fn track_meta(t: &Track) -> crate::plugins::host::Meta {
         artist: t.artist.clone(),
         album: t.album.clone(),
         cover: t.cover.clone(),
-        info: "Free Music".into(),
+        // The card's info line names the source and the licence while the song plays.
+        info: format!("{} · {}", t.source, t.license()),
         duration: f64::from(t.duration),
         kind: "music".into(),
         service: t.source.into(),
@@ -238,12 +256,30 @@ fn fetch_cover(url: &str) -> Option<PathBuf> {
 thread_local! {
     /// Covers decoded by the image cache (by cover URL), drained in `tick`.
     static READY: std::cell::RefCell<Vec<(String, slint::Image)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Detail-pane covers decoded by the image cache (by cover URL), drained in `tick`.
+    static DETAIL: std::cell::RefCell<Vec<(String, slint::Image)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// The Internet Archive's "no image" thumbnail is a wide banner; album art is ~square.
 fn is_cover(img: &slint::Image) -> bool {
     let s = img.size();
     s.width > 0 && s.height > 0 && s.width < 2 * s.height
+}
+
+/// Label of the action that opens the track's page on its source.
+fn page_label(t: &Track) -> String {
+    match t.source {
+        JAMENDO => "Open on Jamendo".into(),
+        _ => "Open on Internet Archive".into(),
+    }
+}
+
+fn same_model(shown: &ModelRc<crate::FmRow>, m: &std::rc::Rc<VecModel<crate::FmRow>>) -> bool {
+    shown
+        .as_any()
+        .downcast_ref::<VecModel<crate::FmRow>>()
+        .map(|v| v as *const _)
+        == Some(std::rc::Rc::as_ptr(m))
 }
 
 impl FreeMusic {
@@ -288,6 +324,10 @@ impl FreeMusic {
             cx.app
                 .global::<crate::MusicDialogState>()
                 .set_copy("".into());
+            self.detail_url.clear();
+            cx.app
+                .global::<crate::MusicDialogState>()
+                .set_has_detail_cover(false);
         } else {
             self.base = self.tracks.clone();
         }
@@ -304,7 +344,8 @@ impl FreeMusic {
                     Self::ui(cx, NO_KEY, false);
                     return;
                 }
-                self.note = NO_KEY.into();
+                // Short: it follows the result count on one status line.
+                self.note = NO_KEY_NOTE.into();
             } else if self.more.get(JAMENDO).copied().unwrap_or(true) || q.page == 0 {
                 self.pending.insert(JAMENDO);
                 let (tx, q, key) = (self.tx.clone(), q.clone(), key.clone());
@@ -407,12 +448,29 @@ impl FreeMusic {
             .extend(fresh.into_iter().filter(|t| !seen.contains(&t.key())));
     }
 
+    /// Downloaded already: the file is in the download folder (checked once per track).
+    fn is_saved(&mut self, cx: &Ctx, t: &Track) -> bool {
+        if t.download.is_empty() {
+            return false;
+        }
+        if let Some(s) = self.saved.get(&t.id) {
+            return *s;
+        }
+        let s = target(t, &Self::folder(cx)).is_file();
+        self.saved.insert(t.id.clone(), s);
+        s
+    }
+
     fn show(&mut self, cx: &Ctx) {
         let sel = self.sel.clone();
+        let tracks = std::mem::take(&mut self.tracks);
+        let saved: Vec<bool> = tracks.iter().map(|t| self.is_saved(cx, t)).collect();
+        self.tracks = tracks;
         let rows: Vec<crate::FmRow> = self
             .tracks
             .iter()
-            .map(|t| {
+            .zip(saved)
+            .map(|(t, saved)| {
                 let img = self.covers.get(&t.cover).cloned();
                 crate::FmRow {
                     title: t.title.clone().into(),
@@ -435,7 +493,7 @@ impl FreeMusic {
                     has_cover: img.is_some(),
                     cover: img.unwrap_or_default(),
                     dl: !t.download.is_empty(),
-                    saved: false,
+                    saved,
                     selected: sel.as_ref() == Some(&t.id),
                 }
             })
@@ -449,12 +507,35 @@ impl FreeMusic {
                 selected: sel.as_ref() == Some(&t.id),
             })
             .collect();
-        cx.app
-            .global::<crate::MusicDialogState>()
-            .set_tracks(ModelRc::new(VecModel::from(rows)));
-        cx.app
-            .global::<crate::MusicDialogState>()
-            .set_results(ModelRc::new(VecModel::from(items)));
+        let st = cx.app.global::<crate::MusicDialogState>();
+        // The highlight follows the selected track when rows are re-sorted or replaced.
+        let idx = sel
+            .as_ref()
+            .and_then(|id| self.tracks.iter().position(|t| &t.id == id));
+        st.set_selected(idx.map_or(-1, |i| i as i32));
+        match &self.model {
+            // Same model still shown: change only the rows that differ.
+            Some(m) if same_model(&st.get_tracks(), m) => {
+                for (i, row) in rows.into_iter().enumerate() {
+                    if i < m.row_count() {
+                        if m.row_data(i).as_ref() != Some(&row) {
+                            m.set_row_data(i, row);
+                        }
+                    } else {
+                        m.push(row);
+                    }
+                }
+                while m.row_count() > self.tracks.len() {
+                    m.remove(m.row_count() - 1);
+                }
+            }
+            _ => {
+                let m = std::rc::Rc::new(VecModel::from(rows));
+                st.set_tracks(ModelRc::from(m.clone()));
+                self.model = Some(m);
+            }
+        }
+        st.set_results(ModelRc::new(VecModel::from(items)));
         cx.app.global::<crate::MusicDialogState>().set_has_more(
             self.pending.is_empty() && self.more.values().any(|m| *m) && !self.tracks.is_empty(),
         );
@@ -502,7 +583,8 @@ impl FreeMusic {
                 acts.push("Artist".into());
             }
             acts.push("Copy credit".into());
-            acts.push("Web page".into());
+            // A direct link to the track's page (Jamendo's API terms ask for one).
+            acts.push(page_label(t).into());
         }
         cx.app
             .global::<crate::MusicDialogState>()
@@ -610,7 +692,58 @@ impl FreeMusic {
         cx.app
             .global::<crate::MusicDialogState>()
             .set_copy(t.attribution().into());
+        self.want_detail_cover(cx, t);
         self.buttons(cx);
+    }
+
+    /// Large cover above the detail text: the full-size cover (cached like the row covers),
+    /// the row thumbnail when that fails.
+    fn want_detail_cover(&mut self, cx: &Ctx, t: &Track) {
+        let url = [&t.cover_full, &t.cover]
+            .into_iter()
+            .find(|u| u.starts_with("http"))
+            .cloned()
+            .unwrap_or_default();
+        let st = cx.app.global::<crate::MusicDialogState>();
+        if url == self.detail_url && st.get_detail_cover_owner() == ID {
+            return;
+        }
+        st.set_has_detail_cover(false);
+        self.detail_url = url.clone();
+        if url.is_empty() {
+            return;
+        }
+        if let Some(p) = cached_cover(&url) {
+            self.detail_ready(cx, &url, &p);
+            return;
+        }
+        let (tx, small) = (self.tx.clone(), t.cover.clone());
+        std::thread::spawn(move || {
+            let p =
+                fetch_cover(&url).or_else(|| (small != url).then(|| fetch_cover(&small)).flatten());
+            let _ = tx.send(Msg::Detail(url, p));
+        });
+    }
+
+    fn detail_ready(&mut self, cx: &Ctx, url: &str, p: &Path) {
+        let key = url.to_string();
+        let img = crate::images::get(p, crate::images::TILE, move |i| {
+            DETAIL.with(|r| r.borrow_mut().push((key, i)))
+        });
+        if let Some(i) = img {
+            self.show_detail_cover(cx, url, i);
+        }
+    }
+
+    fn show_detail_cover(&mut self, cx: &Ctx, url: &str, img: slint::Image) {
+        // Same rule as the rows: the Archive's wide "audio" banner is no cover.
+        if url != self.detail_url || !is_cover(&img) {
+            return;
+        }
+        let st = cx.app.global::<crate::MusicDialogState>();
+        st.set_detail_cover(img);
+        st.set_detail_cover_owner(ID.into());
+        st.set_has_detail_cover(true);
     }
 
     fn open(&mut self, cx: &Ctx) {
@@ -636,7 +769,12 @@ impl FreeMusic {
         a.global::<crate::MusicDialogState>()
             .set_source(SOURCES[self.q.source].into());
         a.global::<crate::MusicDialogState>().set_detail("".into());
+        a.global::<crate::MusicDialogState>()
+            .set_has_detail_cover(false);
         a.global::<crate::Overlays>().set_md_open(true);
+        self.last_source = SOURCES[self.q.source].into();
+        // Downloads may have been moved or deleted since the last time.
+        self.saved.clear();
         self.back.clear();
         self.title.clear();
         self.q.album = None;
@@ -660,6 +798,7 @@ impl FreeMusic {
             .to_string();
         let src = cx.app.global::<crate::MusicDialogState>().get_source();
         self.q.source = SOURCES.iter().position(|s| *s == src.as_str()).unwrap_or(0);
+        self.last_source = src.to_string();
         self.q.text = text;
         self.q.page = 0;
         self.q.album = None;
@@ -686,6 +825,25 @@ impl FreeMusic {
     }
 
     fn play(&mut self, cx: &Ctx, t: &Track, queue: bool) {
+        // Downloaded already: play the file (offline, with its tags and cover).
+        let local = target(t, &Self::folder(cx));
+        if !t.download.is_empty() && local.is_file() {
+            let p = local.to_string_lossy().into_owned();
+            if queue {
+                cx.player.enqueue(&p);
+                cx.toast(&format!(
+                    "Added {} — {} to the queue (downloaded copy)",
+                    t.artist, t.title
+                ));
+            } else {
+                cx.player.cmd("loadfile", &[&p]);
+                cx.toast(&format!(
+                    "Playing {} — {} (downloaded copy)",
+                    t.artist, t.title
+                ));
+            }
+            return;
+        }
         describe(t);
         crate::loading::set_name(&t.stream, &format!("{} — {}", t.artist, t.title));
         crate::store::recent_hint(crate::store::RecentEntry {
@@ -884,7 +1042,7 @@ impl Plugin for FreeMusic {
         Manifest::builtin(
             ID,
             "Free Music",
-            "Search and browse Creative Commons and public-domain music from Jamendo, the Internet Archive and the Free Music Archive: genres, moods, licence filters, album and artist pages, play similar, and downloads with tags, cover and licence attribution.",
+            "Search and browse Creative Commons and public-domain music from Jamendo, the Internet Archive and the Free Music Archive: genres, moods, licence filters, album and artist pages, play similar, the licence on every track and on the now-playing card, and downloads with tags, cover and licence attribution that play from disk once saved.",
             "free-music",
         )
         .source("open")
@@ -963,6 +1121,7 @@ impl Plugin for FreeMusic {
             "set-folder" => {
                 if let Some(d) = args.first().filter(|d| !d.is_empty()) {
                     cx.set("folder", d);
+                    self.saved.clear();
                     slint::Timer::single_shot(Duration::ZERO, crate::settings::refresh_ui);
                     cx.toast(&format!("Free Music downloads go to {d}"));
                 }
@@ -1069,7 +1228,7 @@ impl Plugin for FreeMusic {
                     }
                     // The dialog copied the text to the clipboard itself.
                     "Copy credit" => cx.toast("Attribution copied to the clipboard"),
-                    "Web page" => crate::settings::open_url(&t.page),
+                    a if a == page_label(&t) => crate::settings::open_url(&t.page),
                     _ => {}
                 }
             }
@@ -1089,6 +1248,18 @@ impl Plugin for FreeMusic {
             if q.trim().chars().count() >= 2 && q.trim() != self.q.text.trim() {
                 self.search(cx);
             }
+        }
+        // A new source in the dropdown searches right away (like Network Streams).
+        if cx.app.global::<crate::Overlays>().get_md_open()
+            && cx.app.global::<crate::MusicDialogState>().get_owner() == ID
+        {
+            let src = cx.app.global::<crate::MusicDialogState>().get_source();
+            if src.as_str() != self.last_source && SOURCES.contains(&src.as_str()) {
+                self.search(cx);
+            }
+        }
+        for (url, img) in DETAIL.with(|r| std::mem::take(&mut *r.borrow_mut())) {
+            self.show_detail_cover(cx, &url, img);
         }
         for (url, img) in READY.with(|r| std::mem::take(&mut *r.borrow_mut())) {
             if is_cover(&img) {
@@ -1134,13 +1305,21 @@ impl Plugin for FreeMusic {
                         self.covers_dirty = true;
                     }
                 }
+                Msg::Detail(url, p) => {
+                    if let Some(p) = p.filter(|_| url == self.detail_url) {
+                        self.detail_ready(cx, &url, &p);
+                    }
+                }
                 Msg::Saved(id, title, r) => {
                     self.dl_active = None;
+                    // The row gets its check mark (or loses it) on the next refresh.
+                    self.saved.remove(&id);
+                    self.covers_dirty = true;
                     // The Downloads panel notifies (desktop notification or toast).
                     match r {
                         Ok(p) => {
                             self.dl_done += 1;
-                            self.dl_last = format!("Saved {}", p.display());
+                            self.dl_last = format!("Saved “{title}”");
                             crate::downloads::report(
                                 ID,
                                 &id,
@@ -1240,6 +1419,29 @@ mod tests {
         );
         assert_eq!(m.service, FMA);
         assert_eq!(m.duration, 215.0);
+        // The now-playing card shows the source and the licence.
+        tr.license_url = "https://creativecommons.org/licenses/by-sa/4.0/".into();
+        assert_eq!(track_meta(&tr).info, "Free Music Archive · CC BY-SA 4.0");
+        assert_eq!(page_label(&tr), "Open on Internet Archive");
+        tr.source = JAMENDO;
+        assert_eq!(page_label(&tr), "Open on Jamendo");
+    }
+
+    #[test]
+    fn client_id_is_not_kept_in_urls() {
+        assert_eq!(
+            strip_app("https://prod-1.storage.jamendo.com/?trackid=7&format=mp31&from=app-abc123"),
+            "https://prod-1.storage.jamendo.com/?trackid=7&format=mp31"
+        );
+        assert_eq!(
+            strip_app("https://x/?from=app-abc&client_id=abc"),
+            "https://x/"
+        );
+        assert_eq!(strip_app("https://x/a.mp3"), "https://x/a.mp3");
+        assert_eq!(
+            strip_app("https://x/?a=1&fromage=2"),
+            "https://x/?a=1&fromage=2"
+        );
     }
 
     #[test]
@@ -1291,6 +1493,11 @@ mod tests {
         assert!(a.cover.contains("width=300") && a.cover_full.contains("width=600"));
         assert_eq!(a.license(), "CC BY-SA 3.0");
         assert!(!a.download.is_empty());
+        // The client ID Jamendo puts in stream URLs (`from=app-…`) is dropped.
+        assert_eq!(
+            a.stream,
+            "https://prod-1.storage.jamendo.com/?trackid=1532771&format=mp31"
+        );
         assert_eq!(v[1].download, "", "download not allowed");
         let dir = std::env::temp_dir().join("vivi-fm-nodl");
         assert!(download(&v[1], &dir, &DlProgress::default()).is_err());
@@ -1343,6 +1550,28 @@ mod tests {
         assert_eq!(
             t[0].download,
             "https://archive.org/download/my%20item/dir/b%20c.mp3"
+        );
+        // The waveform PNG derived from an audio file is no cover: the item thumbnail is.
+        let m = serde_json::json!({
+            "metadata": {"identifier": "w", "creator": "A", "title": "T",
+                "licenseurl": "http://creativecommons.org/licenses/by/4.0/"},
+            "files": [
+                {"name": "T.mp3", "format": "VBR MP3", "source": "original"},
+                {"name": "T.png", "format": "PNG", "source": "derivative", "original": "T.mp3"},
+                {"name": "T_spectrogram.png", "format": "Spectrogram", "source": "derivative", "original": "T.mp3"}
+            ]
+        });
+        assert_eq!(
+            ia_tracks(&m, 12)[0].cover_full,
+            "https://archive.org/services/img/w"
+        );
+        let mut m = m;
+        m["files"].as_array_mut().unwrap().push(serde_json::json!(
+            {"name": "art_thumb.jpg", "format": "JPEG", "source": "derivative", "original": "art.png"}
+        ));
+        assert_eq!(
+            ia_tracks(&m, 12)[0].cover_full,
+            "https://archive.org/download/w/art_thumb.jpg"
         );
         // No licence: nothing.
         let m = serde_json::json!({"metadata": {"identifier": "x"}, "files": []});
