@@ -1,7 +1,7 @@
 // Equalizer and filter panels per the Figma "Components" frames
 // (components-miniplayer-menus-eq.png, components-dropdowns-filters.png).
 // State lives in Rust (src/fx.rs); the FxState global carries it both ways.
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Toggle, Slider, TextField } from "core/controls.slint";
 import { Icons } from "core/icons.slint";
 import { Format } from "core/format.slint";
@@ -445,9 +445,9 @@ export component VideoFilters inherits VerticalLayout {
             }
             Rectangle {
                 width: 28px;
-                Icon {
+                TriIcon {
                     width: 18px; height: 18px;
-                    source: FxState.crop[4] > 0 ? @image-url("../assets/icons/link-active.svg") : @image-url("../assets/icons/link.svg");
+                    name: FxState.crop[4] > 0 ? "link-active" : "link";
                     tint: FxState.crop[4] > 0 ? Theme.accent : Theme.fg-a2;
                 }
                 TouchArea { accessible-role: checkbox; accessible-label: "Link crop sides"; accessible-checked: FxState.crop[4] > 0; mouse-cursor: pointer; clicked => { FxState.set("crop", 4, FxState.crop[4] > 0 ? 0 : 1); } }

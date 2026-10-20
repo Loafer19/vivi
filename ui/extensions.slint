@@ -106,7 +106,7 @@ export component ExtensionsDialog inherits Modal {
                             width: 40px; height: 40px; border-radius: Metrics.radius-lg;
                             background: Extensions.on || root.market ? Theme.accent.mix(Theme.field, 25%) : Theme.field-raised;
                             if root.market: TriIcon { width: 22px; height: 22px; base: @image-url("../assets/icons/layers/plugins-twotone-b.svg"); accent: @image-url("../assets/icons/layers/plugins-twotone-a.svg"); dim: @image-url("../assets/icons/layers/plugins-twotone-d.svg"); tint: Theme.fg-1; }
-                            if !root.market: Icon { width: 22px; height: 22px; source: Icons.plugin(Extensions.icon); tint: Extensions.on ? Theme.accent : Theme.fg-a2; }
+                            if !root.market: TriIcon { width: 22px; height: 22px; name: Icons.plugin-duo(Extensions.icon); tint: Extensions.on ? Theme.accent : Theme.fg-a2; }
                         }
                     }
                     VerticalLayout {

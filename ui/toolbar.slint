@@ -1,5 +1,5 @@
 // Bottom-bar customization per Figma "Player - customize" and "Profiles".
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Modal } from "core/modal.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 import { BarStyle, Bars, VolumeStyle } from "core/types.slint";
@@ -8,30 +8,22 @@ import { Icons } from "core/icons.slint";
 import { ToolMeta } from "state/customize.slint";
 
 export global Tools {
-    public pure function icon(id: string) -> image {
-        if id == "prev" { return @image-url("../assets/icons/previous.svg"); }
-        if id == "play" { return @image-url("../assets/icons/play.svg"); }
-        if id == "next" { return @image-url("../assets/icons/next.svg"); }
-        if id == "time" || id == "duration" { return @image-url("../assets/icons/recent.svg"); }
-        if id == "seek" { return @image-url("../assets/icons/playback.svg"); }
-        if id == "spacer" { return @image-url("../assets/icons/divider.svg"); }
-        if id == "queue" { return @image-url("../assets/icons/queue.svg"); }
-        if id == "subtitles" { return @image-url("../assets/icons/subtitles.svg"); }
-        if id == "audio" { return @image-url("../assets/icons/audio.svg"); }
-        if id == "volume" { return @image-url("../assets/icons/volume-high.svg"); }
-        if id == "video" { return @image-url("../assets/icons/playback_settings.svg"); }
-        if id == "speed" { return @image-url("../assets/icons/speed.svg"); }
-        if id == "chapters" { return @image-url("../assets/icons/chapters.svg"); }
-        if id == "bookmark" { return @image-url("../assets/icons/bookmark.svg"); }
-        if id == "back10" { return @image-url("../assets/icons/backward-10-sec.svg"); }
-        if id == "fwd10" { return @image-url("../assets/icons/forward-10-sec.svg"); }
-        if id == "stop" { return @image-url("../assets/icons/stop.svg"); }
-        if id == "snapshot" { return @image-url("../assets/icons/snapshot.svg"); }
-        if id == "repeat" { return @image-url("../assets/icons/repeat-right.svg"); }
-        if id == "shuffle" { return @image-url("../assets/icons/shuffle-right.svg"); }
-        if id == "settings" { return @image-url("../assets/icons/settings.svg"); }
-        if id == "fullscreen" { return @image-url("../assets/icons/fullscreen.svg"); }
-        return @image-url("../assets/icons/more.svg");
+    // Icon name (TriIcon / IconButton `duo`) of a bar item.
+    public pure function duo(id: string) -> string {
+        if id == "prev" { return "previous"; }
+        if id == "time" || id == "duration" { return "recent"; }
+        if id == "seek" { return "playback"; }
+        if id == "spacer" { return "divider"; }
+        if id == "volume" { return "volume-high"; }
+        if id == "video" { return "playback_settings"; }
+        if id == "back10" { return "backward-10-sec"; }
+        if id == "fwd10" { return "forward-10-sec"; }
+        if id == "repeat" { return "repeat-right"; }
+        if id == "shuffle" { return "shuffle-right"; }
+        if id == "play" || id == "next" || id == "queue" || id == "subtitles" || id == "audio" || id == "speed"
+            || id == "chapters" || id == "bookmark" || id == "stop" || id == "snapshot" || id == "settings"
+            || id == "fullscreen" { return id; }
+        return "more";
     }
     public pure function label(id: string) -> string {
         if id == "prev" { return "Previous"; }
@@ -116,7 +108,7 @@ component Placed inherits Rectangle {
         x: root.steps * root.pitch + (root.steps > 0 ? root.width + 2px : -4px); y: 4px;
         width: 2px; height: root.height - 8px; background: Theme.accent;
     }
-    Icon { y: 7px; source: root.plug ? Icons.plugin(root.meta.icon) : Tools.icon(root.id); width: 20px; height: 20px; tint: Theme.fg-1; }
+    TriIcon { y: 7px; name: root.plug ? Icons.plugin-duo(root.meta.icon) : Tools.duo(root.id); width: 20px; height: 20px; tint: Theme.fg-1; }
     Text {
         x: 4px; y: 30px; width: parent.width - 8px; height: 16px;
         text: root.plug ? root.meta.label : Tools.short(root.id); color: Theme.fg-a2; font-size: Metrics.font-xs;
@@ -348,7 +340,7 @@ export component CustomizeDialog inherits Modal {
                     property <string> full: self.plabel != "" ? self.plabel : Tools.label(id);
                     height: 56px; width: 76px; border-radius: Metrics.radius-md;
                     background: ata.has-hover ? Theme.divider : Theme.bg-a1;
-                    Icon { y: 8px; source: parent.plabel != "" ? Icons.plugin(root.available-meta[ai].icon) : Tools.icon(id); width: 20px; height: 20px; tint: Theme.fg-1; }
+                    TriIcon { y: 8px; name: parent.plabel != "" ? Icons.plugin-duo(root.available-meta[ai].icon) : Tools.duo(id); width: 20px; height: 20px; tint: Theme.fg-1; }
                     Text {
                         x: 4px; y: 32px; width: parent.width - 8px; height: 16px;
                         text: parent.plabel != "" ? parent.plabel : Tools.short(id); color: Theme.fg-a2; font-size: Metrics.font-xs;

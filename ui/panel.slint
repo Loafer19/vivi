@@ -3,7 +3,7 @@
 // and Queue / Bookmarks / Chapters / Library (lists). Tab ids: 0 subs, 1 audio,
 // 2 video, 3 playback, 4 queue, 5 library, 6 bookmarks, 7 chapters.
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Toggle, Slider, Segmented, TextField, Dropdown } from "core/controls.slint";
 import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 import { Format } from "core/format.slint";
@@ -74,7 +74,7 @@ component SliderRow inherits VerticalLayout {
 
 // Underlined text tab (Figma side-panel tabs): icon + label, active = accent + underline.
 component Tab inherits Rectangle {
-    in property <image> icon;
+    in property <string> icon; // icon name (two-tone, see TriIcon)
     in property <string> label;
     in property <bool> active;
     in property <bool> compact;
@@ -83,7 +83,7 @@ component Tab inherits Rectangle {
     background: ta.has-hover && !active ? Theme.bg-a1.with-alpha(0.5) : transparent;
     HorizontalLayout {
         alignment: center; spacing: 6px;
-        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: root.active ? Theme.accent : Theme.fg-a3; }
+        TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; name: root.icon; tint: root.active ? Theme.accent : Theme.fg-a3; }
         if !root.compact: Text { text: root.label; font-size: Metrics.font-md; vertical-alignment: center; color: root.active ? Theme.fg-1 : Theme.fg-a2; }
     }
     Rectangle { y: parent.height - 2px; height: 2px; width: parent.width - 12px; x: 6px; border-radius: self.height / 2; background: root.active ? Theme.accent : transparent; }
@@ -197,11 +197,11 @@ component ListHeader inherits HorizontalLayout {
     height: 36px; spacing: 4px;
     Text { text: root.text; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
     if root.show-minus: Rectangle { width: 30px; border-radius: Metrics.radius-sm; background: ma.has-hover ? Theme.bg-a1 : transparent;
-        Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/remove.svg"); tint: Theme.fg-a2; }
+        TriIcon { width: 18px; height: 18px; name: "remove"; tint: Theme.fg-a2; }
         ma := TouchArea { accessible-role: button; accessible-label: root.minus-tip != "" ? root.minus-tip : "Remove"; mouse-cursor: pointer; clicked => { root.minus(); } }
         if root.minus-tip != "": Tooltip { text: @markdown("\{root.minus-tip}"); } }
     Rectangle { width: 30px; border-radius: Metrics.radius-sm; background: pa.has-hover ? Theme.bg-a1 : transparent;
-        Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/add.svg"); tint: Theme.fg-a2; }
+        TriIcon { width: 18px; height: 18px; name: "add"; tint: Theme.fg-a2; }
         pa := TouchArea { accessible-role: button; accessible-label: root.plus-tip != "" ? root.plus-tip : "Add"; mouse-cursor: pointer; clicked => { root.plus(); } }
         if root.plus-tip != "": Tooltip { text: @markdown("\{root.plus-tip}"); } }
 }
@@ -336,14 +336,14 @@ export component SidePanel inherits Rectangle {
             height: 44px; background: Theme.bg-b1.with-alpha(0.7);
             HorizontalLayout {
                 padding-left: 4px; padding-right: 4px;
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/playback.svg"); label: "Playback"; active: root.tab == PanelTab.playback; clicked => { root.tab = PanelTab.playback; } }
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/video.svg"); label: "Video"; active: root.tab == PanelTab.video; clicked => { root.tab = PanelTab.video; } }
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/audio.svg"); label: "Audio"; active: root.tab == PanelTab.audio; clicked => { root.tab = PanelTab.audio; } }
-                if root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/subtitles.svg"); label: "Subtitles"; active: root.tab == PanelTab.subtitles; clicked => { root.tab = PanelTab.subtitles; } }
-                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/queue.svg"); label: "Queue"; active: root.tab == PanelTab.queue; clicked => { root.tab = PanelTab.queue; } }
-                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/bookmark.svg"); label: "Bookmarks"; active: root.tab == PanelTab.bookmarks; clicked => { root.tab = PanelTab.bookmarks; } }
-                if !root.settings-group: Tab { compact: root.narrow; icon: @image-url("../assets/icons/chapters.svg"); label: "Chapters"; active: root.tab == PanelTab.chapters; clicked => { root.tab = PanelTab.chapters; root.chapters-refresh(); } }
-                if !root.settings-group: Tab { compact: true; icon: @image-url("../assets/icons/videos.svg"); label: "Library"; active: root.tab == PanelTab.library; clicked => { root.tab = PanelTab.library; root.library-search(""); } }
+                if root.settings-group: Tab { compact: root.narrow; icon: "playback"; label: "Playback"; active: root.tab == PanelTab.playback; clicked => { root.tab = PanelTab.playback; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: "video"; label: "Video"; active: root.tab == PanelTab.video; clicked => { root.tab = PanelTab.video; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: "audio"; label: "Audio"; active: root.tab == PanelTab.audio; clicked => { root.tab = PanelTab.audio; } }
+                if root.settings-group: Tab { compact: root.narrow; icon: "subtitles"; label: "Subtitles"; active: root.tab == PanelTab.subtitles; clicked => { root.tab = PanelTab.subtitles; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: "queue"; label: "Queue"; active: root.tab == PanelTab.queue; clicked => { root.tab = PanelTab.queue; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: "bookmark"; label: "Bookmarks"; active: root.tab == PanelTab.bookmarks; clicked => { root.tab = PanelTab.bookmarks; } }
+                if !root.settings-group: Tab { compact: root.narrow; icon: "chapters"; label: "Chapters"; active: root.tab == PanelTab.chapters; clicked => { root.tab = PanelTab.chapters; root.chapters-refresh(); } }
+                if !root.settings-group: Tab { compact: true; icon: "videos"; label: "Library"; active: root.tab == PanelTab.library; clicked => { root.tab = PanelTab.library; root.library-search(""); } }
                 Rectangle {
                     width: 32px;
                     Icon { source: @image-url("../assets/icons/close.svg"); width: 16px; height: 16px; tint: Theme.fg-a3; }
@@ -664,7 +664,7 @@ export component SidePanel inherits Rectangle {
                         pta := TouchArea { accessible-role: button; accessible-label: "Load playlist " + pl.label; mouse-cursor: pointer; clicked => { root.playlist-load(pl.key); } }
                         HorizontalLayout {
                             padding-left: 10px; padding-right: 4px; spacing: 8px;
-                            Icon { source: @image-url("../assets/icons/playlist.svg"); width: 18px; height: 34px; }
+                            TriIcon { name: "playlist"; width: 18px; height: 34px; tint: Theme.fg-2; }
                             Text { text: pl.label; color: Theme.fg-2; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
                             Rectangle { width: 24px;
                                 Icon { source: @image-url("../assets/icons/close.svg"); width: 14px; height: 34px; tint: Theme.fg-a3; }

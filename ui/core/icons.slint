@@ -1,3 +1,5 @@
+import { Duo } from "duo.slint";
+
 // Every icon lookup by key (was KindIcon, VizIcons, PluginIcons, PresetIcon, MenuIcons).
 export global Icons {
     // Library item kind → icon.
@@ -16,15 +18,25 @@ export global Icons {
         return @image-url("../../assets/icons/video.svg");
     }
 
+    // Library item kind → icon name for TriIcon (two-tone; tiles of 24 px and up).
+    public pure function kind-duo(kind: string) -> string {
+        if kind == "web" { return "link"; }
+        if kind == "audio" { return "music"; }
+        if kind == "group" { return "album"; }
+        if kind == "add" || kind == "songs" || kind == "album" || kind == "artist" || kind == "genre"
+            || kind == "streaming" || kind == "folder" || kind == "playlist" { return kind; }
+        return "video";
+    }
+
     // Visualizer mode index → two-tone layers (0 = Disabled has none).
     pure public function viz(i: int) -> image {
         if (i == 1) { return @image-url("../../assets/icons/layers/spectometer-twotone-b.svg"); }
         if (i == 2) { return @image-url("../../assets/icons/layers/scope-twotone-b.svg"); }
         if (i == 3) { return @image-url("../../assets/icons/layers/spectrum-twotone-b.svg"); }
         if (i == 4) { return @image-url("../../assets/icons/layers/waveform-twotone-b.svg"); }
-        if (i == 5) { return @image-url("../../assets/icons/disc.svg"); }
-        if (i == 6) { return @image-url("../../assets/icons/genre.svg"); }
-        if (i == 7) { return @image-url("../../assets/icons/music.svg"); }
+        if (i == 5) { return @image-url("../../assets/icons/layers/disc-b.svg"); }
+        if (i == 6) { return @image-url("../../assets/icons/layers/genre-twotone-b.svg"); }
+        if (i == 7) { return @image-url("../../assets/icons/layers/music-twotone-b.svg"); }
         @image-url("")
     }
     pure public function viz-accent(i: int) -> image {
@@ -32,6 +44,9 @@ export global Icons {
         if (i == 2) { return @image-url("../../assets/icons/layers/scope-twotone-a.svg"); }
         if (i == 3) { return @image-url("../../assets/icons/layers/spectrum-twotone-a.svg"); }
         if (i == 4) { return @image-url("../../assets/icons/layers/waveform-twotone-a.svg"); }
+        if (i == 5) { return @image-url("../../assets/icons/layers/disc-a.svg"); }
+        if (i == 6) { return @image-url("../../assets/icons/layers/genre-twotone-a.svg"); }
+        if (i == 7) { return @image-url("../../assets/icons/layers/music-twotone-a.svg"); }
         @image-url("")
     }
     pure public function viz-dim(i: int) -> image {
@@ -39,6 +54,9 @@ export global Icons {
         if (i == 2) { return @image-url("../../assets/icons/layers/scope-twotone-d.svg"); }
         if (i == 3) { return @image-url("../../assets/icons/layers/spectrum-twotone-d.svg"); }
         if (i == 4) { return @image-url("../../assets/icons/layers/waveform-twotone-d.svg"); }
+        if (i == 5) { return @image-url("../../assets/icons/layers/disc-d.svg"); }
+        if (i == 6) { return @image-url("../../assets/icons/layers/genre-twotone-d.svg"); }
+        if (i == 7) { return @image-url("../../assets/icons/layers/music-twotone-d.svg"); }
         @image-url("")
     }
 
@@ -66,6 +84,30 @@ export global Icons {
         @image-url("../../assets/icons/plugins.svg")
     }
 
+    // Plugin manifest icon key → icon name for TriIcon / IconButton (two-tone, 18 px and up).
+    pure public function plugin-duo(key: string) -> string {
+        if (key == "visualizer") { return "spectrum"; }
+        if (key == "skip") { return "next"; }
+        if (key == "lyrics") { return "music"; }
+        if (key == "subtitles") { return "subtitles"; }
+        if (key == "script") { return "file"; }
+        if (key == "loop") { return "repeat-right"; }
+        if (key == "stats") { return "spectometer"; }
+        if (key == "tag") { return "edit"; }
+        if (key == "free-music") { return "album"; }
+        if (key == "youtube-music") { return "youtube-music"; }
+        if (key == "youtube") { return "youtube"; }
+        if (key == "download") { return "download"; }
+        if (key == "streams") { return "streaming"; }
+        if (key == "discord") { return "profile"; }
+        if (key == "remote") { return "capture-device"; }
+        if (key == "scrobble") { return "favorite"; }
+        if (key == "night") { return "volume-high"; }
+        if (key == "eq") { return "eq"; }
+        if (key == "chapters") { return "chapters"; }
+        "plugins"
+    }
+
     // Equalizer preset name → icon.
     pure public function preset(n: string) -> image {
         return n == "Bass" ? @image-url("../../assets/icons/eq-full_bass.svg")
@@ -89,6 +131,17 @@ export global Icons {
             : n == "Soft rock" ? @image-url("../../assets/icons/eq-soft_rock.svg")
             : n == "Techno" ? @image-url("../../assets/icons/eq-techno.svg")
             : @image-url("../../assets/icons/remove.svg");
+    }
+
+    // Menu row names drawn with the shared icons (Duo names), "" for the Figma menu set.
+    public pure function menu-duo(name: string) -> string {
+        if (name == "web") { return "link"; }
+        if (name == "repeat") { return "repeat-right"; }
+        if (name == "file" || name == "folder" || name == "streaming" || name == "recent" || name == "paint"
+            || name == "hotkeys" || name == "settings" || name == "remove" || name == "refresh" || name == "snapshot"
+            || name == "fullscreen" || name == "pip" || name == "speed" || name == "chapters" || name == "bookmark"
+            || name == "zoom" || name == "add" || name == "sort" || name == "close") { return name; }
+        ""
     }
 
     // Menu row icon name (src/menus.rs) → two-tone layers.
@@ -130,27 +183,7 @@ export global Icons {
         if (name == "subtitle") { return @image-url("../../assets/icons/layers/menu_subtitle-b.svg"); }
         if (name == "video") { return @image-url("../../assets/icons/layers/menu_video-b.svg"); }
         if (name == "plugins") { return @image-url("../../assets/icons/layers/plugins-twotone-b.svg"); }
-        if (name == "file") { return @image-url("../../assets/icons/file.svg"); }
-        if (name == "folder") { return @image-url("../../assets/icons/folder.svg"); }
-        if (name == "streaming") { return @image-url("../../assets/icons/streaming.svg"); }
-        if (name == "web") { return @image-url("../../assets/icons/link.svg"); }
-        if (name == "recent") { return @image-url("../../assets/icons/recent.svg"); }
-        if (name == "paint") { return @image-url("../../assets/icons/paint.svg"); }
-        if (name == "hotkeys") { return @image-url("../../assets/icons/hotkeys.svg"); }
-        if (name == "settings") { return @image-url("../../assets/icons/settings.svg"); }
-        if (name == "remove") { return @image-url("../../assets/icons/remove.svg"); }
-        if (name == "refresh") { return @image-url("../../assets/icons/refresh.svg"); }
-        if (name == "snapshot") { return @image-url("../../assets/icons/snapshot.svg"); }
-        if (name == "fullscreen") { return @image-url("../../assets/icons/fullscreen.svg"); }
-        if (name == "pip") { return @image-url("../../assets/icons/pip.svg"); }
-        if (name == "speed") { return @image-url("../../assets/icons/speed.svg"); }
-        if (name == "repeat") { return @image-url("../../assets/icons/repeat-right.svg"); }
-        if (name == "chapters") { return @image-url("../../assets/icons/chapters.svg"); }
-        if (name == "bookmark") { return @image-url("../../assets/icons/bookmark.svg"); }
-        if (name == "zoom") { return @image-url("../../assets/icons/zoom.svg"); }
-        if (name == "add") { return @image-url("../../assets/icons/add.svg"); }
-        if (name == "sort") { return @image-url("../../assets/icons/sort.svg"); }
-        if (name == "close") { return @image-url("../../assets/icons/close.svg"); }
+        if (Icons.menu-duo(name) != "") { return Duo.base(Icons.menu-duo(name)); }
         return @image-url("../../assets/icons/layers/menu_play-b.svg");
     }
     public pure function menu-accent(name: string) -> image {
@@ -187,6 +220,7 @@ export global Icons {
         if (name == "subtitle") { return @image-url("../../assets/icons/layers/menu_subtitle-a.svg"); }
         if (name == "video") { return @image-url("../../assets/icons/layers/menu_video-a.svg"); }
         if (name == "plugins") { return @image-url("../../assets/icons/layers/plugins-twotone-a.svg"); }
+        if (Icons.menu-duo(name) != "") { return Duo.accent(Icons.menu-duo(name)); }
         return @image-url("../../assets/icons/layers/empty.svg");
     }
     public pure function menu-dim(name: string) -> image {
@@ -223,6 +257,7 @@ export global Icons {
         if (name == "subtitle") { return @image-url("../../assets/icons/layers/menu_subtitle-d.svg"); }
         if (name == "video") { return @image-url("../../assets/icons/layers/menu_video-d.svg"); }
         if (name == "plugins") { return @image-url("../../assets/icons/layers/plugins-twotone-d.svg"); }
+        if (Icons.menu-duo(name) != "") { return Duo.dim(Icons.menu-duo(name)); }
         return @image-url("../../assets/icons/layers/empty.svg");
     }
 }

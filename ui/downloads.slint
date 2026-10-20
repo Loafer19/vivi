@@ -1,7 +1,7 @@
 // Library → Downloads: the shared Downloads panel (src/downloads.rs). Rows: artwork or the
 // plugin's glyph, title, plugin, progress, size / speed / ETA, and actions for the state.
 // A group row (a playlist) shows "12 / 40" and expands to its items, drawn indented.
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { IconButton, SecondaryButton, ButtonSize } from "core/buttons.slint";
 import { TextField } from "core/controls.slint";
@@ -27,7 +27,7 @@ component JobRow inherits Rectangle {
             Rectangle {
                 width: root.job.child ? 34px : 44px; height: self.width; border-radius: Metrics.radius-sm; background: Theme.bg-a4; clip: true;
                 if root.job.has-art: Image { width: 100%; height: 100%; source: root.job.art; image-fit: cover; }
-                if !root.job.has-art: Icon { width: 20px; height: 20px; source: Icons.plugin(root.job.icon); tint: Theme.fg-a2; }
+                if !root.job.has-art: TriIcon { width: 20px; height: 20px; name: Icons.plugin-duo(root.job.icon); tint: Theme.fg-a2; }
             }
         }
         VerticalLayout {
@@ -53,13 +53,13 @@ component JobRow inherits Rectangle {
         HorizontalLayout {
             alignment: end; spacing: 2px;
             if root.job.kids > 0: VerticalLayout { alignment: center; Act { tip: root.job.expanded ? "Hide items" : "Show all " + root.job.kids + " items"; icon: root.job.expanded ? @image-url("../assets/icons/chevron-up.svg") : @image-url("../assets/icons/chevron-down.svg"); clicked => { Downloads.act(root.job.id, "expand"); } } }
-            if root.job.state == "active" && root.job.can-pause: VerticalLayout { alignment: center; Act { tip: "Pause"; icon: @image-url("../assets/icons/pause.svg"); clicked => { Downloads.act(root.job.id, "pause"); } } }
-            if root.job.state == "paused": VerticalLayout { alignment: center; Act { tip: "Resume"; icon: @image-url("../assets/icons/play.svg"); clicked => { Downloads.act(root.job.id, "resume"); } } }
+            if root.job.state == "active" && root.job.can-pause: VerticalLayout { alignment: center; Act { tip: "Pause"; duo: "pause"; clicked => { Downloads.act(root.job.id, "pause"); } } }
+            if root.job.state == "paused": VerticalLayout { alignment: center; Act { tip: "Resume"; duo: "play"; clicked => { Downloads.act(root.job.id, "resume"); } } }
             if root.running: VerticalLayout { alignment: center; Act { tip: "Cancel"; icon: @image-url("../assets/icons/close.svg"); clicked => { Downloads.act(root.job.id, "cancel"); } } }
-            if root.job.state == "failed" || root.job.state == "cancelled": VerticalLayout { alignment: center; Act { tip: "Retry"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { Downloads.act(root.job.id, "retry"); } } }
-            if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Play now"; icon: @image-url("../assets/icons/play.svg"); clicked => { Downloads.act(root.job.id, "play"); } } }
-            if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Open file"; icon: @image-url("../assets/icons/open.svg"); clicked => { Downloads.act(root.job.id, "open"); } } }
-            if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Show in folder"; icon: @image-url("../assets/icons/folder.svg"); clicked => { Downloads.act(root.job.id, "folder"); } } }
+            if root.job.state == "failed" || root.job.state == "cancelled": VerticalLayout { alignment: center; Act { tip: "Retry"; duo: "refresh"; clicked => { Downloads.act(root.job.id, "retry"); } } }
+            if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Play now"; duo: "play"; clicked => { Downloads.act(root.job.id, "play"); } } }
+            if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Open file"; duo: "open"; clicked => { Downloads.act(root.job.id, "open"); } } }
+            if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Show in folder"; duo: "folder"; clicked => { Downloads.act(root.job.id, "folder"); } } }
             if !root.running: VerticalLayout { alignment: center; Act { tip: "Remove from list"; icon: @image-url("../assets/icons/close.svg"); clicked => { Downloads.act(root.job.id, "remove"); } } }
         }
     }
