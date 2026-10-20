@@ -148,8 +148,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/Loafer19/vivi.git
-        tag: v0.12.0
-        commit: f0bb41868d01a187f693b78fefa471cf523aaf63
+        tag: v0.13.1
+        commit: 70fbfdf977151f196eff70c9cc3923613c3ce44b
       - type: file
         path: io.github.loafer19.vivi.metainfo.xml
       - cargo-sources.json
