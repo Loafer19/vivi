@@ -182,10 +182,12 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 | --- | --- |
 | `title` | Shown in the row |
 | `subtitle` | Shown before the state on the second line (e.g. "Artist · Album") |
-| `state` | `queued`, `active` (alias `downloading`, `recording`), `paused`, `done`, `failed` (alias `cancelled`) |
+| `state` | `queued`, `active` (alias `downloading`, `recording`), `paused`, `done`, `failed` (alias `error`), `cancelled` (alias `canceled`: stopped by the user, shown as "Cancelled" with Retry, no notification; Vivi 0.12 and older read it as failed) |
 | `done`, `total` | Bytes so far / in total (0 = unknown) |
 | `progress` | 0..1 when only the share is known |
+| `percent` | 0..100, used when `progress` is not given |
 | `speed` | Bytes per second (else measured by Vivi) |
+| `eta` | Seconds left (else estimated from the speed) |
 | `path` | The file (enables Play / Open / Show in folder when done) |
 | `artwork` | The thumbnail: a local image file, or an http(s) URL (fetched into the plugin cover cache, so a row has its cover before the file exists) |
 | `error` | Shown when failed |
@@ -193,6 +195,11 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 | `can_pause` | Show Pause / Resume |
 | `parent` | Job id of a group row of the same plugin (e.g. the playlist this track belongs to) |
 | `items_done`, `items_total` | A group row's counts ("12 / 40"); without them Vivi counts the group's rows |
+
+Numbers may be fractional (whole-number fields are rounded, negative ones read 0) or
+numeric strings; a field that is `null` or not a number is ignored, the rest of the report
+still applies. Vivi 0.12 and older drop a whole report that has a fractional number, so
+send whole numbers for those.
 
 **Groups** (playlist / album downloads): a job whose `parent` names another job of the
 same plugin is drawn indented under it. The group row shows "12 / 40" (its
@@ -213,8 +220,8 @@ items and group as separate rows.
 * **Callbacks**: the panel's buttons call the plugin back with the job id:
   `download-pause`, `download-resume`, `download-cancel`, `download-retry` (a built-in's
   `command(name, [job])`, a package's `script-message-to <script> download-cancel <job>`).
-  The plugin then reports the new state. Cancel on a queued job is marked failed
-  ("Cancelled") by the host as well. Play / Open / Show in folder / Remove / Clear finished
+  The plugin then reports the new state (`cancelled` after a Cancel). Cancel on a queued
+  job is marked cancelled by the host as well. Play / Open / Show in folder / Remove / Clear finished
   are handled by Vivi.
 
 Older Vivi versions ignore the `vivi-download` messages, so a package can send them

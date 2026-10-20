@@ -1311,7 +1311,11 @@ impl Plugin for FreeMusic {
                     }
                 }
                 Msg::Saved(id, title, r) => {
-                    self.dl_active = None;
+                    // Cancel in the Downloads panel: "Cancelled", not a failure.
+                    let cancelled = self
+                        .dl_active
+                        .take()
+                        .is_some_and(|(_, p)| p.cancel.load(Ordering::Relaxed));
                     // The row gets its check mark (or loses it) on the next refresh.
                     self.saved.remove(&id);
                     self.covers_dirty = true;
@@ -1331,12 +1335,17 @@ impl Plugin for FreeMusic {
                             );
                         }
                         Err(e) => {
-                            self.dl_last = format!("“{title}” failed: {e}");
+                            self.dl_last = if cancelled {
+                                format!("Cancelled “{title}”")
+                            } else {
+                                format!("“{title}” failed: {e}")
+                            };
+                            let state = if cancelled { "cancelled" } else { "failed" };
                             crate::downloads::report(
                                 ID,
                                 &id,
                                 crate::downloads::Report {
-                                    state: Some("failed".into()),
+                                    state: Some(state.into()),
                                     error: Some(e),
                                     ..Default::default()
                                 },

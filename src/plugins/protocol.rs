@@ -298,6 +298,18 @@ mod tests {
                 json: "{}",
             },
         );
+        // A progress report as the YouTube plugin sends it (yt-dlp's speed and ETA are
+        // fractional): the JSON reaches the Downloads panel whole and parses.
+        let json = r#"{"state":"active","done":1048576,"total":5.24288e6,"speed":2.5e5,"eta":16.8,"progress":0.2}"#;
+        let args = v(&["vivi-download", "youtube", "abc", json]);
+        let Some(M::Download { json: j, .. }) = ScriptMessage::parse(&args) else {
+            panic!("not a download");
+        };
+        let r: crate::downloads::Report = serde_json::from_str(j).unwrap();
+        assert_eq!(
+            (r.done, r.total, r.speed, r.eta),
+            (Some(1_048_576), Some(5_242_880), Some(250_000), Some(17))
+        );
         is(
             &["vivi-download-remove", "p", "j1"],
             M::DownloadRemove { id: "p", job: "j1" },

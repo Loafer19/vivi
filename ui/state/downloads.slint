@@ -1,7 +1,7 @@
 // Downloads: the shared Downloads panel (src/downloads.rs). Every plugin's jobs in one list.
 import { ExtAction } from "extensions.slint";
 
-// One job; `id` is "<plugin id>\u{1f}<job id>", `state` queued | active | paused | done | failed.
+// One job; `id` is "<plugin id>\u{1f}<job id>", `state` queued | active | paused | done | failed | cancelled.
 export struct DlJob {
     id: string,
     title: string,

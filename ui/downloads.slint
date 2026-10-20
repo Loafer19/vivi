@@ -56,7 +56,7 @@ component JobRow inherits Rectangle {
             if root.job.state == "active" && root.job.can-pause: VerticalLayout { alignment: center; Act { tip: "Pause"; icon: @image-url("../assets/icons/pause.svg"); clicked => { Downloads.act(root.job.id, "pause"); } } }
             if root.job.state == "paused": VerticalLayout { alignment: center; Act { tip: "Resume"; icon: @image-url("../assets/icons/play.svg"); clicked => { Downloads.act(root.job.id, "resume"); } } }
             if root.running: VerticalLayout { alignment: center; Act { tip: "Cancel"; icon: @image-url("../assets/icons/close.svg"); clicked => { Downloads.act(root.job.id, "cancel"); } } }
-            if root.job.state == "failed": VerticalLayout { alignment: center; Act { tip: "Retry"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { Downloads.act(root.job.id, "retry"); } } }
+            if root.job.state == "failed" || root.job.state == "cancelled": VerticalLayout { alignment: center; Act { tip: "Retry"; icon: @image-url("../assets/icons/refresh.svg"); clicked => { Downloads.act(root.job.id, "retry"); } } }
             if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Play now"; icon: @image-url("../assets/icons/play.svg"); clicked => { Downloads.act(root.job.id, "play"); } } }
             if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Open file"; icon: @image-url("../assets/icons/open.svg"); clicked => { Downloads.act(root.job.id, "open"); } } }
             if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Show in folder"; icon: @image-url("../assets/icons/folder.svg"); clicked => { Downloads.act(root.job.id, "folder"); } } }

@@ -34,6 +34,8 @@ pub enum State {
     Paused,
     Done,
     Failed,
+    /// Stopped by the user: no "Download failed" notification, Retry stays.
+    Cancelled,
 }
 
 impl State {
@@ -43,7 +45,8 @@ impl State {
             "active" | "downloading" | "recording" => State::Active,
             "paused" => State::Paused,
             "done" | "finished" => State::Done,
-            "failed" | "error" | "cancelled" => State::Failed,
+            "failed" | "error" => State::Failed,
+            "cancelled" | "canceled" => State::Cancelled,
             _ => return None,
         })
     }
@@ -54,6 +57,7 @@ impl State {
             State::Paused => "paused",
             State::Done => "done",
             State::Failed => "failed",
+            State::Cancelled => "cancelled",
         }
     }
     fn running(self) -> bool {
@@ -78,6 +82,8 @@ pub struct Job {
     pub progress: f32,
     /// Bytes per second (measured by the host from `done`, or reported).
     pub speed: u64,
+    /// Seconds left as the plugin reported them (0 = unknown: from the speed).
+    pub eta: u64,
     /// Saved file (or the file being written).
     pub path: String,
     /// Thumbnail: a local image file, or an http(s) URL fetched into the plugin cover
@@ -96,25 +102,102 @@ pub struct Job {
     pub items_total: u32,
 }
 
-/// What a plugin reports (fields left `None` keep their value).
+/// What a plugin reports (fields left `None` keep their value). Numbers may be
+/// fractional (yt-dlp's speed and ETA are): whole-number fields are rounded, negative
+/// ones read 0, and a number that is not one (`null`, `"n/a"`) is left out instead of
+/// dropping the whole report.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Report {
     pub title: Option<String>,
     pub subtitle: Option<String>,
     pub state: Option<String>,
+    #[serde(deserialize_with = "num::whole")]
     pub done: Option<u64>,
+    #[serde(deserialize_with = "num::whole")]
     pub total: Option<u64>,
+    #[serde(deserialize_with = "num::real")]
     pub progress: Option<f32>,
+    /// 0..100, used when `progress` is not given.
+    #[serde(deserialize_with = "num::real")]
+    pub percent: Option<f32>,
+    #[serde(deserialize_with = "num::whole")]
     pub speed: Option<u64>,
+    /// Seconds left.
+    #[serde(deserialize_with = "num::whole")]
+    pub eta: Option<u64>,
     pub path: Option<String>,
     pub artwork: Option<String>,
     pub error: Option<String>,
     pub detail: Option<String>,
     pub can_pause: Option<bool>,
     pub parent: Option<String>,
+    #[serde(deserialize_with = "num::whole")]
     pub items_done: Option<u32>,
+    #[serde(deserialize_with = "num::whole")]
     pub items_total: Option<u32>,
+}
+
+/// Lenient numbers in [`Report`]: any JSON number (or a numeric string).
+mod num {
+    use serde::de::{Deserializer, Error, Visitor};
+    use std::fmt;
+
+    struct Num;
+
+    impl<'de> Visitor<'de> for Num {
+        type Value = Option<f64>;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a number")
+        }
+        fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
+            Ok(Some(v as f64))
+        }
+        fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
+            Ok(Some(v as f64))
+        }
+        fn visit_f64<E: Error>(self, v: f64) -> Result<Self::Value, E> {
+            Ok(v.is_finite().then_some(v))
+        }
+        fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+            Ok(v.trim().parse::<f64>().ok().filter(|v| v.is_finite()))
+        }
+        fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_some<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            d.deserialize_any(Num)
+        }
+    }
+
+    /// A whole number field: rounded, negative values 0, saturating at the type's max.
+    pub fn whole<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: TryFrom<u64> + Bounded,
+    {
+        Ok(d.deserialize_option(Num)?.map(|v| {
+            // `as` saturates (and maps negatives to 0).
+            T::try_from(v.round() as u64).unwrap_or(T::MAX)
+        }))
+    }
+
+    pub fn real<'de, D: Deserializer<'de>>(d: D) -> Result<Option<f32>, D::Error> {
+        Ok(d.deserialize_option(Num)?.map(|v| v as f32))
+    }
+
+    pub trait Bounded {
+        const MAX: Self;
+    }
+    impl Bounded for u64 {
+        const MAX: u64 = u64::MAX;
+    }
+    impl Bounded for u32 {
+        const MAX: u32 = u32::MAX;
+    }
 }
 
 impl Report {
@@ -148,11 +231,14 @@ impl Report {
         if let Some(v) = self.total {
             j.total = v;
         }
-        if let Some(v) = self.progress {
+        if let Some(v) = self.progress.or(self.percent.map(|p| p / 100.0)) {
             j.progress = v;
         }
         if let Some(v) = self.speed {
             j.speed = v;
+        }
+        if let Some(v) = self.eta {
+            j.eta = v;
         }
         if let Some(v) = self.can_pause {
             j.can_pause = v;
@@ -317,7 +403,8 @@ pub fn report(plugin: &str, job: &str, r: Report) {
                     })
             };
             let j = &s.jobs[i];
-            // A group's items finish quietly; the group row notifies.
+            // A group's items finish quietly; the group row notifies. A cancel was the
+            // user's own doing: no notification.
             let news = match j.state {
                 _ if !j.parent.is_empty() || quiet => None,
                 State::Done => Some((j.title.clone(), true, String::new())),
@@ -409,7 +496,7 @@ fn eta(s: u64) -> String {
 
 /// The line under a job's title.
 pub fn detail(j: &Job) -> String {
-    if !j.detail.is_empty() && j.state != State::Failed {
+    if !j.detail.is_empty() && !matches!(j.state, State::Failed | State::Cancelled) {
         return j.detail.clone();
     }
     match j.state {
@@ -422,6 +509,11 @@ pub fn detail(j: &Job) -> String {
         State::Done => "Done".into(),
         State::Failed if j.error.is_empty() => "Failed".into(),
         State::Failed => format!("Failed · {}", j.error),
+        // The plugin's "Cancelled" is the label itself; a group adds its counts.
+        State::Cancelled if j.error.is_empty() || j.error.eq_ignore_ascii_case("cancelled") => {
+            "Cancelled".into()
+        }
+        State::Cancelled => format!("Cancelled · {}", j.error),
         State::Active => {
             let mut v = Vec::new();
             if j.total > 0 {
@@ -431,9 +523,11 @@ pub fn detail(j: &Job) -> String {
             }
             if j.speed > 0 {
                 v.push(format!("{}/s", size(j.speed)));
-                if j.total > j.done {
-                    v.push(eta((j.total - j.done) / j.speed.max(1)));
-                }
+            }
+            if j.eta > 0 {
+                v.push(eta(j.eta));
+            } else if j.speed > 0 && j.total > j.done {
+                v.push(eta((j.total - j.done) / j.speed.max(1)));
             }
             if v.is_empty() {
                 "Downloading…".into()
@@ -484,7 +578,8 @@ pub fn group_view(g: &Job, items: &[&Job]) -> Job {
             line.push(format!("{}/s", size(v.speed)));
         }
         v.detail = line.join(" · ");
-        // A failed group reads "Failed · 38 / 40 · 2 failed".
+        // A failed group reads "Failed · 38 / 40 · 2 failed" (a cancelled one
+        // "Cancelled · 38 / 40").
         v.error = v.detail.clone();
     }
     v
@@ -619,7 +714,7 @@ fn act(id: &str, action: &str) {
                     plugin,
                     job,
                     Report {
-                        state: Some("failed".into()),
+                        state: Some("cancelled".into()),
                         error: Some("Cancelled".into()),
                         ..Report::default()
                     },
@@ -1003,5 +1098,105 @@ mod tests {
             },
         );
         assert_eq!(news(), 1, "single downloads notify");
+    }
+
+    #[test]
+    fn fractional_numbers_are_rounded_not_dropped() {
+        let r: Report = serde_json::from_str(
+            r#"{"state":"active","done":1500.4,"total":"3000","speed":512.6,"eta":2.5,
+                "progress":0.5,"items_done":1.0,"items_total":3.7}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (r.done, r.total, r.speed, r.eta, r.items_done, r.items_total),
+            (Some(1500), Some(3000), Some(513), Some(3), Some(1), Some(4))
+        );
+        let mut j = Job::default();
+        r.apply(&mut j);
+        assert_eq!(j.speed, 513);
+        // The reported ETA wins over the one from the speed.
+        assert_eq!(detail(&j), "2 KB of 3 KB · 513 B/s · 3s left");
+        // Negative, null and non-numbers: 0 / left out, the rest of the report still counts.
+        let r: Report = serde_json::from_str(
+            r#"{"title":"T","done":-3.2,"total":null,"speed":"n/a","percent":42.5}"#,
+        )
+        .unwrap();
+        assert_eq!((r.done, r.total, r.speed), (Some(0), None, None));
+        assert_eq!(r.title.as_deref(), Some("T"));
+        let mut j = Job::default();
+        r.apply(&mut j);
+        assert!((j.progress - 0.425).abs() < 1e-6);
+        // `progress` wins over `percent`; huge values saturate.
+        let r: Report =
+            serde_json::from_str(r#"{"progress":0.1,"percent":90,"items_total":1e12}"#).unwrap();
+        assert_eq!(r.items_total, Some(u32::MAX));
+        r.apply(&mut j);
+        assert!((j.progress - 0.1).abs() < 1e-6);
+        // Not a number at all (an object) still fails the report, as before.
+        assert!(serde_json::from_str::<Report>(r#"{"done":{}}"#).is_err());
+    }
+
+    #[test]
+    fn cancel_is_its_own_state_without_a_failure_notice() {
+        assert_eq!(State::parse("cancelled"), Some(State::Cancelled));
+        assert_eq!(State::parse("canceled"), Some(State::Cancelled));
+        assert_eq!(State::parse("failed"), Some(State::Failed));
+        assert_eq!(State::parse("error"), Some(State::Failed));
+        assert_eq!(State::Cancelled.name(), "cancelled");
+        assert!(!State::Cancelled.running());
+        let job = |state, error: &str| Job {
+            state,
+            error: error.into(),
+            detail: "Starting…".into(),
+            ..Job::default()
+        };
+        assert_eq!(detail(&job(State::Cancelled, "Cancelled")), "Cancelled");
+        assert_eq!(detail(&job(State::Cancelled, "")), "Cancelled");
+        assert_eq!(detail(&job(State::Failed, "HTTP 403")), "Failed · HTTP 403");
+        // A cancelled group keeps its counts.
+        let mut g = job(State::Cancelled, "Cancelled");
+        g.items_done = 3;
+        g.items_total = 10;
+        assert_eq!(detail(&group_view(&g, &[])), "Cancelled · 3 / 10");
+        // Saved and restored as cancelled (not turned into "Interrupted").
+        let t = serde_json::to_string(&job(State::Cancelled, "Cancelled")).unwrap();
+        assert!(t.contains(r#""state":"cancelled""#));
+        let back: Job = serde_json::from_str(&t).unwrap();
+        assert_eq!(restore(vec![back])[0].state, State::Cancelled);
+        // No "Download failed" for a cancel; real failures still notify.
+        ST.with(|s| *s.borrow_mut() = Store::default());
+        let news = || ST.with(|s| std::mem::take(&mut s.borrow_mut().news));
+        let st = |st: &str, e: &str| Report {
+            title: Some("Video".into()),
+            state: Some(st.into()),
+            error: Some(e.into()),
+            ..Report::default()
+        };
+        report("yt", "a", st("active", ""));
+        report("yt", "a", st("cancelled", "Cancelled"));
+        assert!(news().is_empty());
+        report("yt", "a", st("active", ""));
+        report("yt", "a", st("failed", "HTTP 403"));
+        assert_eq!(
+            news(),
+            [("Video".to_string(), false, "HTTP 403".to_string())]
+        );
+        // A cancelled group is quiet too, and its items' cancels do not count as failed.
+        report("yt", "pl", st("active", ""));
+        report(
+            "yt",
+            "i1",
+            Report {
+                parent: Some("pl".into()),
+                state: Some("cancelled".into()),
+                ..Report::default()
+            },
+        );
+        report("yt", "pl", st("cancelled", "Cancelled"));
+        assert!(news().is_empty());
+        let jobs = ST.with(|s| s.borrow().jobs.clone());
+        let g = &visible(&jobs, &Default::default())[0].0;
+        assert_eq!(g.state, State::Cancelled);
+        assert_eq!(detail(g), "Cancelled · 0 / 1");
     }
 }
