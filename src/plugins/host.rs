@@ -213,12 +213,8 @@ pub fn fetch_cover(url: &str) -> Option<PathBuf> {
     let ext = match b.as_deref() {
         Some([0x89, b'P', b'N', b'G', ..]) => "png",
         Some([0xFF, 0xD8, ..]) => "jpg",
-        Some([b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..]) => {
-            // WebP: re-encode (the image cache decodes PNG / JPEG).
-            let img = image::load_from_memory(b.as_deref()?).ok()?;
-            let p = base.with_extension("png");
-            img.save_with_format(&p, image::ImageFormat::Png).ok()?;
-            return Some(p);
+        Some(w @ [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..]) => {
+            return store_webp(&base, w, url);
         }
         _ => {
             let _ = std::fs::write(base.with_extension("none"), b"");
@@ -228,6 +224,34 @@ pub fn fetch_cover(url: &str) -> Option<PathBuf> {
     let p = base.with_extension(ext);
     std::fs::write(&p, b?).ok()?;
     Some(p)
+}
+
+/// A WebP cover re-encoded as PNG next to `base` (the cache only keeps PNG / JPEG). One
+/// that does not decode is logged (the site only, not the URL: it may carry a token) and
+/// marked `.none`, so it is not fetched and decoded again.
+fn store_webp(base: &Path, b: &[u8], url: &str) -> Option<PathBuf> {
+    let p = base.with_extension("png");
+    let tmp = base.with_extension("tmp");
+    match image::load_from_memory_with_format(b, image::ImageFormat::WebP) {
+        Ok(img) => {
+            img.save_with_format(&tmp, image::ImageFormat::Png).ok()?;
+            std::fs::rename(&tmp, &p).ok()?;
+            Some(p)
+        }
+        Err(e) => {
+            eprintln!("vivi: cover from {}: WebP not decoded: {e}", url_host(url));
+            let _ = std::fs::write(base.with_extension("none"), b"");
+            None
+        }
+    }
+}
+
+/// The host of an http(s) URL, without user info, port, path or query (for logs).
+fn url_host(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = auth.rsplit_once('@').map_or(auth, |(_, h)| h);
+    host.split(':').next().unwrap_or("")
 }
 
 /// Fetch the covers of `urls` on worker threads, then decode them in the image cache.
@@ -807,5 +831,32 @@ mod tests {
         assert_eq!(fetch_cover("ftp://x/y.png"), None);
         assert_eq!(fetch_cover("/nonexistent/cover.png"), None);
         assert_eq!(cached_cover(""), None);
+    }
+
+    #[test]
+    fn webp_covers_become_png_or_are_marked_failed() {
+        let dir = std::env::temp_dir().join(format!("vivi-host-webp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let webp = include_bytes!("../../tests/fixtures/tiny.webp");
+        let p = store_webp(
+            &dir.join("good"),
+            webp,
+            "https://i.ytimg.com/vi_webp/x/a.webp",
+        )
+        .expect("WebP stored");
+        assert_eq!(p, dir.join("good.png"));
+        assert_eq!(image::image_dimensions(&p).unwrap(), (2, 2));
+        // Broken: nothing stored, a `.none` marker so it is not fetched again.
+        let bad = dir.join("bad");
+        assert_eq!(store_webp(&bad, &webp[..20], "https://x/y.webp"), None);
+        assert!(bad.with_extension("none").is_file());
+        assert!(!bad.with_extension("png").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+        // Logs name the site only.
+        assert_eq!(
+            url_host("https://user:pw@cdn.example:8443/a.webp?token=s"),
+            "cdn.example"
+        );
+        assert_eq!(url_host("http://i.ytimg.com/vi/x.webp"), "i.ytimg.com");
     }
 }

@@ -133,9 +133,28 @@ fn mtime(p: &Path) -> Option<std::time::SystemTime> {
 }
 
 /// Worker side: the shrunk copy when it is newer than the source, else decode the source
-/// (PNG / JPEG, or vivi's raw 320×180 RGBA video thumbnails), shrink it and store the copy.
+/// (PNG / JPEG / WebP, or vivi's raw 320×180 RGBA video thumbnails), shrink it and store
+/// the copy.
 fn decode(src: &Path, size: u32) -> Option<Decoded> {
     decode_in(&pics_dir(), src, size)
+}
+
+/// Log a source that could not be decoded, once per file and run (every size of it ends
+/// up in the failed set, so it is not decoded again either). Only the local file is
+/// named, never the URL it came from.
+fn log_failed(src: &Path, why: &dyn std::fmt::Display) {
+    static LOGGED: std::sync::Mutex<Option<std::collections::HashSet<PathBuf>>> =
+        std::sync::Mutex::new(None);
+    let first = LOGGED
+        .lock()
+        .map(|mut l| {
+            l.get_or_insert_with(Default::default)
+                .insert(src.to_path_buf())
+        })
+        .unwrap_or(false);
+    if first {
+        eprintln!("vivi: image {}: {why}", src.display());
+    }
 }
 
 fn decode_in(pics: &Path, src: &Path, size: u32) -> Option<Decoded> {
@@ -165,12 +184,20 @@ fn decode_in(pics: &Path, src: &Path, size: u32) -> Option<Decoded> {
             }
         }
     }
-    let img = image::ImageReader::open(src)
-        .ok()?
-        .with_guessed_format()
-        .ok()?
-        .decode()
-        .ok()?;
+    let img = match image::ImageReader::open(src)
+        .and_then(|r| r.with_guessed_format())
+        .map_err(image::ImageError::IoError)
+        .and_then(|r| r.decode())
+    {
+        Ok(img) => img,
+        Err(e) => {
+            // A missing file is not worth a line (deleted covers, stale cache entries).
+            if src.is_file() {
+                log_failed(src, &e);
+            }
+            return None;
+        }
+    };
     if img.width() <= size && img.height() <= size {
         // Already small (e.g. station logos): no copy needed.
         return Some(pixels(img.into_rgba8()));
@@ -393,6 +420,30 @@ mod tests {
             Some(Decoded::Pixels(48, 24, _))
         ));
         assert!(decode_in(&pics, &dir.join("missing.png"), ROW).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A 2×2 lossless WebP (red, green / blue, white), as YouTube thumbnails come.
+    const TINY_WEBP: &[u8] = include_bytes!("../tests/fixtures/tiny.webp");
+
+    #[test]
+    fn decodes_webp_and_fails_cleanly_on_a_broken_one() {
+        let dir = std::env::temp_dir().join(format!("vivi-images-webp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // The extension does not matter: the format is sniffed (cover caches use hashes).
+        let src = dir.join("thumb.bin");
+        std::fs::write(&src, TINY_WEBP).unwrap();
+        let Some(Decoded::Pixels(w, h, px)) = decode_in(&dir.join("pics"), &src, ROW) else {
+            panic!("WebP not decoded");
+        };
+        assert_eq!((w, h), (2, 2));
+        assert_eq!(&px[..4], &[255, 0, 0, 255]);
+        assert_eq!(&px[12..16], &[255, 255, 255, 255]);
+        // A truncated WebP: no pixels (logged once, then kept in the failed set by `finish`).
+        let bad = dir.join("broken.webp");
+        std::fs::write(&bad, &TINY_WEBP[..20]).unwrap();
+        assert!(decode_in(&dir.join("pics"), &bad, ROW).is_none());
+        assert!(decode_in(&dir.join("pics"), &bad, TILE).is_none());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

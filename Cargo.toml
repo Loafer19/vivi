@@ -27,7 +27,9 @@ rusty-chromaprint = "0.3.0"
 # QR codes for plugin pairing dialogs (`script-message vivi-qr`); no image/svg features.
 qrcode = { version = "0.14", default-features = false }
 # Station logos: sniffed, shrunk to 128 px and re-encoded (Slint already links image with these).
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# WebP: YouTube and other sites serve thumbnails / covers as WebP (image-webp is already
+# linked through resvg).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # setpriority for the Auto-tagger's background fingerprint (already in the tree via mpv/zbus deps).
