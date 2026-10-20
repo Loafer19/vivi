@@ -1,11 +1,46 @@
 name: Feature request
-description: Suggest a new capability
+description: Suggest a new capability for the vivi player
 labels: ["type: feature"]
 body:
-  - type: textarea
-    attributes: { label: Description }
+  - type: markdown
+    attributes:
+      value: |
+        Ideas for a new plugin go to [vivi-plugins → Idea of a plugin](https://github.com/Loafer19/vivi-plugins/issues/new?template=plugin-idea.yml); requests for an existing marketplace plugin go to [vivi-plugins](https://github.com/Loafer19/vivi-plugins/issues/new/choose).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - UI
+        - Player
+        - Library
+        - Settings
+        - Subtitles
+        - Audio
+        - Video
+        - Plugin (built-in extension or plugin host)
+        - Other
     validations: { required: true }
-  - type: input
-    attributes: { label: Figma frame, placeholder: "e.g. Player - customize" }
   - type: textarea
-    attributes: { label: Acceptance criteria }
+    id: description
+    attributes:
+      label: Description
+      description: What should vivi do, and what problem does it solve for you?
+    validations: { required: true }
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you use today, other players or mpv scripts that do this, other ways to solve it.
+  - type: input
+    id: figma
+    attributes:
+      label: Figma frame
+      placeholder: "e.g. Player - customize"
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] …
+        - [ ] …

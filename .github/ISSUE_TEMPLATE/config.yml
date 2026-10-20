@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Idea of a plugin
+    url: https://github.com/Loafer19/vivi-plugins/issues/new?template=plugin-idea.yml
+    about: Propose a new plugin for the vivi marketplace.
+  - name: Plugin bug or plugin feature request
+    url: https://github.com/Loafer19/vivi-plugins/issues/new/choose
+    about: Problems with or requests for a downloadable plugin (SponsorBlock, Discord, YouTube & yt-dlp, Scrobbler, …).
+  - name: Plugin marketplace
+    url: https://plugins.viviplayer.app
+    about: Browse the available plugins.

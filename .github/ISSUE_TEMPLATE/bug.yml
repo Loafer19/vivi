@@ -1,13 +1,81 @@
 name: Bug report
-description: Something doesn't work
+description: Something in the vivi player doesn't work
 labels: ["type: bug"]
 body:
-  - type: textarea
-    attributes: { label: What happened, description: Steps to reproduce }
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Bugs in a downloadable plugin from the marketplace (SponsorBlock, Discord, YouTube & yt-dlp, …) go to [vivi-plugins](https://github.com/Loafer19/vivi-plugins/issues/new/choose). Built-in extensions (Lyrics, Subtitle Search, Auto-tagger, Skip Intro, Visualizer, Free Music, Network Streams) belong here.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of vivi is affected?
+      options:
+        - UI
+        - Player
+        - Library
+        - Settings
+        - Subtitles
+        - Audio
+        - Video
+        - Plugin (built-in extension or plugin host)
+        - Other
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: vivi version
+      description: "Output of `vivi --version`, or the version shown in Settings → About."
+      placeholder: "vivi 0.13.0 (commit abc1234, built 2026-10-18)"
+    validations: { required: true }
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - install.sh one-liner (viviplayer.app/install.sh)
+        - Arch PKGBUILD with makepkg (vivi-bin / vivi-git / packaging/arch)
+        - AppImage (release)
+        - Flatpak bundle (release)
+        - Linux tarball (release)
+        - Windows zip (release)
+        - macOS zip (release)
+        - Built from source (cargo build --release)
+        - Other
+    validations: { required: true }
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: OS / distro, compositor or desktop, display server, GPU and driver, mpv version if known.
+      placeholder: "Arch/Omarchy, Hyprland (Wayland), AMD RX 6700 (mesa 25.2), mpv 0.40"
     validations: { required: true }
   - type: textarea
-    attributes: { label: Expected behavior }
-  - type: input
-    attributes: { label: System, placeholder: "Arch/Omarchy, Hyprland (Wayland), GPU" }
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Steps to reproduce, as exact as you can (file type/codec, URL kind, keys pressed).
+      placeholder: |
+        1. Open a 4K HDR .mkv
+        2. Press F to go fullscreen
+        3. …
+    validations: { required: true }
   - type: textarea
-    attributes: { label: Log, description: "Run with VIVI_MPV_DEBUG=1", render: text }
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations: { required: true }
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or recording
+      description: Drag images or a short screen recording here (on Hyprland e.g. `grim`/`slurp` or `wf-recorder`).
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        Run vivi from a terminal with `VIVI_MPV_DEBUG=1 vivi` (verbose mpv log; `VIVI_LOG=1` adds player events) and paste the relevant part.
+        Please redact personal data first: home-directory paths and file names, usernames, account names, URLs with tokens, API keys.
+      render: text
