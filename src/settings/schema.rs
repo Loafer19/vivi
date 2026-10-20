@@ -53,6 +53,11 @@ pub(super) const OTHER: &[Field] = &[
         set: |c, v| c.interface.accent = v.into(),
     },
     Field {
+        id: "interface.bar_icons",
+        get: Some(|c| crate::config::bar_icons_name(&c.interface.bar_icons).into()),
+        set: |c, v| c.interface.bar_icons = crate::config::bar_icons_name(v).into(),
+    },
+    Field {
         id: "interface.autohide",
         get: None,
         set: |c, v| {

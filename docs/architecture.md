@@ -85,6 +85,14 @@ banner with Retry / Copy), and others listed there.
 * At small sizes a second tone blurs into the first, and at large sizes a single tone reads
   flat next to the two-tone icons. When adding an icon, pick the variant by its rendered
   size, not by where its SVG came from.
+* Draw a two-tone icon by name: `TriIcon { name: "search"; }`, `IconButton { duo: "play"; }`.
+  The names come from `ui/core/duo.slint`, which `tools/icon_layers.py` writes from
+  `assets/icons` (a name without layers draws single-tone, so `duo` is safe for any icon).
+  Lookups that feed these take names too: `Tools.duo(id)`, `Icons.plugin-duo(key)`,
+  `Icons.kind-duo(kind)`. New art: `<name>-twotone.svg` with the accent parts in `#D37918`
+  and dim parts in `#AB6314`, then run the script (see docs/design/icon-map.md).
+* Player top / bottom bar buttons set `IconButton { bar: true; }`: they follow `Theme.bar-duo`
+  (Settings → *Player bar icons*); `TriIcon { flat: true; }` draws the name single-tone (`Duo.single`).
 
 ## Conventions
 

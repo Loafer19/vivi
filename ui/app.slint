@@ -2,7 +2,7 @@
 // topbar 40px #191919 (pad 6, gap 10, title Inter 14 #8F8F8F centered),
 // Controls 54px #191919 @93% (pad 20/11, gap 20), radii 4/6.
 
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { ScrollView } from "std-widgets.slint";
 import { SidePanel, Item } from "panel.slint";
 import { SettingsDialog, SettingRow } from "settings.slint";
@@ -369,7 +369,8 @@ component VolumePopup inherits Rectangle {
     in property <float> value;
     in property <float> maximum: 150;
     in property <bool> compact;
-    in property <image> icon;
+    in property <string> duo; // icon name (two-tone, see TriIcon)
+    in property <bool> flat; // single-tone (Theme.bar-duo off)
     in property <string> tip;
     callback changed(float);
     callback mute();
@@ -377,7 +378,7 @@ component VolumePopup inherits Rectangle {
     border-radius: Metrics.radius-md;
     background: ita.has-hover ? Theme.bg-a1 : transparent;
     property <bool> open: ita.has-hover || pta.has-hover || pta.pressed;
-    Icon { source: root.icon; width: root.compact ? 18px : 20px; height: self.width; tint: ita.has-hover ? Theme.fg-1 : Theme.fg-2; }
+    TriIcon { name: root.duo; flat: root.flat; width: root.compact ? 18px : 20px; height: self.width; tint: ita.has-hover ? Theme.fg-1 : Theme.fg-2; }
     ita := VolumeTouch {
         value: root.value; maximum: root.maximum; relative: true;
         accessible-label: root.tip;
@@ -443,20 +444,21 @@ component BarItem inherits HorizontalLayout {
     in property <bool> boxed: true; // bar style draws boxed tracks (all but Plain)
     callback act(string);
     callback volume-changed(float);
-    property <image> vol-icon: root.muted || root.volume < 1 ? @image-url("../assets/icons/close-none.svg")
-            : root.volume < 50 ? @image-url("../assets/icons/close-low.svg")
-            : root.volume < 100 ? @image-url("../assets/icons/close-medium.svg")
-            : @image-url("../assets/icons/volume-high.svg");
+    // close-none / -low / -medium are the muted and lower-volume speakers of the icon sheet.
+    property <string> vol-duo: root.muted || root.volume < 1 ? "close-none"
+            : root.volume < 50 ? "close-low"
+            : root.volume < 100 ? "close-medium"
+            : "volume-high";
     spacing: root.compact ? 2px : 6px;
     horizontal-stretch: 0;
     if root.shown && root.id == "volume" && root.vstyle != VolumeStyle.popup: IconButton { tab-focus: false;
         size: root.compact ? ButtonSize.sm : ButtonSize.md;
         tip: Tools.label("volume");
-        icon: root.vol-icon;
+        duo: root.vol-duo; bar: true;
         clicked => { root.act("mute"); }
     }
     if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.popup: VerticalLayout { alignment: center; VolumePopup {
-        compact: root.compact; icon: root.vol-icon; tip: Tools.label("volume");
+        compact: root.compact; duo: root.vol-duo; flat: !Theme.bar-duo; tip: Tools.label("volume");
         value: root.volume; maximum: root.volume-max;
         changed(v) => { root.volume-changed(v); }
         mute => { root.act("mute"); }
@@ -482,7 +484,7 @@ component BarItem inherits HorizontalLayout {
     // Icon only on the bar (labels live in the ⋯ overflow menu and hover Tooltip).
     if root.shown && root.id != "volume": IconButton { tab-focus: false;
         size: root.compact ? ButtonSize.sm : ButtonSize.md; active: root.active; tip: Tools.label(root.id);
-        icon: root.id == "fullscreen" && root.fullscreen ? @image-url("../assets/icons/fullscreen-active.svg") : Tools.icon(root.id);
+        duo: root.id == "fullscreen" && root.fullscreen ? "fullscreen-active" : Tools.duo(root.id); bar: true;
         clicked => { root.act(root.id); }
     }
 }
@@ -491,7 +493,7 @@ component OverflowRow inherits Rectangle {
     in property <string> id;
     // Plugin buttons: their own label / icon (else the Tools catalogue's).
     in property <string> plabel;
-    in property <image> picon;
+    in property <string> pduo; // plugin button icon name
     property <string> label: root.plabel != "" ? root.plabel : Tools.label(root.id);
     in property <bool> active;
     callback act(string);
@@ -501,7 +503,7 @@ component OverflowRow inherits Rectangle {
     ta := TouchArea { accessible-role: button; accessible-label: root.label; mouse-cursor: pointer; clicked => { root.act(root.id); } }
     HorizontalLayout {
         padding-left: 8px; spacing: 10px;
-        Icon { source: root.plabel != "" ? root.picon : Tools.icon(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
+        TriIcon { name: root.plabel != "" ? root.pduo : Tools.duo(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
         Text { text: root.label; color: root.active ? Theme.accent : Theme.fg-1; vertical-alignment: center; }
     }
 }
@@ -529,6 +531,8 @@ export component AppWindow inherits Window {
     // Music visualizer (src/viz): shown for audio-only media; mode 0 = Disabled.
     // Plugins (src/plugins). Fields of `plugin-command` args are joined with U+001F.
     callback plugin-command(string, string, string);
+    // Top-bar close button: the same as closing the window (tray or quit, src/tray.rs).
+    callback close-window();
     // Plain (unsynced) lyrics, e.g. radio: a scrollable block without highlight.
     // Full-screen karaoke view and manual search (Lyrics plugin).
     out property <length> karaoke-big: clamp(root.width / 22, 30px, 64px);
@@ -784,17 +788,19 @@ export component AppWindow inherits Window {
         background: Playback.has-media ? Theme.bar : Theme.bg-a4;
         HorizontalLayout {
             padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
-            IconButton { tab-focus: false; icon: @image-url("../assets/icons/open.svg"); tip: "Open file"; clicked => { Playback.open-file(); } }
-            if Playback.has-media: IconButton { tab-focus: false; icon: @image-url("../assets/icons/home.svg"); tip: "Library"; active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
+            IconButton { tab-focus: false; bar: true; duo: "open"; tip: "Open file"; clicked => { Playback.open-file(); } }
+            if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "home"; tip: "Library"; active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
             Text {
                 horizontal-stretch: 1;
                 text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
                 color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
                 overflow: elide;
             }
-            if Playback.has-media: IconButton { tab-focus: false; icon: @image-url("../assets/icons/pip.svg"); tip: "Miniplayer (P)"; clicked => { Playback.toggle-mini(); } }
-            IconButton { tab-focus: false; icon: @image-url("../assets/icons/settings.svg"); tip: "Settings (Ctrl+,)"; active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
-            IconButton { tab-focus: false; icon: @image-url("../assets/icons/fullscreen.svg"); tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
+            if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "pip"; tip: "Miniplayer (P)"; clicked => { Playback.toggle-mini(); } }
+            IconButton { tab-focus: false; bar: true; duo: "settings"; tip: "Settings (Ctrl+,)"; active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
+            IconButton { tab-focus: false; bar: true; duo: "fullscreen"; tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
+            // Same as the window's close button (General → Window → Close button: tray or quit).
+            IconButton { tab-focus: false; bar: true; duo: "close-window"; tip: "Close"; clicked => { root.close-window(); } }
         }
     }
 
@@ -964,11 +970,11 @@ export component AppWindow inherits Window {
                     property <bool> ab: Playback.ab-a >= 0 && Playback.ab-b >= 0;
                     horizontal-stretch: id == "seek" || id == "spacer" ? 1 : 0;
                     spacing: 2px;
-                    if id == "prev": IconButton { tab-focus: false; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { Playback.prev(); } }
-                    if id == "play": IconButton { tab-focus: false; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; primary: true; tip: Playback.playing ? "Pause" : "Play"; icon: Playback.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg"); clicked => { Playback.toggle-play(); fs.focus(); } }
-                    if id == "next": IconButton { tab-focus: false; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { Playback.next(); } }
-                    if on && id == "back10": IconButton { tab-focus: false; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Back 10 s"; icon: @image-url("../assets/icons/backward-10-sec.svg"); clicked => { Playback.seek(max(0, Playback.position - 10)); fs.focus(); } }
-                    if on && id == "fwd10": IconButton { tab-focus: false; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Forward 10 s"; icon: @image-url("../assets/icons/forward-10-sec.svg"); clicked => { Playback.seek(min(Playback.duration, Playback.position + 10)); fs.focus(); } }
+                    if id == "prev": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Previous"; duo: "previous"; clicked => { Playback.prev(); } }
+                    if id == "play": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; primary: true; tip: Playback.playing ? "Pause" : "Play"; duo: Playback.playing ? "pause" : "play"; clicked => { Playback.toggle-play(); fs.focus(); } }
+                    if id == "next": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Next"; duo: "next"; clicked => { Playback.next(); } }
+                    if on && id == "back10": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Back 10 s"; duo: "backward-10-sec"; clicked => { Playback.seek(max(0, Playback.position - 10)); fs.focus(); } }
+                    if on && id == "fwd10": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Forward 10 s"; duo: "forward-10-sec"; clicked => { Playback.seek(min(Playback.duration, Playback.position + 10)); fs.focus(); } }
                     if id == "time": HorizontalLayout {
                         padding-left: 8px; padding-right: 6px; spacing: 4px;
                         Text {
@@ -1009,9 +1015,9 @@ export component AppWindow inherits Window {
                     } }
                     if id == "spacer" || (id == "seek" && root.bar-classic): Rectangle { horizontal-stretch: 1; }
                     // A plugin's button (`controlbar.button`), when the user added it in Customize.
-                    if on && i < Customize.bar-meta.length && Customize.bar-meta[i].label != "": IconButton { tab-focus: false;
+                    if on && i < Customize.bar-meta.length && Customize.bar-meta[i].label != "": IconButton { tab-focus: false; bar: true;
                         size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: Customize.bar-meta[i].label;
-                        icon: Icons.plugin(Customize.bar-meta[i].icon);
+                        duo: Icons.plugin-duo(Customize.bar-meta[i].icon);
                         clicked => { root.bar-act(id); fs.focus(); }
                     }
                     if on && !root.is-core(id) && (i >= Customize.bar-meta.length || Customize.bar-meta[i].label == ""): BarItem {
@@ -1020,8 +1026,8 @@ export component AppWindow inherits Window {
                         volume-changed(v) => { Playback.volume = v; Playback.volume-changed(v); }
                     }
                 }
-                if Customize.bar-slots > root.bar-fit: IconButton { tab-focus: false;
-                    size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; icon: @image-url("../assets/icons/more.svg"); tip: "More";
+                if Customize.bar-slots > root.bar-fit: IconButton { tab-focus: false; bar: true;
+                    size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; duo: "more"; tip: "More";
                     clicked => { overflow.show(); }
                 }
             }
@@ -1058,11 +1064,11 @@ export component AppWindow inherits Window {
     if root.mini && root.mini-tiny && Playback.has-media && root.show-ui: Rectangle {
         width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
         background: Theme.scrim-soft;
-        IconButton { tab-focus: false; x: 6px; y: 6px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { Playback.toggle-mini(); } }
+        IconButton { tab-focus: false; x: 6px; y: 6px; duo: "window"; tip: "Full player (P)"; clicked => { Playback.toggle-mini(); } }
         IconButton { tab-focus: false;
             x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
             primary: true; tip: Playback.playing ? "Pause" : "Play";
-            icon: Playback.playing ? @image-url("../assets/icons/pause.svg") : @image-url("../assets/icons/play.svg");
+            duo: Playback.playing ? "pause" : "play";
             clicked => { Playback.toggle-play(); fs.focus(); }
         }
         Rectangle {
@@ -1076,13 +1082,13 @@ export component AppWindow inherits Window {
         width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
         background: Theme.scrim-soft;
         IconButton { tab-focus: false; x: 8px; y: 8px; icon: @image-url("../assets/icons/close.svg"); tip: "Stop and close the miniplayer"; clicked => { Playback.stop(); Playback.toggle-mini(); } }
-        IconButton { tab-focus: false; x: parent.width - self.width - 8px; y: 8px; icon: @image-url("../assets/icons/window.svg"); tip: "Full player (P)"; clicked => { Playback.toggle-mini(); } }
+        IconButton { tab-focus: false; x: parent.width - self.width - 8px; y: 8px; duo: "window"; tip: "Full player (P)"; clicked => { Playback.toggle-mini(); } }
         HorizontalLayout {
             x: (parent.width - self.preferred-width) / 2; y: (parent.height - 40px) / 2; width: self.preferred-width; height: 40px;
             spacing: 18px; alignment: center;
-            IconButton { tab-focus: false; y: 4px; tip: "Previous"; icon: @image-url("../assets/icons/previous.svg"); clicked => { Playback.prev(); } }
-            IconButton { tab-focus: false; y: 2px; primary: true; tip: Playback.playing ? "Pause" : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? "Replay" : "Play"); icon: Playback.playing ? @image-url("../assets/icons/pause.svg") : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? @image-url("../assets/icons/replay.svg") : @image-url("../assets/icons/play.svg")); clicked => { Playback.toggle-play(); fs.focus(); } }
-            IconButton { tab-focus: false; y: 4px; tip: "Next"; icon: @image-url("../assets/icons/next.svg"); clicked => { Playback.next(); } }
+            IconButton { tab-focus: false; y: 4px; tip: "Previous"; duo: "previous"; clicked => { Playback.prev(); } }
+            IconButton { tab-focus: false; y: 2px; primary: true; tip: Playback.playing ? "Pause" : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? "Replay" : "Play"); duo: Playback.playing ? "pause" : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? "replay" : "play"); clicked => { Playback.toggle-play(); fs.focus(); } }
+            IconButton { tab-focus: false; y: 4px; tip: "Next"; duo: "next"; clicked => { Playback.next(); } }
         }
         Rectangle {
             x: 10px; width: parent.width - 20px; y: parent.height - 18px; height: 14px;
@@ -1138,9 +1144,9 @@ export component AppWindow inherits Window {
             HorizontalLayout {
                 height: 34px; padding-left: 12px; padding-right: 6px; spacing: 2px;
                 Text { text: root.mini-q-meta; color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; horizontal-stretch: 1; }
-                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/sort.svg"); tip: "Sort by name"; clicked => { Playback.queue-sort(); } }
-                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/remove.svg"); tip: "Remove selected"; clicked => { if (root.mini-q-sel >= 0) { Panel.queue-remove(root.mini-q-sel); root.mini-q-sel = -1; } } }
-                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; icon: @image-url("../assets/icons/add.svg"); tip: "Add files"; clicked => { Panel.queue-add(); } }
+                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; duo: "sort"; tip: "Sort by name"; clicked => { Playback.queue-sort(); } }
+                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; duo: "remove"; tip: "Remove selected"; clicked => { if (root.mini-q-sel >= 0) { Panel.queue-remove(root.mini-q-sel); root.mini-q-sel = -1; } } }
+                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; duo: "add"; tip: "Add files"; clicked => { Panel.queue-add(); } }
             }
             ScrollView {
                 vertical-stretch: 1;
@@ -1193,7 +1199,7 @@ export component AppWindow inherits Window {
         VerticalLayout {
             padding: 6px;
             for id[i] in Customize.bar-items: OverflowRow { visible: i < Customize.bar-cum.length && Customize.bar-cum[i] > root.bar-fit; height: self.visible ? 36px : 0; id: id;
-                plabel: i < Customize.bar-meta.length ? Customize.bar-meta[i].label : ""; picon: Icons.plugin(i < Customize.bar-meta.length ? Customize.bar-meta[i].icon : ""); active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
+                plabel: i < Customize.bar-meta.length ? Customize.bar-meta[i].label : ""; pduo: Icons.plugin-duo(i < Customize.bar-meta.length ? Customize.bar-meta[i].icon : ""); active: root.bar-active(id); act(x) => { root.bar-act(x == "volume" ? "mute" : x); } }
         }
     }
 

@@ -1,5 +1,5 @@
 // Settings → About: app identity, build info, update check, links, credits.
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Toggle } from "core/controls.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 import { SectionHeader } from "core/rows.slint";
@@ -38,7 +38,7 @@ component LinkRow inherits Rectangle {
     background: ta.has-hover ? Theme.bg-a1 : transparent;
     HorizontalLayout {
         padding-left: 12px; padding-right: 12px; spacing: 12px;
-        Icon { width: 18px; height: 18px; y: (parent.height - 18px) / 2; source: @image-url("../assets/icons/link.svg"); tint: ta.has-hover ? Theme.accent : Theme.fg-a2; }
+        TriIcon { width: 18px; height: 18px; y: (parent.height - 18px) / 2; name: "link"; tint: ta.has-hover ? Theme.accent : Theme.fg-a2; }
         Text { text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
         Text { horizontal-stretch: 1; text: root.sub; color: Theme.fg-a3; font-size: Metrics.font-md; vertical-alignment: center; horizontal-alignment: right; overflow: elide; }
     }

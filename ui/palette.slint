@@ -1,7 +1,7 @@
 // Command palette (Ctrl+K): a search field over app actions and plugin commands.
 // Keyboard only: type to filter (fuzzy), Up / Down select, Enter runs, Esc closes
 // (through the overlay stack, Overlay.palette). Rows are list items for screen readers.
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { TextField } from "core/controls.slint";
 import { Palette, PaletteItem } from "state/palette.slint";
 
@@ -58,7 +58,7 @@ export component PaletteDialog inherits Rectangle {
                 padding: 8px; spacing: 6px;
                 HorizontalLayout {
                     spacing: 8px; padding-left: 4px;
-                    VerticalLayout { alignment: center; Icon { width: 18px; height: 18px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; } }
+                    VerticalLayout { alignment: center; TriIcon { width: 18px; height: 18px; name: "search"; tint: Theme.fg-a3; } }
                     field := TextField {
                         height: 40px; horizontal-stretch: 1; background: transparent;
                         text <=> Palette.query; placeholder: "Type a command or plugin action"; label: "Command palette";

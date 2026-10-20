@@ -3,7 +3,7 @@
 // rows built from the reusable controls in controls.slint.
 import { AboutPage } from "about.slint";
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Metrics, Icon } from "core/theme.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Dropdown, Toggle, Slider, Segmented, TextField, PathField, AdvancedBar } from "core/controls.slint";
 import { Icons } from "core/icons.slint";
 import { Modal } from "core/modal.slint";
@@ -53,7 +53,7 @@ component PluginCard inherits Rectangle {
             Rectangle {
                 width: 40px; height: 40px; border-radius: Metrics.radius-lg;
                 background: on ? Theme.accent.mix(Theme.field, 25%) : Theme.field-raised;
-                Icon { width: 22px; height: 22px; source: Icons.plugin(setting.options[2]); tint: on ? Theme.accent : Theme.fg-a2; }
+                TriIcon { width: 22px; height: 22px; name: Icons.plugin-duo(setting.options[2]); tint: on ? Theme.accent : Theme.fg-a2; }
             }
         }
         VerticalLayout {
@@ -103,7 +103,7 @@ component PackageCard inherits Rectangle {
         VerticalLayout { alignment: center;
             Rectangle {
                 width: 40px; height: 40px; border-radius: Metrics.radius-lg; background: Theme.field-raised;
-                Icon { width: 22px; height: 22px; source: Icons.plugin(setting.options[2]); tint: Theme.accent; }
+                TriIcon { width: 22px; height: 22px; name: Icons.plugin-duo(setting.options[2]); tint: Theme.accent; }
             }
         }
         VerticalLayout {
@@ -264,15 +264,15 @@ export component SettingsDialog inherits Modal {
     callback changed(string, string);
     callback refresh(int, string, bool); // category, search, advanced
     callback close();
-    // Sidebar icons and group labels, in category order (see settings.rs CATEGORIES).
-    property <[image]> icons: [
-        @image-url("../assets/icons/preferences.svg"), @image-url("../assets/icons/interface.svg"),
-        @image-url("../assets/icons/privacy.svg"), @image-url("../assets/icons/hotkeys.svg"),
-        @image-url("../assets/icons/playback.svg"), @image-url("../assets/icons/video.svg"),
-        @image-url("../assets/icons/audio.svg"), @image-url("../assets/icons/subtitles.svg"),
-        @image-url("../assets/icons/folder.svg"), @image-url("../assets/icons/streaming.svg"),
-        @image-url("../assets/icons/speed.svg"), @image-url("../assets/icons/record.svg"),
-        @image-url("../assets/icons/plugins.svg"), @image-url("../assets/icons/info.svg"),
+    // Sidebar icon names (two-tone, see TriIcon) and group labels, in category order (see settings.rs CATEGORIES).
+    property <[string]> icons: [
+        "preferences", "interface",
+        "privacy", "hotkeys",
+        "playback", "video",
+        "audio", "subtitles",
+        "folder", "streaming",
+        "speed", "record",
+        "plugins", "info",
     ];
     function group(i: int) -> string {
         i == 0 ? "App" : i == 4 ? "Media" : i == 9 ? "System" : ""
@@ -292,7 +292,7 @@ export component SettingsDialog inherits Modal {
                 padding: 8px; spacing: 8px;
                 Rectangle {
                     height: 40px; border-radius: Metrics.radius-md; background: Theme.bg-a3;
-                    Icon { x: 10px; width: 20px; height: 20px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
+                    TriIcon { x: 10px; width: 20px; height: 20px; name: "search"; tint: Theme.fg-a3; }
                     TextField {
                         x: 30px; width: parent.width - 34px; height: parent.height; background: transparent;
                         text <=> root.search; placeholder: "Search";
@@ -314,7 +314,7 @@ export component SettingsDialog inherits Modal {
                                     height: 40px; border-radius: Metrics.radius-md;
                                     property <bool> sel: i == root.category && root.search == "";
                                     background: sel ? Theme.bg-a1 : (cta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
-                                    Icon { x: 10px; width: 22px; height: 22px; source: root.icons[i]; tint: parent.sel ? Theme.accent : Theme.fg-a2; }
+                                    TriIcon { x: 10px; width: 22px; height: 22px; name: root.icons[i]; tint: parent.sel ? Theme.accent : Theme.fg-a2; }
                                     Text {
                                         x: 46px; text: c; vertical-alignment: center; height: parent.height; font-size: Metrics.font-base;
                                         color: parent.sel ? Theme.fg-1 : Theme.fg-a1;

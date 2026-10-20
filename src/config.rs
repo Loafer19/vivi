@@ -56,6 +56,8 @@ pub struct Interface {
     pub bar_style: String,
     /// Volume control style: "Cone" | "Bar" | "Popup" | "Percent" (see `VOLUME_STYLES`).
     pub volume_style: String,
+    /// Player top and bottom bar icons: "Two-tone" | "Single-tone" (see `BAR_ICONS`).
+    pub bar_icons: String,
     /// Offer the Chapter Thumbnails package (seek-bar frame previews) above the seek bar;
     /// "Don't show again" turns it off.
     pub hint_chapter_thumbnails: bool,
@@ -341,6 +343,7 @@ impl Default for Interface {
             mini_window: None,
             bar_style: "Compact".into(),
             volume_style: "Cone".into(),
+            bar_icons: "Two-tone".into(),
             hint_chapter_thumbnails: true,
             bar_layout: None,
             skip_buttons: None,
@@ -619,6 +622,17 @@ pub fn volume_style_name(s: &str) -> &'static str {
         .unwrap_or("Cone")
 }
 
+/// Icon styles of the player's top and bottom bars (other icons are always two-tone).
+pub const BAR_ICONS: [&str; 2] = ["Two-tone", "Single-tone"];
+
+/// The canonical [`BAR_ICONS`] name, ignoring case; unknown values fall back to "Two-tone".
+pub fn bar_icons_name(s: &str) -> &'static str {
+    BAR_ICONS
+        .into_iter()
+        .find(|b| b.eq_ignore_ascii_case(s.trim()))
+        .unwrap_or("Two-tone")
+}
+
 /// Volume style that goes with a built-in profile (all keep the cone for now).
 pub fn profile_volume(_name: &str) -> &'static str {
     "Cone"
@@ -742,6 +756,7 @@ pub fn migrate_toolbar(i: &mut Interface) {
     i.waveform = None;
     i.bar_style = bar_style_name(&i.bar_style).into();
     i.volume_style = volume_style_name(&i.volume_style).into();
+    i.bar_icons = bar_icons_name(&i.bar_icons).into();
 }
 
 #[cfg(test)]
@@ -819,6 +834,21 @@ mod toolbar_tests {
         assert!(!i.hint_chapter_thumbnails);
     }
 
+    #[test]
+    fn bar_icons_default_and_names() {
+        assert_eq!(Interface::default().bar_icons, "Two-tone");
+        assert_eq!(bar_icons_name("single-tone"), "Single-tone");
+        assert_eq!(bar_icons_name("bogus"), "Two-tone");
+        // Older configs have no bar_icons: serde default → Two-tone.
+        let i: Interface = toml::from_str("bar_style = \"Plain\"").unwrap();
+        assert_eq!(i.bar_icons, "Two-tone");
+        let mut i = Interface {
+            bar_icons: "SINGLE-TONE".into(),
+            ..Interface::default()
+        };
+        migrate_toolbar(&mut i);
+        assert_eq!(i.bar_icons, "Single-tone");
+    }
     #[test]
     fn bar_style_names_are_case_insensitive() {
         assert_eq!(bar_style_name("classic"), "Classic");

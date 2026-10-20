@@ -185,6 +185,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             vid: None,
         })
     });
+    // The top-bar close button closes the window like its title-bar button.
+    let wc = app.as_weak();
+    app.on_close_window(move || {
+        if let Some(a) = wc.upgrade() {
+            a.window()
+                .dispatch_event(slint::platform::WindowEvent::CloseRequested);
+        }
+    });
     let w = app.as_weak();
     app.window().on_close_requested(move || {
         let minimize = cfg.borrow().general.close_button != "Quit";

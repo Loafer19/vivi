@@ -1,7 +1,12 @@
+import { Duo } from "duo.slint";
+
 // Design tokens from Figma "VLC Redesign" (Dark/* and Light/* styles). Switched at runtime.
 export global Theme {
     in-out property <bool> dark: true;
     in-out property <color> accent: #D37918;
+    // Player top and bottom bar icons: two-tone (default) or single-tone
+    // (Settings → General → Appearance → Player bar icons, `interface.bar_icons`).
+    in-out property <bool> bar-duo: true;
     // Keyboard focus ring (2px, inside the control).
     out property <color> focus-ring: accent-bright;
     out property <color> accent-bright: dark ? accent.brighter(25%) : accent.darker(10%);
@@ -141,13 +146,22 @@ export component Icon inherits Image {
 
 // Two-tone icon drawn from the colour layers made by tools/icon_layers.py:
 // base follows the text colour, accent/dim follow the theme accent.
+// Set `name` (an icon in assets/icons, looked up in Duo) or the three layers directly.
 export component TriIcon inherits Rectangle {
-    in property <image> base;
-    in property <image> accent;
-    in property <image> dim;
+    in property <string> name;
+    in property <image> base: Duo.base(root.name);
+    in property <image> accent: Duo.accent(root.name);
+    in property <image> dim: Duo.dim(root.name);
     in property <color> tint: Theme.fg-a2;
+    // On an accent fill (primary buttons) the accent layers take the tint too.
+    in property <color> accent-tint: Theme.accent;
+    in property <color> dim-tint: Theme.accent-dim;
+    // Single-tone: the name's plain art (Duo.single) in `tint`, else every layer in `tint`.
+    in property <bool> flat: false;
+    property <image> single: root.flat ? Duo.single(root.name) : @image-url("");
+    property <bool> use-single: root.flat && root.single.width > 0;
     width: 24px; height: 24px;
-    Image { width: 100%; height: 100%; source: root.base; colorize: root.tint; image-fit: contain; }
-    Image { width: 100%; height: 100%; source: root.dim; colorize: Theme.accent-dim; image-fit: contain; }
-    Image { width: 100%; height: 100%; source: root.accent; colorize: Theme.accent; image-fit: contain; }
+    Image { width: 100%; height: 100%; source: root.use-single ? root.single : root.base; colorize: root.tint; image-fit: contain; }
+    if !root.use-single: Image { width: 100%; height: 100%; source: root.dim; colorize: root.flat ? root.tint : root.dim-tint; image-fit: contain; }
+    if !root.use-single: Image { width: 100%; height: 100%; source: root.accent; colorize: root.flat ? root.tint : root.accent-tint; image-fit: contain; }
 }

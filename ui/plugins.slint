@@ -24,7 +24,12 @@ export component SkipButton inherits Rectangle {
     row := HorizontalLayout {
         padding-left: 18px; padding-right: 6px; spacing: 10px;
         Text { text: root.text; color: ta.has-hover ? Theme.bg-b2 : Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; }
-        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon == "undo" ? @image-url("../assets/icons/replay.svg") : root.icon == "unmute" ? @image-url("../assets/icons/volume-high.svg") : root.icon == "always" ? @image-url("../assets/icons/check-active.svg") : @image-url("../assets/icons/next.svg"); tint: ta.has-hover ? Theme.bg-b2 : Theme.accent; }
+        TriIcon {
+            y: (parent.height - 18px) / 2; width: 18px; height: 18px;
+            name: root.icon == "undo" ? "replay" : root.icon == "unmute" ? "volume-high" : root.icon == "always" ? "check-active" : "next";
+            tint: ta.has-hover ? Theme.bg-b2 : Theme.accent;
+            accent-tint: ta.has-hover ? Theme.bg-b2 : Theme.accent; dim-tint: ta.has-hover ? Theme.bg-b2 : Theme.accent-dim;
+        }
         Rectangle {
             width: 28px;
             Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/close.svg"); tint: xa.has-hover ? Theme.fg-1 : Theme.fg-a3; }
@@ -180,14 +185,14 @@ component SubRow inherits Rectangle {
     in property <Item> item;
     callback clicked();
     callback activated();
-    in property <image> icon: @image-url("../assets/icons/subtitle.svg");
+    in property <string> icon: "subtitle"; // icon name (two-tone, see TriIcon)
     in property <image> logo;
     property <string> name: root.item.label;
     height: 36px; border-radius: Metrics.radius-md;
     background: item.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
     HorizontalLayout {
         padding-left: 10px; padding-right: 10px; spacing: 10px;
-        if root.logo.width == 0: Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: root.icon; tint: item.selected ? Theme.accent : Theme.fg-a2; }
+        if root.logo.width == 0: TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; name: root.icon; tint: item.selected ? Theme.accent : Theme.fg-a2; }
         if root.logo.width > 0: Image { y: (parent.height - 24px) / 2; width: 32px; height: 24px; source: root.logo; image-fit: contain; }
         nt := Text { horizontal-stretch: 1; min-width: min(self.preferred-width, root.width * 0.5); text: root.item.key; color: Theme.fg-1; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
         Text { horizontal-stretch: 0; max-width: max(0, root.width * 0.45); text: root.item.label; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
@@ -260,8 +265,8 @@ component LocalSubRow inherits Rectangle {
     background: !root.pair && item.selected ? Theme.bg-b1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
     HorizontalLayout {
         padding-left: 10px; padding-right: 10px; spacing: 10px;
-        Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; tint: Theme.fg-a2;
-            source: root.pair ? @image-url("../assets/icons/video.svg") : @image-url("../assets/icons/subtitle.svg"); }
+        TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; tint: Theme.fg-a2;
+            name: root.pair ? "video" : "subtitle"; }
         Text { horizontal-stretch: root.pair ? 0 : 1; text: root.item.key; color: Theme.fg-2; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
         if root.pair: Rectangle {
             horizontal-stretch: 1;
@@ -273,7 +278,7 @@ component LocalSubRow inherits Rectangle {
         if root.pair: Rectangle {
             width: 46%;
             HorizontalLayout { spacing: 10px;
-                Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; tint: Theme.fg-a2; source: @image-url("../assets/icons/subtitle.svg"); }
+                TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; tint: Theme.fg-a2; name: "subtitle"; }
                 Text { horizontal-stretch: 1; text: root.item.label != "" ? root.item.label : "No subtitle file"; color: root.item.label != "" ? Theme.fg-2 : Theme.fg-a3; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
             }
         }
@@ -390,7 +395,7 @@ export component SubtitleDialog inherits Modal {
             VerticalLayout {
                 HorizontalLayout {
                     height: 44px; padding-left: 16px; padding-right: 8px; spacing: 8px;
-                    Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/subtitles.svg"); tint: Theme.accent; }
+                    TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; name: "subtitles"; tint: Theme.accent; }
                     Text { horizontal-stretch: 1; text: "Add Subtitles"; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; vertical-alignment: center; }
                     if root.source == 0: Text { text: "OpenSubtitles.com"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
                     VerticalLayout { alignment: center;
@@ -411,14 +416,14 @@ export component SubtitleDialog inherits Modal {
                     if root.source == 1: Rectangle {
                         horizontal-stretch: 1; height: 36px; border-radius: Metrics.radius-md; background: bx.has-hover ? Theme.bg-a1 : Theme.bg-a3;
                         HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 10px;
-                            Icon { y: (parent.height - 20px) / 2; width: 20px; height: 20px; source: @image-url("../assets/icons/folder.svg"); tint: Theme.fg-a2; }
+                            TriIcon { y: (parent.height - 20px) / 2; width: 20px; height: 20px; name: "folder"; tint: Theme.fg-a2; }
                             Text { horizontal-stretch: 1; text: root.folder; color: Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; }
                         }
                         bx := TouchArea { accessible-role: button; accessible-label: "Choose folder: " + root.folder; mouse-cursor: pointer; clicked => { root.cmd("browse", ""); } }
                     }
                     if root.source == 0: Rectangle {
                         horizontal-stretch: 1; height: 36px; border-radius: Metrics.radius-md; background: Theme.bg-a3;
-                        Icon { x: 8px; width: 18px; height: 18px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
+                        TriIcon { x: 8px; width: 18px; height: 18px; name: "search"; tint: Theme.fg-a3; }
                         TextField {
                             x: 28px; width: parent.width - 30px; height: parent.height; background: transparent;
                             text <=> root.query; placeholder: "Title, episode, or IMDb id (tt0133093)";
@@ -537,7 +542,7 @@ component TrackRow inherits Rectangle {
             y: 6px; width: 40px; height: 40px; border-radius: Metrics.radius-sm; clip: true;
             background: Theme.accent.with-alpha(0.15);
             if root.fm.has-cover: Image { width: parent.width; height: parent.height; source: root.fm.cover; image-fit: cover; }
-            if !root.fm.has-cover: Icon { x: 10px; y: 10px; width: 20px; height: 20px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; }
+            if !root.fm.has-cover: TriIcon { x: 10px; y: 10px; width: 20px; height: 20px; name: "music"; tint: Theme.accent; }
         }
         VerticalLayout {
             horizontal-stretch: 1; alignment: center; spacing: 2px;
@@ -590,7 +595,7 @@ component CoverTile inherits Rectangle {
         x: 8px; y: 8px; width: parent.width - 16px; height: root.cover-h; border-radius: Metrics.radius-sm; clip: true;
         background: Theme.accent.with-alpha(0.15);
         if root.fm.has-cover: Image { width: parent.width; height: parent.height; source: root.fm.cover; image-fit: cover; }
-        if !root.fm.has-cover: Icon { x: (parent.width - 32px) / 2; y: (parent.height - 32px) / 2; width: 32px; height: 32px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; }
+        if !root.fm.has-cover: TriIcon { x: (parent.width - 32px) / 2; y: (parent.height - 32px) / 2; width: 32px; height: 32px; name: "music"; tint: Theme.accent; }
         if root.fm.badge != "": Rectangle {
             x: 6px; y: 6px; width: tb.preferred-width + 12px; height: 18px; border-radius: self.height / 2;
             background: Theme.bg-a3.with-alpha(0.85);
@@ -687,7 +692,7 @@ export component MusicDialog inherits Modal {
             }
             Rectangle {
                 horizontal-stretch: 1; height: 36px; border-radius: Metrics.radius-md; background: Theme.field;
-                Icon { x: 8px; width: 18px; height: 18px; source: @image-url("../assets/icons/search.svg"); tint: Theme.fg-a3; }
+                TriIcon { x: 8px; width: 18px; height: 18px; name: "search"; tint: Theme.fg-a3; }
                 TextField {
                     x: 28px; width: parent.width - 30px; height: parent.height; background: transparent;
                     text <=> root.query; placeholder: root.placeholder;
@@ -884,7 +889,7 @@ export component MusicDialog inherits Modal {
                             spacing: 2px; alignment: start;
                             for r[i] in root.results: SubRow {
                                 item: { key: r.key, label: r.label, selected: i == root.selected };
-                                icon: @image-url("../assets/icons/music.svg");
+                                icon: "music";
                                 logo: i < root.logos.length ? root.logos[i] : @image-url("");
                                 clicked => { ks.focus(); root.selected = i; root.select(i); }
                                 activated => { root.selected = i; root.select(i); root.primary(i); }
@@ -961,7 +966,7 @@ export component NowPlayingCard inherits Rectangle {
             width: 88px; height: 88px; border-radius: Metrics.radius-xl; clip: true;
             background: Theme.accent.with-alpha(0.18);
             if root.has-logo: Image { width: parent.width; height: parent.height; source: root.logo; image-fit: contain; }
-            if !root.has-logo: Icon { x: 22px; y: 22px; width: 44px; height: 44px; source: root.music ? @image-url("../assets/icons/music.svg") : @image-url("../assets/icons/streaming.svg"); tint: Theme.accent; }
+            if !root.has-logo: TriIcon { x: 22px; y: 22px; width: 44px; height: 44px; name: root.music ? "music" : "streaming"; tint: Theme.accent; }
         }
         VerticalLayout {
             alignment: center; spacing: 4px;
@@ -1415,7 +1420,7 @@ export component KaraokeView inherits Rectangle {
             alignment: center; spacing: 14px;
             HorizontalLayout { alignment: center;
                 Rectangle { width: 76px; height: 76px; border-radius: self.height / 2; background: Theme.accent.with-alpha(0.14);
-                    Icon { width: 34px; height: 34px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; } } }
+                    TriIcon { width: 34px; height: 34px; name: "music"; tint: Theme.accent; } } }
             Text { text: root.state == LyricsState.searching ? "Looking for lyrics…" : root.state == LyricsState.instrumental ? "Instrumental" : "No lyrics for this track"; color: Theme.stage-fg; font-size: Metrics.font-xxl; font-weight: 700; horizontal-alignment: center; }
             Text { text: root.state == LyricsState.instrumental ? "LRCLIB lists this track as instrumental. If it has words, search for them." : "Search LRCLIB by artist and title, or put a .lrc file next to the song."; color: Theme.fg-a2; font-size: Metrics.font-base; horizontal-alignment: center; }
             HorizontalLayout { alignment: center; padding-top: 6px;
@@ -1534,7 +1539,7 @@ export component LyricsSearchDialog inherits Modal {
             height: 44px; background: Theme.bg-b1;
             HorizontalLayout {
                 padding-left: 16px; padding-right: 8px; spacing: 8px;
-                Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/music.svg"); tint: Theme.accent; }
+                TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; name: "music"; tint: Theme.accent; }
                 Text { horizontal-stretch: 1; text: "Find Lyrics"; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; vertical-alignment: center; }
                 Text { text: "LRCLIB"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
                 VerticalLayout { alignment: center;

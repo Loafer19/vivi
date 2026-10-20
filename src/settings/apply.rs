@@ -33,6 +33,7 @@ pub fn apply_theme(a: &AppWindow, c: &Config) {
         _ => true,
     });
     t.set_accent(hex(&c.interface.accent));
+    t.set_bar_duo(config::bar_icons_name(&c.interface.bar_icons) == "Two-tone");
     a.global::<crate::Settings>()
         .set_accent_name(c.interface.accent.clone().into());
     AUTOHIDE_SECS.store(c.interface.autohide_secs.max(1), Ordering::Relaxed);
