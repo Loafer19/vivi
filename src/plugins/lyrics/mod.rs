@@ -24,6 +24,8 @@
 //! karaoke, fine-tuned with the same offset control (not saved). A new stream title
 //! drops the anchor.
 
+use super::lrclib::{self, cached_miss, non_empty, rank, read_cache, write_cache};
+pub use super::lrclib::{Fetched, LrclibItem, Track};
 use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
 use slint::ComponentHandle;
 use slint::{ModelRc, SharedString, VecModel};
@@ -395,7 +397,7 @@ impl Lyrics {
         }
         let key = self.path.clone().unwrap_or_default();
         self.task = crate::util::Task::spawn(move || {
-            let res = fetch_lrclib(&t);
+            let res = lrclib::fetch(&t);
             match &res {
                 Ok(f) => write_cache(&cache, f),
                 Err(e) => eprintln!("vivi: lyrics: {e}"),
@@ -627,7 +629,7 @@ impl Lyrics {
         cx.app
             .global::<crate::Lyrics>()
             .set_search_status("Searching LRCLIB…".into());
-        self.search.task = crate::util::Task::spawn(move || search_lrclib(&artist, &title));
+        self.search.task = crate::util::Task::spawn(move || lrclib::search(&artist, &title));
     }
 
     fn duration(&self, cx: &Ctx) -> f64 {
@@ -903,7 +905,7 @@ impl Lyrics {
                 return;
             }
         }
-        let offline = !cx.flag("online") || cache.with_extension("none").exists();
+        let offline = !cx.flag("online") || cached_miss(&cache).is_some();
         if offline {
             r.mem.insert(key.clone(), None);
         }
@@ -919,9 +921,7 @@ impl Lyrics {
                             let _ = std::fs::write(&cache, j);
                         }
                     }
-                    Ok(None) => {
-                        let _ = std::fs::write(cache.with_extension("none"), b"");
-                    }
+                    Ok(None) => write_cache(&cache, &Fetched::NotFound),
                     Err(e) => eprintln!("vivi: radio lyrics: {e}"),
                 }
                 (key, res.ok().flatten())
@@ -1265,21 +1265,6 @@ mod tests {
     }
 
     #[test]
-    fn rank_results() {
-        let it = |d: f64, s: bool| LrclibItem {
-            duration: Some(d),
-            synced: s.then(|| "[00:01.00]x".to_string()),
-            plain: Some("x".into()),
-            ..Default::default()
-        };
-        let mut v = vec![it(200.0, false), it(300.0, true), it(181.0, true)];
-        rank(&mut v, 180.0);
-        let d: Vec<f64> = v.iter().map(|i| i.duration.unwrap()).collect();
-        assert_eq!(d, [181.0, 300.0, 200.0]);
-        assert_eq!(v[2].best_text().unwrap(), "x");
-    }
-
-    #[test]
     fn karaoke_rows() {
         assert_eq!(wrap_rows(&["aaaa ", "bbbb ", "cc"], 10), [0, 0, 1]);
         assert_eq!(wrap_rows(&["a"], 10), [0]);
@@ -1359,6 +1344,16 @@ mod tests {
         assert_eq!(p("www.radio.fm - best hits"), None);
         assert_eq!(p("Just a title"), None);
         assert_eq!(p(" - "), None);
+        assert_eq!(p("Band — Song"), Some(("Band".into(), "Song".into())));
+        assert_eq!(p("Band ~ Song"), Some(("Band".into(), "Song".into())));
+        assert_eq!(
+            p("Band | Song (Live)"),
+            Some(("Band".into(), "Song".into()))
+        );
+        assert_eq!(p("'Band - Song'"), Some(("Band".into(), "Song".into())));
+        assert_eq!(p(" - Song"), None);
+        assert_eq!(p("Band - (Intro)"), None);
+        assert_eq!(p("??? - !!!"), None);
     }
 
     #[test]
@@ -1417,79 +1412,6 @@ mod tests {
         assert_eq!(plain_lines(&it), ["A", "B"]);
         assert!(it.has_lyrics());
         assert!(!LrclibItem::default().has_lyrics());
-    }
-
-    #[test]
-    fn pick_lyrics_or_instrumental() {
-        let it = |d: f64, synced: Option<&str>, plain: Option<&str>, inst: bool| LrclibItem {
-            duration: Some(d),
-            synced: synced.map(String::from),
-            plain: plain.map(String::from),
-            instrumental: Some(inst),
-            ..Default::default()
-        };
-        // Synced lyrics of the closest result win over the exact match's plain ones.
-        let exact = it(180.0, None, Some("plain"), false);
-        let v = vec![
-            it(300.0, Some("[00:01.00]far"), None, false),
-            it(181.0, Some("[00:01.00]near"), None, false),
-        ];
-        assert_eq!(
-            pick(Some(exact.clone()), v, 180.0),
-            Fetched::Lyrics("[00:01.00]near".into())
-        );
-        // Only plain lyrics: the exact match's first.
-        let v = vec![it(181.0, None, Some("other"), false)];
-        assert_eq!(
-            pick(Some(exact), v.clone(), 180.0),
-            Fetched::Lyrics("plain".into())
-        );
-        assert_eq!(pick(None, v, 180.0), Fetched::Lyrics("other".into()));
-        // Instrumental: the exact match says so, or a result of about the same length.
-        assert_eq!(
-            pick(Some(it(67.0, None, None, true)), vec![], 67.0),
-            Fetched::Instrumental
-        );
-        assert_eq!(
-            pick(None, vec![it(68.5, None, None, true)], 67.0),
-            Fetched::Instrumental
-        );
-        assert_eq!(
-            pick(None, vec![it(120.0, None, None, true)], 67.0),
-            Fetched::NotFound,
-            "other length"
-        );
-        // Any lyrics beat an instrumental flag.
-        let v = vec![
-            it(67.0, None, None, true),
-            it(90.0, None, Some("words"), false),
-        ];
-        assert_eq!(pick(None, v, 67.0), Fetched::Lyrics("words".into()));
-        assert_eq!(pick(None, vec![], 67.0), Fetched::NotFound);
-    }
-
-    #[test]
-    fn cache_misses_expire() {
-        let d = std::env::temp_dir().join(format!("vivi-lyr-miss-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        let stem = d.join("abc.lrc");
-        assert_eq!(cached_miss(&stem), None);
-        write_cache(&stem, &Fetched::NotFound);
-        assert_eq!(cached_miss(&stem), Some(Fetched::NotFound));
-        // A week-old "not found" is asked again.
-        let old = std::time::SystemTime::now() - Duration::from_secs(MISS_DAYS * 86_400 + 60);
-        std::fs::File::options()
-            .write(true)
-            .open(stem.with_extension("missing"))
-            .unwrap()
-            .set_modified(old)
-            .unwrap();
-        assert_eq!(cached_miss(&stem), None);
-        write_cache(&stem, &Fetched::Instrumental);
-        assert_eq!(cached_miss(&stem), Some(Fetched::Instrumental));
-        write_cache(&stem, &Fetched::Lyrics("[00:01.00]x".into()));
-        assert_eq!(read_cache(&stem).as_deref(), Some("[00:01.00]x"));
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
@@ -1576,18 +1498,5 @@ mod tests {
         assert!(!plain_lines(&it).is_empty());
         // Swapped "Title - Artist" still found through search.
         assert!(fetch_radio("Get Lucky", "Daft Punk").unwrap().is_some());
-    }
-
-    /// Network test; run with `cargo test -- --ignored`.
-    #[test]
-    #[ignore]
-    fn lrclib_live() {
-        let t = Track {
-            artist: "Borislav Slavov".into(),
-            title: "I Want to Live".into(),
-            album: "Baldur's Gate 3 (Original Game Soundtrack)".into(),
-            duration: 233.0,
-        };
-        assert!(matches!(fetch_lrclib(&t).unwrap(), Fetched::Lyrics(_)));
     }
 }

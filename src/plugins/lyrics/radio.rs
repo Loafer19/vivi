@@ -32,7 +32,8 @@ pub(crate) const NOT_SONG: &[&str] = &[
     "podcast",
 ];
 
-/// "Artist - Title" from a stream title, or None for ads, station IDs and the like.
+/// "Artist - Title" from a stream title (split by `nowplaying::split_icy_loose`), or None
+/// for ads, station IDs and the like.
 /// `station` (icy-name) is used to reject titles that are just the station's name.
 pub fn parse_stream_title(raw: &str, station: &str) -> Option<(String, String)> {
     let s = raw.trim().trim_matches(|c| c == '\'' || c == '"').trim();
@@ -44,11 +45,11 @@ pub fn parse_stream_title(raw: &str, station: &str) -> Option<(String, String)> 
     if !st.is_empty() && (low == st || low.starts_with(&format!("{st} -"))) {
         return None;
     }
-    let (a, t) = [" - ", " – ", " — ", " ~ ", " | "]
-        .iter()
-        .find_map(|sep| s.split_once(sep))?;
-    let artist = a.trim().to_string();
-    let title = clean_title(t);
+    let (artist, t) = crate::nowplaying::split_icy_loose(s);
+    if artist.is_empty() {
+        return None;
+    }
+    let title = clean_title(&t);
     let bad = |x: &str| x.is_empty() || x.chars().all(|c| !c.is_alphanumeric());
     if bad(&artist) || bad(&title) {
         return None;
@@ -99,29 +100,15 @@ pub(crate) fn norm(s: &str) -> String {
 /// `/api/search` keeping only results whose artist and title match (either way round,
 /// some stations send "Title - Artist").
 pub fn fetch_radio(artist: &str, title: &str) -> Result<Option<LrclibItem>, String> {
-    let a = agent();
-    match call(|| {
-        a.get("https://lrclib.net/api/get")
-            .query("artist_name", artist)
-            .query("track_name", title)
-            .call()
-    }) {
-        Ok(mut r) => {
-            let it: LrclibItem = r.body_mut().read_json().map_err(|e| e.to_string())?;
-            if it.has_lyrics() {
-                return Ok(Some(it));
-            }
-        }
-        Err(ureq::Error::StatusCode(404)) => {}
-        Err(e) => return Err(err(e)),
+    let q = Track {
+        artist: artist.into(),
+        title: title.into(),
+        ..Default::default()
+    };
+    if let Some(it) = lrclib::get(&q)?.filter(LrclibItem::has_lyrics) {
+        return Ok(Some(it));
     }
-    let mut r = call(|| {
-        a.get("https://lrclib.net/api/search")
-            .query("q", format!("{artist} {title}"))
-            .call()
-    })
-    .map_err(err)?;
-    let items: Vec<LrclibItem> = r.body_mut().read_json().map_err(|e| e.to_string())?;
+    let items = lrclib::search_all("", &format!("{artist} {title}"))?;
     let (na, nt) = (norm(artist), norm(title));
     let close =
         |x: &str, y: &str| !x.is_empty() && !y.is_empty() && (x.contains(y) || y.contains(x));

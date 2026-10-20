@@ -123,9 +123,30 @@ pub fn mbid(s: &str) -> String {
     }
 }
 
+/// Artist / title separators of ICY stream titles: hyphen, en and em dash.
+const ICY_DASHES: [&str; 3] = [" - ", " – ", " — "];
+/// Also taken by [`split_icy_loose`]: rarer separators, fine where a wrong split
+/// only costs a lookup (lyrics) but not for what the player shows.
+const ICY_LOOSE: [&str; 2] = [" ~ ", " | "];
+
 /// "Artist - Title" of an ICY stream title: (artist, title); no dash = title only.
+/// The first separator kind found wins, split at its first occurrence.
 pub fn split_icy(s: &str) -> (String, String) {
-    match s.split_once(" - ") {
+    split_on(s, &ICY_DASHES)
+}
+
+/// [`split_icy`] that also splits at " ~ " and " | " when no dash is found.
+pub fn split_icy_loose(s: &str) -> (String, String) {
+    let (a, t) = split_icy(s);
+    if a.is_empty() {
+        split_on(s, &ICY_LOOSE)
+    } else {
+        (a, t)
+    }
+}
+
+fn split_on(s: &str, seps: &[&str]) -> (String, String) {
+    match seps.iter().find_map(|sep| s.split_once(sep)) {
         Some((a, t)) if !a.trim().is_empty() && !t.trim().is_empty() => {
             (a.trim().to_string(), t.trim().to_string())
         }
@@ -523,6 +544,30 @@ mod tests {
         assert_eq!(
             split_icy("Station jingle"),
             ("".into(), "Station jingle".into())
+        );
+        assert_eq!(
+            split_icy("Massive Attack – Teardrop"),
+            ("Massive Attack".into(), "Teardrop".into())
+        );
+        assert_eq!(split_icy("Band — Song"), ("Band".into(), "Song".into()));
+        assert_eq!(split_icy(" - Song"), ("".into(), "- Song".into()));
+        assert_eq!(
+            split_icy("Station | Morning Show"),
+            ("".into(), "Station | Morning Show".into()),
+            "only dashes for what the player shows"
+        );
+        assert_eq!(
+            split_icy_loose("Band | Song"),
+            ("Band".into(), "Song".into())
+        );
+        assert_eq!(
+            split_icy_loose("Band ~ Song"),
+            ("Band".into(), "Song".into())
+        );
+        assert_eq!(
+            split_icy_loose("A | B - C"),
+            ("A | B".into(), "C".into()),
+            "a dash wins"
         );
     }
 

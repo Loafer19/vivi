@@ -1,14 +1,6 @@
-//! Tracks and LRC parsing (line and word timings), local `.lrc` lookup.
+//! LRC parsing (line and word timings), local `.lrc` lookup.
 
 use super::*;
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Track {
-    pub artist: String,
-    pub title: String,
-    pub album: String,
-    pub duration: f64,
-}
 
 /// Timed words of a line: (start seconds, text).
 pub type Words = Vec<(f64, String)>;

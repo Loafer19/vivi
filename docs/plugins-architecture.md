@@ -42,10 +42,11 @@ struct and manifest ID agree. `mod.rs` holds the plugin itself (state, UI update
 | --- | --- |
 | `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply · `cache.rs` per-file AcoustID answers (path + size + mtime, 300 files, 0600) · `mod.rs` also identifies untagged songs while playing (`auto-identify`) |
 | `free_music` (`free-music`) | `catalog.rs` track / licence / query model · `api.rs` Internet Archive + Jamendo clients, downloader |
-| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded / cache / LRCLIB (instrumental, "not found" expiry), offsets · `radio.rs` stream-title lookups · `mod.rs` songs from the shared now-playing track (music services, Auto-tagger) |
+| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded lyrics, cache locations, offsets · `radio.rs` stream-title lookups (titles split by `nowplaying::split_icy_loose`) · `mod.rs` songs from the shared now-playing track (music services, Auto-tagger) |
 | `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists |
 | `subtitle_search` (`subtitle-search`) | `api.rs` OpenSubtitles hash, search, download · `files.rs` picks, folder pairing |
 | `skip_intro`, `epg`, `tagsources` | single files |
+| `lrclib` (no plugin) | LRCLIB client for Lyrics and the Auto-tagger (`tagsources`): `/api/get` + `/api/search` with one User-Agent and 12 s timeout, 503 / 429 retried (1 s, 2 s), ranking and `pick` (synced → plain → instrumental), answer cache files (`.lrc` / `.txt` / `.instrumental` 30 days / `.missing` 7 days) |
 
 Wire formats live in `plugins/protocol.rs`: `PluginCommand` for the UI's
 `plugin-command(id, name, args)` callback (arguments packed with U+001F, see `split_args`
@@ -242,7 +243,8 @@ still load. Packages that never send these messages are unaffected.
 normalized, as one mpv node map `user-data/vivi/now-playing`, so packages do not each
 re-read tags, ICY titles and other packages' metadata. Per field the first non-empty value
 wins: the package metadata of the URL (`vivi-media-meta`), the file's tags, the stream
-title of Shoutcast / Icecast radio (`icy-title` "Artist - Title", station `icy-name`),
+title of Shoutcast / Icecast radio (`icy-title` "Artist - Title", also with an en / em
+dash; station `icy-name`),
 the library database, then mpv's `media-title`. Keys: `title`, `artist`, `album`,
 `album_artist`, `genre` (strings, "" = unknown), `track` (int, 0 = unknown), `duration`
 (seconds, 0 = unknown / live), `cover` (http(s) URL from the package, else a `file://`

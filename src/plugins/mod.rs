@@ -24,6 +24,7 @@ pub mod contrib;
 pub mod epg;
 pub mod free_music;
 pub mod host;
+pub mod lrclib;
 pub mod lyrics;
 pub mod network_streams;
 pub mod packages;

@@ -12,7 +12,7 @@
 //! * **LRCLIB** (shared with the Lyrics plugin): synced lyrics (LRC) to embed.
 
 use super::auto_tagger::{Alt, Candidate};
-use super::lyrics;
+use super::lrclib;
 use super::web;
 
 /// Which sources to ask (from the Auto-tagger settings).
@@ -326,14 +326,14 @@ pub fn enrich(c: &mut Candidate, o: &Opts, duration: f64) -> Vec<String> {
         }));
     }
     if o.lyrics {
-        let t = lyrics::Track {
+        let t = lrclib::Track {
             artist: artist.clone(),
             title: title.clone(),
             album: c.tags.album.clone(),
             duration,
         };
-        note(lyrics::fetch_lrclib(&t).map(|l| {
-            if let lyrics::Fetched::Lyrics(l) = l {
+        note(lrclib::fetch(&t).map(|l| {
+            if let lrclib::Fetched::Lyrics(l) = l {
                 let synced = !super::auto_tagger::lrc_lines(&l).is_empty();
                 c.tags.lyrics = l;
                 c.sources.push((
