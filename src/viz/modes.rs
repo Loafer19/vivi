@@ -105,7 +105,8 @@ impl Visual for Scope {
 /// Classic spectrum bars with peak caps.
 #[derive(Default)]
 struct Spectrum {
-    peaks: Vec<f32>,
+    /// Peak cap height and its falling speed per bar.
+    peaks: Vec<(f32, f32)>,
 }
 impl Visual for Spectrum {
     fn name(&self) -> &'static str {
@@ -113,7 +114,7 @@ impl Visual for Spectrum {
     }
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette) {
         c.clear(p.bg);
-        self.peaks.resize(BANDS, 0.0);
+        self.peaks.resize(BANDS, (0.0, 0.0));
         let (w, h) = (c.w as f32, c.h as f32);
         let slot = w / BANDS as f32;
         let gap = (slot * 0.25).max(1.0);
@@ -139,8 +140,15 @@ impl Visual for Spectrum {
                 p.accent,
                 0.25,
             );
-            let pk = &mut self.peaks[i];
-            *pk = if v > *pk { v } else { (*pk - 0.006).max(0.0) };
+            // Caps hold, then fall faster and faster, so they land with the bars when
+            // the music pauses (a linear fall left them floating over empty bars).
+            let (pk, fall) = &mut self.peaks[i];
+            if v >= *pk {
+                (*pk, *fall) = (v, 0.0);
+            } else {
+                *fall += 0.0008;
+                *pk = (*pk - *fall).max(v);
+            }
             let py = base - *pk * h * 0.82 - 4.0;
             c.rect(x0, py, x0 + slot - gap, py + 2.0, top, 0.9);
         }

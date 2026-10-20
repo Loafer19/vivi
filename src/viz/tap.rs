@@ -26,7 +26,12 @@ const KEEP: usize = 200;
 
 /// Centre frequency of band `i`.
 pub fn band_freq(i: usize) -> f32 {
-    F_LO * (F_HI / F_LO).powf(i as f32 / (BANDS - 1) as f32)
+    band_freq_at(i as f32)
+}
+
+/// Frequency at fractional band position `x` (log scale between band centres).
+pub fn band_freq_at(x: f32) -> f32 {
+    F_LO * (F_HI / F_LO).powf(x / (BANDS - 1) as f32)
 }
 
 /// One measured frame: timestamp (s) and linear RMS (0..1) of the full band and each band.
@@ -256,6 +261,8 @@ mod tests {
         let url = wav.to_string_lossy().into_owned();
         let f = play(&url, None);
         assert!((peak(&f) / 440.0).log2().abs() < 0.2, "peak {}", peak(&f));
+        // The note survives the band measurement (A, not the nearest band centre).
+        assert_eq!(super::super::tests::pitch_of(&f), 9);
         assert!(f.full > 0.2, "{}", f.full);
         // An "EQ" in front (-20 dB) is reflected.
         let q = play(&url, Some("@vivi-eq:lavfi=[volume=0.1]"));

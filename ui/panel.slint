@@ -263,6 +263,7 @@ export component SidePanel inherits Rectangle {
     in property <string> ab-state: "Off";
     in property <string> sleep-state: "";
     in property <string> hwdec: "auto-safe";
+    in property <bool> viz-enabled: true;
     in property <[string]> viz-modes: ["Disabled"];
     in property <int> viz-mode;
     callback viz-select(int);
@@ -380,7 +381,7 @@ export component SidePanel inherits Rectangle {
                             Toggle { on: root.stats-on; toggled => { root.stats-on = !root.stats-on; root.run("script-binding stats/display-stats-toggle"); } } }
                         Line { label: "Subtitle Timeline on Seekbar"; hint: "Coming soon";
                             Toggle { on: root.sub-timeline; enabled: false; toggled => { root.sub-timeline = !root.sub-timeline; } } }
-                        Line { label: "Audio Visualizer"; hint: "Audio-only files";
+                        if root.viz-enabled: Line { label: "Audio Visualizer"; hint: "Music and radio (no video)";
                             Dropdown { width: 170px; options: root.viz-modes; value: root.viz-modes.length > root.viz-mode ? root.viz-modes[root.viz-mode] : ""; selected(i, o) => { root.viz-select(i); } } }
                     }
                     Group { title: "Control";

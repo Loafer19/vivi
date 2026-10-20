@@ -47,7 +47,7 @@ impl Rgb {
 }
 
 /// Colours a mode draws with: theme accent and background.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
     pub accent: Rgb,
     pub bg: Rgb,

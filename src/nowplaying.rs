@@ -368,7 +368,11 @@ pub fn refresh() {
             s.library = lib;
         });
         let out = art_file(&path);
-        if Path::new(&path).is_file() && !out.exists() && crate::library::ffmpeg_available() {
+        if Path::new(&path).is_file()
+            && !out.exists()
+            && !crate::library::known_without_art(&path, &out)
+            && crate::library::ffmpeg_available()
+        {
             let pc = path.clone();
             std::thread::spawn(move || crate::library::make_art(&pc, &out));
         }

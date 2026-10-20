@@ -142,17 +142,13 @@ pub(crate) fn wire(
                 let d = if s.eq_ignore_ascii_case("z") { -d } else { d };
                 suboffset::command(&a, &p, &d.to_string());
             }
+            // V next, Shift+V previous mode; other media keep the key for mpv.
             A::Visualizer => {
-                let n = a.global::<crate::Viz>().get_modes().row_count() as i32;
-                if !(a.global::<crate::Playback>().get_has_media()
-                    && a.global::<crate::Viz>().get_audio())
-                    || n == 0
-                {
+                let back = shift || s == "V";
+                if !crate::viz::step(&a, if back { -1 } else { 1 }) {
                     forward_key(&p, s, ctrl, alt);
                     return false;
                 }
-                a.global::<crate::Viz>()
-                    .invoke_select((a.global::<crate::Viz>().get_mode() + 1).rem_euclid(n));
             }
             A::Record => a.global::<crate::Playback>().invoke_toggle_record(),
             A::HideUi => toggle_ui_hidden(&a),

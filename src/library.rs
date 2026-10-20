@@ -358,11 +358,32 @@ pub fn make_art(path: &str, out: &Path) {
     let ok = cmd
         .args(["-i", path, "-an", "-frames:v", "1", "-vf", "scale=256:-2"])
         .arg(&tmp)
+        .stderr(std::process::Stdio::null())
         .status()
         .is_ok_and(|s| s.success());
     if ok {
         let _ = std::fs::rename(&tmp, out);
+    } else {
+        // No picture (audio without embedded cover art): remember it, so ffmpeg is not
+        // run again every time the file plays.
+        let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::write(no_art_marker(out), b"");
     }
+}
+
+/// Marker [`make_art`] leaves next to `out` when the file has no picture.
+fn no_art_marker(out: &Path) -> PathBuf {
+    out.with_extension("none")
+}
+
+/// [`make_art`] found no picture in `path` since it last changed (a file that gets a
+/// cover later, e.g. from the Auto-tagger, is tried again).
+pub fn known_without_art(path: &str, out: &Path) -> bool {
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    matches!(
+        (modified(&no_art_marker(out)), modified(Path::new(path))),
+        (Some(marker), Some(file)) if marker >= file
+    )
 }
 
 /// Background worker: receives media, produces thumbnails, reports the path back.
@@ -390,6 +411,32 @@ pub fn ytdlp_available() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn art_marker_for_files_without_pictures() {
+        if !ffmpeg_available() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("vivi-art-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("not-audio.mp3");
+        std::fs::write(&f, b"no picture here").unwrap();
+        let src = f.to_string_lossy().into_owned();
+        let out = dir.join("art.png");
+        make_art(&src, &out);
+        assert!(!out.exists());
+        assert!(known_without_art(&src, &out));
+        // A file changed after the attempt (new cover art) is tried again.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+        std::fs::File::options()
+            .write(true)
+            .open(&f)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        assert!(!known_without_art(&src, &out));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     #[test]
     fn natural_order() {
         let mut v = vec!["Ep 10", "Ep 2", "ep 1"];

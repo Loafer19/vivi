@@ -16,7 +16,7 @@ Status: implemented in v0.9.0. Developer-facing guide: <https://plugins.viviplay
 
 | Plugin | Why built in |
 | --- | --- |
-| Music Visualizer | Core feature; renders through the Rust FFT/`viz` pipeline and Slint, 60 fps. |
+| Music Visualizer | Needs a per-frame audio tap (an `af` lavfi filter kept last in mpv's chain, read on a socket), Rust analysis (band levels, onsets, chroma) and a software canvas handed to Slint at ~30 fps; a script could not draw at that rate. |
 | Skip Intro & Credits | Draws a Slint button over the video; needs the Rust UI. |
 | Lyrics | Karaoke overlay is a Slint component synced to the player clock. |
 | Subtitle Search | Lives inside the Add Subtitles dialog (Slint): results with badges, details and preview; picks in `subtitle-picks.json`. The per-file subtitle offset is core (src/suboffset.rs, below), not part of this plugin. |

@@ -136,7 +136,7 @@ fix. Results always carry `structuredContent`; list tools take `offset` / `limit
 | `get_chapters` | – | `current` index and `chapters` (`index`, `title`, `start` s) |
 | `seek_chapter` | `index` *or* `offset` (+1/-1) | Jump to a chapter |
 
-**Audio, lyrics, screenshots**
+**Audio, lyrics, visualizer, screenshots**
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -144,6 +144,7 @@ fix. Results always carry `structuredContent`; list tools take `offset` / `limit
 | `get_lyrics` | – | Lines shown by the Lyrics plugin, `synced`, `current_line`, `source`, `offset_seconds`, `karaoke` |
 | `set_lyrics_offset` | `seconds` *or* `delta` *or* `reset` | Synced-lyrics timing (±30 s), saved per track |
 | `set_karaoke` | `enabled` | Open or close the karaoke view |
+| `set_visualizer` | `mode` (name, `next` or `prev`; optional) | Music visualizer mode (remembered); returns `mode`, `modes` and `showing` (music or radio without video is playing) |
 | `screenshot` | `mode` (`subtitles`/`video`/`window`), `path`, `overwrite`, `save`, `image` | Captures the frame and returns it as **image content** (≤ 4 MB) plus the saved path; `save: false` keeps no file. `path` must be an absolute `.png`/`.jpg`/`.webp` that does not exist (unless `overwrite`). Errors on audio-only items |
 
 **Plugins**

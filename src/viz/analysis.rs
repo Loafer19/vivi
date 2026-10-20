@@ -5,8 +5,35 @@ use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::sync::Arc;
 
 pub const BANDS: usize = 64;
+/// Same range as the tap measures (`tap::band_freq`): bands above it would stay empty.
 const F_LO: f32 = 30.0;
-const F_HI: f32 = 16_000.0;
+const F_HI: f32 = 14_000.0;
+
+/// Band levels measured by the tap: linear RMS per band, log-spaced from `f_lo` to `f_hi`,
+/// and the tones estimated from them (frequency, RMS).
+pub struct Measured<'a> {
+    pub levels: &'a [f32],
+    pub f_lo: f32,
+    pub f_hi: f32,
+    pub tones: &'a [(f32, f32)],
+}
+
+impl Measured<'_> {
+    /// Level at frequency `f`, interpolated in dB between the two nearest bands.
+    fn at(&self, f: f32) -> f32 {
+        let n = self.levels.len();
+        if n == 0 {
+            return 0.0;
+        }
+        let x = ((f / self.f_lo).ln() / (self.f_hi / self.f_lo).ln() * (n - 1) as f32)
+            .clamp(0.0, (n - 1) as f32);
+        let i = (x as usize).min(n - 1);
+        let j = (i + 1).min(n - 1);
+        let db = |v: f32| 20.0 * (v + 1e-9).log10();
+        let d = db(self.levels[i]) + (db(self.levels[j]) - db(self.levels[i])) * (x - i as f32);
+        10f32.powf(d / 20.0)
+    }
+}
 
 /// What the visual modes get every frame.
 pub struct Features {
@@ -109,7 +136,10 @@ impl Analyzer {
     }
 
     /// Analyse `samples` (len == `self.len()`), `dt` = seconds since the last frame.
-    pub fn process(&mut self, samples: &[f32], dt: f32) {
+    /// With `measured` the spectrum bands come from those levels instead of the FFT,
+    /// whose bins are wider than the low bands (neighbouring bars used to share one bin
+    /// and move as blocks).
+    pub fn process(&mut self, samples: &[f32], measured: Option<&Measured>, dt: f32) {
         let n = self.n;
         let f = &mut self.f;
         f.time += dt;
@@ -151,6 +181,20 @@ impl Analyzer {
             }
         }
 
+        // With measured tones the chroma comes from their frequencies: the FFT's 23 Hz
+        // bins are wider than a semitone below ~400 Hz, so a 220 Hz A read as G♯ / A♯.
+        if let Some(m) = measured.filter(|m| !m.tones.is_empty()) {
+            chroma = [0.0; 12];
+            for &(fr, rms) in m.tones {
+                if rms > 0.0 && (55.0..2000.0).contains(&fr) {
+                    let note = 12.0 * (fr / 440.0).log2() + 69.0;
+                    let pc = (note.round() as i64).rem_euclid(12) as usize;
+                    let w = 1.0 - (note - note.round()).abs() * 1.5;
+                    chroma[pc] += rms * rms * w.max(0.0);
+                }
+            }
+        }
+
         // Log-spaced bands, levels in dB mapped to 0..1 (-60 dB .. 0 dB).
         let ratio = (F_HI / F_LO).powf(1.0 / BANDS as f32);
         for b in 0..BANDS {
@@ -161,10 +205,16 @@ impl Analyzer {
                 ((hi / hz) as usize).max((lo / hz) as usize + 1),
             );
             let k1 = k1.min(n / 2);
-            let mut peak = 0.0f32;
-            for k in k0.max(1)..k1.max(k0.max(1) + 1).min(n / 2) {
-                peak = peak.max(self.prev_mag[k]);
-            }
+            let peak = if let Some(m) = measured {
+                // Peak amplitude of a sine with that RMS, like the FFT peak below.
+                m.at((lo * hi).sqrt()) * std::f32::consts::SQRT_2
+            } else {
+                let mut peak = 0.0f32;
+                for k in k0.max(1)..k1.max(k0.max(1) + 1).min(n / 2) {
+                    peak = peak.max(self.prev_mag[k]);
+                }
+                peak
+            };
             // Gentle tilt so highs are not always flat on music (pink spectrum).
             let tilt = 1.0 + b as f32 / BANDS as f32 * 2.0;
             let db = 20.0 * (peak * tilt + 1e-9).log10();
@@ -228,12 +278,40 @@ mod tests {
             .map(|i| 0.5 * (std::f32::consts::TAU * 440.0 * i as f32 / rate as f32).sin())
             .collect();
         for _ in 0..10 {
-            an.process(&s, 0.033);
+            an.process(&s, None, 0.033);
         }
         assert_eq!(an.f.pitch, 9);
         assert!(an.f.level > 0.3);
         // 440 Hz lands in the lower-middle bands, highs stay quiet.
         let peak = (0..BANDS).max_by(|&a, &b| an.f.bands[a].total_cmp(&an.f.bands[b]));
         assert!((20..40).contains(&peak.unwrap()), "{peak:?}");
+    }
+
+    /// Measured levels give every bar its own value: no blocks of equal low bars, and
+    /// the top bar is not empty.
+    #[test]
+    fn measured_bands_are_smooth() {
+        let rate = 48_000;
+        let mut an = Analyzer::new(rate);
+        let s = vec![0.0; an.len()];
+        // Falling 1 dB per measured band (steeper than the display tilt).
+        let levels: Vec<f32> = (0..48)
+            .map(|i| 0.5 * 10f32.powf(-(i as f32) / 20.0))
+            .collect();
+        let m = Measured {
+            levels: &levels,
+            f_lo: 30.0,
+            f_hi: 14_000.0,
+            tones: &[],
+        };
+        for _ in 0..30 {
+            an.process(&s, Some(&m), 0.033);
+        }
+        let b = an.f.bands;
+        for i in 1..BANDS {
+            assert!(b[i] < b[i - 1], "band {i}: {} !< {}", b[i], b[i - 1]);
+        }
+        assert!(b[BANDS - 1] > 0.1, "{}", b[BANDS - 1]);
+        assert!((m.at(30.0) - 0.5).abs() < 1e-3 && (m.at(14_000.0) - levels[47]).abs() < 1e-3);
     }
 }

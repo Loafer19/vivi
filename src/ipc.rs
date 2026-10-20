@@ -915,6 +915,26 @@ fn handle(
             );
             Ok(json!({ "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }))
         }
+        "visualizer" => {
+            match args["mode"].as_str().map(str::trim) {
+                None | Some("") => {}
+                Some(m) if m.eq_ignore_ascii_case("next") || m.eq_ignore_ascii_case("prev") => {
+                    if !crate::viz::step(
+                        a,
+                        if m.eq_ignore_ascii_case("next") {
+                            1
+                        } else {
+                            -1
+                        },
+                    ) {
+                        return Err("the visualizer is not showing: it needs music or radio without video, and the Music Visualizer plugin on".into());
+                    }
+                }
+                Some(m) => crate::viz::select(a, m)?,
+            }
+            let (mode, modes, showing) = crate::viz::state(a);
+            Ok(json!({ "mode": mode, "modes": modes, "showing": showing }))
+        }
         "" => Err("missing \"cmd\"".into()),
         _ => Err(format!("unknown command {cmd:?}")),
     }

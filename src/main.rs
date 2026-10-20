@@ -42,7 +42,7 @@ use app::keys::{forward_key, key_debug, LAST_PHYSICAL};
 use app::panel::*;
 use app::session::*;
 use player::{Player, PlayerEvent};
-use slint::{ComponentHandle, Model};
+use slint::ComponentHandle;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;

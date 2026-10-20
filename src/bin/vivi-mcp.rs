@@ -304,6 +304,8 @@ fn tools() -> Vec<Tool> {
             json!({ "seconds": { "type": "number", "minimum": -30, "maximum": 30 }, "delta": { "type": "number" }, "reset": { "type": "boolean" } }), &[]),
         tool("set_karaoke", "Karaoke view", "karaoke", "Open (enabled: true) or close the full-screen karaoke lyrics view.",
             json!({ "enabled": { "type": "boolean" } }), &["enabled"]),
+        tool("set_visualizer", "Music visualizer", "visualizer", "Music visualizer mode for music and radio without video (Music Visualizer plugin): give mode as a name (Disabled, Spectrometer, Scope, Spectrum, Waveform, Radial, Particles, Pitch), next or prev; without mode it only reports. Returns the mode, all modes and whether it is showing now. The choice is remembered.",
+            json!({ "mode": { "type": "string", "minLength": 1 } }), &[]),
         // Screenshot
         tool("screenshot", "Screenshot", "screenshot", "Capture the current video frame. Returns the image (so you can see it) and the saved file path. save: false returns the image without keeping a file. Default folder: Settings → Video → screenshot folder. Errors on audio-only items.",
             json!({ "mode": { "type": "string", "enum": ["subtitles", "video", "window"], "description": "subtitles (default): video + subtitles; video: video only; window: as shown" },

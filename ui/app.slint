@@ -713,7 +713,7 @@ export component AppWindow inherits Window {
         // Centred in the space right of the docked library while that is shown.
         property <length> left: Overlays.library-open && !Library.full && root.show-ui ? min(427px, root.width) : 0px;
         x: self.left + (root.width - self.left - self.width) / 2;
-        y: Viz.mode > 0 ? 64px : (root.height - self.height) / 2;
+        y: Viz.audio && Viz.mode > 0 ? 64px : (root.height - self.height) / 2;
         width: min(460px, root.width - self.left - 48px);
         station: NowPlaying.station; track: NowPlaying.track; info: NowPlaying.info;
         logo: NowPlaying.logo; has-logo: NowPlaying.has-logo; music: NowPlaying.music;
@@ -835,7 +835,7 @@ export component AppWindow inherits Window {
         add-bookmark() => { Panel.add-bookmark(); }
         remove-bookmark() => { Panel.remove-bookmark(); }
         chapter-times: Panel.chapter-times;
-        viz-modes: Viz.modes; viz-mode: Viz.mode;
+        viz-enabled: Viz.enabled; viz-modes: Viz.modes; viz-mode: Viz.mode;
         viz-select(i) => { Viz.select(i); }
         lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: Lyrics.source;
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;

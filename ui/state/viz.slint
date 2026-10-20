@@ -1,5 +1,7 @@
 // Music visualizer (src/viz): shown for audio-only media; frame, note, mode (0 = Disabled) and the mode list.
+// `enabled`: the plugin is on (Settings → Extensions); `audio`: it is on and the media has no video.
 export global Viz {
+    in-out property <bool> enabled: true;
     in-out property <bool> audio;
     in-out property <image> frame;
     in-out property <string> note;
