@@ -203,7 +203,6 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `videos-selected.svg` | r06c02 |
 | `view.svg` | r09c00 |
 | `view-active.svg` | r09c01 |
-| `vlc.svg` | r08c09 |
 | `volume-high.svg` | r03c06 |
 | `waveform-twotone.svg` | r01c07 |
 | `window.svg` | r11c05 |

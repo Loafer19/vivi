@@ -53,6 +53,7 @@
 - **Free Music: licence and cover while you choose and play**: selecting a track shows its large cover above the details (licence, what it allows, attribution, source page), and a playing Free Music song shows its source and Creative Commons licence on the now-playing card's info line (e.g. *Jamendo · CC BY-SA 3.0 · MP3 · 147 kbps*). *Web page* is now *Open on Jamendo* / *Open on Internet Archive*.
 
 ### Changed
+- **New app logo** (a rounded play triangle; window, tray, About and package icons), also shown on the onboarding welcome step and the empty library (*Your library is empty*) instead of the VLC-style cone.
 - **Settings → Privacy**: the dead *Submit played tracks to last.fm* / *Last.fm username* rows are replaced by one row that points to the Scrobbler extension (Last.fm, ListenBrainz) with **Install** (the Extensions flow with its permission prompt, enabled once installed), **Enable** or **Settings**. Scrobbler is marked *Recommended* in the catalog.
 - `config.toml` is written owner-only (0600 on Unix): extension settings in it can be tokens.
 - The Chapters list reads chapter pictures only from Chapters & Previews (`plugin-data/chapter-thumbnails`): the pictures Scene Chapters 1.0.x saved were not redone when chapters changed (Scene Chapters 1.1 makes none).
