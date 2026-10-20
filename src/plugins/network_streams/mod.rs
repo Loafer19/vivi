@@ -78,11 +78,13 @@ fn live_filter(mode: usize) -> bool {
 const PICK: &str = "pick";
 const IPTV: &str = "https://iptv-org.github.io/iptv";
 const IPTV_API: &str = "https://iptv-org.github.io/api";
-/// radio-browser.info mirrors, tried in order.
-const SERVERS: [&str; 3] = [
+/// radio-browser.info mirrors used when the server list cannot be fetched (`all` is the
+/// DNS round robin of every mirror). The live list comes from [`radio_servers`].
+const FALLBACK_SERVERS: [&str; 4] = [
+    "https://all.api.radio-browser.info",
     "https://de1.api.radio-browser.info",
+    "https://de2.api.radio-browser.info",
     "https://fi1.api.radio-browser.info",
-    "https://at1.api.radio-browser.info",
 ];
 const MAX_RECENT: usize = 30;
 
@@ -111,6 +113,9 @@ pub struct Stream {
     /// XMLTV guide URL from the playlist header (`url-tvg` / `x-tvg-url`).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub epg: String,
+    /// radio-browser.info station id (its click counter is `/json/url/<id>`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub stationuuid: String,
 }
 
 impl Stream {
@@ -222,6 +227,8 @@ pub struct NetworkStreams {
     /// Results shown as logo tiles (the "view" setting); row logos are then decoded at
     /// tile size.
     grid: bool,
+    /// URL last checked by `is_station` and whether it is one of our stations.
+    known: (String, bool),
 }
 
 impl NetworkStreams {
@@ -492,8 +499,9 @@ impl NetworkStreams {
         }
         cx.player.cmd("loadfile", &[&s.url]);
         self.playing = Some(s.clone());
+        self.known.0.clear();
         if s.source == "radio-browser.info" {
-            radio_click(&s.url);
+            radio_click(&s.stationuuid);
         }
         let mut r = load_list("recent.json");
         push_front(&mut r, s, MAX_RECENT);
@@ -598,11 +606,7 @@ fn store_logo(base: &Path, b: &[u8]) -> Option<PathBuf> {
 
 /// Station logo already in the cache (no download, no decoding).
 pub(crate) fn cached_logo(url: &str) -> Option<PathBuf> {
-    let base = logo_dir().join(hash_name(url));
-    ["png", "svg"]
-        .iter()
-        .map(|e| base.with_extension(e))
-        .find(|p| p.is_file())
+    cached_with_ext(&logo_dir(), url, &["png", "svg"])
 }
 
 /// Older versions saved logos as they came, without an extension, so Slint could not tell
@@ -646,7 +650,7 @@ fn fetch_logo(url: &str) -> Option<PathBuf> {
     }
     let dir = logo_dir();
     let base = dir.join(hash_name(url));
-    let miss = base.with_extension("none");
+    let miss = hashed_file(&dir, url, |h| format!("{h}.none"));
     // Broken logo URLs are remembered for a week instead of being retried every time.
     if std::fs::metadata(&miss)
         .and_then(|m| m.modified())
@@ -667,12 +671,86 @@ fn fetch_logo(url: &str) -> Option<PathBuf> {
     stored
 }
 
-/// Short stable file name for a URL.
+/// Short stable file name for a URL: FNV-1a 64 of its bytes, 16 hex digits. Used for
+/// every URL-keyed cache file (station logos, guides, covers, web thumbnails, playlist
+/// copies), so it must never change between builds.
 pub fn hash_name(url: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    url.hash(&mut h);
-    format!("{:016x}", h.finish())
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in url.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
+/// The name Vivi 0.12 and older gave `url`: `DefaultHasher` (SipHash-1-3 with zero keys)
+/// of `str::hash`, i.e. the bytes and a `0xff` terminator. The standard library may change
+/// that hasher in any release, so it is spelled out here to keep finding old cache files.
+pub fn legacy_hash_name(url: &str) -> String {
+    let mut m = url.as_bytes().to_vec();
+    m.push(0xff);
+    format!("{:016x}", siphash13(&m))
+}
+
+/// SipHash-1-3 with zero keys, as `std::hash::SipHasher13::new()` (length in the last byte).
+fn siphash13(m: &[u8]) -> u64 {
+    let mut v = [
+        0x736f_6d65_7073_6575u64,
+        0x646f_7261_6e64_6f6du64,
+        0x6c79_6765_6e65_7261u64,
+        0x7465_6462_7974_6573u64,
+    ];
+    fn round(v: &mut [u64; 4]) {
+        v[0] = v[0].wrapping_add(v[1]);
+        v[1] = v[1].rotate_left(13) ^ v[0];
+        v[0] = v[0].rotate_left(32);
+        v[2] = v[2].wrapping_add(v[3]);
+        v[3] = v[3].rotate_left(16) ^ v[2];
+        v[0] = v[0].wrapping_add(v[3]);
+        v[3] = v[3].rotate_left(21) ^ v[0];
+        v[2] = v[2].wrapping_add(v[1]);
+        v[1] = v[1].rotate_left(17) ^ v[2];
+        v[2] = v[2].rotate_left(32);
+    }
+    let (words, rest) = m.as_chunks::<8>();
+    for c in words {
+        let w = u64::from_le_bytes(*c);
+        v[3] ^= w;
+        round(&mut v);
+        v[0] ^= w;
+    }
+    let mut last = [0u8; 8];
+    last[..rest.len()].copy_from_slice(rest);
+    let w = u64::from_le_bytes(last) | ((m.len() as u64 & 0xff) << 56);
+    v[3] ^= w;
+    round(&mut v);
+    v[0] ^= w;
+    v[2] ^= 0xff;
+    for _ in 0..3 {
+        round(&mut v);
+    }
+    v[0] ^ v[1] ^ v[2] ^ v[3]
+}
+
+/// `dir/name(hash_name(url))`. When only the file of the old name
+/// ([`legacy_hash_name`]) exists, it is renamed first, so caches written by Vivi 0.12 and
+/// older (logos, guides, covers, thumbnails, last good playlist copies) keep working.
+pub fn hashed_file(dir: &Path, url: &str, name: impl Fn(&str) -> String) -> PathBuf {
+    let new = dir.join(name(&hash_name(url)));
+    if !new.exists() {
+        let old = dir.join(name(&legacy_hash_name(url)));
+        if old.is_file() {
+            let _ = std::fs::rename(&old, &new);
+        }
+    }
+    new
+}
+
+/// The first of `dir/<hash>.<ext>` for `exts` that exists (old names migrated).
+pub fn cached_with_ext(dir: &Path, url: &str, exts: &[&str]) -> Option<PathBuf> {
+    exts.iter()
+        .map(|e| hashed_file(dir, url, |h| format!("{h}.{e}")))
+        .find(|p| p.is_file())
 }
 
 /// Keep the logo cache under `max` bytes (oldest files go first).
@@ -700,7 +778,61 @@ fn prune_logos(max: u64) {
     }
 }
 
+/// Whether an audio-only URL plays like a radio station (the station card) rather than a
+/// song file on a server (Free Music, a podcast episode): a station of ours, a stream
+/// title (ICY), or no known length.
+pub(crate) fn looks_like_station(known: bool, get: impl Fn(&str) -> Option<String>) -> bool {
+    if known {
+        return true;
+    }
+    let has = |k: &str| get(k).is_some_and(|v| !v.trim().is_empty());
+    if has("metadata/by-key/icy-name") || has("metadata/by-key/icy-title") {
+        return true;
+    }
+    !get("duration")
+        .and_then(|d| d.parse::<f64>().ok())
+        .is_some_and(|d| d > 0.0)
+}
+
+/// The side drawer panel: the stream playing now (station, ICY title, codec, buffer) or
+/// a hint, and how many favorites / recent streams there are (the manifest description
+/// used to be shown there).
+pub fn drawer_text(
+    station: Option<&Stream>,
+    stream: bool,
+    info: &str,
+    favorites: usize,
+    recent: usize,
+) -> String {
+    let mut s = String::new();
+    if let Some(st) = station {
+        s += &format!("{}\n", display_name(&st.name));
+    }
+    if stream {
+        s += info;
+    } else {
+        s += "No network stream is playing. Browse streams to pick a radio station or TV channel.";
+    }
+    let n = |k: usize, one: &str| format!("{k} {one}{}", if k == 1 { "" } else { "s" });
+    s += &format!(
+        "\n\n{} · {}",
+        n(favorites, "favorite"),
+        n(recent, "recent stream")
+    );
+    s
+}
+
 impl NetworkStreams {
+    /// [`looks_like_station`] for `path` (cached per URL once mpv knows its length).
+    fn is_station(&mut self, path: &str, get: impl Fn(&str) -> Option<String>) -> bool {
+        if self.known.0 != path {
+            let known = self.playing.as_ref().is_some_and(|s| s.url == path)
+                || self.list.iter().any(|s| s.url == path)
+                || known_station(path).is_some();
+            self.known = (path.to_string(), known);
+        }
+        looks_like_station(self.known.1, get)
+    }
     /// Fill the now-playing card while an audio-only network stream plays.
     fn now_playing(&mut self, cx: &Ctx) {
         let a = cx.app;
@@ -710,7 +842,8 @@ impl NetworkStreams {
         }
         let show = a.global::<crate::Playback>().get_has_media()
             && a.global::<crate::Viz>().get_audio()
-            && path.contains("://");
+            && path.contains("://")
+            && self.is_station(&path, |k| cx.player.get(k));
         if !show {
             if a.global::<crate::NowPlaying>().get_show() {
                 a.global::<crate::NowPlaying>().set_show(false);
@@ -779,7 +912,7 @@ impl Plugin for NetworkStreams {
         .source("open")
         .contribute(contrib::PALETTE_COMMAND, "Browse network streams", "open")
         .contribute(contrib::CONTEXT_PLAYER, "Stream info", "info")
-        .contribute(contrib::DRAWER_PANEL, "Network Streams", "")
+        .contribute(contrib::DRAWER_PANEL, "Network Streams", "drawer")
         .contribute(contrib::HOME_WIDGET, "Radio stations", "open")
         .setting(SettingSpec::action(
             "open",
@@ -828,9 +961,23 @@ impl Plugin for NetworkStreams {
                 .map(|i| i as usize)
         };
         match name {
+            "drawer" => {
+                let path = cx.player.get("path").unwrap_or_default();
+                let station = path.contains("://").then(|| known_station(&path)).flatten();
+                let text = drawer_text(
+                    station.as_ref(),
+                    path.contains("://"),
+                    &now_info(|p| cx.player.get(p)),
+                    load_list("saved.json").len(),
+                    load_list("recent.json").len(),
+                );
+                cx.app.global::<crate::Drawer>().set_info(text.into());
+            }
             "open" => {
                 let a = cx.app;
                 a.global::<crate::Overlays>().set_settings_open(false);
+                // From the side drawer: the browser replaces it.
+                a.global::<crate::Overlays>().set_drawer_open(false);
                 a.global::<crate::MusicDialogState>().set_owner(ID.into());
                 a.global::<crate::MusicDialogState>()
                     .set_caps(crate::MdCaps {
@@ -1465,6 +1612,268 @@ mod tests {
         assert_eq!(by_group(&s, "electronica").len(), 1);
     }
 
+    #[test]
+    fn cache_names_are_stable_and_old_ones_migrate() {
+        // FNV-1a 64 test vectors: the names must never change between builds.
+        assert_eq!(hash_name(""), "cbf29ce484222325");
+        assert_eq!(hash_name("a"), "af63dc4c8601ec8c");
+        assert_eq!(hash_name("foobar"), "85944171f73967e8");
+        // The spelled-out legacy name is what DefaultHasher gave (Vivi 0.12 and older).
+        for u in [
+            "",
+            "a",
+            "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+            "1234567",
+        ] {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            u.hash(&mut h);
+            assert_eq!(legacy_hash_name(u), format!("{:016x}", h.finish()), "{u:?}");
+        }
+        let dir = std::env::temp_dir().join(format!("vivi-hash-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let url = "https://example.com/logo.png";
+        let old = dir.join(format!("{}.svg", legacy_hash_name(url)));
+        std::fs::write(&old, b"<svg/>").unwrap();
+        let p = cached_with_ext(&dir, url, &["png", "svg"]).unwrap();
+        assert_eq!(p, dir.join(format!("{}.svg", hash_name(url))));
+        assert_eq!(std::fs::read(&p).unwrap(), b"<svg/>");
+        assert!(!old.exists());
+        // A new file wins over an old one; nothing found stays None.
+        let old2 = dir.join(format!("custom-{}.m3u", legacy_hash_name(url)));
+        std::fs::write(&old2, "old").unwrap();
+        let new2 = dir.join(format!("custom-{}.m3u", hash_name(url)));
+        std::fs::write(&new2, "new").unwrap();
+        let f = hashed_file(&dir, url, |h| format!("custom-{h}.m3u"));
+        assert_eq!(std::fs::read_to_string(f).unwrap(), "new");
+        assert!(cached_with_ext(&dir, "https://other", &["png"]).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn station_ids_and_click_path() {
+        let v = serde_json::json!([{"name": "A", "url": "http://a",
+            "stationuuid": "510506E7-6bc0-4b91-b6a1-fc024ccad1a8"}]);
+        let s = parse_stations(&v);
+        assert_eq!(s[0].stationuuid, "510506E7-6bc0-4b91-b6a1-fc024ccad1a8");
+        assert_eq!(
+            click_path(&s[0].stationuuid).unwrap(),
+            "/json/url/510506e7-6bc0-4b91-b6a1-fc024ccad1a8"
+        );
+        assert!(click_path("").is_none());
+        assert!(click_path("../../json/stations?x=1aaaaaaaaaaaaaaaaaaaaaaaa").is_none());
+        // Favorites keep the id; older ones without it still load.
+        let j = serde_json::to_string(&s[0]).unwrap();
+        assert!(j.contains("stationuuid"));
+        let old: Stream = serde_json::from_str(r#"{"name":"n","url":"u"}"#).unwrap();
+        assert!(old.stationuuid.is_empty());
+    }
+
+    /// A one-shot HTTP server on localhost answering every request with `status` / `body`;
+    /// returns its base URL and a counter of requests it got.
+    fn serve(
+        status: u16,
+        body: &'static str,
+    ) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::{Read, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", l.local_addr().unwrap());
+        let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let n2 = n.clone();
+        std::thread::spawn(move || {
+            for mut c in l.incoming().flatten() {
+                n2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let mut buf = [0u8; 4096];
+                let _ = c.read(&mut buf);
+                let _ = write!(
+                    c,
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        (base, n)
+    }
+
+    #[test]
+    fn radio_servers_fail_over() {
+        let v = serde_json::json!([
+            {"ip": "1.2.3.4", "name": "de1.api.radio-browser.info"},
+            {"ip": "::1", "name": "de1.api.radio-browser.info"},
+            {"ip": "5.6.7.8", "name": "NL1.api.radio-browser.info"},
+            {"ip": "9.9.9.9", "name": "evil.example.com"},
+            {"ip": "9.9.9.9", "name": "x/y.api.radio-browser.info"}
+        ]);
+        assert_eq!(
+            parse_servers(&v),
+            [
+                "https://de1.api.radio-browser.info",
+                "https://nl1.api.radio-browser.info"
+            ]
+        );
+        let mut a: Vec<u32> = (0..20).collect();
+        shuffle(&mut a, 42);
+        assert_ne!(a, (0..20).collect::<Vec<_>>());
+        a.sort();
+        assert_eq!(a, (0..20).collect::<Vec<_>>());
+        // A refused connection and a busy mirror are skipped; the failed ones are reported.
+        let dead = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            format!("http://{}", l.local_addr().unwrap())
+        };
+        let (busy, _) = serve(503, "{}");
+        let (good, hits) = serve(200, r#"[{"name":"S","url":"http://s"}]"#);
+        let mut failed = Vec::new();
+        let v = radio_get_from(
+            &[dead.clone(), busy.clone(), good.clone()],
+            "/json/stations/search",
+            &[("name", "s")],
+            |s| failed.push(s.to_string()),
+        )
+        .unwrap();
+        assert_eq!(parse_stations(&v)[0].url, "http://s");
+        assert_eq!(failed, [dead, busy]);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // A 4xx answer is about the request: the next mirror is not asked.
+        let (bad, _) = serve(404, "{}");
+        let (unused, unused_hits) = serve(200, "[]");
+        let e = radio_get_from(&[bad, unused], "/json/url/x", &[], |_| {}).unwrap_err();
+        assert!(e.contains("404"), "{e}");
+        assert_eq!(unused_hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn search_all_merges_somafm_and_splits_kinds() {
+        let soma = parse_somafm(
+            &serde_json::json!({"channels":[{"id":"groovesalad","title":"Groove Salad","genre":"ambient","description":"d","image":"",
+            "playlists":[{"url":"http://p/gs130.pls","format":"mp3","quality":"high"}]}]}),
+        );
+        let tv = iptv_playlist_from("#EXTINF:-1 tvg-id=\"g.uk\",Groove TV\nhttp://t/g.m3u8\n");
+        let mine = parse_m3u("#EXTINF:-1,Groove FM\nhttp://r/live.mp3\n#EXTINF:-1,Groove News HD\nhttp://t/news.m3u8\n");
+        let radio = vec![Stream {
+            name: "Groove Radio".into(),
+            url: "http://rb/1".into(),
+            source: "radio-browser.info".into(),
+            ..Default::default()
+        }];
+        let parts = || {
+            vec![
+                Ok(mine.clone()),
+                Ok(tv.clone()),
+                Ok(filter(&soma, "groove")),
+                Ok(radio.clone()),
+                Err("iptv-org: offline".to_string()),
+            ]
+        };
+        let all = merge_results(parts(), None).unwrap();
+        assert_eq!(all.len(), 5);
+        assert!(all.iter().any(|s| s.source == "SomaFM"));
+        let names = |k| {
+            merge_results(parts(), Some(k))
+                .unwrap()
+                .into_iter()
+                .map(|s| s.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(Kind::Radio),
+            ["Groove FM", "Groove Salad", "Groove Radio"]
+        );
+        assert_eq!(names(Kind::Tv), ["Groove News HD", "Groove TV"]);
+        assert_eq!(Kind::parse("TV"), Some(Kind::Tv));
+        assert_eq!(Kind::parse("podcast"), None);
+        // Duplicates by URL are dropped; nothing found + an error = the error.
+        assert_eq!(
+            merge_results(vec![Ok(radio.clone()), Ok(radio.clone())], None)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(merge_results(vec![Ok(vec![]), Err("down".into())], None).is_err());
+    }
+
+    fn iptv_playlist_from(t: &str) -> Vec<Stream> {
+        let mut v = parse_m3u(t);
+        for s in &mut v {
+            s.source = "iptv-org".into();
+        }
+        v
+    }
+
+    #[test]
+    fn missing_playlist_files_are_errors_not_channel_names() {
+        let tmp = std::env::temp_dir().join(format!("vivi-missing-{}", std::process::id()));
+        let missing = tmp.join("nope.m3u");
+        let q = missing.to_string_lossy().to_string();
+        assert_eq!(m3u_query(&q), M3uQuery::Missing(missing.clone()));
+        assert!(is_playlist_source(&q));
+        let e = load_m3u(&q).unwrap_err();
+        assert!(e.starts_with("Playlist file not found"), "{e}");
+        for q in [
+            "~/no/such.m3u8",
+            "./list.m3u",
+            "C:\\TV\\list.m3u",
+            "file:///no/such.m3u",
+            "channels.M3U8",
+        ] {
+            assert!(matches!(m3u_query(q), M3uQuery::Missing(_)), "{q}");
+        }
+        for q in ["bbc news", "News 24/7", "Euronews"] {
+            assert_eq!(m3u_query(q), M3uQuery::Name, "{q}");
+        }
+        assert_eq!(m3u_query("https://x/a.m3u"), M3uQuery::Url);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let f = tmp.join("my list.m3u");
+        std::fs::write(&f, "http://a/b\n").unwrap();
+        assert_eq!(m3u_query(f.to_str().unwrap()), M3uQuery::File(f.clone()));
+        let url = format!("file://{}", f.to_string_lossy().replace(' ', "%20"));
+        assert_eq!(load_m3u(&url).unwrap()[0].url, "http://a/b");
+        assert!(load_m3u(tmp.to_str().unwrap())
+            .unwrap_err()
+            .starts_with("Not a playlist file"));
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn songs_on_servers_are_not_stations() {
+        let props = |d: Option<&'static str>, icy: bool| {
+            move |k: &str| match k {
+                "duration" => d.map(String::from),
+                "metadata/by-key/icy-title" if icy => Some("A - B".into()),
+                _ => None,
+            }
+        };
+        // A Free Music / podcast file: known length, no stream title.
+        assert!(!looks_like_station(false, props(Some("215.3"), false)));
+        // Live radio: no length (or 0), or a stream title, or one of our stations.
+        assert!(looks_like_station(false, props(None, false)));
+        assert!(looks_like_station(false, props(Some("0"), false)));
+        assert!(looks_like_station(false, props(Some("215.3"), true)));
+        assert!(looks_like_station(true, props(Some("215.3"), false)));
+    }
+
+    #[test]
+    fn drawer_panel_text() {
+        let st = Stream {
+            name: "Groove%20Salad".into(),
+            ..Default::default()
+        };
+        let t = drawer_text(Some(&st), true, "Now playing: A - B", 1, 3);
+        assert_eq!(
+            t,
+            "Groove Salad\nNow playing: A - B\n\n1 favorite · 3 recent streams"
+        );
+        let t = drawer_text(None, false, "Nothing is playing", 0, 1);
+        assert!(t.starts_with("No network stream is playing."));
+        assert!(t.ends_with("0 favorites · 1 recent stream"));
+        // The panel asks for it when it opens.
+        let m = NetworkStreams::default().manifest();
+        assert!(m
+            .contributes
+            .iter()
+            .any(|c| c.point == contrib::DRAWER_PANEL && c.command == "drawer"));
+    }
+
     /// Live iptv-org and SomaFM. `--ignored`.
     #[test]
     #[ignore]
@@ -1483,12 +1892,24 @@ mod tests {
         assert!(genre_list().unwrap().len() > 10);
         assert!(!genre_stations("@topclick").unwrap().is_empty());
         assert!(somafm().unwrap().len() > 10);
+        let all = search_all("groove").unwrap();
+        assert!(
+            all.iter().any(|s| s.source == "SomaFM"),
+            "SomaFM in Search all"
+        );
     }
 
     /// Live radio-browser.info search (no key). `--ignored`.
     #[test]
     #[ignore]
     fn live_radio_browser() {
+        let servers = radio_servers();
+        eprintln!("servers: {servers:?}");
+        assert!(!servers.is_empty());
+        let jazz = radio_search(0, "jazz").unwrap();
+        assert!(click_path(&jazz[0].stationuuid).is_some());
+        let v = radio_get(&click_path(&jazz[0].stationuuid).unwrap(), &[]).unwrap();
+        assert_eq!(v["ok"], true, "{v}");
         assert!(!radio_any("folk").unwrap().is_empty());
         for (m, q) in [(0, "jazz"), (1, ""), (2, "UA"), (3, "rock")] {
             let v = radio_search(m, q).unwrap();

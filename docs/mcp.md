@@ -105,7 +105,7 @@ fix. Results always carry `structuredContent`; list tools take `offset` / `limit
 | `search_library` | `query`, `kind`, `offset`, `limit` | Words matched in title/artist/album/genre/path of the scanned library |
 | `list_recent` | `query`, `kind`, `offset`, `limit` | The Recent list from Home: files, folders, playlists, streams, radio, web video, Free Music, newest first |
 | `open_network_stream` | `target`, `name`, `queue` | Play (or queue) a stream URL: Internet radio, IPTV `.m3u8`/HLS, DASH, RTMP/RTSP/UDP, Icecast. `name` is shown while it loads |
-| `search_streams` | `query`, `kind` (`radio`/`tv`), `limit` | Search radio-browser.info, iptv-org TV, your Network Streams favorites and playlists; returns `url`s for `open_network_stream` (network; may take a few seconds) |
+| `search_streams` | `query`, `kind` (`radio`/`tv`), `limit` | Search radio-browser.info, SomaFM, iptv-org TV, your Network Streams favorites and playlists; each item has `kind` (`radio` / `tv`) and a `url` for `open_network_stream` (network; may take a few seconds). `kind: radio` asks only the radio directories, `tv` only iptv-org; favorites and your playlists are split per entry. Fails while the Network Streams plugin is off |
 
 **Queue and playlists**
 

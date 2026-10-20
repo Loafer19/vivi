@@ -152,9 +152,9 @@ pub fn playlist_name(src: &str) -> String {
 }
 
 pub(crate) fn playlist_cache(url: &str) -> PathBuf {
-    crate::store::cache_dir()
-        .join("iptv")
-        .join(format!("custom-{}.m3u", hash_name(url)))
+    hashed_file(&crate::store::cache_dir().join("iptv"), url, |h| {
+        format!("custom-{h}.m3u")
+    })
 }
 
 /// Channels of a custom playlist. URLs are cached and refreshed after `ttl` (or when
@@ -241,23 +241,75 @@ pub(crate) fn my_playlists(ttl: u64) -> Result<Vec<Stream>, String> {
     Ok(playlist_picks(&playlists()))
 }
 
-/// Favorites, iptv-org TV, your playlists (cached copies) and radio-browser stations
-/// matching `q`, without duplicates.
-pub fn search_all(q: &str) -> Result<Vec<Stream>, String> {
-    let mut out = filter(&load_list("saved.json"), q);
-    let mut errs = Vec::new();
-    match iptv_search(q) {
-        Ok(v) => out.extend(v),
-        Err(e) => errs.push(e),
-    }
-    for p in playlists() {
-        if let Ok(t) = std::fs::read_to_string(playlist_cache(&p.url)) {
-            out.extend(filter(&parse_m3u(&t), q));
+/// Radio or TV, for `search_streams` `kind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Radio,
+    Tv,
+}
+
+impl Kind {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "radio" => Some(Kind::Radio),
+            "tv" => Some(Kind::Tv),
+            _ => None,
         }
     }
-    match radio_any(q) {
-        Ok(v) => out.extend(v),
-        Err(e) => errs.push(e),
+    pub fn label(self) -> &'static str {
+        match self {
+            Kind::Radio => "radio",
+            Kind::Tv => "tv",
+        }
+    }
+}
+
+/// Whether a stream is a radio station or a TV channel: radio-browser and SomaFM are
+/// radio, iptv-org is TV; for your own playlists and favorites the entry decides (an
+/// audio codec, an audio file or playlist extension, or "radio" in its group / name).
+pub fn stream_kind(s: &Stream) -> Kind {
+    match s.source.as_str() {
+        "radio-browser.info" | "SomaFM" => return Kind::Radio,
+        "iptv-org" => return Kind::Tv,
+        _ => {}
+    }
+    if !s.tvg_id.is_empty() {
+        return Kind::Tv;
+    }
+    let path = s
+        .url
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let audio_ext = [
+        ".mp3", ".aac", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".pls", ".wma", ".wav",
+    ];
+    let words = format!("{} {}", s.group, s.name).to_ascii_lowercase();
+    if !s.codec.is_empty() || audio_ext.iter().any(|e| path.ends_with(e)) || words.contains("radio")
+    {
+        Kind::Radio
+    } else {
+        Kind::Tv
+    }
+}
+
+/// Merge search results: favorites first, then each source in order; duplicates (same
+/// URL) dropped, at most 500. Fails only when nothing was found and a source failed.
+pub fn merge_results(
+    parts: Vec<Result<Vec<Stream>, String>>,
+    kind: Option<Kind>,
+) -> Result<Vec<Stream>, String> {
+    let mut out = Vec::new();
+    let mut errs = Vec::new();
+    for p in parts {
+        match p {
+            Ok(v) => out.extend(v),
+            Err(e) => errs.push(e),
+        }
+    }
+    if let Some(k) = kind {
+        out.retain(|s| stream_kind(s) == k);
     }
     let mut seen = std::collections::HashSet::new();
     out.retain(|s| seen.insert(s.url.clone()));
@@ -266,4 +318,30 @@ pub fn search_all(q: &str) -> Result<Vec<Stream>, String> {
         return Err(errs.join("; "));
     }
     Ok(out)
+}
+
+/// Favorites, iptv-org TV, your playlists (cached copies), SomaFM and radio-browser
+/// stations matching `q`, without duplicates.
+pub fn search_all(q: &str) -> Result<Vec<Stream>, String> {
+    search_kind(q, None)
+}
+
+/// [`search_all`] limited to radio or TV (the other kind's directories are not asked).
+pub fn search_kind(q: &str, kind: Option<Kind>) -> Result<Vec<Stream>, String> {
+    let tv = kind != Some(Kind::Radio);
+    let radio = kind != Some(Kind::Tv);
+    let mut parts = vec![Ok(filter(&load_list("saved.json"), q))];
+    if tv {
+        parts.push(iptv_search(q));
+    }
+    for p in playlists() {
+        if let Ok(t) = std::fs::read_to_string(playlist_cache(&p.url)) {
+            parts.push(Ok(filter(&parse_m3u(&t), q)));
+        }
+    }
+    if radio {
+        parts.push(somafm().map(|v| filter(&v, q)));
+        parts.push(radio_any(q));
+    }
+    merge_results(parts, kind)
 }

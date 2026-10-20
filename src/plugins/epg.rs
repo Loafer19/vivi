@@ -190,9 +190,9 @@ struct Cached {
 }
 
 fn cache_file(url: &str) -> std::path::PathBuf {
-    crate::store::cache_dir()
-        .join("epg")
-        .join(format!("{}.json", super::network_streams::hash_name(url)))
+    super::network_streams::hashed_file(&crate::store::cache_dir().join("epg"), url, |h| {
+        format!("{h}.json")
+    })
 }
 
 /// Load a guide (compact cache when fresh, else download; stale cache on errors).

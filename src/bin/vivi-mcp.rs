@@ -248,7 +248,7 @@ fn tools() -> Vec<Tool> {
             json!({ "target": { "type": "string", "minLength": 1, "description": "Stream URL" },
                     "name": { "type": "string", "description": "Display name while it loads (optional)" },
                     "queue": { "type": "boolean", "description": "Append to the queue instead of playing now" } }), &["target"]).destructive().repeats(),
-        tool("search_streams", "Search radio and TV", "search_streams", "Search Internet radio (radio-browser.info), iptv-org TV channels, your Network Streams favorites and your own playlists by name. Returns stream URLs for open_network_stream. Needs the network; may take a few seconds.",
+        tool("search_streams", "Search radio and TV", "search_streams", "Search Internet radio (radio-browser.info, SomaFM), iptv-org TV channels, your Network Streams favorites and your own playlists by name; kind radio or tv limits it (each item has its kind). Returns stream URLs for open_network_stream. Needs the network and the Network Streams plugin; may take a few seconds.",
             json!({ "query": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "enum": ["radio", "tv"] },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 200 } }), &["query"]).ro().web(),
         tool("search_library", "Search library", "search", "Search the scanned media library by words in title, artist, album, genre or path. Returns paths usable with open / playlist_add.",

@@ -27,6 +27,7 @@ pub fn parse_stations(v: &serde_json::Value) -> Vec<Stream> {
                 bitrate: e["bitrate"].as_u64().unwrap_or(0) as u32,
                 homepage: s(&e["homepage"]),
                 source: "radio-browser.info".into(),
+                stationuuid: s(&e["stationuuid"]),
                 ..Default::default()
             })
         })
@@ -49,14 +50,154 @@ pub fn radio_search(mode: usize, q: &str) -> Result<Vec<Stream>, String> {
         ("order", "votes"),
         ("reverse", "true"),
     ]);
-    let mut err = String::new();
-    for srv in SERVERS {
-        match web::get_json(&format!("{srv}{path}"), &params, "radio-browser.info") {
-            Ok(v) => return Ok(parse_stations(&v)),
-            Err(e) => err = e,
+    radio_get(path, &params).map(|v| parse_stations(&v))
+}
+
+/// How long the discovered server list is kept (in memory).
+const SERVERS_TTL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// The server list (base URLs, shuffled) and when it was made.
+static RADIO_SERVERS: std::sync::Mutex<Option<(std::time::Instant, Vec<String>)>> =
+    std::sync::Mutex::new(None);
+
+/// Base URLs of the mirrors in a `/json/servers` answer, without duplicates (each mirror
+/// is listed once per IP address). Only `*.api.radio-browser.info` names are kept.
+pub fn parse_servers(v: &serde_json::Value) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for e in v.as_array().into_iter().flatten() {
+        let n = e["name"].as_str().unwrap_or("").trim().to_ascii_lowercase();
+        let ok = n.strip_suffix(".api.radio-browser.info").is_some_and(|h| {
+            !h.is_empty() && h.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        });
+        let u = format!("https://{n}");
+        if ok && !out.contains(&u) {
+            out.push(u);
+        }
+    }
+    out
+}
+
+/// Shuffle in place (spreads the load over the mirrors as radio-browser asks); seeded
+/// from the clock, no need for a real RNG.
+pub(crate) fn shuffle<T>(v: &mut [T], seed: u64) {
+    let mut x = seed | 1;
+    for i in (1..v.len()).rev() {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        v.swap(i, (x % (i as u64 + 1)) as usize);
+    }
+}
+
+fn clock_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+        ^ u64::from(std::process::id()).rotate_left(32)
+}
+
+/// Mirrors to try, in order: the list radio-browser publishes (`/json/servers` on the
+/// all-mirrors round robin, shuffled, kept for 15 minutes), else [`FALLBACK_SERVERS`].
+pub fn radio_servers() -> Vec<String> {
+    let mut c = RADIO_SERVERS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, v)) = c.as_ref() {
+        if at.elapsed() < SERVERS_TTL && !v.is_empty() {
+            return v.clone();
+        }
+    }
+    let mut v = web::get_json_timeout(
+        &format!("{}/json/servers", FALLBACK_SERVERS[0]),
+        &[],
+        "radio-browser.info",
+        8,
+    )
+    .map(|j| parse_servers(&j))
+    .unwrap_or_default();
+    shuffle(&mut v, clock_seed());
+    // The fallbacks stay at the end: a list of one mirror is common.
+    for f in FALLBACK_SERVERS {
+        if !v.iter().any(|s| s == f) {
+            v.push(f.to_string());
+        }
+    }
+    *c = Some((std::time::Instant::now(), v.clone()));
+    v
+}
+
+/// Move `srv` to the end of the cached list after it failed.
+fn demote_server(srv: &str) {
+    let mut c = RADIO_SERVERS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, v)) = c.as_mut() {
+        if let Some(i) = v.iter().position(|s| s == srv) {
+            let s = v.remove(i);
+            v.push(s);
+        }
+    }
+}
+
+/// One request's outcome: worth trying the next mirror (connection error, timeout,
+/// overloaded or broken mirror), or final (a 4xx answer means the request itself).
+#[derive(Debug, PartialEq)]
+pub(crate) enum Attempt {
+    Ok(serde_json::Value),
+    Retry(String),
+    Fail(String),
+}
+
+pub(crate) fn radio_try(base: &str, path: &str, q: &[(&str, &str)]) -> Attempt {
+    let mut req = web::agent_as(15, &web::user_agent(), false)
+        .get(&format!("{base}{path}"))
+        .header("Accept", "application/json");
+    for (k, v) in q {
+        req = req.query(*k, *v);
+    }
+    let mut r = match req.call() {
+        Ok(r) => r,
+        Err(e) => return Attempt::Retry(format!("radio-browser.info: {e}")),
+    };
+    let status = r.status().as_u16();
+    let body = r
+        .body_mut()
+        .with_config()
+        .limit(8 * 1024 * 1024)
+        .read_to_string();
+    match (status, body) {
+        (200..=299, Ok(b)) => match serde_json::from_str(&b) {
+            Ok(v) => Attempt::Ok(v),
+            Err(e) => Attempt::Retry(format!("radio-browser.info: {e}")),
+        },
+        (429 | 500..=599, _) => Attempt::Retry(format!(
+            "radio-browser.info is busy ({status}), try again in a moment"
+        )),
+        (200..=299, Err(e)) => Attempt::Retry(format!("radio-browser.info: {e}")),
+        _ => Attempt::Fail(format!("radio-browser.info error {status}")),
+    }
+}
+
+/// GET `path` from the first mirror that answers; a mirror that fails moves to the back.
+pub(crate) fn radio_get_from(
+    servers: &[String],
+    path: &str,
+    q: &[(&str, &str)],
+    mut failed: impl FnMut(&str),
+) -> Result<serde_json::Value, String> {
+    let mut err = "radio-browser.info: no server".to_string();
+    for srv in servers {
+        match radio_try(srv, path, q) {
+            Attempt::Ok(v) => return Ok(v),
+            Attempt::Fail(e) => return Err(e),
+            Attempt::Retry(e) => {
+                failed(srv);
+                err = e;
+            }
         }
     }
     Err(err)
+}
+
+pub(crate) fn radio_get(path: &str, q: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    radio_get_from(&radio_servers(), path, q, demote_server)
 }
 
 /// Stations whose name or tag matches `q` (name matches first, no duplicates).
@@ -72,17 +213,59 @@ pub fn radio_any(q: &str) -> Result<Vec<Stream>, String> {
     Ok(v)
 }
 
-/// Whether `q` names a playlist we can load (URL or existing file).
-pub fn is_playlist_source(q: &str) -> bool {
-    let q = q.trim();
-    if q.starts_with("http://") || q.starts_with("https://") {
-        return true;
+/// What the M3U source's query field holds.
+#[derive(Debug, PartialEq)]
+pub enum M3uQuery {
+    Url,
+    /// A playlist file that exists.
+    File(PathBuf),
+    /// Looks like a path (`/…`, `~/…`, `./…`, `file://…`, `C:\…`, `*.m3u`) but there is
+    /// no such file: an error, not a channel name.
+    Missing(PathBuf),
+    /// Anything else: an iptv-org channel name.
+    Name,
+}
+
+/// Local path of a query (`~/` expanded, `file://` URLs decoded).
+fn local_path(q: &str) -> PathBuf {
+    if let Some(r) = q.strip_prefix("file://") {
+        return PathBuf::from(pct_decode(r));
     }
-    let p = match q.strip_prefix("~/") {
+    match q.strip_prefix("~/") {
         Some(r) => crate::store::home().join(r),
         None => PathBuf::from(q),
-    };
-    p.is_file()
+    }
+}
+
+pub fn m3u_query(q: &str) -> M3uQuery {
+    let q = q.trim();
+    if q.starts_with("http://") || q.starts_with("https://") {
+        return M3uQuery::Url;
+    }
+    let p = local_path(q);
+    if p.is_file() {
+        return M3uQuery::File(p);
+    }
+    let lower = q.to_ascii_lowercase();
+    let b = q.as_bytes();
+    let pathlike = q.starts_with(['/', '\\', '~', '.'])
+        || lower.starts_with("file://")
+        || (b.len() > 2
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && matches!(b[2], b'\\' | b'/'))
+        || [".m3u", ".m3u8"].iter().any(|e| lower.ends_with(e));
+    if pathlike {
+        M3uQuery::Missing(p)
+    } else {
+        M3uQuery::Name
+    }
+}
+
+/// Whether `q` names a playlist to load (a URL, a file, or a missing file whose error
+/// should show) rather than a channel name.
+pub fn is_playlist_source(q: &str) -> bool {
+    m3u_query(q) != M3uQuery::Name
 }
 
 /// Placeholder of the query field per source.
@@ -104,15 +287,21 @@ pub fn placeholder(mode: usize) -> &'static str {
     }
 }
 
-/// Tell the directory a station was played (its click counter); best effort.
-pub(crate) fn radio_click(url: &str) {
-    let url = url.to_string();
+/// The click-counter path of a station id (`/json/url/<stationuuid>`), `None` for an id
+/// that is not a UUID.
+pub fn click_path(uuid: &str) -> Option<String> {
+    let ok = uuid.len() == 36 && uuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+    ok.then(|| format!("/json/url/{}", uuid.to_ascii_lowercase()))
+}
+
+/// Tell the directory a station was played (its click counter, by station id as
+/// radio-browser asks); best effort, in the background.
+pub(crate) fn radio_click(uuid: &str) {
+    let Some(path) = click_path(uuid) else {
+        return;
+    };
     std::thread::spawn(move || {
-        let _ = web::get_json(
-            &format!("{}/json/url", SERVERS[0]),
-            &[("url", &url)],
-            "radio-browser.info",
-        );
+        let _ = radio_get(&path, &[]);
     });
 }
 
@@ -149,14 +338,7 @@ pub(crate) fn genre_list() -> Result<Vec<Stream>, String> {
         ("limit", "120"),
         ("hidebroken", "true"),
     ];
-    let mut err = String::new();
-    for srv in SERVERS {
-        match web::get_json(&format!("{srv}/json/tags"), &p, "radio-browser.info") {
-            Ok(v) => return Ok(parse_tags(&v)),
-            Err(e) => err = e,
-        }
-    }
-    Err(err)
+    radio_get("/json/tags", &p).map(|v| parse_tags(&v))
 }
 
 /// Stations of a genre picker key (`@topvote`, `@topclick` or a tag).
@@ -166,15 +348,8 @@ pub(crate) fn genre_stations(key: &str) -> Result<Vec<Stream>, String> {
         "@topclick" => "/json/stations/topclick",
         _ => return radio_search(3, key),
     };
-    let mut err = String::new();
-    for srv in SERVERS {
-        let p = [("limit", "100"), ("hidebroken", "true")];
-        match web::get_json(&format!("{srv}{path}"), &p, "radio-browser.info") {
-            Ok(v) => return Ok(parse_stations(&v)),
-            Err(e) => err = e,
-        }
-    }
-    Err(err)
+    let p = [("limit", "100"), ("hidebroken", "true")];
+    radio_get(path, &p).map(|v| parse_stations(&v))
 }
 
 // ---------- SomaFM ----------
@@ -478,10 +653,13 @@ pub fn load_m3u(src: &str) -> Result<Vec<Stream>, String> {
         let b = web::get_bytes(src, 32 * 1024 * 1024)?.ok_or("Playlist not found (404)")?;
         String::from_utf8_lossy(&b).into_owned()
     } else {
-        let p = match src.strip_prefix("~/") {
-            Some(r) => crate::store::home().join(r),
-            None => PathBuf::from(src),
-        };
+        let p = local_path(src);
+        if !p.exists() {
+            return Err(format!("Playlist file not found: {}", p.display()));
+        }
+        if !p.is_file() {
+            return Err(format!("Not a playlist file: {}", p.display()));
+        }
         std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?
     };
     let v = parse_m3u(&text);

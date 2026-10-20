@@ -52,31 +52,37 @@ fn search(args: &Value) -> Result<Value, String> {
     Ok(json!({ "count": hits.len(), "items": hits }))
 }
 
-/// Radio + TV directory search (network; runs on the connection thread).
+/// Radio + TV directory search (network; runs on the connection thread). `kind` radio
+/// asks only the radio directories (SomaFM, radio-browser) and tv only iptv-org; your
+/// favorites and playlists are split by [`network_streams::stream_kind`].
 #[cfg(unix)]
 fn search_streams(args: &Value) -> Result<Value, String> {
+    use crate::plugins::network_streams as ns;
     let q = args["query"].as_str().unwrap_or("").trim();
     if q.is_empty() {
         return Err("missing \"query\"".into());
     }
     let limit = args["limit"].as_u64().unwrap_or(25).clamp(1, 200) as usize;
-    let kind = args["kind"].as_str().unwrap_or("");
-    let v = crate::plugins::network_streams::search_all(q)?;
-    let items: Vec<Value> = v
-        .into_iter()
-        .filter(|s| match kind {
-            "radio" => s.source == "radio-browser.info",
-            "tv" => s.source != "radio-browser.info",
-            _ => true,
-        })
+    let kind = match args["kind"].as_str().unwrap_or("") {
+        "" => None,
+        k => Some(ns::Kind::parse(k).ok_or_else(|| format!("unknown kind {k:?} (radio or tv)"))?),
+    };
+    let items = stream_items(ns::search_kind(q, kind)?, limit);
+    Ok(json!({ "count": items.len(), "items": items }))
+}
+
+/// `search_streams` result rows.
+#[cfg(unix)]
+pub fn stream_items(v: Vec<crate::plugins::network_streams::Stream>, limit: usize) -> Vec<Value> {
+    use crate::plugins::network_streams as ns;
+    v.into_iter()
         .take(limit)
         .map(|s| {
-            json!({ "name": crate::plugins::network_streams::display_name(&s.name), "url": s.url,
+            json!({ "name": ns::display_name(&s.name), "url": s.url, "kind": ns::stream_kind(&s).label(),
                 "group": s.group, "country": s.country, "codec": s.codec, "bitrate": s.bitrate,
                 "logo": s.logo, "source": s.source, "tvg_id": s.tvg_id })
         })
-        .collect();
-    Ok(json!({ "count": items.len(), "items": items }))
+        .collect()
 }
 
 /// Recent list entries matching `args.query` (words in title, subtitle or target) and
@@ -269,7 +275,8 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                             } else if cmd == "saved_playlists" {
                                 Ok(saved_playlists())
                             } else if cmd == "search_streams" {
-                                search_streams(&args)
+                                // Only while Network Streams is on (asked on the UI thread).
+                                ui("__streams_on", json!({})).and_then(|_| search_streams(&args))
                             } else if cmd.starts_with("__") {
                                 // Internal UI-thread requests (they carry the API key).
                                 Err(format!("unknown command {cmd:?}"))
@@ -723,6 +730,16 @@ fn handle(
                 "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }),
             )
         }
+        "__streams_on" => {
+            if crate::plugins::active(crate::plugins::network_streams::ID) {
+                ok()
+            } else {
+                Err(
+                    "the Network Streams plugin is turned off (Extensions → Network Streams)"
+                        .into(),
+                )
+            }
+        }
         "__subs_ctx" => {
             crate::plugins::query::<Value>(crate::plugins::subtitle_search::ID, "mcp-context")
                 .ok_or_else(|| "the Subtitle Search plugin is turned off".to_string())
@@ -952,6 +969,30 @@ mod tests {
         assert_eq!(move_target(1, 1, 3), Ok(1));
         assert!(move_target(0, 3, 3).is_err());
         assert!(move_target(-1, 0, 3).is_err());
+    }
+
+    #[test]
+    fn stream_rows_carry_their_kind() {
+        use crate::plugins::network_streams::Stream;
+        let v = vec![
+            Stream {
+                name: "Groove%20Salad".into(),
+                url: "http://s".into(),
+                source: "SomaFM".into(),
+                ..Default::default()
+            },
+            Stream {
+                name: "News".into(),
+                url: "http://t".into(),
+                source: "iptv-org".into(),
+                ..Default::default()
+            },
+        ];
+        let r = stream_items(v, 5);
+        assert_eq!(r[0]["name"], "Groove Salad");
+        assert_eq!(r[0]["kind"], "radio");
+        assert_eq!(r[1]["kind"], "tv");
+        assert_eq!(stream_items(vec![Stream::default(); 3], 2).len(), 2);
     }
 
     #[test]

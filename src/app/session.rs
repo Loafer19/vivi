@@ -52,10 +52,8 @@ fn fetch_web_thumb(a: &AppWindow, target: String) {
     std::thread::spawn(move || {
         let dir = store::cache_dir().join("web-thumbs");
         let base = dir.join(crate::plugins::network_streams::hash_name(&target));
-        let cached = ["jpg", "png"]
-            .iter()
-            .map(|e| base.with_extension(e))
-            .find(|p| p.is_file());
+        let cached =
+            crate::plugins::network_streams::cached_with_ext(&dir, &target, &["jpg", "png"]);
         let path = cached.or_else(|| {
             let url = match store::youtube_id(&target) {
                 Some(id) => format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg"),

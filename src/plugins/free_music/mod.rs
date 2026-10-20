@@ -178,28 +178,45 @@ fn jamendo_key(cx: &Ctx) -> String {
         .to_string()
 }
 
+/// Tell the host what a track's stream URL is (title, artist, album, cover), so it plays
+/// as a song: the music now-playing card, MPRIS and the shared now playing, not a radio
+/// station card named after the file.
+fn describe(t: &Track) {
+    crate::plugins::host::media_meta(ID, track_meta(t));
+}
+
+pub(crate) fn track_meta(t: &Track) -> crate::plugins::host::Meta {
+    crate::plugins::host::Meta {
+        url: t.stream.clone(),
+        title: t.title.clone(),
+        artist: t.artist.clone(),
+        album: t.album.clone(),
+        cover: t.cover.clone(),
+        info: "Free Music".into(),
+        duration: f64::from(t.duration),
+        kind: "music".into(),
+        service: t.source.into(),
+        ..Default::default()
+    }
+}
+
 /// Cached list thumbnail (`free-music-covers/<hash>.jpg|png`); `None` when missing.
 /// Cover already in the cache (no download).
 pub(crate) fn cached_cover(url: &str) -> Option<PathBuf> {
-    let base = crate::store::cache_dir()
-        .join("free-music-covers")
-        .join(super::network_streams::hash_name(url));
-    ["jpg", "png"]
-        .iter()
-        .map(|e| base.with_extension(e))
-        .find(|p| p.is_file())
+    super::network_streams::cached_with_ext(
+        &crate::store::cache_dir().join("free-music-covers"),
+        url,
+        &["jpg", "png"],
+    )
 }
 
 fn fetch_cover(url: &str) -> Option<PathBuf> {
     let dir = crate::store::cache_dir().join("free-music-covers");
     let base = dir.join(super::network_streams::hash_name(url));
-    for ext in ["jpg", "png"] {
-        let p = base.with_extension(ext);
-        if p.is_file() {
-            return Some(p);
-        }
+    if let Some(p) = super::network_streams::cached_with_ext(&dir, url, &["jpg", "png"]) {
+        return Some(p);
     }
-    if base.with_extension("none").is_file() {
+    if super::network_streams::hashed_file(&dir, url, |h| format!("{h}.none")).is_file() {
         return None;
     }
     std::fs::create_dir_all(&dir).ok()?;
@@ -669,6 +686,7 @@ impl FreeMusic {
     }
 
     fn play(&mut self, cx: &Ctx, t: &Track, queue: bool) {
+        describe(t);
         crate::loading::set_name(&t.stream, &format!("{} — {}", t.artist, t.title));
         crate::store::recent_hint(crate::store::RecentEntry {
             target: t.stream.clone(),
@@ -714,6 +732,7 @@ impl FreeMusic {
                 break;
             }
             if seen.insert(t.key()) {
+                describe(t);
                 crate::loading::set_name(&t.stream, &format!("{} — {}", t.artist, t.title));
                 crate::store::recent_hint(crate::store::RecentEntry {
                     target: t.stream.clone(),
@@ -1202,6 +1221,25 @@ mod tests {
             artist: ar.into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn tracks_are_described_as_songs() {
+        let mut tr = t("Air", "Bach");
+        tr.stream = "https://archive.org/download/x/01.mp3".into();
+        tr.album = "Suites".into();
+        tr.duration = 215;
+        tr.source = FMA;
+        let m = track_meta(&tr);
+        // The URL plays as a song (music card, shared now playing), not as a radio station.
+        assert_eq!(m.url, tr.stream);
+        assert_eq!(m.kind, "music");
+        assert_eq!(
+            (m.title.as_str(), m.artist.as_str(), m.album.as_str()),
+            ("Air", "Bach", "Suites")
+        );
+        assert_eq!(m.service, FMA);
+        assert_eq!(m.duration, 215.0);
     }
 
     #[test]

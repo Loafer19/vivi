@@ -177,11 +177,7 @@ pub fn cached_cover(url: &str) -> Option<PathBuf> {
     if url.is_empty() {
         return None;
     }
-    let p = cover_base(url);
-    ["jpg", "png"]
-        .iter()
-        .map(|e| p.with_extension(e))
-        .find(|p| p.is_file())
+    super::network_streams::cached_with_ext(&cover_dir(), url, &["jpg", "png"])
 }
 
 fn cover_dir() -> PathBuf {
@@ -209,7 +205,7 @@ pub fn fetch_cover(url: &str) -> Option<PathBuf> {
         return Some(p);
     }
     let base = cover_base(url);
-    if base.with_extension("none").is_file() {
+    if super::network_streams::hashed_file(&cover_dir(), url, |h| format!("{h}.none")).is_file() {
         return None;
     }
     std::fs::create_dir_all(cover_dir()).ok()?;
