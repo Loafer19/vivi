@@ -329,12 +329,15 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
 #[cfg(not(unix))]
 pub fn setup(_: &crate::AppWindow, _: &std::rc::Rc<crate::player::Player>, _: bool) {}
 
+#[cfg(unix)]
 /// This instance owns the control socket (removed again on exit).
 static BOUND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// On exit: remove our control socket and the mpv IPC socket the Remote Control
 /// plugin opened (`$XDG_RUNTIME_DIR/vivi-mpv-<pid>.sock`).
 pub fn cleanup() {
+    // The control socket exists only on Unix (`setup` is a no-op elsewhere).
+    #[cfg(unix)]
     if BOUND.load(std::sync::atomic::Ordering::Relaxed) {
         let _ = std::fs::remove_file(socket_path());
     }

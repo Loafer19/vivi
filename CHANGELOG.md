@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Windows build**: 0.13.0 did not compile for Windows (the exit cleanup removed the control socket, which exists only on Unix), so the release had no Windows zip.
+
 ## [0.13.0] - 2026-10-20
 
 ### Added
