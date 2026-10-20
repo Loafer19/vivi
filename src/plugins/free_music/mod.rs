@@ -820,6 +820,7 @@ impl FreeMusic {
         self.back.push(self.q.clone());
         self.title = title;
         self.q = q;
+        self.sync_query_box(cx);
         self.filters(cx);
         self.run(cx);
     }
@@ -860,6 +861,16 @@ impl FreeMusic {
             cx.player.cmd("loadfile", &[&t.stream]);
             cx.toast(&format!("Playing {} — {}", t.artist, t.title));
         }
+    }
+
+    /// Show the current page's search text in the query box (Similar, album and artist
+    /// pages, and Back from them), so it never shows a search that is not running.
+    fn sync_query_box(&mut self, cx: &Ctx) {
+        // A half-typed edit belongs to the page that was left.
+        self.typed = None;
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_query(query_box_text(&self.q).into());
     }
 
     /// "Play similar": play this track, then queue similar ones as they arrive.
@@ -1197,6 +1208,7 @@ impl Plugin for FreeMusic {
                         if self.back.is_empty() {
                             self.title.clear();
                         }
+                        self.sync_query_box(cx);
                         self.filters(cx);
                         self.run(cx);
                     }
@@ -1388,6 +1400,16 @@ impl Plugin for FreeMusic {
         if status && cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             self.status(cx);
         }
+    }
+}
+
+/// Text the search box shows for `q`: an album or artist page lists that album or
+/// artist, not a text search, so the box is empty there (the title names the page).
+pub(crate) fn query_box_text(q: &Query) -> String {
+    if q.album.is_some() || q.artist.is_some() {
+        String::new()
+    } else {
+        q.text.clone()
     }
 }
 
@@ -1585,6 +1607,34 @@ mod tests {
         // No licence: nothing.
         let m = serde_json::json!({"metadata": {"identifier": "x"}, "files": []});
         assert!(ia_tracks(&m, 12).is_empty());
+    }
+
+    #[test]
+    fn query_box_follows_the_page() {
+        // Album and artist pages: no stale search text, even if the query carries some.
+        let album = Query {
+            text: "old search".into(),
+            album: Some((JAMENDO, "123".into())),
+            ..Default::default()
+        };
+        assert_eq!(query_box_text(&album), "");
+        let artist = Query {
+            artist: Some((JAMENDO, "Kevin MacLeod".into())),
+            ..Default::default()
+        };
+        assert_eq!(query_box_text(&artist), "");
+        // Similar: the box shows what the similar search really looks for.
+        let mut t = t("Song", "Some Artist");
+        t.source = JAMENDO;
+        let q = similar_query(&t);
+        assert_eq!(query_box_text(&q), q.text);
+        assert_eq!(q.text, "Some Artist");
+        // A plain search keeps its text (Back restores it).
+        let plain = Query {
+            text: "kevin macleod".into(),
+            ..Default::default()
+        };
+        assert_eq!(query_box_text(&plain), "kevin macleod");
     }
 
     #[test]
