@@ -48,8 +48,20 @@ fn main() {
     println!("cargo:rerun-if-changed=ui");
 
     // Dark std-widgets (LineEdit, ScrollView) to match the Figma dark theme.
-    let config = slint_build::CompilerConfiguration::new().with_style("fluent-dark".into());
-    slint_build::compile_with_config("ui/app.slint", config).expect("failed to compile Slint UI");
+    // The Slint compiler recurses through long `if` chains (ui/core/duo.slint has one entry per
+    // icon); Windows gives the main thread only 1 MB of stack, so compile on a thread with more.
+    std::thread::Builder::new()
+        .name("slint-build".into())
+        .stack_size(256 * 1024 * 1024)
+        .spawn(|| {
+            let config =
+                slint_build::CompilerConfiguration::new().with_style("fluent-dark".into());
+            slint_build::compile_with_config("ui/app.slint", config)
+                .expect("failed to compile Slint UI");
+        })
+        .expect("failed to start the Slint compiler thread")
+        .join()
+        .expect("failed to compile Slint UI");
 }
 
 /// Days since 1970-01-01 → "YYYY-MM-DD" (civil-from-days).
