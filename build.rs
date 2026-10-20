@@ -54,8 +54,7 @@ fn main() {
         .name("slint-build".into())
         .stack_size(256 * 1024 * 1024)
         .spawn(|| {
-            let config =
-                slint_build::CompilerConfiguration::new().with_style("fluent-dark".into());
+            let config = slint_build::CompilerConfiguration::new().with_style("fluent-dark".into());
             slint_build::compile_with_config("ui/app.slint", config)
                 .expect("failed to compile Slint UI");
         })
