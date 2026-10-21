@@ -17,6 +17,10 @@ on:
       - packaging/appimage/build-libmpv.sh
       - .github/workflows/cache-warmup.yml
       - .github/workflows/release.yml
+  # Weekly refresh on the default branch (scheduled runs use master, so they save): picks up
+  # new stable rustc and Flathub SDK updates, and keeps the caches from GitHub's 7-day eviction.
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
   # On master this saves too; on any other branch it only restores and builds (no save).
   workflow_dispatch:
 permissions:
