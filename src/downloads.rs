@@ -100,6 +100,9 @@ pub struct Job {
     /// A group row's items done / in total ("12 / 40"); 0 in total = count its rows.
     pub items_done: u32,
     pub items_total: u32,
+    /// Heading of the notification when it finishes (empty = "Download finished"), e.g.
+    /// "Export finished" for a clip export.
+    pub done_title: String,
 }
 
 /// What a plugin reports (fields left `None` keep their value). Numbers may be
@@ -136,6 +139,7 @@ pub struct Report {
     pub items_done: Option<u32>,
     #[serde(deserialize_with = "num::whole")]
     pub items_total: Option<u32>,
+    pub done_title: Option<String>,
 }
 
 /// Lenient numbers in [`Report`]: any JSON number (or a numeric string).
@@ -216,6 +220,7 @@ impl Report {
         set(&mut j.error, self.error);
         set(&mut j.detail, self.detail);
         set(&mut j.parent, self.parent);
+        set(&mut j.done_title, self.done_title);
         if let Some(v) = self.items_done {
             j.items_done = v;
         }
@@ -264,7 +269,7 @@ struct Store {
     rate: Vec<(String, Instant, u64)>,
     dirty: bool,
     save: bool,
-    /// Finished / failed since the last refresh: (title, ok, error).
+    /// Finished / failed since the last refresh: (title, ok, error or the finished heading).
     news: Vec<(String, bool, String)>,
     /// Group rows shown with all their items (keys).
     expanded: std::collections::HashSet<String>,
@@ -407,7 +412,7 @@ pub fn report(plugin: &str, job: &str, r: Report) {
             // user's own doing: no notification.
             let news = match j.state {
                 _ if !j.parent.is_empty() || quiet => None,
-                State::Done => Some((j.title.clone(), true, String::new())),
+                State::Done => Some((j.title.clone(), true, j.done_title.clone())),
                 State::Failed => Some((j.title.clone(), false, j.error.clone())),
                 _ => None,
             };
@@ -867,15 +872,23 @@ pub fn refresh() {
             .map_or("".into(), |e| e.command.as_str().into()),
     );
     g.set_url_label(url.map_or("".into(), |e| e.label.into()));
-    for (title, ok, err) in news {
+    for (title, ok, text) in news {
         let (t, b) = if ok {
-            ("Download finished", title)
+            (done_heading(&text), title)
         } else {
-            ("Download failed", format!("{title}: {err}"))
+            ("Download failed", format!("{title}: {text}"))
         };
         if !(crate::notify::enabled(&cfg.borrow()) && crate::notify::send(t, &b)) {
             crate::plugins::toast(&a, &crate::notify::toast_text(t, &b));
         }
+    }
+}
+
+/// The notification heading of a finished job: its `done_title`, else "Download finished".
+fn done_heading(done_title: &str) -> &str {
+    match done_title.trim() {
+        "" => "Download finished",
+        t => t,
     }
 }
 
@@ -1044,6 +1057,51 @@ mod tests {
         });
         remove("p", "pl");
         ST.with(|s| assert!(s.borrow().jobs.is_empty()));
+    }
+
+    #[test]
+    fn done_title_names_the_finished_notification() {
+        ST.with(|s| *s.borrow_mut() = Store::default());
+        let news = || ST.with(|s| std::mem::take(&mut s.borrow_mut().news));
+        let rep = |st: &str, done_title: Option<&str>| Report {
+            title: Some("clip.mp4".into()),
+            state: Some(st.into()),
+            done_title: done_title.map(Into::into),
+            ..Report::default()
+        };
+        // Old plugins send no done_title: "Download finished".
+        report("yt", "a", rep("active", None));
+        report("yt", "a", rep("done", None));
+        let n = news();
+        assert_eq!(n, [("clip.mp4".to_string(), true, String::new())]);
+        assert_eq!(done_heading(&n[0].2), "Download finished");
+        // A plugin's own heading, given with any report, is kept for the finish.
+        report("cut-export", "1", rep("active", Some("Export finished")));
+        report("cut-export", "1", rep("done", None));
+        let n = news();
+        assert_eq!(done_heading(&n[0].2), "Export finished");
+        assert_eq!(
+            crate::notify::toast_text(done_heading(&n[0].2), &n[0].0),
+            "Export finished: clip.mp4"
+        );
+        // Failures keep "Download failed" with the error.
+        report("cut-export", "2", rep("active", Some("Export finished")));
+        report(
+            "cut-export",
+            "2",
+            Report {
+                error: Some("ffmpeg failed".into()),
+                ..rep("failed", None)
+            },
+        );
+        assert_eq!(news()[0].2, "ffmpeg failed");
+        // Saved with the job; downloads.json without the field still loads.
+        let j = ST.with(|s| s.borrow().jobs[1].clone());
+        let back: Job = serde_json::from_str(&serde_json::to_string(&j).unwrap()).unwrap();
+        assert_eq!(back.done_title, "Export finished");
+        let old: Job = serde_json::from_str(r#"{"plugin":"p","job":"j","state":"done"}"#).unwrap();
+        assert_eq!(done_heading(&old.done_title), "Download finished");
+        assert_eq!(done_heading("  "), "Download finished");
     }
 
     #[test]

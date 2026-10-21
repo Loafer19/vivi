@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Downloads panel: a job's own "finished" wording**: a `vivi-download` report (or a built-in's `Report`) may set `done_title`, the heading of the notification when the job finishes, e.g. `"Export finished"`, so Cut & Export's clips notify "Export finished: clip.mp4" instead of "Download finished: …". Without it nothing changes; failures still say "Download failed", and older Vivi ignores the field. Documented in docs/plugins-architecture.md.
+
 ## [0.13.1] - 2026-10-20
 
 ### Added

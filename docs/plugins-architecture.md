@@ -195,6 +195,7 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 | `can_pause` | Show Pause / Resume |
 | `parent` | Job id of a group row of the same plugin (e.g. the playlist this track belongs to) |
 | `items_done`, `items_total` | A group row's counts ("12 / 40"); without them Vivi counts the group's rows |
+| `done_title` | Heading of the notification when the job finishes, instead of "Download finished" (e.g. `"Export finished"` → "Export finished: clip.mp4"); failures still say "Download failed". Vivi 0.13.1 and older ignore it |
 
 Numbers may be fractional (whole-number fields are rounded, negative ones read 0) or
 numeric strings; a field that is `null` or not a number is ignored, the rest of the report
