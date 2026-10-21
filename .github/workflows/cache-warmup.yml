@@ -1,0 +1,166 @@
+name: Cache warm-up
+# release.yml runs on tags, and a cache saved on a tag ref is visible to that tag alone, so
+# release.yml only restores caches. This workflow saves them from master, whose caches every
+# ref (tags included) can read. It repeats the cache-relevant part of release.yml with the
+# same cache keys, toolchain, env and cargo profile, and skips everything once a cache is an
+# exact hit. It publishes nothing: no artifacts, releases, tags or commits. Keep it in sync
+# with release.yml.
+on:
+  push:
+    branches: [master]
+    paths:
+      - Cargo.lock
+      - Cargo.toml
+      - rust-toolchain
+      - rust-toolchain.toml
+      - packaging/flatpak/io.github.loafer19.vivi.yml
+      - packaging/appimage/build-libmpv.sh
+      - .github/workflows/cache-warmup.yml
+      - .github/workflows/release.yml
+  # On master this saves too; on any other branch it only restores and builds (no save).
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cache-warmup-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  # Same as release.yml: Swatinem/rust-cache hashes CARGO* / RUST* env vars into its key.
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        id: rust-cache
+        with:
+          shared-key: release-linux
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      - uses: actions/cache/restore@v5
+        id: deps
+        with:
+          path: deps
+          key: libmpv-${{ runner.os }}-${{ hashFiles('packaging/appimage/build-libmpv.sh') }}
+      - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo fallocate -l 10G /swapfile.vivi && sudo chmod 600 /swapfile.vivi
+          sudo mkswap /swapfile.vivi && sudo swapon /swapfile.vivi
+          free -h; swapon --show
+      - name: System deps
+        if: steps.rust-cache.outputs.cache-hit != 'true' || steps.deps.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev libfuse2t64 desktop-file-utils \
+            nasm meson ninja-build pkg-config libass-dev libplacebo-dev libpulse-dev libasound2-dev libdrm-dev libgbm-dev \
+            libva-dev libvdpau-dev libvulkan-dev libwayland-dev wayland-protocols libx11-dev libxext-dev libxrandr-dev \
+            libxss-dev libxpresent-dev libxv-dev libxinerama-dev libegl-dev libuchardet-dev liblua5.2-dev libgnutls28-dev \
+            libdav1d-dev libvpx-dev libopus-dev libvorbis-dev libwebp-dev libxml2-dev libbz2-dev liblzma-dev zlib1g-dev \
+            libjpeg-dev liblcms2-dev
+      - name: Build slim libmpv
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: PREFIX=$PWD/deps SRC=$RUNNER_TEMP/deps-src packaging/appimage/build-libmpv.sh
+      - name: Save slim libmpv (master only)
+        if: github.ref == 'refs/heads/master' && steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: deps
+          key: ${{ steps.deps.outputs.cache-primary-key }}
+      # rust-cache saves ~/.cargo and the dependency artifacts in target/ in its post step.
+      - run: cargo build --release
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        env:
+          VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
+          PKG_CONFIG_PATH: ${{ github.workspace }}/deps/lib/pkgconfig
+          LIBRARY_PATH: ${{ github.workspace }}/deps/lib
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        id: rust-cache
+        with:
+          shared-key: release-windows
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      # Same as release.yml: the RUSTFLAGS it exports are part of cargo's fingerprints.
+      - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R shinchiro/mpv-winbuild-cmake -p 'mpv-dev-x86_64-2*' -O mpv-dev.7z
+          7z x mpv-dev.7z -ompv | Out-Null
+          Get-ChildItem mpv
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $bin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64" | Select-Object -Last 1).FullName
+          $dll = (Get-ChildItem mpv\libmpv-2.dll).FullName
+          if (-not (Test-Path mpv\mpv.def)) {
+            $names = & "$bin\dumpbin.exe" /exports $dll | ForEach-Object { if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] } }
+            (@('EXPORTS') + $names) | Set-Content mpv\mpv.def
+          }
+          & "$bin\lib.exe" /def:mpv\mpv.def /name:libmpv-2.dll /machine:x64 /out:mpv\mpv.lib
+          "RUSTFLAGS=-L native=$((Resolve-Path mpv).Path)" | Out-File -Append $env:GITHUB_ENV
+      - run: cargo build --release
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        env:
+          VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        id: rust-cache
+        with:
+          shared-key: release-macos
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      # Only what the build links against; dylibbundler and librsvg are for packaging.
+      - run: brew install mpv
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+      - run: cargo build --release
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        env:
+          VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
+          VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
+          LIBRARY_PATH: /opt/homebrew/lib
+
+  flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore flatpak-builder state
+        id: fb-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .flatpak-builder
+          key: flatpak-builder-${{ runner.os }}-${{ runner.arch }}-x86_64-${{ hashFiles('packaging/flatpak/io.github.loafer19.vivi.yml') }}
+          restore-keys: flatpak-builder-${{ runner.os }}-${{ runner.arch }}-x86_64-
+      # Only the dependency modules (luajit, uchardet, libass, libplacebo, libmpv, inter-font):
+      # the vivi module is rebuilt on every release anyway, since its source is the checkout.
+      - name: Build the dependency modules
+        if: steps.fb-cache.outputs.cache-hit != 'true'
+        uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+        with:
+          manifest-path: packaging/flatpak/io.github.loafer19.vivi.yml
+          stop-at-module: vivi
+          cache: false
+          restore-cache: false
+          upload-artifact: false
+      - name: Save flatpak-builder state (master only)
+        if: github.ref == 'refs/heads/master' && steps.fb-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .flatpak-builder
+          key: ${{ steps.fb-cache.outputs.cache-primary-key }}

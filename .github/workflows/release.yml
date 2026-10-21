@@ -9,6 +9,12 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 
+# Caches: tag runs only RESTORE. A cache saved on a tag ref is visible to that tag alone, so it
+# would only pile up; caches saved on master are visible to every ref. They are saved by
+# cache-warmup.yml (push to master when Cargo.lock, the Flatpak manifest etc. change), or by a
+# manual run of this workflow on master. Cache keys, toolchain, env and cargo profile must stay
+# in sync with cache-warmup.yml.
+
 jobs:
   linux:
     runs-on: ubuntu-24.04
@@ -30,8 +36,11 @@ jobs:
             libjpeg-dev liblcms2-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-linux
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       # Slim libmpv (decoders only FFmpeg, no mpv CLI) for the AppImage; cached by script hash.
-      - uses: actions/cache@v5
+      - uses: actions/cache/restore@v5
         id: deps
         with:
           path: deps
@@ -39,6 +48,12 @@ jobs:
       - name: Build slim libmpv
         if: steps.deps.outputs.cache-hit != 'true'
         run: PREFIX=$PWD/deps SRC=$RUNNER_TEMP/deps-src packaging/appimage/build-libmpv.sh
+      - name: Save slim libmpv (master only)
+        if: github.ref == 'refs/heads/master' && steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: deps
+          key: ${{ steps.deps.outputs.cache-primary-key }}
       - run: cargo build --release
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
@@ -75,6 +90,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-windows
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
         shell: pwsh
         env:
@@ -115,6 +133,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-macos
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: brew install mpv dylibbundler librsvg
       - run: cargo build --release
         env:
@@ -163,6 +184,15 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v7
+      # flatpak-builder's state dir (built dependency modules, git mirrors, downloads). Restored
+      # before the next step edits the manifest, so the key hashes the committed manifest.
+      - name: Restore flatpak-builder state
+        id: fb-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .flatpak-builder
+          key: flatpak-builder-${{ runner.os }}-${{ runner.arch }}-x86_64-${{ hashFiles('packaging/flatpak/io.github.loafer19.vivi.yml') }}
+          restore-keys: flatpak-builder-${{ runner.os }}-${{ runner.arch }}-x86_64-
       - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
         run: |
           # The flatpak-builder image has no mkswap/swapon and no package manager: warn and go on.
@@ -189,8 +219,17 @@ jobs:
         with:
           bundle: vivi.flatpak
           manifest-path: packaging/flatpak/io.github.loafer19.vivi.yml
-          cache-key: flatpak-builder-${{ github.sha }}
+          # The action's own cache saves on every ref (and its fallback key never matches):
+          # off, the explicit restore/save steps around it apply the master-only policy.
+          cache: false
+          restore-cache: false
           upload-artifact: false
+      - name: Save flatpak-builder state (master only)
+        if: github.ref == 'refs/heads/master' && steps.fb-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .flatpak-builder
+          key: ${{ steps.fb-cache.outputs.cache-primary-key }}
       - name: Name the bundle
         run: |
           VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
