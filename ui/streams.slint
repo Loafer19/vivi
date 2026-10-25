@@ -148,6 +148,8 @@ export component NowBar inherits Rectangle {
 component Tab inherits Rectangle {
     in property <string> text;
     in property <string> icon;
+    // The <icon>-active art (solid accent) drawn while selected, like the Library rail.
+    in property <string> active-icon;
     in property <bool> active;
     callback clicked();
     height: 34px; width: row.preferred-width + 24px; border-radius: self.height / 2;
@@ -155,7 +157,7 @@ component Tab inherits Rectangle {
     border-width: 1px; border-color: root.active ? Theme.accent : transparent;
     row := HorizontalLayout {
         x: 12px; spacing: 8px;
-        VerticalLayout { alignment: center; TriIcon { width: 16px; height: 16px; name: root.icon; tint: root.active ? Theme.accent-bright : Theme.fg-a2; } }
+        VerticalLayout { alignment: center; TriIcon { width: 16px; height: 16px; name: root.active && root.active-icon != "" ? root.active-icon : root.icon; tint: root.active ? Theme.accent-bright : Theme.fg-a2; } }
         Text { text: root.text; color: root.active ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; }
     }
     ta := TouchArea { accessible-role: tab; accessible-label: root.text; accessible-item-selected: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
@@ -223,11 +225,11 @@ export component StreamsHub inherits VerticalLayout {
     UrlBar { }
     HorizontalLayout {
         spacing: 8px; alignment: start;
-        Tab { text: "Recent"; icon: "recent"; active: Streams.tab == "recent"; clicked => { Streams.select-tab("recent"); } }
-        Tab { text: "Favorites"; icon: "favorite"; active: Streams.tab == "favorites"; clicked => { Streams.select-tab("favorites"); } }
-        if Streams.directory: Tab { text: "Radio"; icon: "streaming"; active: Streams.tab == "radio"; clicked => { Streams.select-tab("radio"); } }
-        if Streams.directory: Tab { text: "TV"; icon: "tv"; active: Streams.tab == "tv"; clicked => { Streams.select-tab("tv"); } }
-        Tab { text: "Music"; icon: "music"; active: Streams.tab == "music"; clicked => { Streams.select-tab("music"); } }
+        Tab { text: "Recent"; icon: "recent"; active-icon: "recent-active"; active: Streams.tab == "recent"; clicked => { Streams.select-tab("recent"); } }
+        Tab { text: "Favorites"; icon: "favorite"; active-icon: "favorite-active"; active: Streams.tab == "favorites"; clicked => { Streams.select-tab("favorites"); } }
+        if Streams.directory: Tab { text: "Radio"; icon: "streaming"; active-icon: "streaming-active"; active: Streams.tab == "radio"; clicked => { Streams.select-tab("radio"); } }
+        if Streams.directory: Tab { text: "TV"; icon: "tv"; active-icon: "tv-active"; active: Streams.tab == "tv"; clicked => { Streams.select-tab("tv"); } }
+        Tab { text: "Music"; icon: "songs"; active-icon: "songs-active"; active: Streams.tab == "music"; clicked => { Streams.select-tab("music"); } }
         Rectangle { horizontal-stretch: 1; }
         if Streams.tab == "recent" && Streams.recent.length > 0: VerticalLayout { alignment: center;
             Text { text: "Clear"; color: cl.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base;

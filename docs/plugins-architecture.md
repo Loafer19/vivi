@@ -114,6 +114,7 @@ its point and runs the chosen one.
 | `notify` | Desktop notifications: built-ins call `Ctx::notify(title, body)`, packages send `script-message vivi-notify <plugin id> <title> [body]`. Shown through `org.freedesktop.Notifications` on Linux (`src/notify.rs`) only when the plugin declares `notify` and *Settings → Extensions → Desktop notifications from extensions* is on; otherwise (or on Windows / macOS for now) the text shows as a player toast. | done | none |
 | `downloads` | The plugin reports jobs to the shared Downloads panel (see *Downloads* below); declaring it lists the panel under *Where it shows up* | done | none |
 | `downloads.action` | Button in the Downloads panel header (e.g. *Record stream*, *Find free music*) | done | none |
+| `streams.music` | A service tab on the Streams hub's *Music* tab (`src/streams/`): the service switcher lists every enabled plugin with this point (Free Music built in, YouTube Music and other music packages); choosing it runs `command`, which opens the plugin's dialog as the tab's page | done | none |
 | `downloads.url` | The Downloads panel's *paste a link* field (first plugin that declares it); `label` is the placeholder | done | the URL |
 
 Unknown points are ignored with a log line, so a manifest written for a newer Vivi still
@@ -131,6 +132,32 @@ Manifest::builtin(ID, "YouTube Music", "…", "streams")
 `source(cmd)` sets the role and adds the `sidebar.source` entry; the command usually sets
 `MusicDialogState.owner` / `caps` and opens the shared plugin dialog (see Network Streams).
 Opened from the Extensions window's *Open* button, the window closes first.
+
+### Plugin dialogs as Library pages (Streams hub, #86)
+
+The shared plugin dialog (`MusicDialogState`, `ui/plugins.slint` `MusicBody`) is drawn either
+as a modal or as a full-width Library page. Core (`src/streams/mod.rs`, `open_dialog`)
+decides when a plugin opens it (`set_md_open` in built-ins, `vivi-dialog … "open": true` for
+packages):
+
+* **Page** when the owner is a *source* (`sidebar.source`), a `streams.music` service or the
+  radio / TV directory (Network Streams): `MusicDialogState.page` is set and the Library shows
+  the dialog body full width with the now-playing card and a back arrow (*Streams* on the
+  service's own page, reached from its sidebar icon; inside the hub on the Radio / TV / Music
+  tabs). If the user is elsewhere (the player, another section) the Library opens at that
+  plugin's place: `service:<id>`, or `streams:music:<id>` / `streams:radio` / `streams:tv`
+  when the hub was what asked for it.
+* **Modal** otherwise (Auto-tagger review, a package's settings or info dialog), unchanged.
+
+Nothing changes for plugins: the same fields, rows, filters and commands; `close` is sent when
+the user leaves the page (Back, another section, the Library closed) like when the modal was
+dismissed. Esc in a page goes back to the hub instead of closing an overlay. Places use one
+syntax (`src/streams/route.rs`): `streams[:recent|favorites|radio|tv|music[:<id>]|url]` and
+`service:<id>`; `VIVI_PAGE=<place>`, the control socket's `page` command and the palette
+(*Streams: …*) open them. The directory gets `hub <tab> [query]` and `filter <name> <value>`
+(the hub's Radio filters: country, genre, language, bitrate, sort; TV: country, group, guide).
+Favorites, Recent and the URL history are core (`src/streams/store.rs`, below), so every card
+has a working ★ even with Network Streams turned off; then the Radio and TV tabs are hidden.
 
 Packages declare the same in `manifest.toml`:
 
@@ -447,8 +474,7 @@ which keeps its Figma design. Sources: radio-browser.info (`/json/stations/searc
 name / country / countrycode / tag, `/json/stations/topvote`, `hidebroken=true`, ordered by
 votes, mirrors `de1`, `fi1`, `at1` tried in turn; a play is reported to `/json/url` as the API
 asks), M3U / extended M3U / IPTV playlists from a path or URL (`#EXTINF` name, `tvg-logo`,
-`group-title`, `tvg-country`; relative entries skipped), and JSON lists `saved.json` /
-`recent.json` (30 entries, de-duplicated by URL) under `$XDG_DATA_HOME/vivi/streams/`.
+`group-title`, `tvg-country`; relative entries skipped), and the Streams hub's lists (below).
 Stream info reads mpv's `icy-title`, `icy-name`, codec, bitrate and `demuxer-cache-duration`.
 TV comes from iptv-org: `api/countries.json` / `api/categories.json` as pickers, then
 `iptv/countries/<code>.m3u` / `iptv/categories/<id>.m3u` (and `index.m3u` for a word typed
@@ -459,7 +485,14 @@ filter locally as the user types; row logos load in the background into
 `stream-logos/` and are decoded through `src/images.rs` at row size (48 px) or, in the grid
 view, at tile size (256 px). The view (list / grid) is the plugin's `view` setting. The loading spinner / error toast for network streams is core
 (`src/loading.rs`, mpv `start-file`, `playback-restart`, `paused-for-cache`, `end-file`
-error). No key. Later: EPG for IPTV, podcasts (RSS).
+error). No key. Later: podcasts (RSS).
+
+Favorites, recent streams and the URL history are core since #86 (`src/streams/store.rs`):
+`favorites.json`, `history.json` (recent, 50) and `urls.json` (typed / pasted URLs, 20) under
+`$XDG_DATA_HOME/vivi/streams/`, each entry with a `kind` (radio, tv, music, web) and the
+`service` that played it. On first run they are filled once from Network Streams' `saved.json` /
+`recent.json` and the URLs of the global Recent list; the old files are left in place (older
+Vivi still reads them) and not written again.
 
 ## Options considered
 
