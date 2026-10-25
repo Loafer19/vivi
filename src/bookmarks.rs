@@ -367,37 +367,24 @@ fn frame(p: &Player, path: &str, t: f64) -> Option<String> {
     std::fs::create_dir_all(&dir).ok()?;
     let name = format!("{}-{}.jpg", key(path), (t * 1000.0).round() as u64);
     let out = dir.join(&name);
-    // Local files: ffmpeg seeks the file itself (works whatever the video output can
-    // capture); streams: mpv's own screenshot of the current frame.
-    if std::path::Path::new(path).is_file() && crate::library::ffmpeg_available() {
+    // mpv's own screenshot of the current frame. It fails while hardware decoding
+    // hands frames straight to the GPU (vaapi / nvdec zero-copy): mpv cannot read them
+    // back. Local files then get a frame from a short-lived, software-decoding libmpv
+    // instance (vo=image); anything else stays without a picture (generic icon).
+    let raw = dir.join(format!(".{name}.png"));
+    if p.try_cmd("screenshot-to-file", &[&raw.to_string_lossy(), "video"])
+        .is_err()
+    {
+        if !std::path::Path::new(path).is_file() {
+            return None;
+        }
         let src = path.to_string();
         std::thread::spawn(move || {
-            let ok = std::process::Command::new("ffmpeg")
-                .args([
-                    "-v",
-                    "error",
-                    "-nostdin",
-                    "-y",
-                    "-ss",
-                    &format!("{t:.2}"),
-                    "-i",
-                ])
-                .arg(&src)
-                .args(["-an", "-frames:v", "1", "-vf"])
-                .arg(format!("scale={THUMB_W}:-2"))
-                .arg(&out)
-                .status()
-                .is_ok_and(|s| s.success());
-            if ok {
+            if grab(&src, t, &out).is_some() {
                 let _ = slint::invoke_from_event_loop(refresh);
             }
         });
         return Some(name);
-    }
-    let raw = dir.join(format!(".{name}.png"));
-    if let Err(e) = p.try_cmd("screenshot-to-file", &[&raw.to_string_lossy(), "video"]) {
-        eprintln!("vivi: bookmark thumbnail: {e}");
-        return None;
     }
     std::thread::spawn(move || {
         let r = image::open(&raw).map(|i| {
@@ -410,6 +397,51 @@ fn frame(p: &Player, path: &str, t: f64) -> Option<String> {
         }
     });
     Some(name)
+}
+
+/// One frame of local file `src` at `t` seconds, scaled to [`THUMB_W`] px wide, written
+/// to `out` (JPEG) by a separate headless libmpv (software decode, no audio, no
+/// config or scripts). Gives up after 10 s.
+fn grab(src: &str, t: f64, out: &std::path::Path) -> Option<()> {
+    let tmp = out.with_extension("d");
+    std::fs::create_dir_all(&tmp).ok()?;
+    let r = grab_into(src, t, &tmp, out);
+    let _ = std::fs::remove_dir_all(&tmp);
+    r
+}
+
+fn grab_into(src: &str, t: f64, tmp: &std::path::Path, out: &std::path::Path) -> Option<()> {
+    use libmpv2::events::{Event, EventContext};
+    let mpv = libmpv2::Mpv::with_initializer(|i| {
+        i.set_property("config", "no")?;
+        i.set_property("load-scripts", "no")?;
+        i.set_property("ytdl", "no")?;
+        i.set_property("terminal", "no")?;
+        i.set_property("idle", "yes")?;
+        i.set_property("vo", "image")?;
+        i.set_property("vo-image-format", "jpg")?;
+        i.set_property("vo-image-outdir", tmp.to_string_lossy().as_ref())?;
+        i.set_property("ao", "null")?;
+        i.set_property("audio", "no")?;
+        i.set_property("sid", "no")?;
+        i.set_property("hwdec", "no")?;
+        i.set_property("vf", format!("scale=w={THUMB_W}:h=-2").as_str())?;
+        i.set_property("start", format!("{t:.3}").as_str())?;
+        i.set_property("frames", 1i64)?;
+        Ok(())
+    })
+    .ok()?;
+    let mut ev = EventContext::new(mpv.ctx);
+    let q = format!("\"{}\"", src.replace('\\', "\\\\").replace('"', "\\\""));
+    mpv.command("loadfile", &[&q]).ok()?;
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_secs(10) {
+        if let Some(Ok(Event::EndFile(_))) = ev.wait_event(0.2) {
+            break;
+        }
+    }
+    let f = std::fs::read_dir(tmp).ok()?.flatten().next()?.path();
+    std::fs::rename(f, out).ok()
 }
 
 fn index(i: i32) -> Option<usize> {
