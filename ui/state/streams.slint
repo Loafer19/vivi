@@ -33,6 +33,8 @@ export global Streams {
     in-out property <[string]> history;
     // Ask the URL bar to take the keyboard focus (old "Open URL" entry points).
     in-out property <int> focus-url;
+    // Open the URL history list (the `url_history` socket command: scripts, screenshots).
+    in-out property <int> open-history;
     in-out property <[StreamCard]> recent;
     in-out property <[StreamCard]> favorites;
     // Home's Streams row: favorites, then recent streams.

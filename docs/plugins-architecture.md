@@ -156,7 +156,7 @@ the user leaves the page (Back, another section, the Library closed) like when t
 dismissed. Esc in a page goes back to the hub instead of closing an overlay. Places use one
 syntax (`src/streams/route.rs`): `streams[:recent|favorites|radio|tv|music[:<id>]|url]` and
 `service:<id>`; `VIVI_PAGE=<place>`, the control socket's `page` command and the palette
-(*Streams: …*) open them. The directory gets `hub <tab> [query]` and `filter <name> <value>`
+(*Streams: …*) open them; the socket's `url_history` shows the URL bar with its history list. The directory gets `hub <tab> [query]` and `filter <name> <value>`
 (the hub's Radio filters: country, genre, language, bitrate, sort; TV: country, group, guide).
 Favorites, Recent and the URL history are core (`src/streams/store.rs`, below), so every card
 has a working ★ even with Network Streams turned off; then the Radio and TV tabs are hidden.

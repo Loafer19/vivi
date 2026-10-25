@@ -818,6 +818,14 @@ fn handle(
             crate::streams::open_page(a, page);
             Ok(json!({ "page": page }))
         }
+        "url_history" => {
+            // Show the Streams hub's URL bar with its history list open (scripts,
+            // screenshots).
+            crate::streams::open_page(a, "streams:url");
+            let st = a.global::<crate::Streams>();
+            st.set_open_history(st.get_open_history() + 1);
+            Ok(json!({ "urls": st.get_history().row_count() }))
+        }
         "__streams_on" => {
             if crate::plugins::active(crate::plugins::network_streams::ID) {
                 ok()

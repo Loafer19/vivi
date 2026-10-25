@@ -169,6 +169,8 @@ component Tab inherits Rectangle {
 component UrlBar inherits Rectangle {
     property <int> want: Streams.focus-url;
     changed want => { tf.focus-input(); }
+    property <int> want-history: Streams.open-history;
+    changed want-history => { if Streams.history.length > 0 { hist.show(); } }
     height: 40px;
     HorizontalLayout {
         spacing: 8px;
