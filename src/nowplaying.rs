@@ -172,6 +172,14 @@ pub fn merge(s: &Sources) -> Track {
     let lib_s = |f: fn(&crate::library::Media) -> &str| lib.map(f).unwrap_or_default();
     let (icy_artist, icy_title) = split_icy(&t.icy_title);
     let tagged = !t.title.is_empty() || !t.artist.is_empty();
+    // The library row of an untagged file only repeats its file name (the scanner's
+    // fallback title): that is not something the library knows, the source stays `file`.
+    let stem = Path::new(&s.path)
+        .file_stem()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let lib_known =
+        lib.is_some_and(|m| !m.artist.is_empty() || (!m.title.is_empty() && m.title != stem));
     let icy = !t.icy_title.is_empty() && !tagged;
     let title = first(&[
         pm_s(|m| m.title.as_str()),
@@ -198,7 +206,7 @@ pub fn merge(s: &Sources) -> Track {
         "tags".into()
     } else if icy {
         "stream".into()
-    } else if lib.is_some_and(|m| !m.title.is_empty() || !m.artist.is_empty()) {
+    } else if lib_known {
         "library".into()
     } else {
         "file".into()
@@ -619,6 +627,13 @@ mod tests {
             (t.title.as_str(), t.source.as_str(), t.track),
             ("Lib song", "library", 2)
         );
+        // An untagged file's library row (title = file name) is not library metadata.
+        s.library = Some(crate::library::Media {
+            title: "a".into(),
+            ..Default::default()
+        });
+        let t = merge(&s);
+        assert_eq!((t.title.as_str(), t.source.as_str()), ("a", "file"));
         s.library = None;
         let t = merge(&s);
         assert_eq!(
