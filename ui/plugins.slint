@@ -944,7 +944,7 @@ export component MusicDialog inherits Modal {
             for act in root.actions: FlatButton { text: act; enabled: !root.busy || root.rich; clicked => {
                 if act == "Copy credit" { copier.select-all(); copier.copy(); copier.clear-selection(); }
                 root.action(act, root.selected); } }
-            if !root.info-only || root.secondary-text != "": FlatButton { text: root.secondary-text; enabled: root.info-only || (!root.busy || root.rich) && root.secondary-text != "Preview only" && (root.secondary-text == "Choose file…" || ((root.selected >= 0 || root.secondary-text == "Write all" || (root.rich && root.detail != "")) && root.results.length > 0)); clicked => { root.secondary(root.selected); } }
+            if !root.info-only || root.secondary-text != "": FlatButton { text: root.secondary-text; enabled: root.info-only || ((!root.busy || root.rich) && root.secondary-text != "Preview only" && (root.secondary-text == "Choose file…" || ((root.selected >= 0 || root.secondary-text == "Write all" || (root.rich && root.detail != "")) && root.results.length > 0))); clicked => { root.secondary(root.selected); } }
             if !root.info-only || root.primary-text != "": Rectangle {
                 property <bool> on: root.info-only || ((root.selected >= 0 || (root.rich && root.detail != "")) && (!root.busy || root.rich));
                 width: max(96px, pt.preferred-width + 24px); height: 32px; border-radius: Metrics.radius-md;
