@@ -209,26 +209,6 @@ component ListHeader inherits HorizontalLayout {
         if root.plus-tip != "": Tooltip { text: @markdown("\{root.plus-tip}"); } }
 }
 
-// Numbered / named row with a right-aligned monospace timestamp.
-component TimeRow inherits Rectangle {
-    in property <string> number;
-    in property <string> title;
-    in property <string> time;
-    in property <bool> current;
-    callback clicked();
-    height: 38px; border-radius: Metrics.radius-sm;
-    background: ta.has-hover ? Theme.bg-a1 : (current ? Theme.accent-bg.with-alpha(0.5) : transparent);
-    HorizontalLayout {
-        padding-left: 10px; padding-right: 10px; spacing: 12px;
-        if root.number != "": Text { width: 22px; text: root.number; color: Theme.accent; font-family: "DM Mono"; font-size: Metrics.font-md; vertical-alignment: center; }
-        Text { text: root.title; horizontal-stretch: 1; overflow: elide; vertical-alignment: center; color: root.current ? Theme.accent-bright : Theme.fg-2; }
-        Text { text: root.time; color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; }
-    }
-    ta := TouchArea { accessible-role: button; accessible-label: root.title + ", " + root.time; mouse-cursor: pointer; clicked => { root.clicked(); } }
-}
-
-
-
 // "−  45 min  +" number stepper.
 component Stepper inherits HorizontalLayout {
     in property <int> value;

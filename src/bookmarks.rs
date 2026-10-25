@@ -373,9 +373,9 @@ fn index(i: i32) -> Option<usize> {
     usize::try_from(i).ok()
 }
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, log: bool) {
+pub fn setup(app: &AppWindow, pl: &Rc<Player>, log: bool) {
     APP.with(|a| *a.borrow_mut() = Some(app.as_weak()));
-    PLAYER.with(|p| *p.borrow_mut() = Some(player.clone()));
+    PLAYER.with(|p| *p.borrow_mut() = Some(pl.clone()));
     let g = app.global::<crate::Bookmarks>();
     g.on_add(move || {
         if let Some(p) = player() {
