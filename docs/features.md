@@ -60,8 +60,10 @@ instant startup, a simple interface by default with deep customization when you 
 | <img src="screenshots/miniplayer.png" width="260"> | <img src="screenshots/onboarding.png" width="420"> |
 | **Equalizer** | **Audio effects** |
 | <img src="screenshots/panel-audio.png" width="420"> | <img src="screenshots/audio-effects.png" width="420"> |
-| **Open Network Stream** | **New Playlist** |
-| <img src="screenshots/network.png" width="420"> | <img src="screenshots/new-playlist.png" width="420"> |
+| **Streams hub** | **New Playlist** |
+| <img src="screenshots/streams.png" width="420"> | <img src="screenshots/new-playlist.png" width="420"> |
+| **Streams hub: Music** | |
+| <img src="screenshots/streams-music.png" width="420"> | |
 | **Video filters** | **Miniplayer queue** |
 | <img src="screenshots/panel-video.png" width="420"> | <img src="screenshots/miniplayer-queue.png" width="200"> |
 

@@ -89,7 +89,7 @@ def sitemap(out: Path) -> None:
 
 
 IMAGES = ["og", "player", "extensions", "lyrics", "skip-intro", "add-subtitles", "visualizer", "library-home",
-          "settings", "panel-subtitles", "menu-main", "miniplayer", "panel-audio", "network"]
+          "settings", "panel-subtitles", "menu-main", "miniplayer", "panel-audio", "streams"]
 
 
 def icon(name: str) -> str:
