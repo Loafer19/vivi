@@ -168,6 +168,14 @@ pub fn refresh() {
     }) else {
         return;
     };
+    // Speed changed outside the panel (keys, menus, IPC, plugins): keep the Playback
+    // panel's presets / readout in step with mpv.
+    if let Some(s) = num(&p, "speed") {
+        let pg = a.global::<crate::Panel>();
+        if (pg.get_pv_speed() as f64 - s).abs() > 0.001 {
+            pg.set_pv_speed(s as f32);
+        }
+    }
     let now = current(&p);
     let g = a.global::<crate::Status>();
     let old = g.get_items();
