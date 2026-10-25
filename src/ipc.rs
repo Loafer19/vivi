@@ -453,7 +453,8 @@ fn repeat_mode(p: &crate::player::Player) -> &'static str {
 
 /// `"open"` of the `drawer` command: true / absent = open, false = close, "toggle".
 #[cfg_attr(not(unix), allow(dead_code))]
-pub fn drawer_open_arg(v: &Value) -> Result<Option<bool>, String> {
+pub fn drawer_open_arg(v: &serde_json::Value) -> Result<Option<bool>, String> {
+    use serde_json::Value;
     match v {
         Value::Null => Ok(Some(true)),
         Value::Bool(b) => Ok(Some(*b)),
