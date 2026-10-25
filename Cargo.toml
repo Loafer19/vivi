@@ -1,6 +1,6 @@
 [package]
 name = "vivi"
-version = "0.13.1"
+version = "0.14.0"
 edition = "2021"
 description = "Fast, lightweight media player inspired by Juxtopposed's VLC redesign"
 
