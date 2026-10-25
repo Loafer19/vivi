@@ -366,10 +366,39 @@ fn frame(p: &Player, path: &str, t: f64) -> Option<String> {
     let dir = thumbs_dir();
     std::fs::create_dir_all(&dir).ok()?;
     let name = format!("{}-{}.jpg", key(path), (t * 1000.0).round() as u64);
-    let raw = dir.join(format!(".{name}.png"));
-    p.try_cmd("screenshot-to-file", &[&raw.to_string_lossy(), "video"])
-        .ok()?;
     let out = dir.join(&name);
+    // Local files: ffmpeg seeks the file itself (works whatever the video output can
+    // capture); streams: mpv's own screenshot of the current frame.
+    if std::path::Path::new(path).is_file() && crate::library::ffmpeg_available() {
+        let src = path.to_string();
+        std::thread::spawn(move || {
+            let ok = std::process::Command::new("ffmpeg")
+                .args([
+                    "-v",
+                    "error",
+                    "-nostdin",
+                    "-y",
+                    "-ss",
+                    &format!("{t:.2}"),
+                    "-i",
+                ])
+                .arg(&src)
+                .args(["-an", "-frames:v", "1", "-vf"])
+                .arg(format!("scale={THUMB_W}:-2"))
+                .arg(&out)
+                .status()
+                .is_ok_and(|s| s.success());
+            if ok {
+                let _ = slint::invoke_from_event_loop(refresh);
+            }
+        });
+        return Some(name);
+    }
+    let raw = dir.join(format!(".{name}.png"));
+    if let Err(e) = p.try_cmd("screenshot-to-file", &[&raw.to_string_lossy(), "video"]) {
+        eprintln!("vivi: bookmark thumbnail: {e}");
+        return None;
+    }
     std::thread::spawn(move || {
         let r = image::open(&raw).map(|i| {
             let i = i.thumbnail(THUMB_W, THUMB_W * 9 / 16 + 60).to_rgb8();

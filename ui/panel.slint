@@ -257,7 +257,7 @@ component BookmarkItem inherits Rectangle {
             if root.it.note != "": Text { text: root.it.note; overflow: elide; color: Theme.fg-a3; font-size: Metrics.font-xs; }
         }
         Text { text: Format.hms(root.it.time, false); color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; }
-        for b in ["edit", "close-low"]: tb := Rectangle { width: 26px;
+        for b in ["edit", "close"]: tb := Rectangle { width: 26px;
             property <string> tip: b == "edit" ? "Rename" : "Delete";
             Rectangle { width: 26px; height: 26px; border-radius: Metrics.radius-sm; background: ba.has-hover ? Theme.field-raised : transparent;
                 TriIcon { width: 16px; height: 16px; name: b; tint: ba.has-hover ? Theme.fg-1 : Theme.fg-a3; }
