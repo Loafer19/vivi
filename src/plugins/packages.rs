@@ -1260,7 +1260,13 @@ mod tests {
         let ids: Vec<&str> = browse_order(&c).iter().map(|e| e.id.as_str()).collect();
         assert_eq!(
             ids,
-            ["chapter-thumbnails", "youtube", "remote-control", "ab-loop", "scrobbler"]
+            [
+                "chapter-thumbnails",
+                "youtube",
+                "remote-control",
+                "ab-loop",
+                "scrobbler"
+            ]
         );
         assert_eq!(recommended_rank(&c, &c[2]), None);
         assert_eq!(recommended_rank(&c, &c[3]), Some(1));
