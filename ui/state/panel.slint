@@ -1,4 +1,4 @@
-// Side panel: tab, scroll, track / device / chapter / bookmark / queue / playlist lists, the quick-setting values (pv-*) and its actions.
+// Side panel: tab, scroll, track / device / chapter / queue / playlist lists, the quick-setting values (pv-*) and its actions.
 import { Item } from "../core/types.slint";
 import { PanelTab } from "../core/types.slint";
 export global Panel {
@@ -11,12 +11,10 @@ export global Panel {
     in-out property <[image]> chapter-thumbs;
     in-out property <[bool]> chapter-has-thumb;
     in-out property <[string]> chapter-times;
-    in-out property <[Item]> bookmarks;
     in-out property <[Item]> queue;
     in-out property <[Item]> playlists;
     in-out property <string> preset-name;
     in-out property <[Item]> lib;
-    in-out property <string> sleep-state: "";
     in-out property <string> hwdec: "auto-safe";
     in-out property <float> pv-sub-delay: 0;
     in-out property <float> pv-sub-scale: 1;
@@ -37,9 +35,6 @@ export global Panel {
     callback load-sub();
     // Subtitle Offset group: ("offset", delta | "reset") or ("sync", ""); src/suboffset.rs.
     callback sub-offset(string, string);
-    callback sleep(int);
-    callback add-bookmark();
-    callback remove-bookmark();
     callback queue-play(int);
     callback queue-move(int, int);
     callback queue-remove(int);

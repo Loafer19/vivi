@@ -102,6 +102,8 @@ pub(crate) fn wire(
                         suboffset::file_loaded(&a, &player);
                         crate::nowplaying::file_loaded();
                         plugins::file_loaded();
+                        crate::bookmarks::file_loaded(&player);
+                        crate::sleep::file_loaded(&player);
                         a.global::<crate::Panel>().set_preset_name(
                             key.or_else(|| player.get("path").map(|p| config::show_key(&p)))
                                 .unwrap_or_default()

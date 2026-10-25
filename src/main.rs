@@ -2,6 +2,7 @@
 mod abloop;
 mod about;
 mod app;
+mod bookmarks;
 mod config;
 mod desktop;
 mod dialogs;
@@ -31,6 +32,8 @@ mod preview;
 mod render;
 mod scenes;
 mod settings;
+mod sleep;
+mod status;
 mod store;
 mod streams;
 mod suboffset;

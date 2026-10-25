@@ -176,6 +176,14 @@ pub(super) const OTHER: &[Field] = &[
         set: |c, v| c.playback.precise_seek = v == "true",
     },
     Field {
+        id: "playback.sleep_fade",
+        get: None,
+        set: |c, v| {
+            let num = v.parse::<f64>().unwrap_or(30.0);
+            c.playback.sleep_fade = (num.round() as i64).clamp(0, 120)
+        },
+    },
+    Field {
         id: "playback.quality",
         get: None,
         set: |c, v| c.playback.quality = v.into(),

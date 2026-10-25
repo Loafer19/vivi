@@ -272,6 +272,15 @@ pub fn active(id: &str) -> bool {
     with(|r| r.entries.iter().any(|e| e.active && e.manifest.id == id)).unwrap_or(false)
 }
 
+/// Whether plugin `id` is running: an active built-in or a loaded package script.
+pub fn loaded(id: &str) -> bool {
+    with(|r| {
+        r.entries.iter().any(|e| e.active && e.manifest.id == id)
+            || r.scripts.iter().any(|s| s.manifest.id == id)
+    })
+    .unwrap_or(false)
+}
+
 /// Whether a plugin is enabled in the config.
 pub fn is_enabled(c: &Config, m: &Manifest) -> bool {
     c.plugins
@@ -823,6 +832,13 @@ pub fn client_message(args: &[String]) {
                 crate::drawer::request(&a, id, open);
             }
         }
+        Some(M::Sleep(spec)) => {
+            if let Err(e) = crate::sleep::set_spec(spec) {
+                eprintln!("vivi: vivi-sleep: {e}");
+            }
+        }
+        Some(M::Indicator { id, key, json }) => crate::status::plugin_set(id, key, json),
+        Some(M::IndicatorClear { id, key }) => crate::status::plugin_clear(id, key),
         _ => {}
     }
 }

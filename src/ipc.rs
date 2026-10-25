@@ -333,6 +333,18 @@ pub fn setup(_: &crate::AppWindow, _: &std::rc::Rc<crate::player::Player>, _: bo
 /// This instance owns the control socket (removed again on exit).
 static BOUND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Whether this instance owns the control socket (top-bar remote indicator).
+pub fn bound() -> bool {
+    #[cfg(unix)]
+    {
+        BOUND.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
 /// On exit: remove our control socket and the mpv IPC socket the Remote Control
 /// plugin opened (`$XDG_RUNTIME_DIR/vivi-mpv-<pid>.sock`).
 pub fn cleanup() {
@@ -423,6 +435,7 @@ fn status(a: &crate::AppWindow, p: &crate::player::Player) -> Value {
         "repeat": repeat_mode(p),
         "shuffle": a.global::<crate::Playback>().get_shuffle_on(),
         "lyrics_available": a.global::<crate::Lyrics>().get_lines().row_count() > 0,
+        "sleep": crate::sleep::state_json(),
     })
 }
 
@@ -743,6 +756,27 @@ fn handle(
                 "source": a.global::<crate::Lyrics>().get_source().as_str(), "offset_seconds": a.global::<crate::Lyrics>().get_offset(),
                 "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }),
             )
+        }
+        "sleep" => {
+            // Sleep timer: {"timer": "off" | "min:<n>" | "eof" | "chapter" | "items:<n>"}
+            // or {"minutes": n}; no arguments returns the state.
+            let spec = match (&args["timer"], &args["minutes"]) {
+                (Value::String(s), _) => Some(s.clone()),
+                (_, Value::Number(n)) => Some(format!("min:{}", n.as_f64().unwrap_or(0.0).round() as i64)),
+                (Value::Null, Value::Null) => None,
+                _ => return Err("\"timer\" is a string (off, min:<n>, eof, chapter, items:<n>) or \"minutes\" a number".into()),
+            };
+            if let Some(s) = spec {
+                crate::sleep::set_spec(&s)?;
+            }
+            Ok(crate::sleep::state_json())
+        }
+        "bookmarks" => {
+            // Bookmarks of the playing file; {"add": true} bookmarks the position first.
+            if args["add"].as_bool() == Some(true) {
+                crate::bookmarks::add_current(p, false);
+            }
+            Ok(json!(crate::bookmarks::current_marks()))
         }
         "drawer" => {
             // Open / close / toggle the plugin side drawer (screenshots, scripts); it

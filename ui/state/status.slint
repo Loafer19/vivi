@@ -1,0 +1,36 @@
+// Top-bar status indicators (src/status.rs) and the sleep timer (src/sleep.rs).
+//
+// An indicator shows only while its feature is on: the sleep timer, loudness
+// normalization, an A-B loop, speed other than 1×, remote control, or one a package
+// registered with `vivi-indicator`. Clicking it opens the matching panel or setting.
+export struct Indicator {
+    // "sleep", "leveling", "ab-loop", "speed", "remote" or "plugin:<id>:<key>".
+    id: string,
+    // Duo icon name; drawn as its solid `-active` art (two-tone bar icons) or its plain
+    // art in the accent colour (single-tone).
+    icon: string,
+    tip: string,
+    // Short text after the icon ("23:41", "1.5×"); "" = icon only.
+    label: string,
+}
+
+export global Status {
+    in-out property <[Indicator]> items;
+    callback clicked(string);
+
+    // ---- Sleep timer ----
+    // Choice in the side panel (index into `sleep-options`, see src/sleep.rs MODES).
+    in-out property <int> sleep-choice: 0;
+    out property <[string]> sleep-options: ["Off", "15 min", "30 min", "60 min", "Custom", "End of file", "End of chapter", "After N items"];
+    // "Pausing in 23:41", "Pausing at end of chapter", "" when off.
+    in-out property <string> sleep-state: "";
+    // Custom minutes and item count for the Custom / After N items choices.
+    in-out property <int> sleep-minutes: 45;
+    in-out property <int> sleep-items: 3;
+    // Fade-out before pausing, seconds (playback.sleep_fade; 0 = none).
+    in-out property <int> sleep-fade: 30;
+    out property <[string]> fade-options: ["No fade", "15 s", "30 s", "45 s", "60 s"];
+    // Start a timer: "off", "min:<n>", "eof", "chapter", "items:<n>".
+    callback sleep-set(string);
+    callback sleep-fade-set(int);
+}

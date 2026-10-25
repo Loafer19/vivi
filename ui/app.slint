@@ -43,17 +43,54 @@ import { ExtensionsDialog } from "extensions.slint";
 import { Palette, PaletteItem } from "state/palette.slint";
 import { PaletteDialog } from "palette.slint";
 import { Drawer } from "state/drawer.slint";
+import { Status, Indicator } from "state/status.slint";
+import { Duo } from "core/duo.slint";
+import { Bookmarks, BookmarkRow } from "state/bookmarks.slint";
 import { SideDrawer } from "drawer.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
 export { LiveRow } from "core/rows.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Streams, StreamCard, StreamService, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Streams, StreamCard, StreamService, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads, Status, Indicator, Bookmarks, BookmarkRow }
+
+// Top-bar status chip (src/status.rs): accent icon (+ short label) for a feature that is
+// on; clicking opens its panel or setting. Two-tone bars draw the icon's solid
+// `-active` art, single-tone bars its plain art in the accent colour.
+component StatusChip inherits Rectangle {
+    in property <Indicator> it;
+    callback clicked();
+    property <string> solid: root.it.icon + "-active";
+    property <bool> has-solid: Duo.base(root.solid).width > 0;
+    height: 28px;
+    border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.accent.with-alpha(0.22) : Theme.accent.with-alpha(0.10);
+    HorizontalLayout {
+        padding-left: 6px; padding-right: root.it.label != "" ? 8px : 6px; spacing: 5px;
+        TriIcon {
+            y: (parent.height - self.height) / 2; width: 18px; height: 18px;
+            name: Theme.bar-duo && root.has-solid ? root.solid : root.it.icon;
+            tint: Theme.accent; accent-tint: Theme.accent; dim-tint: Theme.accent-dim;
+            flat: !Theme.bar-duo;
+        }
+        if root.it.label != "": Text {
+            text: root.it.label; color: Theme.accent-bright; font-family: "DM Mono"; font-size: Metrics.font-sm;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        accessible-role: button; accessible-label: root.it.tip;
+        accessible-action-default => { root.clicked(); }
+        clicked => { root.clicked(); }
+    }
+    Tooltip { text: @markdown("\{root.it.tip}"); }
+}
 
 component SeekBar inherits Rectangle {
     in property <float> position;
     in property <float> duration;
     in property <[image]> frames; // evenly spaced preview frames from the Chapter Thumbnails cache (may be empty)
     in property <[float]> chapters; // chapter start times (s) → segment gaps on the track
+    in property <[float]> marks; // bookmark times (s) → accent pins (src/bookmarks.rs)
     in property <[float]> peaks; // audio waveform peaks 0..1 (empty = plain bar)
     in property <float> range-a: -1; // plugin range (vivi-range), drawn in blue
     in property <float> range-b: -1;
@@ -121,6 +158,13 @@ component SeekBar inherits Rectangle {
             width: parent.width * clamp(abs(self.e - root.range-a) / root.duration, 0, 1);
             height: parent.height; border-radius: Metrics.radius-xs;
             background: Theme.range.with-alpha(0.25); border-width: 1px; border-color: Theme.range;
+        }
+        // Bookmarks: an accent line through the track with a dot above it.
+        for m in root.marks: Rectangle {
+            visible: root.duration > 0 && m >= 0 && m <= root.duration;
+            x: parent.width * clamp(m / max(root.duration, 1), 0, 1) - 1px; width: 2px;
+            height: parent.height; background: Theme.accent-bright;
+            if !root.boxed: Rectangle { x: -2px; y: -7px; width: 6px; height: 6px; border-radius: 3px; background: Theme.accent-bright; }
         }
         // A-B range overlay
         if root.ra >= 0 && root.rb >= 0: Rectangle {
@@ -594,7 +638,7 @@ export component AppWindow inherits Window {
         else if (id == "chapters") { root.open-panel(PanelTab.chapters); Panel.chapters-refresh(); }
         else if (id == "mute") { Playback.toggle-mute(); }
         else if (id == "fullscreen") { Playback.toggle-fullscreen(); }
-        else if (id == "bookmark") { Panel.add-bookmark(); }
+        else if (id == "bookmark") { Bookmarks.add(); }
         else if (id == "settings") { Overlays.settings-open = true; Settings.refresh(Settings.category, "", false); }
         else { Playback.bar-action(id); }
     }
@@ -802,6 +846,8 @@ export component AppWindow inherits Window {
                 color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
                 overflow: elide;
             }
+            // Status indicators (sleep timer, loudness, A-B loop, speed, remote, plugins).
+            for it in Status.items: StatusChip { y: (parent.height - self.height) / 2; it: it; clicked => { Status.clicked(it.id); } }
             if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "pip"; tip: "Miniplayer (P)"; clicked => { Playback.toggle-mini(); } }
             IconButton { tab-focus: false; bar: true; duo: "settings"; tip: "Settings (Ctrl+,)"; active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
             IconButton { tab-focus: false; bar: true; duo: "fullscreen"; tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
@@ -837,15 +883,11 @@ export component AppWindow inherits Window {
         sub-tracks: Panel.sub-tracks; audio-tracks: Panel.audio-tracks;
         audio-devices: Panel.audio-devices; chapters: Panel.chapters; chapter-thumbs: Panel.chapter-thumbs; chapter-has-thumb: Panel.chapter-has-thumb;
         chapters-refresh => { Panel.chapters-refresh(); }
-        ab-state: Playback.ab-state; sleep-state: Panel.sleep-state; hwdec: Panel.hwdec;
+        ab-state: Playback.ab-state; hwdec: Panel.hwdec;
         set-prop(n, v) => { Panel.set-prop(n, v); }
         run(c) => { Panel.run(c); }
         load-sub() => { Panel.load-sub(); }
-        sleep(m) => { Panel.sleep(m); }
-        bookmarks: Panel.bookmarks;
         seek-to(k) => { Playback.seek(k.to-float()); }
-        add-bookmark() => { Panel.add-bookmark(); }
-        remove-bookmark() => { Panel.remove-bookmark(); }
         chapter-times: Panel.chapter-times;
         viz-enabled: Viz.enabled; viz-modes: Viz.modes; viz-mode: Viz.mode;
         viz-select(i) => { Viz.select(i); }
@@ -964,7 +1006,7 @@ export component AppWindow inherits Window {
             if root.bar-classic: SeekBar {
                 position: Playback.position; duration: Playback.duration;
                 frames: Playback.preview-frames;
-                chapters: Playback.chapter-starts; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
+                chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
                 ab-set(x, y) => { Playback.set-ab(x, y); }
                 fmt(t) => { root.fmt(t) }
                 seek(t) => { Playback.seek(t); fs.focus(); }
@@ -1014,7 +1056,7 @@ export component AppWindow inherits Window {
                         track-h: 4px;
                         position: Playback.position; duration: Playback.duration;
                         frames: Playback.preview-frames; peaks: Playback.wave-peaks;
-                        chapters: Playback.chapter-starts; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
+                        chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
                         ab-set(x, y) => { Playback.set-ab(x, y); }
                         fmt(t) => { root.fmt(t) }
                         seek(t) => { Playback.seek(t); fs.focus(); }

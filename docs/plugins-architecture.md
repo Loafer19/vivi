@@ -276,6 +276,9 @@ still load. Packages that never send these messages are unaffected.
 | `vivi-content <id> [home\|drawer\|all] <json>` | Live content (feature `content`) of the package's Home widget (`home`) and/or drawer tab (`drawer`; no surface = `all`). Fields: `title` (replaces the contribution label), `value` (a large line, e.g. "1 h 05 min today"), `sub` (a line under it; on Home it replaces the description), `progress` (0–1 bar under them; negative removes it), `rows` (`[{label, value, sub, bar, heading}]`: `bar` 0–1 draws a native bar between label and value, `heading: true` makes a section title). Fields left out keep their last value; `"replace": true` starts from empty. Home shows the first 8 rows, the drawer up to 60. Kept for the session (until `vivi-content-clear` or quit); the widget / tab redraws at once when shown, so send updates only when something changed. Numbers out of 0–1 are clamped, NaN dropped. Code: `src/plugins/content.rs`. |
 | `vivi-content-clear <id> [home\|drawer\|all]` | Drop that content: the widget and tab show the static description again. |
 | `vivi-drawer <id> [open\|close\|toggle]` | (Feature `drawer`.) Open (default), close or toggle the player side drawer on the package's own `drawer.panel` tab. Ignored for a package without one. The drawer shows while media plays (it stays flagged open otherwise). |
+| `vivi-indicator <id> <key> <json>` | (Feature `indicators`.) Show or update a top-bar status chip `{icon, tip, label}`: `icon` is a Vivi icon name (drawn in the accent colour; unknown names fall back to `extension`), `tip` the tooltip, `label` up to 12 characters after the icon (e.g. "TV"). Up to 3 per package, shown while the package is loaded. A click sends `{"event":"indicator","args":[key]}` on `vivi-ui`. Code: `src/status.rs`. |
+| `vivi-indicator-clear <id> [key]` | Remove that chip, or every chip of the package. |
+| `vivi-sleep <spec>` | (Feature `sleep`.) Start or cancel the shared sleep timer: `off`, `min:<n>`, `eof`, `chapter`, `items:<n>`. It fades the volume out over `playback.sleep_fade` seconds, pauses and restores the volume. The state is in `user-data/vivi/sleep` (JSON `{mode, active, remaining, items_left, fade}`). Code: `src/sleep.rs`. |
 | `vivi-confirm <id> <key> <json>` | Warning / confirm dialog `{title, heading, text, ok}` (Enter confirms, Esc cancels). |
 | `vivi-media-meta <id> <json>` | `{url, title, artist, album, cover, info}` or `{"items": [...]}` for URLs the package queued: Vivi shows them on the now-playing card (cover, title, artist · album, `info` · codec · bitrate) while one of them plays as audio, uses the cover in Recent and merges them into `user-data/vivi/now-playing` (below). Optional for that: `album_artist`, `mbid` (MusicBrainz recording id), `duration` (s), `kind` (`music` / `video` / `podcast` / `stream`; e.g. `music` for a music video of a music service) and `service` (else `info`). At most 5000 URLs are kept. |
 | `vivi-protect <id> <path>` | `chmod 0600` (0700 for a folder) on a file inside the package's data folder `<data>/plugin-data/<id>` (credentials). Paths outside it are ignored. No-op on Windows. |
@@ -283,7 +286,7 @@ still load. Packages that never send these messages are unaffected.
 
 **Host capabilities.** Vivi sets `user-data/vivi/host-api` to the integer `1` and
 `user-data/vivi/host-features` to a space-separated word list of the host API it
-understands: `dialog confirm media-meta contributions content drawer bars info-dialog`
+understands: `dialog confirm media-meta contributions content drawer bars info-dialog indicators sleep`
 (`src/plugins/host.rs`, `FEATURES`). Older Vivi leaves both unset, so a package checks a
 word and keeps its old UI otherwise:
 

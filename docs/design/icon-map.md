@@ -41,6 +41,9 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 
 | Icon | Sheet cell |
 |---|---|
+| `ab-loop.svg` | hand-drawn in the sheet style: arrows between A / B bars (bars dim) |
+| `ab-loop-active.svg` | hand-drawn in the sheet style, solid accent |
+| `ab-loop-twotone.svg` | hand-drawn in the sheet style: arrows between A / B bars (bars dim) |
 | `accessibility.svg` | r10c05 |
 | `add.svg` | r08c10 |
 | `add-twotone.svg` | r08c10 + dim horizontal stroke (#82) |
@@ -149,8 +152,14 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `list.svg` | r11c11 |
 | `lists.svg` | r00c10 |
 | `lists-active.svg` | r00c11 |
+| `loudness.svg` | hand-drawn in the sheet style: level bars between limit lines (lines dim) |
+| `loudness-active.svg` | hand-drawn in the sheet style, solid accent |
+| `loudness-twotone.svg` | hand-drawn in the sheet style: level bars between limit lines (lines dim) |
 | `maximize.svg` | r04c01 |
 | `minimize.svg` | r04c00 |
+| `moon.svg` | hand-drawn in the sheet style: crescent with a sparkle (sparkle dim); sleep timer |
+| `moon-active.svg` | hand-drawn in the sheet style, solid accent |
+| `moon-twotone.svg` | hand-drawn in the sheet style: crescent with a sparkle (sparkle dim); sleep timer |
 | `more.svg` | r08c08 |
 | `more-twotone.svg` | r08c08, middle dot dim (#82) |
 | `move.svg` | r03c10 |
@@ -206,6 +215,9 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `record-twotone.svg` | r12c04, ring in the text colour, dot dim |
 | `refresh.svg` | r03c01 |
 | `refresh-twotone.svg` | r03c02 |
+| `remote.svg` | hand-drawn in the sheet style: remote with signal arcs (arcs dim) |
+| `remote-active.svg` | hand-drawn in the sheet style, solid accent |
+| `remote-twotone.svg` | hand-drawn in the sheet style: remote with signal arcs (arcs dim) |
 | `remove.svg` | r08c11 |
 | `repeat-right.svg` | r08c01 |
 | `repeat-right-twotone.svg` | r08c02 |

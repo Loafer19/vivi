@@ -3,6 +3,8 @@
 // plain icon as the base and no accent layers, so they draw single-tone.
 export global Duo {
     pure public function base(name: string) -> image {
+        if (name == "ab-loop") { return @image-url("../../assets/icons/layers/ab-loop-twotone-b.svg"); }
+        if (name == "ab-loop-active") { return @image-url("../../assets/icons/layers/ab-loop-active-b.svg"); }
         if (name == "add") { return @image-url("../../assets/icons/layers/add-twotone-b.svg"); }
         if (name == "album") { return @image-url("../../assets/icons/layers/album-twotone-b.svg"); }
         if (name == "arrow-down") { return @image-url("../../assets/icons/layers/arrow-down-twotone-b.svg"); }
@@ -67,6 +69,10 @@ export global Duo {
         if (name == "link-active") { return @image-url("../../assets/icons/layers/link-active-b.svg"); }
         if (name == "list") { return @image-url("../../assets/icons/layers/list-twotone-b.svg"); }
         if (name == "lists-active") { return @image-url("../../assets/icons/layers/lists-active-b.svg"); }
+        if (name == "loudness") { return @image-url("../../assets/icons/layers/loudness-twotone-b.svg"); }
+        if (name == "loudness-active") { return @image-url("../../assets/icons/layers/loudness-active-b.svg"); }
+        if (name == "moon") { return @image-url("../../assets/icons/layers/moon-twotone-b.svg"); }
+        if (name == "moon-active") { return @image-url("../../assets/icons/layers/moon-active-b.svg"); }
         if (name == "more") { return @image-url("../../assets/icons/layers/more-twotone-b.svg"); }
         if (name == "music") { return @image-url("../../assets/icons/layers/music-twotone-b.svg"); }
         if (name == "new_folder") { return @image-url("../../assets/icons/layers/new_folder-twotone-b.svg"); }
@@ -99,6 +105,8 @@ export global Duo {
         if (name == "record") { return @image-url("../../assets/icons/layers/record-twotone-b.svg"); }
         if (name == "record-active") { return @image-url("../../assets/icons/layers/record-active-b.svg"); }
         if (name == "refresh") { return @image-url("../../assets/icons/layers/refresh-twotone-b.svg"); }
+        if (name == "remote") { return @image-url("../../assets/icons/layers/remote-twotone-b.svg"); }
+        if (name == "remote-active") { return @image-url("../../assets/icons/layers/remote-active-b.svg"); }
         if (name == "repeat-right") { return @image-url("../../assets/icons/layers/repeat-right-twotone-b.svg"); }
         if (name == "replay") { return @image-url("../../assets/icons/layers/replay-twotone-b.svg"); }
         if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-b.svg"); }
@@ -177,6 +185,8 @@ export global Duo {
         @image-url("")
     }
     pure public function accent(name: string) -> image {
+        if (name == "ab-loop") { return @image-url("../../assets/icons/layers/ab-loop-twotone-a.svg"); }
+        if (name == "ab-loop-active") { return @image-url("../../assets/icons/layers/ab-loop-active-a.svg"); }
         if (name == "add") { return @image-url("../../assets/icons/layers/add-twotone-a.svg"); }
         if (name == "album") { return @image-url("../../assets/icons/layers/album-twotone-a.svg"); }
         if (name == "arrow-down") { return @image-url("../../assets/icons/layers/arrow-down-twotone-a.svg"); }
@@ -241,6 +251,10 @@ export global Duo {
         if (name == "link-active") { return @image-url("../../assets/icons/layers/link-active-a.svg"); }
         if (name == "list") { return @image-url("../../assets/icons/layers/list-twotone-a.svg"); }
         if (name == "lists-active") { return @image-url("../../assets/icons/layers/lists-active-a.svg"); }
+        if (name == "loudness") { return @image-url("../../assets/icons/layers/loudness-twotone-a.svg"); }
+        if (name == "loudness-active") { return @image-url("../../assets/icons/layers/loudness-active-a.svg"); }
+        if (name == "moon") { return @image-url("../../assets/icons/layers/moon-twotone-a.svg"); }
+        if (name == "moon-active") { return @image-url("../../assets/icons/layers/moon-active-a.svg"); }
         if (name == "more") { return @image-url("../../assets/icons/layers/more-twotone-a.svg"); }
         if (name == "music") { return @image-url("../../assets/icons/layers/music-twotone-a.svg"); }
         if (name == "new_folder") { return @image-url("../../assets/icons/layers/new_folder-twotone-a.svg"); }
@@ -273,6 +287,8 @@ export global Duo {
         if (name == "record") { return @image-url("../../assets/icons/layers/record-twotone-a.svg"); }
         if (name == "record-active") { return @image-url("../../assets/icons/layers/record-active-a.svg"); }
         if (name == "refresh") { return @image-url("../../assets/icons/layers/refresh-twotone-a.svg"); }
+        if (name == "remote") { return @image-url("../../assets/icons/layers/remote-twotone-a.svg"); }
+        if (name == "remote-active") { return @image-url("../../assets/icons/layers/remote-active-a.svg"); }
         if (name == "repeat-right") { return @image-url("../../assets/icons/layers/repeat-right-twotone-a.svg"); }
         if (name == "replay") { return @image-url("../../assets/icons/layers/replay-twotone-a.svg"); }
         if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-a.svg"); }
@@ -322,6 +338,8 @@ export global Duo {
         @image-url("")
     }
     pure public function dim(name: string) -> image {
+        if (name == "ab-loop") { return @image-url("../../assets/icons/layers/ab-loop-twotone-d.svg"); }
+        if (name == "ab-loop-active") { return @image-url("../../assets/icons/layers/ab-loop-active-d.svg"); }
         if (name == "add") { return @image-url("../../assets/icons/layers/add-twotone-d.svg"); }
         if (name == "album") { return @image-url("../../assets/icons/layers/album-twotone-d.svg"); }
         if (name == "arrow-down") { return @image-url("../../assets/icons/layers/arrow-down-twotone-d.svg"); }
@@ -386,6 +404,10 @@ export global Duo {
         if (name == "link-active") { return @image-url("../../assets/icons/layers/link-active-d.svg"); }
         if (name == "list") { return @image-url("../../assets/icons/layers/list-twotone-d.svg"); }
         if (name == "lists-active") { return @image-url("../../assets/icons/layers/lists-active-d.svg"); }
+        if (name == "loudness") { return @image-url("../../assets/icons/layers/loudness-twotone-d.svg"); }
+        if (name == "loudness-active") { return @image-url("../../assets/icons/layers/loudness-active-d.svg"); }
+        if (name == "moon") { return @image-url("../../assets/icons/layers/moon-twotone-d.svg"); }
+        if (name == "moon-active") { return @image-url("../../assets/icons/layers/moon-active-d.svg"); }
         if (name == "more") { return @image-url("../../assets/icons/layers/more-twotone-d.svg"); }
         if (name == "music") { return @image-url("../../assets/icons/layers/music-twotone-d.svg"); }
         if (name == "new_folder") { return @image-url("../../assets/icons/layers/new_folder-twotone-d.svg"); }
@@ -418,6 +440,8 @@ export global Duo {
         if (name == "record") { return @image-url("../../assets/icons/layers/record-twotone-d.svg"); }
         if (name == "record-active") { return @image-url("../../assets/icons/layers/record-active-d.svg"); }
         if (name == "refresh") { return @image-url("../../assets/icons/layers/refresh-twotone-d.svg"); }
+        if (name == "remote") { return @image-url("../../assets/icons/layers/remote-twotone-d.svg"); }
+        if (name == "remote-active") { return @image-url("../../assets/icons/layers/remote-active-d.svg"); }
         if (name == "repeat-right") { return @image-url("../../assets/icons/layers/repeat-right-twotone-d.svg"); }
         if (name == "replay") { return @image-url("../../assets/icons/layers/replay-twotone-d.svg"); }
         if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-d.svg"); }
@@ -467,6 +491,7 @@ export global Duo {
         @image-url("")
     }
     pure public function single(name: string) -> image {
+        if (name == "ab-loop") { return @image-url("../../assets/icons/ab-loop.svg"); }
         if (name == "add") { return @image-url("../../assets/icons/add.svg"); }
         if (name == "album") { return @image-url("../../assets/icons/album.svg"); }
         if (name == "arrow-down") { return @image-url("../../assets/icons/arrow-down.svg"); }
@@ -498,6 +523,8 @@ export global Duo {
         if (name == "interface") { return @image-url("../../assets/icons/interface.svg"); }
         if (name == "link") { return @image-url("../../assets/icons/link.svg"); }
         if (name == "list") { return @image-url("../../assets/icons/list.svg"); }
+        if (name == "loudness") { return @image-url("../../assets/icons/loudness.svg"); }
+        if (name == "moon") { return @image-url("../../assets/icons/moon.svg"); }
         if (name == "more") { return @image-url("../../assets/icons/more.svg"); }
         if (name == "music") { return @image-url("../../assets/icons/music.svg"); }
         if (name == "new_folder") { return @image-url("../../assets/icons/new_folder.svg"); }
@@ -520,6 +547,7 @@ export global Duo {
         if (name == "recent") { return @image-url("../../assets/icons/recent.svg"); }
         if (name == "record") { return @image-url("../../assets/icons/record.svg"); }
         if (name == "refresh") { return @image-url("../../assets/icons/refresh.svg"); }
+        if (name == "remote") { return @image-url("../../assets/icons/remote.svg"); }
         if (name == "repeat-right") { return @image-url("../../assets/icons/repeat-right.svg"); }
         if (name == "replay") { return @image-url("../../assets/icons/replay.svg"); }
         if (name == "save") { return @image-url("../../assets/icons/save.svg"); }

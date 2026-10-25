@@ -427,6 +427,10 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
             v
         }
         "action" => Vec::new(),
+        "bookmark" => vec![
+            row("lib:play", "Play from Here", "play", ""),
+            div(row("lib:delete-bookmark", "Delete Bookmark", "remove", "")),
+        ],
         _ => {
             let mut v = vec![
                 row("lib:play", "Play", "play", ""),

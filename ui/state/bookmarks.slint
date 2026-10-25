@@ -1,0 +1,21 @@
+// Persistent bookmarks of the playing file (src/bookmarks.rs): seek-bar markers and
+// the side panel's Bookmarks tab.
+export struct BookmarkRow {
+    time: float,
+    label: string,
+    note: string,
+    thumb: image,
+    has-thumb: bool,
+}
+
+export global Bookmarks {
+    in-out property <[BookmarkRow]> items;
+    // Bookmark times (s) for the seek-bar markers.
+    in-out property <[float]> times;
+    // Row being renamed in the side panel (-1 = none).
+    in-out property <int> editing: -1;
+    callback add();
+    callback jump(int);
+    callback rename(int, string, string);
+    callback remove(int);
+}

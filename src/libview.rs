@@ -383,6 +383,36 @@ impl Lib {
             "downloads" => {
                 crumbs.push(("downloads".into(), "Downloads".into()));
             }
+            // Every saved bookmark (src/bookmarks.rs), by file then time.
+            "bookmarks" => {
+                crumbs.push(("playlists".into(), "Playlists".into()));
+                crumbs.push(("bookmarks".into(), "Bookmarks".into()));
+                let dir = crate::bookmarks::thumbs_dir();
+                for (path, title, m) in crate::bookmarks::list_all() {
+                    let file = if title.is_empty() { store::display_name(&path) } else { title };
+                    let mut sub = format!("{file} · {}", crate::bookmarks::short_time(m.time));
+                    if !m.note.is_empty() {
+                        sub = format!("{sub} · {}", m.note);
+                    }
+                    let mut it = Self::group(
+                        crate::bookmarks::lib_key(&path, m.time),
+                        &m.label,
+                        sub,
+                        "bookmark",
+                        false,
+                    );
+                    it.icon = "bookmark".into();
+                    if !m.thumb.is_empty() {
+                        let f = dir.join(&m.thumb).to_string_lossy().into_owned();
+                        it.thumb_key = f.as_str().into();
+                        if let Some(img) = picture(&f) {
+                            it.thumb = img;
+                            it.has_thumb = true;
+                        }
+                    }
+                    out.push(it);
+                }
+            }
             "playlists" => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
                 out.push(Self::action(
@@ -390,6 +420,12 @@ impl Lib {
                     "Create playlist",
                     "add",
                 ));
+                let marks = crate::bookmarks::list_all().len();
+                if marks > 0 {
+                    let mut it = Self::action("bookmarks", "Bookmarks", "bookmark");
+                    it.subtitle = format!("{marks} saved").into();
+                    out.push(it);
+                }
                 let names: Vec<(String, String)> = crate::plugins::manifests()
                     .into_iter()
                     .map(|m| (m.id, m.name))
@@ -895,6 +931,17 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 },
                 "folder" | "group" => a.global::<crate::Library>().invoke_navigate(key),
                 "playlist" => a.global::<crate::Panel>().invoke_playlist_load(key),
+                "bookmark" => {
+                    if let Some((path, t)) = crate::bookmarks::parse_lib_key(&key) {
+                        crate::bookmarks::open_at(&p, &path, t);
+                        if a.global::<crate::Library>().get_full()
+                            || !a.global::<crate::Playback>().get_has_media()
+                        {
+                            a.global::<crate::Overlays>().set_library_open(false);
+                        }
+                        a.global::<crate::Library>().set_full(false);
+                    }
+                }
                 _ => {
                     // Play the item and queue the rest of the current list after it.
                     p.open(&key);
@@ -933,6 +980,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 let path = key.strip_prefix("video:").unwrap_or(&key).to_string();
                 match action.as_str() {
                     "play" => a.global::<crate::Library>().invoke_open(key, kind),
+                    "delete-bookmark" => {
+                        if let Some((path, t)) = crate::bookmarks::parse_lib_key(&key) {
+                            crate::bookmarks::remove_at(&path, t);
+                        }
+                        render();
+                    }
                     "enqueue" => {
                         if a.global::<crate::Playback>().get_has_media() {
                             p.enqueue(&path);

@@ -167,7 +167,7 @@ pub(crate) fn wire(
             }
             A::Extensions => crate::extwin::toggle(&a),
             A::Palette => crate::palette::toggle(&a),
-            A::Bookmark => a.global::<crate::Panel>().invoke_add_bookmark(),
+            A::Bookmark => a.global::<crate::Bookmarks>().invoke_add(),
             A::Shortcuts => a
                 .global::<crate::Overlays>()
                 .set_shortcuts_open(!a.global::<crate::Overlays>().get_shortcuts_open()),

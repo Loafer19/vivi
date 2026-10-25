@@ -89,6 +89,8 @@ pub struct Playback {
     pub cache_mib: i64,
     /// Already-played network data kept for seeking back, in MiB (`demuxer-max-back-bytes`).
     pub cache_back_mib: i64,
+    /// Sleep timer fade-out before pausing, seconds (0 = pause at once; src/sleep.rs).
+    pub sleep_fade: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -363,6 +365,7 @@ impl Default for Playback {
             hwdec_interop: "auto".into(),
             cache_mib: 48,
             cache_back_mib: 16,
+            sleep_fade: 30,
         }
     }
 }

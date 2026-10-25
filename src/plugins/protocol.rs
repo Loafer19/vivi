@@ -145,6 +145,19 @@ pub enum ScriptMessage<'a> {
     /// package's tab (the default), close it or toggle it. `open`: `Some(true)` opens,
     /// `Some(false)` closes, `None` toggles.
     Drawer { id: &'a str, open: Option<bool> },
+    /// `vivi-sleep <spec>`: start or cancel the shared sleep timer (`off`, `min:<n>`,
+    /// `eof`, `chapter`, `items:<n>`; src/sleep.rs).
+    Sleep(&'a str),
+    /// `vivi-indicator <id> <key> <json>`: show or update a top-bar status chip
+    /// (`{"icon","tip","label"}`; src/status.rs). Clicks come back on `vivi-ui` as
+    /// `{"event":"indicator","args":[key]}`.
+    Indicator {
+        id: &'a str,
+        key: &'a str,
+        json: &'a str,
+    },
+    /// `vivi-indicator-clear <id> [key]`: remove one chip, or all of the package's.
+    IndicatorClear { id: &'a str, key: &'a str },
 }
 
 impl<'a> ScriptMessage<'a> {
@@ -220,6 +233,16 @@ impl<'a> ScriptMessage<'a> {
                     Some("close") => Some(false),
                     _ => None,
                 },
+            },
+            ["vivi-sleep", spec, ..] => M::Sleep(spec.trim()),
+            ["vivi-indicator", id, key, json] if !key.trim().is_empty() => M::Indicator {
+                id,
+                key: key.trim(),
+                json,
+            },
+            ["vivi-indicator-clear", id, rest @ ..] => M::IndicatorClear {
+                id,
+                key: rest.first().map(|k| k.trim()).unwrap_or(""),
             },
             _ => return None,
         })
@@ -465,5 +488,33 @@ mod tests {
             },
         );
         assert_eq!(p(&["vivi-drawer"]), None);
+    }
+
+    #[test]
+    fn sleep_and_indicators() {
+        use ScriptMessage as M;
+        let p = |a: &[&str]| ScriptMessage::parse(&v(a)).map(|m| format!("{m:?}"));
+        let is = |a: &[&str], m: M| assert_eq!(p(a), Some(format!("{m:?}")));
+        is(&["vivi-sleep", " min:30 "], M::Sleep("min:30"));
+        is(&["vivi-sleep", "off"], M::Sleep("off"));
+        assert_eq!(p(&["vivi-sleep"]), None);
+        is(
+            &["vivi-indicator", "cast", "tv", "{\"icon\":\"cast\"}"],
+            M::Indicator {
+                id: "cast",
+                key: "tv",
+                json: "{\"icon\":\"cast\"}",
+            },
+        );
+        assert_eq!(p(&["vivi-indicator", "cast", " ", "{}"]), None);
+        assert_eq!(p(&["vivi-indicator", "cast", "tv"]), None);
+        is(
+            &["vivi-indicator-clear", "cast"],
+            M::IndicatorClear { id: "cast", key: "" },
+        );
+        is(
+            &["vivi-indicator-clear", "cast", "tv"],
+            M::IndicatorClear { id: "cast", key: "tv" },
+        );
     }
 }

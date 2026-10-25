@@ -15,6 +15,8 @@ import { Icons } from "core/icons.slint";
 import { LibItem, TypeBadge } from "library.slint";
 
 import { Item } from "core/types.slint";
+import { Status } from "state/status.slint";
+import { Bookmarks, BookmarkRow } from "state/bookmarks.slint";
 export { Item }
 
 // A clickable list of options with a check mark on the selected one.
@@ -227,6 +229,76 @@ component TimeRow inherits Rectangle {
 
 
 
+// "−  45 min  +" number stepper.
+component Stepper inherits HorizontalLayout {
+    in property <int> value;
+    in property <string> unit;
+    in property <int> step: 1;
+    in property <int> minimum: 1;
+    in property <int> maximum: 999;
+    in property <string> name;
+    callback changed(int);
+    spacing: 4px;
+    for d[i] in [-1, 1]: Rectangle {
+        width: 28px; height: 26px; border-radius: Metrics.radius-md; background: sa.has-hover ? Theme.field-raised : Theme.field;
+        TriIcon { width: 14px; height: 14px; name: d < 0 ? "remove" : "add"; tint: Theme.fg-a2; }
+        sa := TouchArea { accessible-role: button; accessible-label: root.name + (d < 0 ? " down" : " up"); mouse-cursor: pointer;
+            clicked => { root.changed(clamp(root.value + d * root.step, root.minimum, root.maximum)); } }
+    }
+    Rectangle { width: 72px; height: 26px; border-radius: Metrics.radius-md; background: Theme.field;
+        Text { text: root.value + " " + root.unit; font-family: "DM Mono"; font-size: Metrics.font-sm; color: Theme.fg-2; horizontal-alignment: center; vertical-alignment: center; }
+    }
+}
+
+// One bookmark: thumbnail, label, note and time; click jumps, the pencil renames
+// (label and note), the cross deletes.
+component BookmarkItem inherits Rectangle {
+    in property <BookmarkRow> it;
+    in property <int> index;
+    in property <bool> editing;
+    callback jump();
+    callback edit();
+    callback save(string, string);
+    callback cancel();
+    callback delete();
+    height: root.editing ? 112px : (root.it.has-thumb || root.it.note != "" ? 52px : 40px);
+    border-radius: Metrics.radius-sm;
+    background: ta.has-hover && !root.editing ? Theme.bg-a1 : (root.editing ? Theme.bg-a1.with-alpha(0.6) : transparent);
+    ta := TouchArea { accessible-role: button; accessible-label: "Jump to " + root.it.label + ", " + Format.hms(root.it.time, false); mouse-cursor: root.editing ? MouseCursor.default : MouseCursor.pointer;
+        clicked => { if (!root.editing) { root.jump(); } } }
+    if !root.editing: HorizontalLayout {
+        padding-left: 8px; padding-right: 4px; spacing: 10px;
+        if root.it.has-thumb: Rectangle { width: 64px; height: 36px; y: (parent.height - self.height) / 2; border-radius: Metrics.radius-xs; clip: true; background: Theme.video-bg;
+            Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: ImageFit.cover; } }
+        if !root.it.has-thumb: Rectangle { width: 22px;
+            TriIcon { width: 18px; height: 18px; name: "bookmark"; tint: Theme.fg-a2; } }
+        VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 1px;
+            Text { text: root.it.label; overflow: elide; color: Theme.fg-2; font-size: Metrics.font-md; }
+            if root.it.note != "": Text { text: root.it.note; overflow: elide; color: Theme.fg-a3; font-size: Metrics.font-xs; }
+        }
+        Text { text: Format.hms(root.it.time, false); color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; }
+        for b in ["edit", "close-low"]: tb := Rectangle { width: 26px;
+            property <string> tip: b == "edit" ? "Rename" : "Delete";
+            Rectangle { width: 26px; height: 26px; border-radius: Metrics.radius-sm; background: ba.has-hover ? Theme.field-raised : transparent;
+                TriIcon { width: 16px; height: 16px; name: b; tint: ba.has-hover ? Theme.fg-1 : Theme.fg-a3; }
+                ba := TouchArea { accessible-role: button; accessible-label: (b == "edit" ? "Rename " : "Delete ") + root.it.label; mouse-cursor: pointer;
+                    clicked => { if (b == "edit") { root.edit(); } else { root.delete(); } } }
+                Tooltip { text: @markdown("\{tb.tip}"); } } }
+    }
+    if root.editing: VerticalLayout {
+        padding: 8px; spacing: 6px;
+        lf := TextField { text: root.it.label; placeholder: "Bookmark name"; label: "Bookmark name";
+            init => { self.focus-input(); }
+            accepted => { root.save(lf.text, nf.text); } }
+        nf := TextField { text: root.it.note; placeholder: "Note (optional)"; label: "Bookmark note";
+            accepted => { root.save(lf.text, nf.text); } }
+        HorizontalLayout { alignment: end; spacing: 6px; height: 26px;
+            Text { text: Format.hms(root.it.time, false); color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-stretch: 1; }
+            SecondaryButton { size: ButtonSize.sm; text: "Cancel"; clicked => { root.cancel(); } }
+            SecondaryButton { size: ButtonSize.sm; text: "Save"; clicked => { root.save(lf.text, nf.text); } } }
+    }
+}
+
 export component SidePanel inherits Rectangle {
     in-out property <PanelTab> tab: PanelTab.subtitles;
     in-out property <length> scroll-y;
@@ -238,7 +310,6 @@ export component SidePanel inherits Rectangle {
     in property <[image]> chapter-thumbs;
     in property <[bool]> chapter-has-thumb;
     callback chapters-refresh();
-    in property <[Item]> bookmarks;
     in property <[Item]> queue;
     in property <[Item]> playlists;
     callback queue-play(int);
@@ -259,10 +330,7 @@ export component SidePanel inherits Rectangle {
     callback library-enqueue(string);
     callback save-preset();
     callback seek-to(string);
-    callback add-bookmark();
-    callback remove-bookmark();
     in property <string> ab-state: "Off";
-    in property <string> sleep-state: "";
     in property <string> hwdec: "auto-safe";
     in property <bool> viz-enabled: true;
     in property <[string]> viz-modes: ["Disabled"];
@@ -293,7 +361,6 @@ export component SidePanel inherits Rectangle {
     callback set-prop(string, string);
     callback run(string);
     callback load-sub();
-    callback sleep(int);
     callback close();
 
     // Slider values (synced from mpv by the app).
@@ -323,7 +390,6 @@ export component SidePanel inherits Rectangle {
     in-out property <string> flip: "None";
     in-out property <string> stereo: "Auto";
     in-out property <string> hdr: "Auto";
-    property <string> sleep-choice: root.sleep-state == "" ? "Off" : root.sleep-state;
     property <bool> settings-group: root.tab == PanelTab.subtitles || root.tab == PanelTab.audio || root.tab == PanelTab.video || root.tab == PanelTab.playback;
     property <bool> narrow: root.width < 360px;
 
@@ -388,9 +454,23 @@ export component SidePanel inherits Rectangle {
                     Group { title: "Control";
                         Line { label: "Reverse"; hint: "Play backwards (mpv play-direction)";
                             Toggle { on: root.reverse-on; toggled => { root.reverse-on = !root.reverse-on; root.set-prop("play-direction", root.reverse-on ? "backward" : "forward"); } } }
-                        Line { label: "Sleep Timer"; hint: root.sleep-state;
-                            Dropdown { width: 170px; options: ["Off", "15 min", "30 min", "60 min", "End of file"]; value: root.sleep-state == "" ? "Off" : "On";
-                                selected(i, o) => { root.sleep(i == 0 ? 0 : i == 1 ? 15 : i == 2 ? 30 : i == 3 ? 60 : -1); } } }
+                        // Sleep timer (src/sleep.rs): fades the volume out, then pauses.
+                        Line { label: "Sleep Timer"; hint: Status.sleep-state;
+                            Dropdown { width: 170px; options: Status.sleep-options; value: Status.sleep-options[Status.sleep-choice];
+                                selected(i, o) => {
+                                    Status.sleep-set(i == 0 ? "off" : i == 1 ? "min:15" : i == 2 ? "min:30" : i == 3 ? "min:60"
+                                        : i == 4 ? "min:" + Status.sleep-minutes : i == 5 ? "eof" : i == 6 ? "chapter" : "items:" + Status.sleep-items);
+                                } } }
+                        if Status.sleep-choice == 4: Line { label: "Minutes"; hint: "Restarts the timer";
+                            Stepper { name: "Sleep minutes"; value: Status.sleep-minutes; unit: "min"; step: 5; minimum: 5; maximum: 600;
+                                changed(v) => { Status.sleep-minutes = v; Status.sleep-set("min:" + v); } } }
+                        if Status.sleep-choice == 7: Line { label: "Items"; hint: "Counting the current one";
+                            Stepper { name: "Sleep after items"; value: Status.sleep-items; unit: Status.sleep-items == 1 ? "item" : "items"; minimum: 1; maximum: 99;
+                                changed(v) => { Status.sleep-items = v; Status.sleep-set("items:" + v); } } }
+                        Line { label: "Fade Out"; hint: "Lowers the volume before pausing";
+                            Dropdown { width: 170px; options: Status.fade-options;
+                                value: Status.sleep-fade == 0 ? "No fade" : Status.sleep-fade + " s";
+                                selected(i, o) => { Status.sleep-fade-set(i * 15); } } }
                         Line { label: "A-B Loop"; hint: root.ab-state;
                             SecondaryButton { size: ButtonSize.sm; width: 110px; text: "Set A / B"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } } }
                     }
@@ -554,22 +634,26 @@ export component SidePanel inherits Rectangle {
                     PresetCard { name: root.preset-name; save => { root.save-preset(); } }
                     AdvancedLink { clicked => { root.open-settings(7); } }
                 }
-                // ---- Bookmarks ----
+                // ---- Bookmarks (src/bookmarks.rs, saved per file) ----
                 if root.tab == PanelTab.bookmarks: VerticalLayout {
                     spacing: 4px; alignment: start;
                     ListHeader {
-                        text: root.bookmarks.length + (root.bookmarks.length == 1 ? " Bookmark" : " Bookmarks");
-                        show-minus: root.bookmarks.length > 0;
-                        minus => { root.remove-bookmark(); } plus => { root.add-bookmark(); }
+                        text: Bookmarks.items.length + (Bookmarks.items.length == 1 ? " Bookmark" : " Bookmarks");
+                        show-minus: false; plus-tip: "Add bookmark (Ctrl+B)";
+                        plus => { Bookmarks.add(); }
                     }
-                    if root.bookmarks.length == 0: VerticalLayout {
+                    if Bookmarks.items.length == 0: VerticalLayout {
                         spacing: 10px; alignment: start;
-                        Text { text: "No bookmarks yet — press + or Ctrl+B."; color: Theme.fg-a3; wrap: word-wrap; }
-                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; icon: @image-url("../assets/icons/bookmark.svg"); text: "Add bookmark"; clicked => { root.add-bookmark(); } } }
+                        Text { text: "No bookmarks yet — press + or Ctrl+B. They are saved with the file and shown on the seek bar."; color: Theme.fg-a3; wrap: word-wrap; }
+                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; icon: @image-url("../assets/icons/bookmark.svg"); text: "Add bookmark"; clicked => { Bookmarks.add(); } } }
                     }
-                    for it in root.bookmarks: TimeRow {
-                        title: it.label; time: Format.hms(it.key.to-float(), true);
-                        clicked => { root.seek-to(it.key); }
+                    for it[i] in Bookmarks.items: BookmarkItem {
+                        it: it; index: i; editing: Bookmarks.editing == i;
+                        jump => { Bookmarks.jump(i); }
+                        edit => { Bookmarks.editing = i; }
+                        cancel => { Bookmarks.editing = -1; }
+                        save(l, n) => { Bookmarks.rename(i, l, n); Bookmarks.editing = -1; }
+                        delete => { Bookmarks.editing = -1; Bookmarks.remove(i); }
                     }
                 }
                 // ---- Chapters ----

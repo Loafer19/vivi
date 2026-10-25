@@ -191,64 +191,6 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
             p.run(&format!("sub-add \"{path}\" select"));
         }
     });
-    // Sleep timer: pause after N minutes, or at end of file (-1).
-    let sleep_timer = Rc::new(slint::Timer::default());
-    let p = player.clone();
-    let weak = app.as_weak();
-    app.global::<crate::Panel>().on_sleep(move |min| {
-        let Some(a) = weak.upgrade() else { return };
-        sleep_timer.stop();
-        p.set("keep-open", "yes");
-        match min {
-            0 => a.global::<crate::Panel>().set_sleep_state("".into()),
-            -1 => {
-                a.global::<crate::Panel>()
-                    .set_sleep_state("Pausing at end of file".into());
-                p.set("keep-open", "always");
-            }
-            m => {
-                a.global::<crate::Panel>()
-                    .set_sleep_state(format!("Pausing in {m} min").into());
-                let p = p.clone();
-                let w = weak.clone();
-                sleep_timer.start(
-                    slint::TimerMode::SingleShot,
-                    Duration::from_secs(m as u64 * 60),
-                    move || {
-                        p.set("pause", "yes");
-                        if let Some(a) = w.upgrade() {
-                            a.global::<crate::Panel>().set_sleep_state("".into());
-                        }
-                    },
-                );
-            }
-        }
-    });
-    // In-memory bookmarks (persisted later with settings).
-    let marks: Rc<slint::VecModel<Item>> = Rc::new(slint::VecModel::default());
-    app.global::<crate::Panel>()
-        .set_bookmarks(marks.clone().into());
-    {
-        let marks = marks.clone();
-        app.global::<crate::Panel>().on_remove_bookmark(move || {
-            let n = marks.row_count();
-            if n > 0 {
-                marks.remove(n - 1);
-            }
-        });
-    }
-    let p = player.clone();
-    app.global::<crate::Panel>().on_add_bookmark(move || {
-        let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
-        marks.push(Item {
-            key: format!("{t:.3}").into(),
-            label: format!("Bookmark {}", marks.row_count() + 1).into(),
-            selected: false,
-        });
-        if log {
-            eprintln!("bookmark at {t:.2}");
-        }
-    });
     // Debug/screenshot helpers.
     if let Some(c) = std::env::var("VIVI_SETTINGS")
         .ok()
@@ -340,7 +282,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                     a.global::<crate::Panel>()
                         .invoke_set_prop((*k).into(), (*v).into());
                 } else if n == ops.len() {
-                    a.global::<crate::Panel>().invoke_add_bookmark();
+                    a.global::<crate::Bookmarks>().invoke_add();
                     a.global::<crate::Panel>()
                         .invoke_playlist_save("Selftest".into());
                     a.global::<crate::Panel>().invoke_save_preset();

@@ -409,6 +409,8 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .seg("playback.repeat", "Repeat", "Off, repeat the current file (mpv loop-file) or the whole queue (loop-playlist).", &c.playback.repeat, &["Off", "One", "All"])
         .header("Seeking")
         .toggle("playback.precise_seek", "Seek precisely", "Seek to the exact frame instead of the nearest keyframe (mpv hr-seek). Slower on some files.", c.playback.precise_seek)
+        .header("Sleep timer")
+        .slider("playback.sleep_fade", "Fade out before pausing", "The sleep timer (side panel → Playback) lowers the volume over this many seconds, then pauses and restores it. 0 pauses at once.", c.playback.sleep_fade as f64, (0.0, 120.0, 5.0), &["Off", "60 s", "120 s"])
         .header("Per-show presets");
     if c.presets.is_empty() {
         r.push(
