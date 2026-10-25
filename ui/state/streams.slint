@@ -1,0 +1,67 @@
+// Streams hub (#86): the Library's Streams section (src/streams/mod.rs). URL bar with
+// history, Recent / Favorites / Radio / TV / Music tabs, and the music services.
+
+// A stream card (same look on every tab and on Home).
+export struct StreamCard {
+    url: string,
+    title: string,
+    sub: string,
+    // "Radio" | "TV" | "Music" | "Web" | "" (type label)
+    badge: string,
+    logo: image,
+    has-logo: bool,
+    fav: bool,
+    playing: bool,
+    // Icon name when there is no logo ("streaming", "tv", "music", "youtube", …).
+    icon: string,
+}
+
+// A music service of the Music tab (Free Music, YouTube Music, …).
+export struct StreamService {
+    id: string,
+    name: string,
+    icon: string,
+}
+
+export global Streams {
+    // "recent" | "favorites" | "radio" | "tv" | "music"
+    in-out property <string> tab: "recent";
+    // The radio / TV directory built-in is on (Radio and TV tabs shown).
+    in-out property <bool> directory: true;
+    // URL bar text and its history (newest first).
+    in-out property <string> url;
+    in-out property <[string]> history;
+    // Ask the URL bar to take the keyboard focus (old "Open URL" entry points).
+    in-out property <int> focus-url;
+    in-out property <[StreamCard]> recent;
+    in-out property <[StreamCard]> favorites;
+    // Home's Streams row: favorites, then recent streams.
+    in-out property <[StreamCard]> home;
+    // What the Library shows for its nav: "hub" (streams), "service" (service:<id>), "".
+    in-out property <string> view;
+    in-out property <[StreamService]> services;
+    // Selected service of the Music tab.
+    in-out property <string> service;
+    // The plugin dialog shown as a page right now (hub tab or service page); "" = none.
+    in-out property <string> page-owner;
+    // Service page title (service:<id>).
+    in-out property <string> page-title;
+    // Open a hub place: "streams[:tab]", "streams:music:<id>", "streams:url",
+    // "service:<id>" or an old entry point id (src/streams/route.rs).
+    callback open-page(string);
+    callback select-tab(string);
+    callback pick-service(string);
+    // URL bar: Enter (open a URL, or search), typing (filters Recent / Favorites).
+    callback submit(string);
+    callback edited(string);
+    callback clear-history();
+    // Cards: play, ★, remove from Recent.
+    callback play(string);
+    callback toggle-fav(string);
+    callback remove(string);
+    callback clear-recent();
+    // The full Open Network Stream dialog (several URLs, playlist name, options).
+    callback more-options();
+    // Service page back arrow.
+    callback back();
+}

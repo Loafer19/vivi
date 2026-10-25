@@ -1,5 +1,5 @@
 // Shared dialog of the music plugins (Auto-tagger, Free Music, Network Streams): owner plugin id, what the owner supports (caps), and the dialog's content.
-import { Item } from "../panel.slint";
+import { Item } from "../core/types.slint";
 import { FmRow, MdFilter } from "../plugins.slint";
 // What the owning plugin's dialog uses; the plugin sets it together with `owner`.
 export struct MdCaps {
@@ -11,6 +11,8 @@ export struct MdCaps {
 }
 export global MusicDialogState {
     in-out property <MdCaps> caps;
+    // Shown as a Library page (Streams hub tab or service page, #86) instead of the modal.
+    in-out property <bool> page;
     in-out property <string> owner;
     // Results shown as logo tiles instead of rows (when caps.grid; the owner remembers it).
     in-out property <bool> grid;

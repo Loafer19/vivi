@@ -668,3 +668,179 @@ pub fn load_m3u(src: &str) -> Result<Vec<Stream>, String> {
     }
     Ok(v)
 }
+
+// ---------- Streams hub filters (#86) ----------
+
+/// Countries offered by the hub's Radio and TV country filters (name, ISO code).
+pub const HUB_COUNTRIES: [(&str, &str); 30] = [
+    ("Ukraine", "UA"),
+    ("United States", "US"),
+    ("United Kingdom", "GB"),
+    ("Germany", "DE"),
+    ("France", "FR"),
+    ("Poland", "PL"),
+    ("Italy", "IT"),
+    ("Spain", "ES"),
+    ("Portugal", "PT"),
+    ("Netherlands", "NL"),
+    ("Belgium", "BE"),
+    ("Switzerland", "CH"),
+    ("Austria", "AT"),
+    ("Czechia", "CZ"),
+    ("Slovakia", "SK"),
+    ("Romania", "RO"),
+    ("Moldova", "MD"),
+    ("Lithuania", "LT"),
+    ("Latvia", "LV"),
+    ("Estonia", "EE"),
+    ("Finland", "FI"),
+    ("Sweden", "SE"),
+    ("Norway", "NO"),
+    ("Denmark", "DK"),
+    ("Greece", "GR"),
+    ("Turkey", "TR"),
+    ("Canada", "CA"),
+    ("Brazil", "BR"),
+    ("Japan", "JP"),
+    ("Australia", "AU"),
+];
+/// Genre tags of the Radio genre filter.
+pub const HUB_GENRES: [&str; 20] = [
+    "pop",
+    "rock",
+    "jazz",
+    "classical",
+    "electronic",
+    "dance",
+    "hiphop",
+    "ambient",
+    "chillout",
+    "lounge",
+    "news",
+    "talk",
+    "metal",
+    "oldies",
+    "80s",
+    "90s",
+    "country",
+    "blues",
+    "reggae",
+    "folk",
+];
+/// Languages of the Radio language filter (radio-browser names).
+pub const HUB_LANGUAGES: [&str; 12] = [
+    "english",
+    "ukrainian",
+    "german",
+    "french",
+    "spanish",
+    "polish",
+    "italian",
+    "portuguese",
+    "dutch",
+    "czech",
+    "japanese",
+    "turkish",
+];
+/// Bitrate filter (label, minimum kbps).
+pub const HUB_BITRATES: [(&str, u32); 5] = [
+    ("Any", 0),
+    ("64+ kbps", 64),
+    ("128+ kbps", 128),
+    ("192+ kbps", 192),
+    ("320 kbps", 320),
+];
+/// Sort filter (label, radio-browser `order`). "Trending" and "Newest" are the
+/// top-new choices.
+pub const HUB_SORTS: [(&str, &str); 4] = [
+    ("Top voted", "votes"),
+    ("Most played", "clickcount"),
+    ("Trending", "clicktrend"),
+    ("Newest", "changetimestamp"),
+];
+
+/// The Radio tab's search: name words (may be empty) and its filters.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RadioQuery {
+    pub name: String,
+    /// ISO code, "" = any.
+    pub country: String,
+    pub tag: String,
+    pub language: String,
+    /// Minimum kbps, 0 = any.
+    pub bitrate: u32,
+    /// radio-browser `order` ("" = votes).
+    pub order: String,
+}
+
+/// `/json/stations/search` parameters of `q`.
+pub fn radio_params(q: &RadioQuery) -> Vec<(&'static str, String)> {
+    let mut p: Vec<(&'static str, String)> = Vec::new();
+    let name = q.name.trim();
+    if !name.is_empty() {
+        p.push(("name", name.to_string()));
+    }
+    if !q.country.is_empty() {
+        p.push(("countrycode", q.country.clone()));
+    }
+    if !q.tag.is_empty() {
+        p.push(("tag", q.tag.clone()));
+        p.push(("tagExact", "false".into()));
+    }
+    if !q.language.is_empty() {
+        p.push(("language", q.language.clone()));
+    }
+    if q.bitrate > 0 {
+        p.push(("bitrateMin", q.bitrate.to_string()));
+    }
+    let order = if q.order.is_empty() {
+        "votes"
+    } else {
+        q.order.as_str()
+    };
+    p.push(("order", order.into()));
+    // Newest first; the counters highest first.
+    p.push(("reverse", "true".into()));
+    p.push(("limit", "120".into()));
+    p.push(("hidebroken", "true".into()));
+    p
+}
+
+/// Stations for the Radio tab.
+pub fn radio_filtered(q: &RadioQuery) -> Result<Vec<Stream>, String> {
+    let p = radio_params(q);
+    let p: Vec<(&str, &str)> = p.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    radio_get("/json/stations/search", &p).map(|v| parse_stations(&v))
+}
+
+#[cfg(test)]
+mod hub_tests {
+    use super::*;
+
+    #[test]
+    fn radio_filters_become_search_parameters() {
+        let p = radio_params(&RadioQuery::default());
+        assert!(p.contains(&("order", "votes".into())));
+        assert!(!p.iter().any(|(k, _)| *k == "name" || *k == "countrycode"));
+        let q = RadioQuery {
+            name: " jazz ".into(),
+            country: "UA".into(),
+            tag: "jazz".into(),
+            language: "ukrainian".into(),
+            bitrate: 128,
+            order: "changetimestamp".into(),
+        };
+        let p = radio_params(&q);
+        for want in [
+            ("name", "jazz"),
+            ("countrycode", "UA"),
+            ("tag", "jazz"),
+            ("language", "ukrainian"),
+            ("bitrateMin", "128"),
+            ("order", "changetimestamp"),
+            ("hidebroken", "true"),
+        ] {
+            assert!(p.contains(&(want.0, want.1.to_string())), "{want:?}");
+        }
+    }
+}

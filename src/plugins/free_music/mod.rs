@@ -773,7 +773,8 @@ impl FreeMusic {
         a.global::<crate::MusicDialogState>().set_detail("".into());
         a.global::<crate::MusicDialogState>()
             .set_has_detail_cover(false);
-        a.global::<crate::Overlays>().set_md_open(true);
+        // Its page (Streams hub → Music, or its sidebar icon) (#86).
+        crate::streams::open_dialog(a);
         self.last_source = SOURCES[self.q.source].into();
         // Downloads may have been moved or deleted since the last time.
         self.saved.clear();
@@ -1060,6 +1061,7 @@ impl Plugin for FreeMusic {
         )
         .source("open")
         .contribute(contrib::PALETTE_COMMAND, "Find free music", "open")
+        .contribute(contrib::STREAMS_MUSIC, "Free Music", "open")
         .contribute(contrib::HOME_WIDGET, "Discover free music", "open")
         .contribute(contrib::DOWNLOADS, "Track downloads", "")
         .contribute(contrib::DOWNLOADS_ACTION, "Find free music", "open")

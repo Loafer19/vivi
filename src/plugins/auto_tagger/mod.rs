@@ -210,7 +210,7 @@ impl AutoTagger {
         a.global::<crate::MusicDialogState>()
             .set_query(target.into());
         a.global::<crate::MusicDialogState>().set_detail("".into());
-        a.global::<crate::Overlays>().set_md_open(true);
+        crate::streams::open_dialog(a);
         self.rows.clear();
         self.show_rows(cx, None);
         self.start(cx);
@@ -667,7 +667,7 @@ impl AutoTagger {
         a.global::<crate::MusicDialogState>()
             .set_query(path.as_str().into());
         a.global::<crate::MusicDialogState>().set_detail("".into());
-        a.global::<crate::Overlays>().set_md_open(true);
+        crate::streams::open_dialog(a);
         self.batch = false;
         self.rows.clear();
         self.show_rows(cx, None);

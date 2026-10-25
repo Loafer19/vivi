@@ -13,6 +13,8 @@ import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 import { ExtTab, ExtWidget } from "state/extensions.slint";
 import { Downloads } from "state/downloads.slint";
 import { DownloadsView } from "downloads.slint";
+import { Streams } from "state/streams.slint";
+import { StreamsHub, ServicePage, StreamsRow } from "streams.slint";
 
 export struct LibItem {
     key: string,
@@ -399,9 +401,13 @@ export component LibraryView inherits Rectangle {
     // Remove one Recent entry (hover ×).
     callback forget-recent(LibItem);
     callback popout();
+    // Plugin dialogs shown as pages (Streams hub tabs, service pages): (owner, name, args).
+    callback plugin-command(string, string, string);
     in-out property <string> query;
     property <bool> searching: query != "";
     property <string> section: nav == "home" ? "home" : (crumb-keys.length > 0 ? crumb-keys[0] : nav);
+    // The Streams hub or a service page fills the content area (#86).
+    property <bool> hub: Streams.view != "";
     property <bool> show-grid: root.grid && !root.sidebar && root.width >= 520px && root.nav != "home" && root.items.length > 0 && root.items[0].kind != "action";
     property <int> rows-max: root.sidebar ? 3 : 6;
 
@@ -425,7 +431,7 @@ export component LibraryView inherits Rectangle {
                 RailButton { label: "Home"; icon: "home"; active-icon: @image-url("../assets/icons/layers/home-active-b.svg"); active-accent: @image-url("../assets/icons/layers/home-active-a.svg"); active-dim: @image-url("../assets/icons/layers/home-active-d.svg"); active: root.section == "home"; clicked => { root.navigate("home"); } }
                 RailButton { label: "Videos"; icon: "videos"; active-icon: @image-url("../assets/icons/layers/videos-active-b.svg"); active-accent: @image-url("../assets/icons/layers/videos-active-a.svg"); active-dim: @image-url("../assets/icons/layers/videos-active-d.svg"); active: root.section == "video"; clicked => { root.navigate("video"); } }
                 RailButton { label: "Music"; icon: "songs"; active-icon: @image-url("../assets/icons/layers/songs-active-b.svg"); active-accent: @image-url("../assets/icons/layers/songs-active-a.svg"); active-dim: @image-url("../assets/icons/layers/songs-active-d.svg"); active: root.section == "music"; clicked => { root.navigate("music"); } }
-                RailButton { label: "Streams"; icon: "streaming"; active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "network"; clicked => { root.navigate("network"); } }
+                RailButton { label: "Streams"; icon: "streaming"; active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "streams" && Streams.view == "hub"; clicked => { root.navigate("streams"); } }
                 RailButton { label: "Playlists"; icon: "playlist"; active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
                 RailButton { label: "Recently played"; icon: "recent"; active-icon: @image-url("../assets/icons/layers/recent-active-b.svg"); active-accent: @image-url("../assets/icons/layers/recent-active-a.svg"); active-dim: @image-url("../assets/icons/layers/recent-active-d.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
                 // Shared Downloads panel; the badge counts queued / running / paused jobs.
@@ -491,7 +497,7 @@ export component LibraryView inherits Rectangle {
                 }
                 HeadIcon { label: root.has-media ? "Back to the player" : "Open file"; icon: "open"; clicked => { root.popout(); } }
             }
-            HorizontalLayout {
+            if !root.hub: HorizontalLayout {
                 height: 24px; spacing: 12px;
                 Text {
                     horizontal-stretch: 1; vertical-alignment: center; font-size: Metrics.font-base; color: Theme.fg-a3;
@@ -510,13 +516,21 @@ export component LibraryView inherits Rectangle {
                     clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }
             }
-            if root.searching: TextField {
+            if root.searching && !root.hub: TextField {
                 placeholder: "Search library"; text <=> root.query;
                 edited(t) => { root.search(t); }
                 init => { self.focus-input(); }
             }
             Rectangle { height: 1px; background: Theme.bg-a1; }
-            ScrollView {
+            if Streams.view == "hub": StreamsHub {
+                vertical-stretch: 1; padding-bottom: 16px;
+                command(o, n, a) => { root.plugin-command(o, n, a); }
+            }
+            if Streams.view == "service": ServicePage {
+                vertical-stretch: 1; padding-bottom: 16px;
+                command(o, n, a) => { root.plugin-command(o, n, a); }
+            }
+            if !root.hub: ScrollView {
                 vertical-stretch: 1;
                 VerticalLayout {
                     alignment: start; padding-top: 3px; padding-bottom: 20px; padding-right: 8px; spacing: 30px;
@@ -570,6 +584,7 @@ export component LibraryView inherits Rectangle {
                                 }
                             }
                         }
+                        if Streams.home.length > 0: StreamsRow { open-hub => { root.navigate("streams"); } }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;
                             title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                         if root.listen-items.length > 0: Shelf { title: "Listen Again"; items: root.listen-items; max: root.rows-max;

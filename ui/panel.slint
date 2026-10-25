@@ -14,7 +14,8 @@ import { PanelTab } from "core/types.slint";
 import { Icons } from "core/icons.slint";
 import { LibItem, TypeBadge } from "library.slint";
 
-export struct Item { key: string, label: string, selected: bool }
+import { Item } from "core/types.slint";
+export { Item }
 
 // A clickable list of options with a check mark on the selected one.
 component OptionList inherits VerticalLayout {

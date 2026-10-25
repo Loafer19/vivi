@@ -12,7 +12,7 @@ pub(crate) fn screenshot_mode() -> bool {
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
-/// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
+/// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY, VIVI_PAGE=<streams hub page>,
 /// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] [VIVI_MUSICPLAY=row] (a plugin dialog,
 /// searched when a query or source is given, then a result row played).
@@ -119,6 +119,16 @@ pub(crate) fn debug_ui(app: &AppWindow) {
     }
     if var("VIVI_LIBRARY").is_some() {
         app.global::<crate::Overlays>().set_library_open(true);
+    }
+    // VIVI_PAGE=streams[:tab] | streams:music:<id> | streams:url | service:<id>: open a
+    // Streams hub place (#86) once the plugins are loaded.
+    if let Some(p) = var("VIVI_PAGE") {
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(1500), move || {
+            if let Some(a) = w.upgrade() {
+                crate::streams::open_page(&a, &p);
+            }
+        });
     }
     // VIVI_MENU="kind;x;y;ctx" (ctx lines joined by '|' or '~'), VIVI_SUB="row-id;y": open a menu.
     if let Some(m) = var("VIVI_MENU") {

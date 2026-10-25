@@ -38,6 +38,7 @@ pub(crate) fn setup_features(
     plugins::setup(app, player, cfg.clone());
     crate::extwin::setup(app, cfg.clone());
     crate::extwin::refresh();
+    crate::streams::setup(app, player);
     crate::palette::setup(app);
     crate::drawer::setup(app);
     crate::downloads::setup(app, player, cfg.clone());

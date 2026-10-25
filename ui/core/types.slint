@@ -53,3 +53,6 @@ export enum Overlay {
 
 // Outcome of one file in the tag review.
 export enum TagStatus { tagged, renamed, skipped, failed, undone }
+
+// A plain list row (key, label, selected): side panel lists, plugin dialog results.
+export struct Item { key: string, label: string, selected: bool }

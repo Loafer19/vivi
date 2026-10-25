@@ -37,7 +37,21 @@ fn entries() -> Vec<Entry> {
     };
     v.push(app("app:marketplace", "Extensions: All / Marketplace"));
     v.push(app("app:customize", "Customize Player"));
-    v.push(app("app:network", "Open Network Stream"));
+    // The Streams hub (#86). "app:network" (Open Network Stream) still works for
+    // keymaps and scripts for one release but is not listed.
+    v.push(app("app:streams:url", "Streams: open a URL"));
+    for t in crate::streams::route::Tab::ALL {
+        v.push(app(
+            &format!("app:streams:{}", t.key()),
+            &format!("Streams: {}", t.label()),
+        ));
+    }
+    for s in crate::streams::services() {
+        v.push(app(
+            &format!("app:streams:music:{}", s.id),
+            &format!("Streams: Music → {}", s.name),
+        ));
+    }
     for e in plugins::contributions(contrib::DRAWER_PANEL) {
         v.push(Entry {
             id: format!("drawer:{}", e.id),
@@ -187,8 +201,7 @@ fn run(a: &AppWindow, id: &str) {
         _ => match arg {
             "marketplace" => crate::extwin::open(a, "", false),
             "customize" => a.global::<crate::Overlays>().set_customize_open(true),
-            "network" => a.global::<crate::Overlays>().set_network_open(true),
-            _ => {}
+            p => crate::streams::open_page(a, if p == "network" { "app:network" } else { p }),
         },
     }
 }

@@ -32,6 +32,7 @@ mod render;
 mod scenes;
 mod settings;
 mod store;
+mod streams;
 mod suboffset;
 mod tray;
 mod util;

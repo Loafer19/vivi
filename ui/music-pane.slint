@@ -1,0 +1,38 @@
+// The shared plugin dialog body bound to MusicDialogState (src/plugins/host.rs and the
+// built-in music plugins fill it). Used by the modal (ui/app.slint) and, in page mode,
+// by the Streams hub tabs and the service pages (ui/streams.slint, #86). Every callback
+// goes to the owner plugin through `command(owner, name, args)`.
+import { MusicBody } from "plugins.slint";
+import { MusicDialogState } from "state/music-dialog.slint";
+import { Overlays } from "state/overlays.slint";
+
+export component MusicPane inherits MusicBody {
+    callback command(string, string, string);
+    // After the dialog closed itself (Close / X): the window takes the focus back.
+    callback closed();
+    title: MusicDialogState.title; results: MusicDialogState.results; logos: MusicDialogState.caps.logos ? MusicDialogState.logos : []; status: MusicDialogState.status; busy: MusicDialogState.busy;
+    detail: MusicDialogState.detail; placeholder: MusicDialogState.placeholder;
+    detail-cover: MusicDialogState.detail-cover; has-detail-cover: MusicDialogState.has-detail-cover && MusicDialogState.detail-cover-owner == MusicDialogState.owner; search-label: MusicDialogState.search-label;
+    primary-text: MusicDialogState.primary; secondary-text: MusicDialogState.secondary; sources: MusicDialogState.sources;
+    source <=> MusicDialogState.source; query <=> MusicDialogState.query; selected <=> MusicDialogState.selected;
+    chips: MusicDialogState.caps.chips ? MusicDialogState.chips : []; chip: MusicDialogState.chip;
+    actions: MusicDialogState.caps.chips ? MusicDialogState.actions : [];
+    rich: MusicDialogState.caps.rich; tracks: MusicDialogState.caps.rich ? MusicDialogState.tracks : [];
+    // Pages show every owner's filters (the hub's Radio / TV filters are dropdowns too).
+    filters: MusicDialogState.caps.rich || root.page ? MusicDialogState.filters : []; copy-text: MusicDialogState.copy;
+    has-more: MusicDialogState.caps.rich && MusicDialogState.has-more;
+    can-grid: MusicDialogState.caps.grid; grid: MusicDialogState.caps.grid && MusicDialogState.grid;
+    info-only: MusicDialogState.caps.info;
+    view(g) => { MusicDialogState.grid = g; root.command(MusicDialogState.owner, "view", g ? "grid" : "list"); }
+    filter(n, v) => { root.command(MusicDialogState.owner, "filter", n + "\u{1f}" + v); }
+    more => { root.command(MusicDialogState.owner, "more", ""); }
+    window(f, c) => { MusicDialogState.win-first = f; MusicDialogState.win-count = c; MusicDialogState.window-changed(); }
+    edited => { if MusicDialogState.caps.rich { root.command(MusicDialogState.owner, "edited", ""); } }
+    chip-clicked(c) => { root.command(MusicDialogState.owner, "chip", c); }
+    action(n, i) => { root.command(MusicDialogState.owner, "act:" + n, i); }
+    search => { root.command(MusicDialogState.owner, "search", ""); }
+    select(i) => { root.command(MusicDialogState.owner, "select", i); }
+    primary(i) => { root.command(MusicDialogState.owner, "primary", i); }
+    secondary(i) => { root.command(MusicDialogState.owner, "secondary", i); }
+    close => { Overlays.md-open = false; root.command(MusicDialogState.owner, "close", ""); root.closed(); }
+}

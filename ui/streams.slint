@@ -1,0 +1,312 @@
+// Streams hub (#86, src/streams/mod.rs): the Library's Streams section and the service
+// pages. A URL bar with history, Recent / Favorites / Radio / TV / Music tabs, stream
+// cards that look the same everywhere (also Home's Streams row) and the one
+// now-playing card at the bottom. Radio, TV and the Music services are the owners' plugin
+// dialogs shown as pages (MusicPane in page mode, same protocol as the modal).
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
+import { TextField } from "core/controls.slint";
+import { FlatButton, PrimaryButton } from "core/buttons.slint";
+import { Streams, StreamCard, StreamService } from "state/streams.slint";
+import { NowPlaying } from "state/now-playing.slint";
+import { MusicDialogState } from "state/music-dialog.slint";
+import { MusicPane } from "music-pane.slint";
+
+// Round icon button of the hub (★, lyrics, record, download, history, …).
+export component HubButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> on;          // active state (★ set, recording)
+    in property <bool> enabled: true;
+    in property <length> size: 32px;
+    callback clicked();
+    width: root.size; height: root.size; border-radius: self.height / 2;
+    opacity: root.enabled ? 1 : 0.35;
+    background: ta.has-hover && root.enabled ? Theme.bg-a1 : transparent;
+    TriIcon {
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        width: root.size * 0.56; height: root.size * 0.56; name: root.icon;
+        tint: root.on ? Theme.accent-bright : ta.has-hover ? Theme.fg-1 : Theme.fg-a2;
+    }
+    ta := TouchArea { enabled: root.enabled; accessible-role: button; accessible-label: root.label; accessible-checked: root.on; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    if root.label != "": Tooltip { text: @markdown("\{root.label}"); }
+}
+
+// A stream card: logo (or the type icon), name, one detail line, type badge, ★ and, on
+// Recent, a remove button on hover. Click plays.
+export component StreamTile inherits Rectangle {
+    in property <StreamCard> card;
+    in property <bool> removable;
+    callback play();
+    callback fav();
+    callback remove();
+    property <length> logo-h: self.width * 0.62;
+    border-radius: Metrics.radius-lg;
+    background: card.playing ? Theme.accent.with-alpha(0.14) : ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    border-width: 1px; border-color: card.playing ? Theme.accent.with-alpha(0.6) : transparent;
+    ta := TouchArea { accessible-role: button; accessible-label: "Play " + root.card.title; mouse-cursor: pointer; clicked => { root.play(); } }
+    Rectangle {
+        x: 8px; y: 8px; width: parent.width - 16px; height: root.logo-h;
+        border-radius: Metrics.radius-md; background: Theme.bg-b1; clip: true;
+        if root.card.has-logo: Image { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; source: root.card.logo; image-fit: contain; }
+        if !root.card.has-logo: TriIcon { x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; width: 36px; height: 36px; name: root.card.icon; tint: Theme.fg-a3; }
+        if root.card.badge != "": Rectangle {
+            x: 6px; y: 6px; width: bt.preferred-width + 12px; height: 18px; border-radius: self.height / 2;
+            background: Theme.bg-a3.with-alpha(0.85);
+            bt := Text { text: root.card.badge; color: Theme.fg-1; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        if root.card.playing: Rectangle {
+            x: parent.width - self.width - 6px; y: parent.height - self.height - 6px; width: 22px; height: 22px; border-radius: self.height / 2;
+            background: Theme.accent;
+            TriIcon { x: 4px; y: 4px; width: 14px; height: 14px; name: "play"; tint: Theme.bg-b2; accent-tint: Theme.bg-b2; dim-tint: Theme.bg-b2; }
+        }
+    }
+    // ★ (always visible when set) and remove (hover).
+    HubButton {
+        x: parent.width - self.width - 10px; y: 10px; size: 28px;
+        icon: root.card.fav ? "favorite-active" : "favorite"; on: root.card.fav;
+        label: root.card.fav ? "Remove from favorites" : "Add to favorites";
+        clicked => { root.fav(); }
+    }
+    if root.removable: HubButton {
+        x: parent.width - self.width - 40px; y: 10px; size: 28px;
+        icon: "close"; label: "Remove from Recent";
+        clicked => { root.remove(); }
+    }
+    Text {
+        x: 10px; y: root.logo-h + 14px; width: parent.width - 20px;
+        text: root.card.title; color: Theme.fg-1; font-size: Metrics.font-sm; font-weight: 600; overflow: elide;
+    }
+    Text {
+        x: 10px; y: root.logo-h + 32px; width: parent.width - 20px;
+        text: root.card.sub; color: Theme.fg-a3; font-size: Metrics.font-micro; overflow: elide;
+    }
+}
+
+// Cards in a wrapping grid that scrolls.
+export component StreamGrid inherits Rectangle {
+    in property <[StreamCard]> cards;
+    in property <bool> removable;
+    in property <string> empty-text;
+    property <length> gap: 12px;
+    property <length> inner: self.width - 14px;
+    property <int> cols: max(1, floor((self.inner + self.gap) / (168px + self.gap)));
+    property <length> tile-w: (self.inner - (self.cols - 1) * self.gap) / self.cols;
+    property <length> tile-h: self.tile-w * 0.62 + 56px;
+    if root.cards.length == 0: Text {
+        y: 24px; width: parent.width; text: root.empty-text; color: Theme.fg-a3; font-size: Metrics.font-base;
+        horizontal-alignment: center; wrap: word-wrap;
+    }
+    ScrollView {
+        content-height: ceil(root.cards.length / root.cols) * (root.tile-h + root.gap);
+        for c[i] in root.cards: StreamTile {
+            x: mod(i, root.cols) * (root.tile-w + root.gap); y: floor(i / root.cols) * (root.tile-h + root.gap);
+            width: root.tile-w; height: root.tile-h;
+            card: c; removable: root.removable;
+            play => { Streams.play(c.url); }
+            fav => { Streams.toggle-fav(c.url); }
+            remove => { Streams.remove(c.url); }
+        }
+    }
+}
+
+// The now-playing actions: ★, lyrics, record (live streams) or download.
+export component NowActions inherits HorizontalLayout {
+    in property <length> size: 32px;
+    spacing: 4px; alignment: end;
+    HubButton { size: root.size; icon: NowPlaying.fav ? "favorite-active" : "favorite"; on: NowPlaying.fav; enabled: NowPlaying.url != "";
+        label: NowPlaying.fav ? "Remove from favorites" : "Add to favorites"; clicked => { NowPlaying.action("fav"); } }
+    if NowPlaying.has-lyrics: HubButton { size: root.size; icon: "subtitle"; label: "Lyrics"; clicked => { NowPlaying.action("lyrics"); } }
+    if NowPlaying.can-record: HubButton { size: root.size; icon: NowPlaying.recording ? "record-active" : "record"; on: NowPlaying.recording;
+        label: NowPlaying.recording ? "Stop recording" : "Record"; clicked => { NowPlaying.action("record"); } }
+    if NowPlaying.can-download: HubButton { size: root.size; icon: "download"; label: "Download for offline"; clicked => { NowPlaying.action("download"); } }
+}
+
+// The shared now-playing card at the bottom of the hub and the service pages.
+export component NowBar inherits Rectangle {
+    height: 72px; border-radius: Metrics.radius-xl;
+    background: Theme.bg-a3;
+    border-width: 1px; border-color: Theme.accent.with-alpha(0.35);
+    HorizontalLayout {
+        padding: 10px; padding-right: 14px; spacing: 12px;
+        Rectangle {
+            width: 52px; height: 52px; border-radius: Metrics.radius-md; clip: true;
+            background: Theme.accent.with-alpha(0.18);
+            if NowPlaying.has-logo: Image { width: parent.width; height: parent.height; source: NowPlaying.logo; image-fit: contain; }
+            if !NowPlaying.has-logo: TriIcon { x: 12px; y: 12px; width: 28px; height: 28px; name: NowPlaying.music ? "music" : "streaming"; tint: Theme.accent; }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1; alignment: center; spacing: 2px;
+            Text { text: NowPlaying.station; color: Theme.fg-1; font-size: Metrics.font-md; font-weight: 600; overflow: elide; }
+            if NowPlaying.track != "": Text { text: NowPlaying.track; color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
+            if NowPlaying.info != "": Text { text: NowPlaying.info; color: Theme.fg-a3; font-size: Metrics.font-micro; overflow: elide; }
+        }
+        VerticalLayout { alignment: center; NowActions { } }
+    }
+}
+
+component Tab inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> active;
+    callback clicked();
+    height: 34px; width: row.preferred-width + 24px; border-radius: self.height / 2;
+    background: root.active ? Theme.accent.with-alpha(0.28) : ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    border-width: 1px; border-color: root.active ? Theme.accent : transparent;
+    row := HorizontalLayout {
+        x: 12px; spacing: 8px;
+        VerticalLayout { alignment: center; TriIcon { width: 16px; height: 16px; name: root.icon; tint: root.active ? Theme.accent-bright : Theme.fg-a2; } }
+        Text { text: root.text; color: root.active ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; }
+    }
+    ta := TouchArea { accessible-role: tab; accessible-label: root.text; accessible-item-selected: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// The URL bar: paste a link (Enter opens it) or type to search; the clock opens the
+// history, "⋯" the full Open Network Stream dialog.
+component UrlBar inherits Rectangle {
+    property <int> want: Streams.focus-url;
+    changed want => { tf.focus-input(); }
+    height: 40px;
+    HorizontalLayout {
+        spacing: 8px;
+        Rectangle {
+            horizontal-stretch: 1; border-radius: Metrics.radius-md; background: Theme.field;
+            TriIcon { x: 10px; y: (parent.height - self.height) / 2; width: 18px; height: 18px; name: "link"; tint: Theme.fg-a3; }
+            tf := TextField {
+                x: 32px; width: parent.width - 34px; height: parent.height; background: transparent;
+                label: "Stream URL or search";
+                placeholder: "Paste a stream or video URL, or type to search";
+                text <=> Streams.url;
+                edited(t) => { Streams.edited(t); }
+                accepted(t) => { Streams.submit(t); }
+            }
+        }
+        HubButton { y: 4px; icon: "recent"; label: "URL history"; enabled: Streams.history.length > 0; clicked => { hist.show(); } }
+        PrimaryButton { text: "Open"; enabled: Streams.url != ""; clicked => { Streams.submit(Streams.url); } }
+        HubButton { y: 4px; icon: "more"; label: "More options (several URLs, playlist name)"; clicked => { Streams.more-options(); } }
+    }
+    hist := PopupWindow {
+        x: 0; y: root.height + 4px; width: min(root.width, 640px);
+        height: min(Streams.history.length * 36px + 52px, 420px);
+        Rectangle {
+            background: Theme.bar-solid.with-alpha(0.97); border-radius: Metrics.radius-xl;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
+            clip: true;
+            VerticalLayout {
+                padding: 4px;
+                Flickable {
+                    vertical-stretch: 1;
+                    content-height: Streams.history.length * 36px;
+                    VerticalLayout {
+                        alignment: start;
+                        for u in Streams.history: Rectangle {
+                            height: 36px; border-radius: Metrics.radius-md; background: hta.has-hover ? Theme.popup-hover : transparent;
+                            Text { x: 12px; width: parent.width - 24px; text: u; color: Theme.fg-1; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
+                            hta := TouchArea { accessible-role: button; accessible-label: u; mouse-cursor: pointer; clicked => { Streams.url = u; Streams.submit(u); } }
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 40px;
+                    Text { x: 12px; text: "Clear history"; color: cta.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
+                    cta := TouchArea { accessible-role: button; accessible-label: "Clear URL history"; mouse-cursor: pointer; clicked => { Streams.clear-history(); } }
+                }
+            }
+        }
+    }
+}
+
+// The Streams section of the Library.
+export component StreamsHub inherits VerticalLayout {
+    callback command(string, string, string);
+    spacing: 14px;
+    UrlBar { }
+    HorizontalLayout {
+        spacing: 8px; alignment: start;
+        Tab { text: "Recent"; icon: "recent"; active: Streams.tab == "recent"; clicked => { Streams.select-tab("recent"); } }
+        Tab { text: "Favorites"; icon: "favorite"; active: Streams.tab == "favorites"; clicked => { Streams.select-tab("favorites"); } }
+        if Streams.directory: Tab { text: "Radio"; icon: "streaming"; active: Streams.tab == "radio"; clicked => { Streams.select-tab("radio"); } }
+        if Streams.directory: Tab { text: "TV"; icon: "tv"; active: Streams.tab == "tv"; clicked => { Streams.select-tab("tv"); } }
+        Tab { text: "Music"; icon: "music"; active: Streams.tab == "music"; clicked => { Streams.select-tab("music"); } }
+        Rectangle { horizontal-stretch: 1; }
+        if Streams.tab == "recent" && Streams.recent.length > 0: VerticalLayout { alignment: center;
+            Text { text: "Clear"; color: cl.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base;
+                cl := TouchArea { accessible-role: button; accessible-label: "Clear recent streams"; mouse-cursor: pointer; clicked => { Streams.clear-recent(); } } } }
+    }
+    // Music: the service switcher (each service keeps its own chips, filters, actions).
+    if Streams.tab == "music" && Streams.services.length > 0: HorizontalLayout {
+        spacing: 8px; alignment: start;
+        for s in Streams.services: Tab { text: s.name; icon: s.icon; active: Streams.service == s.id; clicked => { Streams.pick-service(s.id); } }
+    }
+    if Streams.tab == "recent": StreamGrid {
+        vertical-stretch: 1; cards: Streams.recent; removable: true;
+        empty-text: "Streams you play show here: radio, TV, links you paste and music services.";
+    }
+    if Streams.tab == "favorites": StreamGrid {
+        vertical-stretch: 1; cards: Streams.favorites;
+        empty-text: "Star a stream (★ on its card or in the now-playing card) to keep it here.";
+    }
+    if Streams.tab != "recent" && Streams.tab != "favorites" && Streams.page-owner != "" && MusicDialogState.page: Rectangle {
+        // Sized from outside: the dialog body's rows follow its width.
+        vertical-stretch: 1; horizontal-stretch: 1; min-width: 0px;
+        MusicPane {
+            x: 0; y: 0; width: parent.width; height: parent.height; page: true; show-back: false;
+            command(o, n, a) => { root.command(o, n, a); }
+        }
+    }
+    if Streams.tab != "recent" && Streams.tab != "favorites" && (Streams.page-owner == "" || !MusicDialogState.page): Rectangle {
+        vertical-stretch: 1;
+        Text {
+            y: 24px; width: parent.width; horizontal-alignment: center; wrap: word-wrap; color: Theme.fg-a3; font-size: Metrics.font-base;
+            text: Streams.tab == "music" && Streams.services.length == 0
+                ? "No music services are on. Turn on Free Music or install YouTube Music in Extensions (Ctrl+E)."
+                : "Loading…";
+        }
+    }
+    if NowPlaying.show || NowPlaying.bar: NowBar { }
+}
+
+// A service's own page (its sidebar icon): the plugin dialog full width, a back arrow to
+// the hub and the now-playing card.
+export component ServicePage inherits VerticalLayout {
+    callback command(string, string, string);
+    spacing: 10px;
+    if MusicDialogState.page && Streams.page-owner != "": Rectangle {
+        vertical-stretch: 1; horizontal-stretch: 1; min-width: 0px;
+        MusicPane {
+            x: 0; y: 0; width: parent.width; height: parent.height; page: true; show-back: true;
+            back => { Streams.back(); }
+            command(o, n, a) => { root.command(o, n, a); }
+        }
+    }
+    if !MusicDialogState.page || Streams.page-owner == "": Rectangle {
+        vertical-stretch: 1;
+        Text { y: 24px; width: parent.width; horizontal-alignment: center; color: Theme.fg-a3; font-size: Metrics.font-base; text: "Loading " + Streams.page-title + "…"; }
+    }
+    if NowPlaying.show || NowPlaying.bar: NowBar { }
+}
+
+// Home → Streams: favorites and recent streams as cards in one row.
+export component StreamsRow inherits VerticalLayout {
+    callback open-hub();
+    spacing: 16px;
+    property <int> fit: max(1, floor((self.width + 12px) / (168px + 12px)));
+    HorizontalLayout {
+        height: 24px; spacing: 4px;
+        Text { text: "Streams"; color: tta.has-hover ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-lg; vertical-alignment: center; horizontal-stretch: 1;
+            tta := TouchArea { accessible-role: button; accessible-label: "Streams"; mouse-cursor: pointer; clicked => { root.open-hub(); } } }
+        Icon { source: @image-url("../assets/icons/chevron-right.svg"); tint: cta.has-hover ? Theme.fg-1 : Theme.fg-a1;
+            cta := TouchArea { accessible-role: button; accessible-label: "Show all streams"; mouse-cursor: pointer; clicked => { root.open-hub(); } } }
+    }
+    Rectangle {
+        property <length> tile-w: (self.width - (root.fit - 1) * 12px) / root.fit;
+        height: self.tile-w * 0.62 + 56px;
+        for c[i] in Streams.home: StreamTile {
+            visible: i < root.fit;
+            x: i * (parent.tile-w + 12px); width: parent.tile-w; height: parent.height;
+            card: c;
+            play => { Streams.play(c.url); }
+            fav => { Streams.toggle-fav(c.url); }
+        }
+    }
+}

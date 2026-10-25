@@ -41,10 +41,10 @@ pub fn parse_urls(text: &str) -> Result<Vec<String>, String> {
 }
 
 /// Recent network streams for the dialog's history list.
+/// The URL history it shares with the Streams hub's URL bar.
 fn history() -> slint::ModelRc<slint::SharedString> {
-    let v: Vec<slint::SharedString> = store::recent()
+    let v: Vec<slint::SharedString> = crate::streams::store::urls()
         .into_iter()
-        .filter(|r| r.contains("://") && !r.starts_with("file://"))
         .take(5)
         .map(Into::into)
         .collect();
@@ -123,6 +123,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                         return;
                     }
                 };
+                for u in urls.iter().rev() {
+                    crate::streams::store::push_url(u);
+                }
                 let name = name.trim().to_string();
                 if !name.is_empty() {
                     match store::save_playlist(&name, &urls) {

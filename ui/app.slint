@@ -13,7 +13,7 @@ import { NetworkStreamDialog, NewPlaylistDialog, QrDialog, ConfirmDialog, Shortc
 import { FxState } from "filters.slint";
 import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, MusicDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsState, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
+import { SkipButton, LyricsView, SubtitleDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsState, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
 import { Modal } from "core/modal.slint";
 import { IconButton, PrimaryButton, FlatButton, ButtonSize } from "core/buttons.slint";
 import { BarStyle, BarMetrics, Bars, VolumeStyle, PanelTab, Overlay, TagStatus } from "core/types.slint";
@@ -32,6 +32,9 @@ import { Subtitles } from "state/subtitles.slint";
 import { MusicDialogState, MdCaps } from "state/music-dialog.slint";
 import { TagReview } from "state/tag-review.slint";
 import { NowPlaying } from "state/now-playing.slint";
+import { Streams, StreamCard, StreamService } from "state/streams.slint";
+import { NowActions } from "streams.slint";
+import { MusicPane } from "music-pane.slint";
 import { Notices } from "state/notices.slint";
 import { Viz } from "state/viz.slint";
 import { SkipIntro } from "state/skip-intro.slint";
@@ -44,7 +47,7 @@ import { SideDrawer } from "drawer.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
 export { LiveRow } from "core/rows.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Streams, StreamCard, StreamService, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads }
 
 component SeekBar inherits Rectangle {
     in property <float> position;
@@ -561,7 +564,7 @@ export component AppWindow inherits Window {
         : Overlays.tr-open ? Overlay.tag-review
         : Overlays.ls-open ? Overlay.lyrics-search
         : Overlays.confirm-open ? Overlay.confirm
-        : Overlays.md-open ? Overlay.music-dialog
+        : Overlays.md-open && !MusicDialogState.page ? Overlay.music-dialog
         : Overlays.subs-open ? Overlay.subtitles
         : Overlays.qr-open ? Overlay.qr
         : Overlays.extensions-open ? Overlay.extensions
@@ -665,7 +668,7 @@ export component AppWindow inherits Window {
     // Rust moves focus back to the player after Esc closed an overlay.
     public function focus-main() { fs.focus(); }
     property <bool> dialog-open: Overlays.settings-open || Overlays.extensions-open || Overlays.palette-open || Overlays.customize-open || Overlays.network-open
-        || Overlays.new-playlist-open || Overlays.subs-open || Overlays.md-open || Overlays.ls-open
+        || Overlays.new-playlist-open || Overlays.subs-open || (Overlays.md-open && !MusicDialogState.page) || Overlays.ls-open
         || Overlays.tr-open || Overlays.onboarding-open || Overlays.qr-open || Overlays.confirm-open || Overlays.info-open
         || Overlays.shortcuts-open;
 
@@ -722,6 +725,7 @@ export component AppWindow inherits Window {
         width: min(460px, root.width - self.left - 48px);
         station: NowPlaying.station; track: NowPlaying.track; info: NowPlaying.info;
         logo: NowPlaying.logo; has-logo: NowPlaying.has-logo; music: NowPlaying.music;
+        NowActions { x: parent.width - self.preferred-width - 12px; y: 12px; width: self.preferred-width; height: 28px; size: 28px; }
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
@@ -766,7 +770,8 @@ export component AppWindow inherits Window {
         open(k, kind) => { Library.open(k, kind); }
         menu-request(kind, x, y, c) => { Menus.menu-request(kind, x, y, c); }
         open-file() => { Playback.open-file(); }
-        open-network() => { Overlays.network-open = true; }
+        open-network() => { Streams.open-page("streams:url"); }
+        plugin-command(o, n, a) => { root.plugin-command(o, n, a); }
         sources: Extensions.sources;
         open-source(id) => { Extensions.run(id, "::source"); }
         widgets: Extensions.widgets;
@@ -1267,32 +1272,18 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Auto-tagger / Free Music ----------
-    if Overlays.md-open: MusicDialog {
+    // Shown as a Library page instead while it is one (Streams hub, #86).
+    if Overlays.md-open && !MusicDialogState.page: Modal {
         width: root.width; height: root.height;
-        title: MusicDialogState.title; results: MusicDialogState.results; logos: MusicDialogState.caps.logos ? MusicDialogState.logos : []; status: MusicDialogState.status; busy: MusicDialogState.busy;
-        detail: MusicDialogState.detail; placeholder: MusicDialogState.placeholder;
-        detail-cover: MusicDialogState.detail-cover; has-detail-cover: MusicDialogState.has-detail-cover && MusicDialogState.detail-cover-owner == MusicDialogState.owner; search-label: MusicDialogState.search-label;
-        primary-text: MusicDialogState.primary; secondary-text: MusicDialogState.secondary; sources: MusicDialogState.sources;
-        source <=> MusicDialogState.source; query <=> MusicDialogState.query; selected <=> MusicDialogState.selected;
-        chips: MusicDialogState.caps.chips ? MusicDialogState.chips : []; chip: MusicDialogState.chip;
-        actions: MusicDialogState.caps.chips ? MusicDialogState.actions : [];
-        rich: MusicDialogState.caps.rich; tracks: MusicDialogState.caps.rich ? MusicDialogState.tracks : [];
-        filters: MusicDialogState.caps.rich ? MusicDialogState.filters : []; copy-text: MusicDialogState.copy;
-        has-more: MusicDialogState.caps.rich && MusicDialogState.has-more;
-        can-grid: MusicDialogState.caps.grid; grid: MusicDialogState.caps.grid && MusicDialogState.grid;
-        info-only: MusicDialogState.caps.info;
-        view(g) => { MusicDialogState.grid = g; root.plugin-command(MusicDialogState.owner, "view", g ? "grid" : "list"); }
-        filter(n, v) => { root.plugin-command(MusicDialogState.owner, "filter", n + "\u{1f}" + v); }
-        more => { root.plugin-command(MusicDialogState.owner, "more", ""); }
-        window(f, c) => { MusicDialogState.win-first = f; MusicDialogState.win-count = c; MusicDialogState.window-changed(); }
-        edited => { if MusicDialogState.caps.rich { root.plugin-command(MusicDialogState.owner, "edited", ""); } }
-        chip-clicked(c) => { root.plugin-command(MusicDialogState.owner, "chip", c); }
-        action(n, i) => { root.plugin-command(MusicDialogState.owner, "act:" + n, i); }
-        search => { root.plugin-command(MusicDialogState.owner, "search", ""); }
-        select(i) => { root.plugin-command(MusicDialogState.owner, "select", i); }
-        primary(i) => { root.plugin-command(MusicDialogState.owner, "primary", i); }
-        secondary(i) => { root.plugin-command(MusicDialogState.owner, "secondary", i); }
-        close => { Overlays.md-open = false; root.plugin-command(MusicDialogState.owner, "close", ""); fs.focus(); }
+        // The station browser grows with the window (the modal still keeps it inside).
+        card-width: MusicDialogState.caps.rich ? 1060px : MusicDialogState.caps.grid ? max(900px, min(1400px, root.width * 0.86)) : 900px;
+        card-height: MusicDialogState.caps.rich ? 720px : MusicDialogState.caps.grid ? max(640px, min(960px, root.height * 0.88)) : 640px;
+        dismissed => { Overlays.md-open = false; root.plugin-command(MusicDialogState.owner, "close", ""); fs.focus(); }
+        MusicPane {
+            width: 100%; height: 100%;
+            command(o, n, a) => { root.plugin-command(o, n, a); }
+            closed => { fs.focus(); }
+        }
     }
 
     // ---------- Plugin confirmation (above Settings and the music dialog) ----------

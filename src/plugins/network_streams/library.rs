@@ -8,24 +8,6 @@ pub(crate) fn dir() -> PathBuf {
     crate::store::data_dir().join("streams")
 }
 
-pub(crate) fn load_list(name: &str) -> Vec<Stream> {
-    std::fs::read_to_string(dir().join(name))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
-}
-
-pub(crate) fn save_list(name: &str, v: &[Stream]) {
-    let d = dir();
-    let _ = std::fs::create_dir_all(&d);
-    let tmp = d.join(format!(".{name}.tmp"));
-    if let Ok(t) = serde_json::to_string_pretty(v) {
-        if std::fs::write(&tmp, t).is_ok() {
-            let _ = std::fs::rename(&tmp, d.join(name));
-        }
-    }
-}
-
 /// Put `s` first in `list` (dedup by URL), keep at most `max`.
 pub fn push_front(list: &mut Vec<Stream>, s: &Stream, max: usize) {
     list.retain(|o| o.url != s.url);
@@ -330,7 +312,7 @@ pub fn search_all(q: &str) -> Result<Vec<Stream>, String> {
 pub fn search_kind(q: &str, kind: Option<Kind>) -> Result<Vec<Stream>, String> {
     let tv = kind != Some(Kind::Radio);
     let radio = kind != Some(Kind::Tv);
-    let mut parts = vec![Ok(filter(&load_list("saved.json"), q))];
+    let mut parts = vec![Ok(filter(&crate::streams::store::favorites(), q))];
     if tv {
         parts.push(iptv_search(q));
     }

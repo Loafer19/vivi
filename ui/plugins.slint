@@ -3,7 +3,7 @@
 // used by the Subtitle Search plugin.
 import { ScrollView } from "std-widgets.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
-import { Item } from "panel.slint";
+import { Item } from "core/types.slint";
 import { Dropdown, TextField, EdgeFades } from "core/controls.slint";
 import { Modal } from "core/modal.slint";
 import { FlatButton, PrimaryButton } from "core/buttons.slint";
@@ -618,10 +618,16 @@ component CoverTile inherits Rectangle {
     ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub + (root.fm.saved ? ", downloaded" : ""); accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
 }
 
-// Shared dialog of the music plugins (Auto-tagger, Free Music): optional source
-// dropdown, query + search button, result list, a detail pane (tag diff or licence),
-// status line and two actions. The owner plugin id routes the callbacks.
-export component MusicDialog inherits Modal {
+// Shared dialog body of the music plugins (Auto-tagger, Free Music, Network Streams,
+// package dialogs): optional source dropdown, query + search button, result list, a
+// detail pane (tag diff or licence), status line and two actions. The owner plugin id
+// routes the callbacks (ui/music-pane.slint binds it to MusicDialogState). Shown in a
+// Modal, or as a full-width Library page (`page`, Streams hub #86): no Close button,
+// an optional back arrow instead of the close X.
+export component MusicBody inherits Rectangle {
+    in property <bool> page;
+    in property <bool> show-back;     // page mode: back arrow in the header (service pages)
+    callback back();
     in property <string> title;
     in property <[Item]> results;
     in property <[image]> logos;
@@ -668,15 +674,15 @@ export component MusicDialog inherits Modal {
     // replaces its rows (Free Music) keeps the highlight on the same item, or clears it.
     in-out property <int> selected: -1;
     init => { root.selected = -1; }
-    // The station browser grows with the window (the modal still keeps it inside).
-    card-width: root.rich ? 1060px : root.can-grid ? max(900px, min(1400px, root.width * 0.86)) : 900px;
-    card-height: root.rich ? 720px : root.can-grid ? max(640px, min(960px, root.height * 0.88)) : 640px;
-    dismissed => { root.close(); }
     VerticalLayout {
         Rectangle {
-            height: 44px; background: Theme.bg-a3;
+            height: 44px; background: root.page ? transparent : Theme.bg-a3;
             HorizontalLayout {
-                padding-left: 16px; padding-right: 8px;
+                padding-left: root.page && !root.show-back ? 12px : 16px; padding-right: 8px; spacing: 8px;
+                if root.page && root.show-back: VerticalLayout { alignment: center;
+                    Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: bk.has-hover ? Theme.bg-a1 : transparent;
+                        TriIcon { x: 5px; y: 5px; width: 20px; height: 20px; name: "arrow-left"; tint: bk.has-hover ? Theme.fg-1 : Theme.fg-a2; }
+                        bk := TouchArea { accessible-role: button; accessible-label: "Back to Streams"; mouse-cursor: pointer; clicked => { root.back(); } } } }
                 Text { horizontal-stretch: 1; text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
                 if root.can-grid: HorizontalLayout { alignment: center; spacing: 2px; padding-right: 8px;
                     VerticalLayout { alignment: center;
@@ -686,7 +692,7 @@ export component MusicDialog inherits Modal {
                         ViewButton { label: "Grid view"; active: root.grid; clicked => { root.view(true); }
                             base: @image-url("../assets/icons/layers/grid-twotone-b.svg"); accent: @image-url("../assets/icons/layers/grid-twotone-a.svg"); dim: @image-url("../assets/icons/layers/grid-twotone-d.svg"); } }
                 }
-                VerticalLayout { alignment: center;
+                if !root.page: VerticalLayout { alignment: center;
                     Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: mx.has-hover ? Theme.bg-a1 : transparent;
                         Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); }
                         mx := TouchArea { accessible-role: button; accessible-label: "Close"; mouse-cursor: pointer; clicked => { root.close(); } } } }
@@ -940,7 +946,7 @@ export component MusicDialog inherits Modal {
             padding: 12px; padding-top: root.rich ? 6px : 12px; spacing: 8px;
             if !root.rich: Text { horizontal-stretch: 1; text: root.status; color: Theme.fg-a2; font-size: Metrics.font-sm; wrap: word-wrap; vertical-alignment: center; }
             if root.rich: Rectangle { horizontal-stretch: 1; }
-            FlatButton { text: "Close"; clicked => { root.close(); } }
+            if !root.page: FlatButton { text: "Close"; clicked => { root.close(); } }
             for act in root.actions: FlatButton { text: act; enabled: !root.busy || root.rich; clicked => {
                 if act == "Copy credit" { copier.select-all(); copier.copy(); copier.clear-selection(); }
                 root.action(act, root.selected); } }
@@ -957,8 +963,8 @@ export component MusicDialog inherits Modal {
     }
 }
 
-// "Now playing" card for audio-only network streams (Network Streams plugin): station
-// logo or a radio icon, station name, current ICY title and codec / bitrate.
+// "Now playing" card over the player for audio-only streams (src/streams/nowplaying.rs):
+// station logo or a radio icon, station name, current ICY title and codec / bitrate.
 export component NowPlayingCard inherits Rectangle {
     in property <string> station;
     in property <string> track;
@@ -987,6 +993,8 @@ export component NowPlayingCard inherits Rectangle {
             if root.info != "": Text { text: root.info; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; }
         }
     }
+    // The shared now-playing actions (★, lyrics, record / download; ui/streams.slint).
+    @children
 }
 
 // ---------- Auto-tagger review (src/plugins/tagger.rs) ----------

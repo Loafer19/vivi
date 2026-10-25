@@ -44,9 +44,12 @@ pub const DOWNLOADS: &str = "downloads";
 pub const DOWNLOADS_ACTION: &str = "downloads.action";
 /// The Downloads panel's "paste a link" field; `command` gets the URL as its argument.
 pub const DOWNLOADS_URL: &str = "downloads.url";
+/// A service on the Streams hub's Music tab (`command` opens its dialog, shown there as
+/// a page; the same command as its `sidebar.source` when it has one).
+pub const STREAMS_MUSIC: &str = "streams.music";
 
 /// Every known point, in documentation order.
-pub const POINTS: [&str; 15] = [
+pub const POINTS: [&str; 16] = [
     SIDEBAR_SOURCE,
     MENU_SUBTITLES,
     MENU_AUDIO,
@@ -62,6 +65,7 @@ pub const POINTS: [&str; 15] = [
     DOWNLOADS,
     DOWNLOADS_ACTION,
     DOWNLOADS_URL,
+    STREAMS_MUSIC,
 ];
 
 /// What a plugin is for.
@@ -128,6 +132,7 @@ pub fn describe(point: &str) -> &'static str {
         DOWNLOADS => "Downloads panel",
         DOWNLOADS_ACTION => "Downloads panel button",
         DOWNLOADS_URL => "Downloads panel: paste a link",
+        STREAMS_MUSIC => "Streams hub → Music",
         _ => "",
     }
 }

@@ -15,6 +15,7 @@
 
 use super::web;
 use super::{contrib, Ctx, Manifest, Plugin, SettingSpec};
+use crate::streams::store as hub_store;
 use crate::Item;
 use serde::{Deserialize, Serialize};
 use slint::ComponentHandle;
@@ -86,37 +87,12 @@ const FALLBACK_SERVERS: [&str; 4] = [
     "https://de2.api.radio-browser.info",
     "https://fi1.api.radio-browser.info",
 ];
-const MAX_RECENT: usize = 30;
+/// Source dropdown of the hub's TV tab.
+const HUB_TV_SOURCES: [&str; 3] = ["TV channels", "M3U / IPTV playlist", "My playlists"];
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct Stream {
-    pub name: String,
-    pub url: String,
-    #[serde(default)]
-    pub logo: String,
-    /// Genre tags or IPTV group.
-    #[serde(default)]
-    pub group: String,
-    #[serde(default)]
-    pub country: String,
-    #[serde(default)]
-    pub codec: String,
-    #[serde(default)]
-    pub bitrate: u32,
-    #[serde(default)]
-    pub homepage: String,
-    #[serde(default)]
-    pub source: String,
-    /// `tvg-id` of IPTV channels (program guide key).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub tvg_id: String,
-    /// XMLTV guide URL from the playlist header (`url-tvg` / `x-tvg-url`).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub epg: String,
-    /// radio-browser.info station id (its click counter is `/json/url/<id>`).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub stationuuid: String,
-}
+/// The stream record is core since the Streams hub (#86): favorites and Recent hold
+/// streams from every source.
+pub use crate::streams::Stream;
 
 impl Stream {
     fn label(&self) -> String {
@@ -199,10 +175,6 @@ pub struct NetworkStreams {
     note: Option<String>,
     /// Source shown in the dropdown last tick (placeholder/button follow it).
     last_source: String,
-    /// Station picked in the browser, for the now-playing card.
-    playing: Option<Stream>,
-    np_url: String,
-    logo_task: crate::util::Task<(String, Option<PathBuf>)>,
     poll: u32,
     /// Unfiltered results; `list` is its view (group chip + live filter + favorites first).
     all: Vec<Stream>,
@@ -227,8 +199,21 @@ pub struct NetworkStreams {
     /// Results shown as logo tiles (the "view" setting); row logos are then decoded at
     /// tile size.
     grid: bool,
-    /// URL last checked by `is_station` and whether it is one of our stations.
-    known: (String, bool),
+    /// Streams hub tab shown ("radio" | "tv"; "" = the 0.13 browser, unused now).
+    hub: String,
+    /// Radio tab filters (indexes into the `HUB_*` lists, 0 = any).
+    r_country: usize,
+    r_genre: usize,
+    r_lang: usize,
+    r_bitrate: usize,
+    r_sort: usize,
+    /// TV tab filters and the program guide switch.
+    t_country: usize,
+    t_category: usize,
+    guide_off: bool,
+    /// Group chip to apply when the playlist that is loading arrives (TV country +
+    /// category).
+    chip_after: Option<String>,
 }
 
 impl NetworkStreams {
@@ -239,7 +224,7 @@ impl NetworkStreams {
         cx.app.global::<crate::MusicDialogState>().set_busy(busy);
     }
     fn reload_favs(&mut self) {
-        self.favs = load_list("saved.json").into_iter().map(|s| s.url).collect();
+        self.favs = hub_store::favorites().into_iter().map(|s| s.url).collect();
     }
     fn ttl(cx: &Ctx) -> u64 {
         match cx.get("refresh").as_str() {
@@ -343,6 +328,9 @@ impl NetworkStreams {
         });
     }
     fn guide_for(&self, s: &Stream) -> Option<&Vec<super::epg::Prog>> {
+        if self.guide_off {
+            return None;
+        }
         super::epg::lookup(&self.epg, &s.tvg_id)
     }
     fn show_rows(&self, cx: &Ctx) {
@@ -410,20 +398,49 @@ impl NetworkStreams {
             .global::<crate::MusicDialogState>()
             .set_actions(ModelRc::new(VecModel::from(acts)));
     }
-    fn mode(cx: &Ctx) -> usize {
+    /// Source mode of the dropdown (the hub tabs have their own short lists).
+    fn cur_mode(&self, cx: &Ctx) -> usize {
         let s = cx.app.global::<crate::MusicDialogState>().get_source();
-        SOURCES.iter().position(|x| *x == s.as_str()).unwrap_or(0)
+        match self.hub.as_str() {
+            "radio" => 0,
+            "tv" => match s.as_str() {
+                x if x == HUB_TV_SOURCES[1] => M3U,
+                x if x == HUB_TV_SOURCES[2] => MY_PL,
+                _ => TV_COUNTRY,
+            },
+            _ => SOURCES.iter().position(|x| *x == s.as_str()).unwrap_or(0),
+        }
+    }
+    /// `s` as the hub stores it: ours, with its kind.
+    fn tagged(&self, s: &Stream) -> Stream {
+        let mut s = s.clone();
+        if s.service.is_empty() {
+            s.service = ID.into();
+        }
+        if s.kind.is_empty() {
+            s.kind = match hub_store::kind_of(&s) {
+                "" if self.hub == "tv"
+                    || [M3U, TV_COUNTRY, TV_CATEGORY, MY_PL].contains(&self.mode) =>
+                {
+                    "tv"
+                }
+                "" => "radio",
+                k => k,
+            }
+            .into();
+        }
+        s
     }
     fn local(&mut self, cx: &Ctx, mode: usize) {
         self.mode = mode;
         self.reload_favs();
         self.chip.clear();
         self.loaded_src.clear();
-        self.all = load_list(if mode == SAVED {
-            "saved.json"
+        self.all = if mode == SAVED {
+            hub_store::favorites()
         } else {
-            "recent.json"
-        });
+            hub_store::recent()
+        };
         self.apply_view(cx);
         self.want_epg(cx);
         cx.app
@@ -455,6 +472,9 @@ impl NetworkStreams {
     }
     /// Request guides for the channels shown (playlist `url-tvg` + the EPG setting).
     fn want_epg(&mut self, cx: &Ctx) {
+        if self.guide_off {
+            return;
+        }
         if !self.all.iter().any(|s| !s.tvg_id.is_empty()) {
             return;
         }
@@ -497,15 +517,13 @@ impl NetworkStreams {
             Self::ui(cx, &format!("Queued {}", s.name), false);
             return;
         }
+        // Recent first, so the now-playing card knows the station when it loads.
+        hub_store::push_recent(&self.tagged(s));
+        crate::streams::refresh_later();
         cx.player.cmd("loadfile", &[&s.url]);
-        self.playing = Some(s.clone());
-        self.known.0.clear();
         if s.source == "radio-browser.info" {
             radio_click(&s.stationuuid);
         }
-        let mut r = load_list("recent.json");
-        push_front(&mut r, s, MAX_RECENT);
-        save_list("recent.json", &r);
         cx.toast(&format!("Playing {}", s.name));
         Self::ui(cx, &format!("Playing {}", s.name), false);
         if how == 2 {
@@ -538,11 +556,11 @@ impl NetworkStreams {
     }
 }
 
-/// Station of `url` in the saved and recent lists.
+/// Station of `url` in the hub's favorites and recent lists.
 fn known_station(url: &str) -> Option<Stream> {
-    load_list("saved.json")
+    hub_store::favorites()
         .into_iter()
-        .chain(load_list("recent.json"))
+        .chain(hub_store::recent())
         .find(|s| s.url == url)
 }
 
@@ -644,7 +662,7 @@ fn logo_image(p: &Path, size: u32, now_playing: bool, key: String) -> Option<sli
 
 /// Download a station logo into the cache (once); `None` when it cannot be fetched or
 /// is not an image.
-fn fetch_logo(url: &str) -> Option<PathBuf> {
+pub(crate) fn fetch_logo(url: &str) -> Option<PathBuf> {
     if let Some(p) = cached_logo(url) {
         return Some(p);
     }
@@ -822,85 +840,6 @@ pub fn drawer_text(
     s
 }
 
-impl NetworkStreams {
-    /// [`looks_like_station`] for `path` (cached per URL once mpv knows its length).
-    fn is_station(&mut self, path: &str, get: impl Fn(&str) -> Option<String>) -> bool {
-        if self.known.0 != path {
-            let known = self.playing.as_ref().is_some_and(|s| s.url == path)
-                || self.list.iter().any(|s| s.url == path)
-                || known_station(path).is_some();
-            self.known = (path.to_string(), known);
-        }
-        looks_like_station(self.known.1, get)
-    }
-    /// Fill the now-playing card while an audio-only network stream plays.
-    fn now_playing(&mut self, cx: &Ctx) {
-        let a = cx.app;
-        let path = cx.player.get("path").unwrap_or_default();
-        if super::host::has_meta(&path) {
-            return; // a package described this URL: the host fills the card
-        }
-        let show = a.global::<crate::Playback>().get_has_media()
-            && a.global::<crate::Viz>().get_audio()
-            && path.contains("://")
-            && self.is_station(&path, |k| cx.player.get(k));
-        if !show {
-            if a.global::<crate::NowPlaying>().get_show() {
-                a.global::<crate::NowPlaying>().set_show(false);
-            }
-            return;
-        }
-        if path != self.np_url {
-            self.np_url = path.clone();
-            let st = self
-                .playing
-                .clone()
-                .filter(|s| s.url == path)
-                .or_else(|| self.list.iter().find(|s| s.url == path).cloned())
-                .or_else(|| known_station(&path));
-            a.global::<crate::NowPlaying>().set_has_logo(false);
-            a.global::<crate::NowPlaying>().set_music(false);
-            self.logo_task.cancel();
-            let name = st
-                .as_ref()
-                .map(|s| display_name(&s.name))
-                .unwrap_or_default();
-            a.global::<crate::NowPlaying>().set_station(name.into());
-            if let Some(logo) = st.map(|s| s.logo).filter(|l| l.starts_with("http")) {
-                let u = path.clone();
-                self.logo_task = crate::util::Task::spawn(move || (u, fetch_logo(&logo)));
-            }
-        }
-        let g = |k: &str| cx.player.get(k).filter(|v| !v.trim().is_empty());
-        if a.global::<crate::NowPlaying>().get_station().is_empty() {
-            let n = g("metadata/by-key/icy-name")
-                .or_else(|| g("media-title"))
-                .unwrap_or_else(|| display_name(path.rsplit('/').next().unwrap_or(&path)));
-            a.global::<crate::NowPlaying>().set_station(n.into());
-        }
-        let track = g("metadata/by-key/icy-title").unwrap_or_default();
-        let mut info = Vec::new();
-        if let Some(c) = g("audio-codec-name") {
-            info.push(c.to_uppercase());
-        }
-        if let Some(b) = g("audio-bitrate")
-            .and_then(|b| b.parse::<f64>().ok())
-            .filter(|b| *b > 0.0)
-        {
-            info.push(format!("{:.0} kbps", b / 1000.0));
-        }
-        if let Some(r) = g("audio-params/samplerate").and_then(|r| r.parse::<f64>().ok()) {
-            info.push(format!("{:.1} kHz", r / 1000.0));
-        }
-        a.global::<crate::NowPlaying>().set_track(track.into());
-        a.global::<crate::NowPlaying>()
-            .set_info(info.join(" · ").into());
-        if !a.global::<crate::NowPlaying>().get_show() {
-            a.global::<crate::NowPlaying>().set_show(true);
-        }
-    }
-}
-
 impl Plugin for NetworkStreams {
     fn manifest(&self) -> Manifest {
         Manifest::builtin(
@@ -909,11 +848,10 @@ impl Plugin for NetworkStreams {
             "Internet radio (radio-browser.info, SomaFM), iptv-org TV by country and category, your own M3U/IPTV playlists that refresh themselves, favorites, Search all (TV + radio), group and category chips, channel logos as a list or a grid, an XMLTV program guide (now / next) and stream info.",
             "streams",
         )
-        .source("open")
-        .contribute(contrib::PALETTE_COMMAND, "Browse network streams", "open")
+        // Its browser is the Streams hub's Radio and TV tabs now (#86): no sidebar
+        // source, palette entry or Home widget of its own.
         .contribute(contrib::CONTEXT_PLAYER, "Stream info", "info")
         .contribute(contrib::DRAWER_PANEL, "Network Streams", "drawer")
-        .contribute(contrib::HOME_WIDGET, "Radio stations", "open")
         .setting(SettingSpec::action(
             "open",
             "Browse streams",
@@ -948,7 +886,6 @@ impl Plugin for NetworkStreams {
     }
     fn disable(&mut self, cx: &Ctx) {
         self.task.cancel();
-        cx.app.global::<crate::NowPlaying>().set_show(false);
         if cx.app.global::<crate::MusicDialogState>().get_owner() == ID {
             cx.app.global::<crate::Overlays>().set_md_open(false);
         }
@@ -968,60 +905,57 @@ impl Plugin for NetworkStreams {
                     station.as_ref(),
                     path.contains("://"),
                     &now_info(|p| cx.player.get(p)),
-                    load_list("saved.json").len(),
-                    load_list("recent.json").len(),
+                    hub_store::favorites().len(),
+                    hub_store::recent().len(),
                 );
                 cx.app.global::<crate::Drawer>().set_info(text.into());
             }
+            // The 0.13 browser (palette, keymaps, the drawer's button): the hub's Radio
+            // tab, for one release.
             "open" => {
-                let a = cx.app;
-                a.global::<crate::Overlays>().set_settings_open(false);
-                // From the side drawer: the browser replaces it.
-                a.global::<crate::Overlays>().set_drawer_open(false);
-                a.global::<crate::MusicDialogState>().set_owner(ID.into());
-                a.global::<crate::MusicDialogState>()
-                    .set_caps(crate::MdCaps {
-                        logos: true,
-                        chips: true,
-                        rich: false,
-                        grid: true,
-                        info: false,
-                    });
-                self.grid = cx.get("view") == "Grid";
-                a.global::<crate::MusicDialogState>().set_grid(self.grid);
-                a.global::<crate::MusicDialogState>()
-                    .set_title("Network Streams".into());
-                a.global::<crate::MusicDialogState>()
-                    .set_placeholder(placeholder(Self::mode(cx)).into());
-                self.last_source.clear(); // the next tick sets placeholder and button
-                a.global::<crate::MusicDialogState>()
-                    .set_search_label("Go".into());
-                a.global::<crate::MusicDialogState>()
-                    .set_primary("Play".into());
-                let src: Vec<SharedString> = SOURCES.iter().map(|s| (*s).into()).collect();
-                a.global::<crate::MusicDialogState>()
-                    .set_sources(ModelRc::new(VecModel::from(src)));
-                if !SOURCES.contains(&a.global::<crate::MusicDialogState>().get_source().as_str()) {
-                    a.global::<crate::MusicDialogState>()
-                        .set_source(SOURCES[0].into());
-                }
-                a.global::<crate::Overlays>().set_md_open(true);
-                std::thread::spawn(|| prune_logos(64 * 1024 * 1024));
-                self.local(cx, SAVED);
-                if self.list.is_empty() {
-                    Self::ui(
-                        cx,
-                        "Pick a source, type and press Go. Favorites show here.",
-                        false,
-                    );
+                cx.app.global::<crate::Overlays>().set_drawer_open(false);
+                let w = cx.app.as_weak();
+                crate::streams::later(move || {
+                    if let Some(a) = w.upgrade() {
+                        crate::streams::open_page(&a, "network-streams:open");
+                    }
+                });
+            }
+            "hub" => self.hub_open(cx, args),
+            "filter" if !self.hub.is_empty() => {
+                let (Some(n), true) = (args.first(), args.len() > 1) else {
+                    return;
+                };
+                let v = args[1..].join(" ");
+                self.hub_filter(n, &v);
+                self.hub_filters(cx);
+                self.hub_run(cx);
+            }
+            "favorites-changed" => {
+                self.reload_favs();
+                if self.mode == SAVED {
+                    self.local(cx, SAVED);
+                } else {
+                    self.show_rows(cx);
+                    self.buttons(cx);
                 }
             }
             "view" => {
                 let grid = args.first().is_some_and(|a| a == "grid");
                 self.set_view(cx, grid);
             }
+            "search" if self.hub == "radio" => self.hub_run(cx),
+            "search"
+                if self.hub == "tv"
+                    && self.cur_mode(cx) == TV_COUNTRY
+                    && !self.all.is_empty()
+                    && !self.is_picker() =>
+            {
+                // A channel list is loaded: typing filters it already.
+                self.filtered_by.clear();
+            }
             "search" => {
-                let mode = Self::mode(cx);
+                let mode = self.cur_mode(cx);
                 if mode == SAVED || mode == RECENT {
                     self.local(cx, mode);
                     return;
@@ -1235,13 +1169,13 @@ impl Plugin for NetworkStreams {
                 };
                 let s = self.list[i].clone();
                 if self.mode == SAVED || self.mode == RECENT {
-                    let file = if self.mode == SAVED {
-                        "saved.json"
-                    } else {
-                        "recent.json"
-                    };
                     self.all.retain(|o| o.url != s.url);
-                    save_list(file, &self.all);
+                    if self.mode == SAVED {
+                        hub_store::save_favorites(&self.all);
+                    } else {
+                        hub_store::save_recent(&self.all);
+                    }
+                    crate::streams::refresh_later();
                     self.reload_favs();
                     self.apply_view(cx);
                     cx.app
@@ -1261,13 +1195,9 @@ impl Plugin for NetworkStreams {
                         Self::ui(cx, "Open it first, then favorite a stream", false);
                     }
                 } else {
-                    let mut v = load_list("saved.json");
-                    let was = v.iter().any(|o| o.url == s.url);
-                    v.retain(|o| o.url != s.url);
-                    if !was {
-                        v.push(s.clone());
-                    }
-                    save_list("saved.json", &v);
+                    // The hub's ★: the same favorites as every other stream.
+                    let was = !hub_store::toggle_favorite(&self.tagged(&s));
+                    crate::streams::refresh_later();
                     self.reload_favs();
                     self.show_rows(cx);
                     self.selected = Some(i);
@@ -1296,7 +1226,7 @@ impl Plugin for NetworkStreams {
             let src = cx.app.global::<crate::MusicDialogState>().get_source();
             if src.as_str() != self.last_source {
                 self.last_source = src.to_string();
-                let m = Self::mode(cx);
+                let m = self.cur_mode(cx);
                 cx.app
                     .global::<crate::MusicDialogState>()
                     .set_placeholder(placeholder(m).into());
@@ -1341,14 +1271,9 @@ impl Plugin for NetworkStreams {
             }
             self.logos_dirty |= got;
         }
-        for (now_playing, key, img) in READY.with(|r| std::mem::take(&mut *r.borrow_mut())) {
-            if !now_playing {
-                self.logos.insert(key, img);
-                self.logos_dirty = true;
-            } else if key == self.np_url {
-                cx.app.global::<crate::NowPlaying>().set_logo(img);
-                cx.app.global::<crate::NowPlaying>().set_has_logo(true);
-            }
+        for (_, key, img) in READY.with(|r| std::mem::take(&mut *r.borrow_mut())) {
+            self.logos.insert(key, img);
+            self.logos_dirty = true;
         }
         if let Some(rx) = &self.epg_rx {
             loop {
@@ -1370,28 +1295,12 @@ impl Plugin for NetworkStreams {
             self.logos_dirty = false;
             self.show_rows(cx);
         }
-        if self.poll.is_multiple_of(5) {
-            self.now_playing(cx);
-        }
-        if let Some((url, path)) = self.logo_task.poll() {
-            if url == self.np_url {
-                let key = url.clone();
-                match path.and_then(|p| logo_image(&p, crate::images::TILE, true, key)) {
-                    Some(img) => {
-                        cx.app.global::<crate::NowPlaying>().set_logo(img);
-                        cx.app.global::<crate::NowPlaying>().set_has_logo(true);
-                    }
-                    // Not a picture, or still decoding (shown when READY has it).
-                    None => cx.app.global::<crate::NowPlaying>().set_has_logo(false),
-                }
-            }
-        }
         let Some(r) = self.task.poll() else { return };
         match r {
             Ok(v) => {
                 let n = v.len();
                 self.all = v;
-                self.chip.clear();
+                self.chip = self.chip_after.take().unwrap_or_default();
                 if live_filter(self.mode) {
                     self.filtered_by = cx
                         .app
@@ -1416,6 +1325,273 @@ impl Plugin for NetworkStreams {
             Err(e) => {
                 self.note = None;
                 Self::ui(cx, &e, false)
+            }
+        }
+    }
+}
+
+// ---------- Streams hub mode (#86) ----------
+
+impl NetworkStreams {
+    /// `hub radio|tv [words]`: show the Radio or TV tab of the Streams hub (a page, see
+    /// `crate::streams::open_dialog`). Again on the same tab: only the words search.
+    fn hub_open(&mut self, cx: &Ctx, args: &[String]) {
+        let a = cx.app;
+        let tab = if args.first().is_some_and(|t| t == "tv") {
+            "tv"
+        } else {
+            "radio"
+        };
+        let words = args.get(1).cloned();
+        let st = a.global::<crate::MusicDialogState>();
+        let same =
+            a.global::<crate::Overlays>().get_md_open() && st.get_owner() == ID && self.hub == tab;
+        self.hub = tab.into();
+        if !same {
+            st.set_owner(ID.into());
+            st.set_caps(crate::MdCaps {
+                logos: true,
+                chips: true,
+                rich: false,
+                grid: true,
+                info: false,
+            });
+            self.grid = cx.get("view") == "Grid";
+            st.set_grid(self.grid);
+            st.set_title(if tab == "tv" { "TV" } else { "Radio" }.into());
+            st.set_search_label("Search".into());
+            st.set_primary("Play".into());
+            let src: Vec<SharedString> = if tab == "tv" {
+                HUB_TV_SOURCES.iter().map(|s| (*s).into()).collect()
+            } else {
+                Vec::new()
+            };
+            if tab == "tv" && !HUB_TV_SOURCES.contains(&st.get_source().as_str()) {
+                st.set_source(HUB_TV_SOURCES[0].into());
+            }
+            st.set_sources(ModelRc::new(VecModel::from(src)));
+            if tab == "radio" {
+                st.set_source("".into());
+            }
+            st.set_query("".into());
+            st.set_detail("".into());
+            self.last_source = st.get_source().to_string();
+            st.set_placeholder(
+                if tab == "tv" {
+                    "Channel name; the filters pick a country or category"
+                } else {
+                    "Station name; the filters narrow it down"
+                }
+                .into(),
+            );
+            st.set_secondary("Favorite".into());
+            self.hub_filters(cx);
+            crate::streams::open_dialog(a);
+            std::thread::spawn(|| prune_logos(64 * 1024 * 1024));
+        }
+        if let Some(w) = &words {
+            st.set_query(w.as_str().into());
+        }
+        if !same || words.is_some() {
+            self.hub_run(cx);
+        }
+    }
+
+    /// The tab's dropdown filters.
+    fn hub_filters(&self, cx: &Ctx) {
+        let f = |name: &str, opts: Vec<String>, i: usize| crate::MdFilter {
+            name: name.into(),
+            value: opts.get(i).cloned().unwrap_or_default().into(),
+            options: ModelRc::new(VecModel::from(
+                opts.into_iter().map(SharedString::from).collect::<Vec<_>>(),
+            )),
+        };
+        let any = |l: &mut dyn Iterator<Item = String>| {
+            std::iter::once("Any".to_string())
+                .chain(l)
+                .collect::<Vec<_>>()
+        };
+        let countries = any(&mut HUB_COUNTRIES.iter().map(|c| c.0.to_string()));
+        let v = if self.hub == "tv" {
+            vec![
+                f("Country", countries, self.t_country),
+                f(
+                    "Category",
+                    any(&mut CATEGORY_CHIPS.iter().map(|c| c.0.to_string())),
+                    self.t_category,
+                ),
+                f(
+                    "Guide",
+                    vec!["Guide on".into(), "Guide off".into()],
+                    usize::from(self.guide_off),
+                ),
+            ]
+        } else {
+            vec![
+                f("Country", countries, self.r_country),
+                f(
+                    "Genre",
+                    any(&mut HUB_GENRES.iter().map(|g| g.to_string())),
+                    self.r_genre,
+                ),
+                f(
+                    "Language",
+                    any(&mut HUB_LANGUAGES.iter().map(|g| g.to_string())),
+                    self.r_lang,
+                ),
+                f(
+                    "Bitrate",
+                    HUB_BITRATES.iter().map(|b| b.0.to_string()).collect(),
+                    self.r_bitrate,
+                ),
+                f(
+                    "Sort",
+                    HUB_SORTS.iter().map(|b| b.0.to_string()).collect(),
+                    self.r_sort,
+                ),
+            ]
+        };
+        cx.app
+            .global::<crate::MusicDialogState>()
+            .set_filters(ModelRc::new(VecModel::from(v)));
+    }
+
+    /// A filter dropdown changed.
+    fn hub_filter(&mut self, name: &str, v: &str) {
+        let pos = |l: &mut dyn Iterator<Item = &str>, any: bool| {
+            let mut i = 0;
+            while let Some(x) = l.next() {
+                if x == v {
+                    return i + usize::from(any);
+                }
+                i += 1;
+            }
+            0
+        };
+        match name {
+            "Country" if self.hub == "tv" => {
+                self.t_country = pos(&mut HUB_COUNTRIES.iter().map(|c| c.0), true)
+            }
+            "Country" => self.r_country = pos(&mut HUB_COUNTRIES.iter().map(|c| c.0), true),
+            "Category" => self.t_category = pos(&mut CATEGORY_CHIPS.iter().map(|c| c.0), true),
+            "Guide" => self.guide_off = v == "Guide off",
+            "Genre" => self.r_genre = pos(&mut HUB_GENRES.iter().copied(), true),
+            "Language" => self.r_lang = pos(&mut HUB_LANGUAGES.iter().copied(), true),
+            "Bitrate" => self.r_bitrate = pos(&mut HUB_BITRATES.iter().map(|b| b.0), false),
+            "Sort" => self.r_sort = pos(&mut HUB_SORTS.iter().map(|b| b.0), false),
+            _ => {}
+        }
+    }
+
+    /// The Radio tab's query from its filters and the search words.
+    fn radio_query(&self, words: &str) -> RadioQuery {
+        let pick = |i: usize, l: &[&str]| {
+            i.checked_sub(1)
+                .and_then(|i| l.get(i))
+                .map(|x| x.to_string())
+                .unwrap_or_default()
+        };
+        RadioQuery {
+            name: words.trim().to_string(),
+            country: self
+                .r_country
+                .checked_sub(1)
+                .and_then(|i| HUB_COUNTRIES.get(i))
+                .map(|c| c.1.to_string())
+                .unwrap_or_default(),
+            tag: pick(self.r_genre, &HUB_GENRES),
+            language: pick(self.r_lang, &HUB_LANGUAGES),
+            bitrate: HUB_BITRATES.get(self.r_bitrate).map_or(0, |b| b.1),
+            order: HUB_SORTS.get(self.r_sort).map_or("votes", |s| s.1).into(),
+        }
+    }
+
+    /// Load what the tab's filters (and search words) ask for.
+    fn hub_run(&mut self, cx: &Ctx) {
+        self.reload_favs();
+        let words = cx
+            .app
+            .global::<crate::MusicDialogState>()
+            .get_query()
+            .trim()
+            .to_string();
+        self.note = None;
+        self.loaded_src.clear();
+        self.chip_after = None;
+        if self.hub == "radio" {
+            self.mode = 0;
+            self.clear(cx);
+            Self::ui(cx, "Searching radio-browser.info…", true);
+            let q = self.radio_query(&words);
+            self.spawn(move || radio_filtered(&q));
+            return;
+        }
+        let mode = self.cur_mode(cx);
+        if mode != TV_COUNTRY {
+            // M3U and My playlists work as in the 0.13 browser.
+            if mode == M3U && words.is_empty() {
+                self.mode = M3U;
+                self.clear(cx);
+                cx.app
+                    .global::<crate::MusicDialogState>()
+                    .set_secondary("Choose file…".into());
+                Self::ui(
+                    cx,
+                    "Paste a playlist URL or path (.m3u / .m3u8), or Choose file…",
+                    false,
+                );
+                return;
+            }
+            let hub = std::mem::take(&mut self.hub);
+            cx.app.global::<crate::MusicDialogState>().set_source(
+                if mode == M3U {
+                    SOURCES[M3U]
+                } else {
+                    SOURCES[MY_PL]
+                }
+                .into(),
+            );
+            self.command(cx, "search", &[]);
+            cx.app.global::<crate::MusicDialogState>().set_source(
+                if mode == M3U {
+                    HUB_TV_SOURCES[1]
+                } else {
+                    HUB_TV_SOURCES[2]
+                }
+                .into(),
+            );
+            self.hub = hub;
+            return;
+        }
+        self.mode = TV_COUNTRY;
+        let country = self
+            .t_country
+            .checked_sub(1)
+            .and_then(|i| HUB_COUNTRIES.get(i));
+        let category = self
+            .t_category
+            .checked_sub(1)
+            .and_then(|i| CATEGORY_CHIPS.get(i));
+        match (country, category) {
+            (Some((name, code)), cat) => {
+                let url = format!("{IPTV}/countries/{}.m3u", code.to_lowercase());
+                self.open_playlist(cx, name, url);
+                self.chip_after = cat.map(|c| c.0.to_string());
+            }
+            (None, Some((label, id))) => {
+                self.open_playlist(cx, label, format!("{IPTV}/categories/{id}.m3u"));
+            }
+            (None, None) if !words.is_empty() => {
+                self.mode = M3U;
+                self.clear(cx);
+                Self::ui(cx, "Searching iptv-org channels…", true);
+                self.spawn(move || iptv_search(&words));
+            }
+            (None, None) => {
+                self.clear(cx);
+                Self::ui(cx, "Loading countries…", true);
+                self.note = Some("{n} countries. Pick one, or use the filters.".into());
+                self.spawn(|| iptv_index(true));
             }
         }
     }

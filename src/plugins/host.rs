@@ -572,7 +572,8 @@ pub fn dialog(a: &crate::AppWindow, id: &str, u: DialogUpdate) {
     }
     if u.open {
         ov.set_settings_open(false);
-        ov.set_md_open(true);
+        // A page of the Streams hub for sources, a modal otherwise (#86).
+        crate::streams::open_dialog(a);
     }
 }
 

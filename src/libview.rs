@@ -301,20 +301,11 @@ impl Lib {
                 out.push(Self::action("music:artists", "Artists", "artist"));
                 out.push(Self::action("music:genres", "Genres", "genre"));
             }
-            "network" => {
-                crumbs.push(("network".into(), "Network".into()));
-                out.push(Self::action("action:network", "Add Network Stream", "add"));
-                for u in store::recent().into_iter().filter(|u| u.contains("://")) {
-                    let mut it = Self::group(
-                        u.clone(),
-                        &store::display_name(&u),
-                        u.clone(),
-                        "video",
-                        false,
-                    );
-                    it.icon = "streaming".into();
-                    out.push(it);
-                }
+            // The Streams hub and service pages (src/streams): drawn by the hub, no items.
+            "streams" => crumbs.push(("streams".into(), "Streams".into())),
+            "service" => {
+                crumbs.push(("streams".into(), "Streams".into()));
+                crumbs.push((nav.clone(), crate::streams::service_name(arg)));
             }
             "recent" => {
                 crumbs.push(("recent".into(), "Recent".into()));
@@ -753,8 +744,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 .set_can_back(!l.back.is_empty());
             a.global::<crate::Library>()
                 .set_can_forward(!l.fwd.is_empty());
+            let nav = l.nav.clone();
             drop(l);
             a.global::<crate::Panel>().invoke_lib_search("".into());
+            crate::streams::nav_changed(&a, &nav);
         })
     };
 
@@ -822,6 +815,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let lib = lib.clone();
         let render = render.clone();
         app.global::<crate::Library>().on_navigate(move |key| {
+            // The 0.13 Network section is the Streams hub now.
+            let key: slint::SharedString = if key == "network" {
+                "streams".into()
+            } else {
+                key
+            };
             {
                 let mut l = lib.borrow_mut();
                 if l.nav != key.as_str() {
@@ -888,7 +887,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             match kind.as_str() {
                 "action" => match key.as_str() {
                     "action:add-folder" => a.global::<crate::Library>().invoke_add_folder(),
-                    "action:network" => a.global::<crate::Overlays>().set_network_open(true),
+                    "action:network" => crate::streams::open_page(&a, "action:network"),
                     "action:create-playlist" => {
                         a.global::<crate::Library>().invoke_create_playlist()
                     }

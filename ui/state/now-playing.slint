@@ -1,6 +1,12 @@
-// Now-playing card for radio / network streams (Network Streams plugin): station, current track, info line and logo.
+// The one now-playing card of streams (Streams hub, #86): station or title, the current
+// track (ICY title / media-title), an info line and the logo, plus what can be done with
+// it (★, lyrics, record, download). Filled by the core (src/streams/nowplaying.rs);
+// packages that describe a URL (host `meta`) fill the text and logo instead.
 export global NowPlaying {
+    // The card over the player (audio-only stations and package-described URLs).
     in-out property <bool> show;
+    // Any stream is playing: the Streams hub's now-playing bar.
+    in-out property <bool> bar;
     in-out property <string> station;
     in-out property <string> track;
     in-out property <string> info;
@@ -9,4 +15,16 @@ export global NowPlaying {
     // A song (package metadata such as an Auto-tagger match): a music icon instead of
     // the radio one when there is no cover.
     in-out property <bool> music;
+    // The stream playing (what ★ stars) and whether it is a favorite.
+    in-out property <string> url;
+    in-out property <bool> fav;
+    // Live (no known length): record with mpv's stream-record; otherwise download.
+    in-out property <bool> live;
+    in-out property <bool> recording;
+    in-out property <bool> can-record;
+    in-out property <bool> can-download;
+    // The Lyrics plugin is on.
+    in-out property <bool> has-lyrics;
+    // "fav" | "lyrics" | "record" | "download" | "open" (the Streams hub).
+    callback action(string);
 }
