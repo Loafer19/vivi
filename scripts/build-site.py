@@ -88,8 +88,8 @@ def sitemap(out: Path) -> None:
     (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\nSitemap: {MARKET}/sitemap.xml\n")
 
 
-IMAGES = ["og", "player", "extensions", "lyrics", "skip-intro", "add-subtitles", "visualizer", "library-home",
-          "settings", "panel-subtitles", "menu-main", "miniplayer", "panel-audio", "streams"]
+# PNGs the pages or the SEO tags use (og image, JSON-LD screenshots, full-size links).
+IMAGES = ["og", "player", "library-home", "visualizer", "streams"]
 
 
 def icon(name: str) -> str:
