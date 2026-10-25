@@ -112,8 +112,9 @@ export component LiveRows inherits VerticalLayout {
     in property <length> label-w: 72px;  // label column of bar rows
     in property <length> value-w: 64px;  // value column of bar rows
     spacing: 6px;
-    for r in root.rows: VerticalLayout {
+    for r[i] in root.rows: VerticalLayout {
         spacing: 2px;
+        padding-top: r.heading && i > 0 ? 8px : 0px;
         if r.heading: SectionHeader { caps: true; text: r.label; overflow: elide; }
         if !r.heading && r.bar >= 0: HorizontalLayout {
             spacing: 8px;
