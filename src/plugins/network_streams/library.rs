@@ -9,6 +9,7 @@ pub(crate) fn dir() -> PathBuf {
 }
 
 /// Put `s` first in `list` (dedup by URL), keep at most `max`.
+#[cfg(test)]
 pub fn push_front(list: &mut Vec<Stream>, s: &Stream, max: usize) {
     list.retain(|o| o.url != s.url);
     list.insert(0, s.clone());

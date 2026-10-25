@@ -1459,12 +1459,10 @@ impl NetworkStreams {
     /// A filter dropdown changed.
     fn hub_filter(&mut self, name: &str, v: &str) {
         let pos = |l: &mut dyn Iterator<Item = &str>, any: bool| {
-            let mut i = 0;
-            while let Some(x) = l.next() {
+            for (i, x) in l.enumerate() {
                 if x == v {
                     return i + usize::from(any);
                 }
-                i += 1;
             }
             0
         };
