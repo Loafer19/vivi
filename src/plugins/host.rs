@@ -841,7 +841,7 @@ mod tests {
             assert!(f.split(' ').any(|x| x == w), "{w}");
         }
         assert!(!f.contains("  "));
-        assert!(API_VERSION >= 1);
+        assert_eq!(API_VERSION, 1);
     }
 
     #[test]
