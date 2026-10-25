@@ -241,10 +241,11 @@ pub fn refresh() {
     let rows: Vec<BookmarkRow> = ms
         .iter()
         .map(|m| {
-            let img = (!m.thumb.is_empty())
-                .then(|| {
-                    crate::images::get(&dir.join(&m.thumb), crate::images::TILE, |_| refresh())
-                })
+            // Only once the file is there: a miss is remembered by the image cache, and
+            // the picture is still being captured right after Add.
+            let f = dir.join(&m.thumb);
+            let img = (!m.thumb.is_empty() && f.is_file())
+                .then(|| crate::images::get(&f, crate::images::TILE, |_| refresh()))
                 .flatten();
             BookmarkRow {
                 time: m.time as f32,
@@ -389,7 +390,9 @@ fn frame(p: &Player, path: &str, t: f64) -> Option<String> {
     std::thread::spawn(move || {
         let r = image::open(&raw).map(|i| {
             let i = i.thumbnail(THUMB_W, THUMB_W * 9 / 16 + 60).to_rgb8();
-            i.save_with_format(&out, image::ImageFormat::Jpeg)
+            let tmp = out.with_extension("part");
+            i.save_with_format(&tmp, image::ImageFormat::Jpeg)
+                .and_then(|()| std::fs::rename(&tmp, &out).map_err(Into::into))
         });
         let _ = std::fs::remove_file(&raw);
         if matches!(r, Ok(Ok(()))) {
