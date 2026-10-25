@@ -175,7 +175,7 @@ section[id]{scroll-margin-top:120px}
 
 <section id="tools">
 <h2>Tools</h2>
-<p class="lead">Resources <code>vivi://status</code> and <code>vivi://playlist</code> (JSON) are also exposed. <span class="soon">next release</span> adds <code>vivi://recent</code>, <code>vivi://lyrics</code> and <code>vivi://plugin-commands</code>, change notifications for all of them, prompts (<code>play_radio</code>, <code>fix_subtitles</code>, …), tool annotations so clients ask before destructive calls, argument checks, pagination, and MCP 2026-07-28 next to the handshake versions.</p>
+<p class="lead">Resources <code>vivi://status</code> and <code>vivi://playlist</code> (JSON) are also exposed. So are <code>vivi://recent</code>, <code>vivi://lyrics</code> and <code>vivi://plugin-commands</code>, with change notifications for all of them; there are also prompts (<code>play_radio</code>, <code>fix_subtitles</code>, …), tool annotations so clients ask before destructive calls, argument checks, pagination, and MCP 2026-07-28 next to the handshake versions.</p>
 <div class="tsearch"><input type="search" id="tq" placeholder="Filter tools, e.g. subtitle, stream, chapter…" aria-label="Filter tools"><span id="tcount">47 tools</span></div>
 <table id="tooltable">
 <thead><tr><th>Tool</th><th>Arguments</th><th>What it does</th></tr></thead>
@@ -185,13 +185,13 @@ section[id]{scroll-margin-top:120px}
 <tr><td><code>seek</code></td><td><code>position</code> <em>or</em> <code>offset</code> (s)</td><td>Absolute or relative seek</td></tr>
 <tr><td><code>set_volume</code></td><td><code>level</code>, <code>muted</code></td><td>Volume in % and/or mute</td></tr>
 <tr><td><code>set_speed</code></td><td><code>speed</code> (0.1–4)</td><td>Playback speed</td></tr>
-<tr><td><code>set_repeat</code></td><td><code>mode</code> (<code>off</code>/<code>one</code>/<code>all</code>)</td><td>Repeat the item or the whole queue <span class="soon">next release</span></td></tr>
-<tr><td><code>set_shuffle</code></td><td><code>enabled</code></td><td>Shuffle the queue or restore its order <span class="soon">next release</span></td></tr>
+<tr><td><code>set_repeat</code></td><td><code>mode</code> (<code>off</code>/<code>one</code>/<code>all</code>)</td><td>Repeat the item or the whole queue</td></tr>
+<tr><td><code>set_shuffle</code></td><td><code>enabled</code></td><td>Shuffle the queue or restore its order</td></tr>
 </tbody>
 <tbody><tr class="grp"><th colspan="3">Find &amp; open <span>5</span></th></tr>
 <tr><td><code>open</code></td><td><code>target</code></td><td>Play a file path or URL now, replacing the queue (yt-dlp sites work when yt-dlp is installed)</td></tr>
 <tr><td><code>search_library</code></td><td><code>query</code>, <code>kind</code>, <code>limit</code></td><td>Words matched in title/artist/album/genre/path of the scanned library</td></tr>
-<tr><td><code>list_recent</code></td><td><code>query</code>, <code>kind</code></td><td>The Recent list from Home: files, folders, playlists, streams, radio, web video, Free Music <span class="soon">next release</span></td></tr>
+<tr><td><code>list_recent</code></td><td><code>query</code>, <code>kind</code></td><td>The Recent list from Home: files, folders, playlists, streams, radio, web video, Free Music</td></tr>
 <tr><td><code>open_network_stream</code></td><td><code>target</code>, <code>name</code>, <code>queue</code></td><td>Play (or queue) a stream URL: Internet radio, IPTV <code>.m3u8</code>/HLS, DASH, RTMP/RTSP/UDP, Icecast. <code>name</code> is shown while it loads</td></tr>
 <tr><td><code>search_streams</code></td><td><code>query</code>, <code>kind</code> (<code>radio</code>/<code>tv</code>), <code>limit</code></td><td>Search radio-browser.info, SomaFM, iptv-org TV, your Network Streams favorites and playlists; each item has a <code>kind</code> (<code>radio</code> / <code>tv</code>) and a <code>url</code> for <code>open_network_stream</code></td></tr>
 </tbody>
@@ -200,10 +200,10 @@ section[id]{scroll-margin-top:120px}
 <tr><td><code>playlist_add</code></td><td><code>target</code></td><td>Append to the queue</td></tr>
 <tr><td><code>playlist_play</code></td><td><code>index</code></td><td>Jump to a queue entry</td></tr>
 <tr><td><code>next</code>, <code>previous</code></td><td>–</td><td>Queue navigation</td></tr>
-<tr><td><code>playlist_move</code></td><td><code>from</code>, <code>to</code></td><td>Reorder the queue <span class="soon">next release</span></td></tr>
-<tr><td><code>playlist_remove</code>, <code>playlist_clear</code></td><td><code>index</code> / <code>keep_current</code></td><td>Remove one entry or empty the queue (marked destructive, so clients ask first) <span class="soon">next release</span></td></tr>
-<tr><td><code>list_saved_playlists</code>, <code>open_saved_playlist</code></td><td><code>name</code>, <code>queue</code></td><td>Saved playlists from Library → Playlists: list, play or append <span class="soon">next release</span></td></tr>
-<tr><td><code>save_queue_as_playlist</code></td><td><code>name</code>, <code>overwrite</code></td><td>Save the queue as a playlist <span class="soon">next release</span></td></tr>
+<tr><td><code>playlist_move</code></td><td><code>from</code>, <code>to</code></td><td>Reorder the queue</td></tr>
+<tr><td><code>playlist_remove</code>, <code>playlist_clear</code></td><td><code>index</code> / <code>keep_current</code></td><td>Remove one entry or empty the queue (marked destructive, so clients ask first)</td></tr>
+<tr><td><code>list_saved_playlists</code>, <code>open_saved_playlist</code></td><td><code>name</code>, <code>queue</code></td><td>Saved playlists from Library → Playlists: list, play or append</td></tr>
+<tr><td><code>save_queue_as_playlist</code></td><td><code>name</code>, <code>overwrite</code></td><td>Save the queue as a playlist</td></tr>
 </tbody>
 <tbody><tr class="grp"><th colspan="3">Tracks &amp; chapters <span>7</span></th></tr>
 <tr><td><code>set_subtitles</code></td><td><code>enabled</code></td><td>Show/hide subtitles</td></tr>
@@ -224,15 +224,15 @@ section[id]{scroll-margin-top:120px}
 <tr><td><code>list_eq_presets</code></td><td>–</td><td>Built-in and custom EQ presets, current one</td></tr>
 <tr><td><code>set_eq_preset</code></td><td><code>name</code></td><td>Select a preset, or <code>Off</code> to disable the equalizer</td></tr>
 <tr><td><code>get_lyrics</code></td><td>–</td><td>Lines shown by the Lyrics plugin, <code>synced</code>, <code>current_line</code>, <code>source</code>, <code>offset_seconds</code>, <code>karaoke</code></td></tr>
-<tr><td><code>set_lyrics_offset</code></td><td><code>seconds</code> / <code>delta</code> / <code>reset</code></td><td>Synced-lyrics timing (±30 s), saved per track <span class="soon">next release</span></td></tr>
-<tr><td><code>set_karaoke</code></td><td><code>enabled</code></td><td>Open or close the karaoke view <span class="soon">next release</span></td></tr>
-<tr><td><code>screenshot</code></td><td><code>path</code>, <code>mode</code> (<code>subtitles</code>/<code>video</code>/<code>window</code>)</td><td>Saves the current frame and returns its path. <span class="soon">next release</span> also returns the image itself, so the agent can see the frame; <code>save: false</code> keeps no file</td></tr>
+<tr><td><code>set_lyrics_offset</code></td><td><code>seconds</code> / <code>delta</code> / <code>reset</code></td><td>Synced-lyrics timing (±30 s), saved per track</td></tr>
+<tr><td><code>set_karaoke</code></td><td><code>enabled</code></td><td>Open or close the karaoke view</td></tr>
+<tr><td><code>screenshot</code></td><td><code>path</code>, <code>mode</code> (<code>subtitles</code>/<code>video</code>/<code>window</code>)</td><td>Saves the current frame and returns its path. also returns the image itself, so the agent can see the frame; <code>save: false</code> keeps no file</td></tr>
 </tbody>
 <tbody><tr class="grp"><th colspan="3">Plugins <span>4</span></th></tr>
 <tr><td><code>list_plugins</code></td><td>–</td><td>Plugins: <code>id</code>, <code>name</code>, <code>version</code>, <code>kind</code>, <code>enabled</code></td></tr>
 <tr><td><code>plugin_info</code></td><td><code>id</code></td><td>Description, author, version and setting keys/titles (no values)</td></tr>
-<tr><td><code>list_plugin_commands</code>, <code>run_plugin_command</code></td><td><code>plugin</code>, <code>command</code>, <code>target</code></td><td>Commands plugins add to the command palette, menus, tray and control bar, and running them <span class="soon">next release</span></td></tr>
-<tr><td><code class="dyn">plugin_&lt;id&gt;_&lt;command&gt;</code></td><td>–</td><td>Every plugin command is also a tool of its own: install a plugin and the agent gets its commands <span class="soon">next release</span></td></tr>
+<tr><td><code>list_plugin_commands</code>, <code>run_plugin_command</code></td><td><code>plugin</code>, <code>command</code>, <code>target</code></td><td>Commands plugins add to the command palette, menus, tray and control bar, and running them</td></tr>
+<tr><td><code class="dyn">plugin_&lt;id&gt;_&lt;command&gt;</code></td><td>–</td><td>Every plugin command is also a tool of its own: install a plugin and the agent gets its commands</td></tr>
 </tbody>
 </table>
 <p>IPTV and radio: <code>open</code> also plays URLs, but <code>open_network_stream</code> validates the URL, can queue instead of

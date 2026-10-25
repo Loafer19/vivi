@@ -230,3 +230,11 @@ a.card.link h3 svg.lucide { color: var(--accent); }
   .getbar { flex-direction: column; align-items: stretch; }
   .getbar .os { display: flex; } .getbar .os button { flex: 1; }
 }
+
+/* Home page v3: highlight tiles */
+.bento { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.bento .tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.bento .tile .shot, .bento .tile .ph { box-shadow: none; border-radius: 10px; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; width: 100%; }
+.bento .tile h3 { margin: 4px 4px 0; font-size: 18px; } .bento .tile p { margin: 0 4px; color: var(--fg2); font-size: 14px; }
+.grid.links { grid-template-columns: 1fr 1fr; margin-top: 16px; }
+@media (max-width: 760px) { .bento, .grid.links { grid-template-columns: 1fr; } }
