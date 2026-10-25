@@ -120,9 +120,11 @@ struct Timer {
     shown: String,
 }
 
+type Ctx = (slint::Weak<AppWindow>, Rc<Player>, Rc<RefCell<Config>>);
+
 thread_local! {
     static T: RefCell<Timer> = RefCell::new(Timer::default());
-    static CTX: RefCell<Option<(slint::Weak<AppWindow>, Rc<Player>, Rc<RefCell<Config>>)>> = const { RefCell::new(None) };
+    static CTX: RefCell<Option<Ctx>> = const { RefCell::new(None) };
     static TICK: slint::Timer = slint::Timer::default();
 }
 
