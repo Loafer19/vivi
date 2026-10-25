@@ -7,6 +7,7 @@ export struct MdCaps {
     chips: bool,   // chip row and row actions
     rich: bool,    // Free Music track rows, filters, "more" paging and edit-triggered search
     grid: bool,    // list / grid toggle in the header (Network Streams)
+    info: bool,    // info-only plugin dialog: no search row or per-row play / queue (`info_only`)
 }
 export global MusicDialogState {
     in-out property <MdCaps> caps;

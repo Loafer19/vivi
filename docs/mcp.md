@@ -197,6 +197,9 @@ overrides the interval) and sends `notifications/resources/updated` /
   ```
 - The socket can also be scripted directly:
   `echo '{"cmd":"status"}' | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/vivi.sock`.
+  Socket-only (no MCP tool): `{"cmd":"drawer","args":{"plugin":"<id>","open":true}}` opens
+  (`false` closes, `"toggle"` toggles) the player side drawer on a plugin's tab for
+  screenshots and tests; it answers `{open, tab, tabs, shown}`.
 
 ## Security
 

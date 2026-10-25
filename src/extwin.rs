@@ -219,6 +219,56 @@ pub fn source_setting(rest: &str, value: &str) {
     }
 }
 
+/// Home widgets of the enabled plugins: the static manifest text, or the live content a
+/// package sent (`vivi-content <id> home`, see `plugins::content`).
+fn widgets(all: &[Manifest]) -> Vec<ExtWidget> {
+    use plugins::content::{self, Surface, HOME_ROWS};
+    plugins::contributions(contrib::HOME_WIDGET)
+        .into_iter()
+        .map(|e| {
+            let info = all
+                .iter()
+                .find(|m| m.id == e.id)
+                .map(|m| m.description.as_str())
+                .unwrap_or_default();
+            let live = content::get(&e.id, Surface::Home);
+            let c = live.clone().unwrap_or_default();
+            ExtWidget {
+                live: live.is_some(),
+                info: if c.sub.is_empty() || live.is_none() {
+                    info
+                } else {
+                    c.sub.as_str()
+                }
+                .into(),
+                label: if c.title.is_empty() {
+                    e.label.as_str()
+                } else {
+                    c.title.as_str()
+                }
+                .into(),
+                value: c.value.as_str().into(),
+                progress: c.progress.unwrap_or(-1.0),
+                rows: ModelRc::new(VecModel::from(c.ui_rows(HOME_ROWS))),
+                id: e.id.into(),
+                name: e.name.into(),
+                icon: e.icon.into(),
+                command: e.command.into(),
+            }
+        })
+        .collect()
+}
+
+/// A package changed its Home widget content: rebuild only the widgets.
+pub fn refresh_widgets() {
+    let Some(a) = ST.with(|s| s.borrow().as_ref().and_then(|s| s.app.upgrade())) else {
+        return;
+    };
+    let all = plugins::manifests();
+    a.global::<crate::Extensions>()
+        .set_widgets(ModelRc::new(VecModel::from(widgets(&all))));
+}
+
 /// Rebuild tabs, sidebar sources and the selected tab (after any plugin change).
 pub fn refresh() {
     let Some((a, cfg, rows)) = ST.with(|s| {
@@ -246,23 +296,7 @@ pub fn refresh() {
         })
         .collect();
     g.set_sources(ModelRc::new(VecModel::from(sources)));
-    let widgets: Vec<ExtWidget> = plugins::contributions(contrib::HOME_WIDGET)
-        .into_iter()
-        .map(|e| ExtWidget {
-            info: all
-                .iter()
-                .find(|m| m.id == e.id)
-                .map(|m| m.description.as_str())
-                .unwrap_or_default()
-                .into(),
-            id: e.id.into(),
-            name: e.name.into(),
-            label: e.label.into(),
-            icon: e.icon.into(),
-            command: e.command.into(),
-        })
-        .collect();
-    g.set_widgets(ModelRc::new(VecModel::from(widgets)));
+    g.set_widgets(ModelRc::new(VecModel::from(widgets(&all))));
     // Plugin buttons in the bottom bar follow the plugins being turned on / off.
     settings::apply_toolbar(&a, &c);
     if !a.global::<crate::Overlays>().get_extensions_open() {

@@ -43,6 +43,7 @@ import { Drawer } from "state/drawer.slint";
 import { SideDrawer } from "drawer.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
+export { LiveRow } from "core/rows.slint";
 export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads }
 
 component SeekBar inherits Rectangle {
@@ -1279,6 +1280,7 @@ export component AppWindow inherits Window {
         filters: MusicDialogState.caps.rich ? MusicDialogState.filters : []; copy-text: MusicDialogState.copy;
         has-more: MusicDialogState.caps.rich && MusicDialogState.has-more;
         can-grid: MusicDialogState.caps.grid; grid: MusicDialogState.caps.grid && MusicDialogState.grid;
+        info-only: MusicDialogState.caps.info;
         view(g) => { MusicDialogState.grid = g; root.plugin-command(MusicDialogState.owner, "view", g ? "grid" : "list"); }
         filter(n, v) => { root.plugin-command(MusicDialogState.owner, "filter", n + "\u{1f}" + v); }
         more => { root.plugin-command(MusicDialogState.owner, "more", ""); }

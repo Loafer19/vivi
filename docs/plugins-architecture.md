@@ -107,8 +107,8 @@ its point and runs the chosen one.
 | `context.item` | Right-click on a library file / folder (audio, video, folder kinds) | done | item key (path) |
 | `context.player` | Right-click on the player → *Plugins* submenu | done | none |
 | `palette.command` | Command palette (Ctrl+K, `src/palette.rs`): fuzzy search over every keymap action, a few app commands, sources (*Open …*), drawer panels and these entries (plugin name as the group) | done | none |
-| `drawer.panel` | Player side drawer (`src/drawer.rs`, `ui/drawer.slint`): right slide-out with an icon tab per plugin, hides with the controls, Esc closes; opened from player menu → Plugins → Side drawer or the palette. Lyrics shows its synced lines; other plugins show their description and `action` settings as buttons, the gear opens their settings. `command` is sent when the panel opens | done | none |
-| `home.widget` | Card on Home under *Widgets* (icon, `label`, the plugin's description; click runs `command`). Each plugin's gear view has *Show on Home* and *Position on Home* (stored as `ui.home-hidden` in the plugin's settings and `order` in the `vivi-home` entry) | done | none |
+| `drawer.panel` | Player side drawer (`src/drawer.rs`, `ui/drawer.slint`): right slide-out with an icon tab per plugin, hides with the controls, Esc closes; opened from player menu → Plugins → Side drawer or the palette. Lyrics shows its synced lines; other plugins show their description (or their live content, `vivi-content`) and `action` settings as buttons, the gear opens their settings. `command` is sent when the panel opens; `vivi-drawer` opens it | done | none |
+| `home.widget` | Card on Home under *Widgets* (icon, `label`, the plugin's description; click runs `command`; with `vivi-content <id> home` a taller card with a value line, bars and rows). Each plugin's gear view has *Show on Home* and *Position on Home* (stored as `ui.home-hidden` in the plugin's settings and `order` in the `vivi-home` entry) | done | none |
 | `controlbar.button` | Bottom-bar button: listed under *Available items* in Customize Player after the built-in ones (never in a profile, so off until the user adds it). Stored in `interface.toolbar` as `plug:<plugin id>\|<command>`; it folds into ⋯ like other items and disappears while the plugin is off. Lyrics (karaoke view), Skip Intro (mark), Subtitle Search (search online) | done | none |
 | `tray.item` | Tray icon menu (Linux StatusNotifierItem, `src/tray.rs`), between Show / Hide window and Quit; clicking shows the window and runs `command` | done | none |
 | `notify` | Desktop notifications: built-ins call `Ctx::notify(title, body)`, packages send `script-message vivi-notify <plugin id> <title> [body]`. Shown through `org.freedesktop.Notifications` on Linux (`src/notify.rs`) only when the plugin declares `notify` and *Settings → Extensions → Desktop notifications from extensions* is on; otherwise (or on Windows / macOS for now) the text shows as a player toast. | done | none |
@@ -242,12 +242,41 @@ still load. Packages that never send these messages are unaffected.
 
 | Message | Effect |
 | --- | --- |
-| `vivi-dialog <id> <json>` | Open (`"open": true`) or update the shared music dialog owned by `id`. Fields: `title`, `placeholder`, `search_label`, `query`, `sources` + `source` (dropdown), `chips` + `chip`, `actions` (buttons), `filters` (`[{name, options, value}]` dropdowns), `rows`, `status`, `busy`, `detail` (side pane text), `detail_cover` (large cover above it, URL or path; a `detail` without it hides the cover), `primary` / `secondary` (button labels), `has_more` (infinite scroll), `grid_toggle` (offer list / grid), `grid`, `copy`. A row is `{title, sub, badge, chip, chip_ok, dur, cover, dl, saved, selected}` (`saved`: a check mark for an item downloaded already); `cover` is an http(s) URL or a local path, downloaded into the image cache (`<cache>/plugin-covers`) and decoded at row (48 px) or tile (256 px) size. The grid shows square cover tiles. Updates for a dialog that another plugin took over are dropped until the next `open`. |
+| `vivi-dialog <id> <json>` | Open (`"open": true`) or update the shared music dialog owned by `id`. Fields: `info_only` (feature `info-dialog`: a read-only dialog with no search row and no per-row play / queue / download; Enter and double-click only select, footer buttons with an empty label are hidden; kept on updates, reset when another package opens the dialog), `title`, `placeholder`, `search_label`, `query`, `sources` + `source` (dropdown), `chips` + `chip`, `actions` (buttons), `filters` (`[{name, options, value}]` dropdowns), `rows`, `status`, `busy`, `detail` (side pane text), `detail_cover` (large cover above it, URL or path; a `detail` without it hides the cover), `primary` / `secondary` (button labels), `has_more` (infinite scroll), `grid_toggle` (offer list / grid), `grid`, `copy`. A row is `{title, sub, badge, chip, chip_ok, dur, cover, dl, saved, selected, bar}` (`saved`: a check mark for an item downloaded already; `bar`, feature `bars`: a native 0–1 bar under the title, e.g. a share of listening time); `cover` is an http(s) URL or a local path, downloaded into the image cache (`<cache>/plugin-covers`) and decoded at row (48 px) or tile (256 px) size. The grid shows square cover tiles. Updates for a dialog that another plugin took over are dropped until the next `open`. |
 | `vivi-dialog-close <id>` | Close it if `id` still owns it. |
+| `vivi-content <id> [home\|drawer\|all] <json>` | Live content (feature `content`) of the package's Home widget (`home`) and/or drawer tab (`drawer`; no surface = `all`). Fields: `title` (replaces the contribution label), `value` (a large line, e.g. "1 h 05 min today"), `sub` (a line under it; on Home it replaces the description), `progress` (0–1 bar under them; negative removes it), `rows` (`[{label, value, sub, bar, heading}]`: `bar` 0–1 draws a native bar between label and value, `heading: true` makes a section title). Fields left out keep their last value; `"replace": true` starts from empty. Home shows the first 8 rows, the drawer up to 60. Kept for the session (until `vivi-content-clear` or quit); the widget / tab redraws at once when shown, so send updates only when something changed. Numbers out of 0–1 are clamped, NaN dropped. Code: `src/plugins/content.rs`. |
+| `vivi-content-clear <id> [home\|drawer\|all]` | Drop that content: the widget and tab show the static description again. |
+| `vivi-drawer <id> [open\|close\|toggle]` | (Feature `drawer`.) Open (default), close or toggle the player side drawer on the package's own `drawer.panel` tab. Ignored for a package without one. The drawer shows while media plays (it stays flagged open otherwise). |
 | `vivi-confirm <id> <key> <json>` | Warning / confirm dialog `{title, heading, text, ok}` (Enter confirms, Esc cancels). |
 | `vivi-media-meta <id> <json>` | `{url, title, artist, album, cover, info}` or `{"items": [...]}` for URLs the package queued: Vivi shows them on the now-playing card (cover, title, artist · album, `info` · codec · bitrate) while one of them plays as audio, uses the cover in Recent and merges them into `user-data/vivi/now-playing` (below). Optional for that: `album_artist`, `mbid` (MusicBrainz recording id), `duration` (s), `kind` (`music` / `video` / `podcast` / `stream`; e.g. `music` for a music video of a music service) and `service` (else `info`). At most 5000 URLs are kept. |
 | `vivi-protect <id> <path>` | `chmod 0600` (0700 for a folder) on a file inside the package's data folder `<data>/plugin-data/<id>` (credentials). Paths outside it are ignored. No-op on Windows. |
 | `vivi-wipe <id> <path>` | Overwrite a file in that folder with zeros, then delete it (sign out). |
+
+**Host capabilities.** Vivi sets `user-data/vivi/host-api` to the integer `1` and
+`user-data/vivi/host-features` to a space-separated word list of the host API it
+understands: `dialog confirm media-meta contributions content drawer bars info-dialog`
+(`src/plugins/host.rs`, `FEATURES`). Older Vivi leaves both unset, so a package checks a
+word and keeps its old UI otherwise:
+
+```lua
+local function host_has(word)
+  local f = mp.get_property_native("user-data/vivi/host-features") or ""
+  return (" " .. tostring(f) .. " "):find(" " .. word .. " ", 1, true) ~= nil
+end
+if host_has("content") then
+  mp.commandv("script-message", "vivi-content", "playback-stats", "home", utils.format_json({
+    value = "1h 05m today", sub = "3-day streak",
+    rows = { { label = "Mon", bar = 0.4, value = "26m" }, { label = "Tue", bar = 1, value = "1h 05m" } },
+  }))
+end
+```
+
+**Screenshots and tests of the drawer**: `VIVI_DRAWER=<plugin id>` (debug builds or
+`VIVI_SCREENSHOT=1`) opens the drawer on that tab 3 s after start, and the control socket
+(`VIVI_IPC=1`) has `{"cmd":"drawer","args":{"plugin":"playback-stats","open":true}}`
+(`open`: `true` / `false` / `"toggle"`, no `plugin` = the current or first tab), which
+answers `{open, tab, tabs, shown}` (`shown`: open and media playing). Neither needs input
+synthesis.
 
 **Now playing** (`src/nowplaying.rs`, Vivi 0.13+): Vivi publishes the playing track,
 normalized, as one mpv node map `user-data/vivi/now-playing`, so packages do not each

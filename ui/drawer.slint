@@ -5,7 +5,7 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { SecondaryButton } from "core/buttons.slint";
-import { SectionHeader } from "core/rows.slint";
+import { SectionHeader, MeterBar, LiveRows } from "core/rows.slint";
 import { Drawer } from "state/drawer.slint";
 import { Lyrics } from "state/lyrics.slint";
 import { LyricsState } from "plugins.slint";
@@ -77,7 +77,12 @@ export component SideDrawer inherits Rectangle {
                         }
                     }
                 }
-                if Drawer.tab != "lyrics": Text { text: Drawer.info; color: Theme.fg-a1; font-size: Metrics.font-sm; wrap: word-wrap; }
+                if Drawer.tab != "lyrics" && !Drawer.live: Text { text: Drawer.info; color: Theme.fg-a1; font-size: Metrics.font-sm; wrap: word-wrap; }
+                // Live content a package sent (`vivi-content <id> drawer`).
+                if Drawer.tab != "lyrics" && Drawer.live && Drawer.value != "": Text { text: Drawer.value; color: Theme.fg-1; font-size: Metrics.font-xl; font-weight: 700; wrap: word-wrap; }
+                if Drawer.tab != "lyrics" && Drawer.live && Drawer.sub != "": Text { text: Drawer.sub; color: Theme.fg-a2; font-size: Metrics.font-sm; wrap: word-wrap; }
+                if Drawer.tab != "lyrics" && Drawer.live && Drawer.progress >= 0: MeterBar { value: Drawer.progress; label: Drawer.title; }
+                if Drawer.tab != "lyrics" && Drawer.live && Drawer.rows.length > 0: LiveRows { rows: Drawer.rows; label-w: 96px; value-w: 72px; }
                 if Drawer.tab != "lyrics" && Drawer.actions.length > 0: SectionHeader { text: "Actions"; }
                 if Drawer.tab != "lyrics": VerticalLayout { spacing: 6px;
                     for a in Drawer.actions: HorizontalLayout {

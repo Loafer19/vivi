@@ -132,6 +132,19 @@ pub enum ScriptMessage<'a> {
     /// `vivi-eq-import <json>`: add presets in the `vivi-eq-presets` export format (or one
     /// preset) to the built-in equalizer, select the first and turn it on.
     EqImport(&'a str),
+    /// `vivi-content <id> [surface] <json>` (`home`, `drawer` or `all`, the default): live
+    /// content of the package's Home widget / drawer tab (see `content`).
+    Content {
+        id: &'a str,
+        surface: &'a str,
+        json: &'a str,
+    },
+    /// `vivi-content-clear <id> [surface]`: back to the static manifest text.
+    ContentClear { id: &'a str, surface: &'a str },
+    /// `vivi-drawer <id> [open|close|toggle]`: open the player side drawer on the
+    /// package's tab (the default), close it or toggle it. `open`: `Some(true)` opens,
+    /// `Some(false)` closes, `None` toggles.
+    Drawer { id: &'a str, open: Option<bool> },
 }
 
 impl<'a> ScriptMessage<'a> {
@@ -190,6 +203,24 @@ impl<'a> ScriptMessage<'a> {
             ["vivi-skip-undo", ..] => M::SkipUndo,
             ["vivi-eq-preset", name] if !name.trim().is_empty() => M::EqPreset(name.trim()),
             ["vivi-eq-import", json] => M::EqImport(json),
+            ["vivi-content", id, surface, json] => M::Content { id, surface, json },
+            ["vivi-content", id, json] => M::Content {
+                id,
+                surface: "all",
+                json,
+            },
+            ["vivi-content-clear", id, rest @ ..] => M::ContentClear {
+                id,
+                surface: rest.first().copied().unwrap_or("all"),
+            },
+            ["vivi-drawer", id, rest @ ..] => M::Drawer {
+                id,
+                open: match rest.first().map(|s| s.trim()) {
+                    None | Some("") | Some("open") => Some(true),
+                    Some("close") => Some(false),
+                    _ => None,
+                },
+            },
             _ => return None,
         })
     }
@@ -380,5 +411,59 @@ mod tests {
         assert_eq!(p(&["vivi-eq-preset", " "]), None);
         is(&["vivi-eq-import", "{}"], M::EqImport("{}"));
         assert_eq!(p(&["vivi-skip-ranges", "sponsorblock"]), None);
+        // Live content and the drawer (issue #83).
+        is(
+            &["vivi-content", "p", "home", "{}"],
+            M::Content {
+                id: "p",
+                surface: "home",
+                json: "{}",
+            },
+        );
+        is(
+            &["vivi-content", "p", "{}"],
+            M::Content {
+                id: "p",
+                surface: "all",
+                json: "{}",
+            },
+        );
+        assert_eq!(p(&["vivi-content", "p"]), None);
+        is(
+            &["vivi-content-clear", "p"],
+            M::ContentClear {
+                id: "p",
+                surface: "all",
+            },
+        );
+        is(
+            &["vivi-content-clear", "p", "drawer"],
+            M::ContentClear {
+                id: "p",
+                surface: "drawer",
+            },
+        );
+        is(
+            &["vivi-drawer", "p"],
+            M::Drawer {
+                id: "p",
+                open: Some(true),
+            },
+        );
+        is(
+            &["vivi-drawer", "p", "close"],
+            M::Drawer {
+                id: "p",
+                open: Some(false),
+            },
+        );
+        is(
+            &["vivi-drawer", "p", "toggle"],
+            M::Drawer {
+                id: "p",
+                open: None,
+            },
+        );
+        assert_eq!(p(&["vivi-drawer"]), None);
     }
 }

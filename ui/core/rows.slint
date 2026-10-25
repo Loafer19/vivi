@@ -83,3 +83,49 @@ export component ListRow inherits Rectangle {
     }
     @children
 }
+
+// A row of live plugin content (Home widgets, drawer tabs, `vivi-content`): `label` left,
+// `value` right, a native bar between them when `bar` >= 0 (0–1), an optional `sub` line;
+// `heading` rows are section titles (src/plugins/content.rs).
+export struct LiveRow { label: string, value: string, sub: string, bar: float, heading: bool }
+
+// Solid horizontal bar for a 0–1 fraction (stats, levels, progress): track + accent fill,
+// at least a sliver when the value is above zero.
+export component MeterBar inherits Rectangle {
+    in property <float> value;
+    in property <color> fill: Theme.accent;
+    in property <string> label; // screen-reader name
+    height: 6px; border-radius: self.height / 2; background: Theme.bg-a1;
+    accessible-role: progress-indicator;
+    accessible-label: root.label;
+    accessible-value: round(clamp(root.value, 0, 1) * 100) + "%";
+    Rectangle {
+        x: 0; height: parent.height; border-radius: parent.border-radius;
+        width: root.value <= 0 ? 0px : max(parent.height, parent.width * min(root.value, 1));
+        background: root.fill;
+    }
+}
+
+// Rows of live plugin content; bar rows keep their label and value columns aligned.
+export component LiveRows inherits VerticalLayout {
+    in property <[LiveRow]> rows;
+    in property <length> label-w: 72px;  // label column of bar rows
+    in property <length> value-w: 64px;  // value column of bar rows
+    spacing: 6px;
+    for r in root.rows: VerticalLayout {
+        spacing: 2px;
+        if r.heading: SectionHeader { caps: true; text: r.label; overflow: elide; }
+        if !r.heading && r.bar >= 0: HorizontalLayout {
+            spacing: 8px;
+            Text { width: root.label-w; text: r.label; color: Theme.fg-a1; font-size: Metrics.font-sm; overflow: elide; vertical-alignment: center; }
+            VerticalLayout { horizontal-stretch: 1; alignment: center; MeterBar { value: r.bar; label: r.label + " " + r.value; } }
+            Text { width: root.value-w; text: r.value; color: Theme.fg-1; font-size: Metrics.font-sm; horizontal-alignment: right; overflow: elide; vertical-alignment: center; }
+        }
+        if !r.heading && r.bar < 0: HorizontalLayout {
+            spacing: 8px;
+            Text { horizontal-stretch: 1; text: r.label; color: Theme.fg-a1; font-size: Metrics.font-sm; overflow: elide; vertical-alignment: center; }
+            Text { text: r.value; color: Theme.fg-1; font-size: Metrics.font-sm; horizontal-alignment: right; vertical-alignment: center; }
+        }
+        if !r.heading && r.sub != "": Text { text: r.sub; color: Theme.fg-a3; font-size: Metrics.font-xs; overflow: elide; }
+    }
+}

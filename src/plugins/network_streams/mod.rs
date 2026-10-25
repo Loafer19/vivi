@@ -985,6 +985,7 @@ impl Plugin for NetworkStreams {
                         chips: true,
                         rich: false,
                         grid: true,
+                        info: false,
                     });
                 self.grid = cx.get("view") == "Grid";
                 a.global::<crate::MusicDialogState>().set_grid(self.grid);

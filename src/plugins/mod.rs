@@ -20,6 +20,7 @@
 //! The Settings → Extensions page is generated from the manifests (see `settings.rs`).
 
 pub mod auto_tagger;
+pub mod content;
 pub mod contrib;
 pub mod epg;
 pub mod free_music;
@@ -395,6 +396,18 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     // `vivi-eq-import`).
     if let Err(e) = player.mpv.set_property("user-data/vivi/equalizer", 1i64) {
         eprintln!("vivi: set user-data/vivi/equalizer: {e:?}");
+    }
+    // What the package host offers (dialog, confirm, contribution points, live content,
+    // drawer, bars, info dialogs): packages check these instead of guessing from other
+    // flags (host::FEATURES).
+    if let Err(e) = player.mpv.set_property(host::API_KEY, host::API_VERSION) {
+        eprintln!("vivi: set {}: {e:?}", host::API_KEY);
+    }
+    if let Err(e) = player
+        .mpv
+        .set_property(host::FEATURES_KEY, host::features().as_str())
+    {
+        eprintln!("vivi: set {}: {e:?}", host::FEATURES_KEY);
     }
     // The per-file subtitle offset is built in (src/suboffset.rs): Subtitle Auto-Sync
     // checks `user-data/vivi/sub-offset` and leaves Alt+Z / Alt+X and storage to it.
@@ -801,6 +814,13 @@ pub fn client_message(args: &[String]) {
         Some(M::EqImport(json)) => {
             if let Some(a) = with(|r| r.app.upgrade()).flatten() {
                 crate::fx::preset_action(&a, "import-text", "", json);
+            }
+        }
+        Some(M::Content { id, surface, json }) => content::message(id, surface, json),
+        Some(M::ContentClear { id, surface }) => content::clear_message(id, surface),
+        Some(M::Drawer { id, open }) => {
+            if let Some(a) = with(|r| r.app.upgrade()).flatten() {
+                crate::drawer::request(&a, id, open);
             }
         }
         _ => {}

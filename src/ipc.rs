@@ -438,6 +438,17 @@ fn repeat_mode(p: &crate::player::Player) -> &'static str {
     }
 }
 
+/// `"open"` of the `drawer` command: true / absent = open, false = close, "toggle".
+#[cfg_attr(not(unix), allow(dead_code))]
+pub fn drawer_open_arg(v: &Value) -> Result<Option<bool>, String> {
+    match v {
+        Value::Null => Ok(Some(true)),
+        Value::Bool(b) => Ok(Some(*b)),
+        Value::String(s) if s == "toggle" => Ok(None),
+        _ => Err("\"open\" is true, false or \"toggle\"".into()),
+    }
+}
+
 #[cfg(unix)]
 use slint::{ComponentHandle, Model};
 
@@ -733,6 +744,32 @@ fn handle(
                 "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }),
             )
         }
+        "drawer" => {
+            // Open / close / toggle the plugin side drawer (screenshots, scripts); it
+            // shows while media plays.
+            let open_it = drawer_open_arg(&args["open"])?;
+            let g = a.global::<crate::Drawer>();
+            let id = match args["plugin"].as_str() {
+                Some(id) => id.to_string(),
+                None if a.global::<crate::Overlays>().get_drawer_open() => g.get_tab().into(),
+                None => String::new(),
+            };
+            if !id.is_empty()
+                && !crate::plugins::contributions(crate::plugins::contrib::DRAWER_PANEL)
+                    .iter()
+                    .any(|e| e.id == id)
+            {
+                return Err(format!(
+                    "plugin {id:?} has no drawer panel (or is turned off)"
+                ));
+            }
+            let open = crate::drawer::request(a, &id, open_it);
+            let tabs: Vec<String> = g.get_tabs().iter().map(|t| t.id.to_string()).collect();
+            Ok(
+                json!({ "open": open, "tab": g.get_tab().as_str(), "tabs": tabs,
+                "shown": open && a.global::<crate::Playback>().get_has_media() }),
+            )
+        }
         "__streams_on" => {
             if crate::plugins::active(crate::plugins::network_streams::ID) {
                 ok()
@@ -964,6 +1001,14 @@ fn handle(
 mod tests {
     use super::*;
     use crate::plugins::Contributed;
+
+    #[test]
+    fn drawer_open_argument() {
+        assert_eq!(drawer_open_arg(&Value::Null), Ok(Some(true)));
+        assert_eq!(drawer_open_arg(&json!(false)), Ok(Some(false)));
+        assert_eq!(drawer_open_arg(&json!("toggle")), Ok(None));
+        assert!(drawer_open_arg(&json!(3)).is_err());
+    }
 
     #[test]
     fn move_targets_follow_mpv_insert_semantics() {

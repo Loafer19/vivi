@@ -2,13 +2,17 @@
 // for the plugin's settings) and the plugin entries other surfaces show (sidebar Sources).
 // Built in src/extwin.rs from the plugin manifests and their contribution points.
 import { SettingRow } from "../settings.slint";
+import { LiveRow } from "../core/rows.slint";
 
 // A plugin tab, or a sidebar source (name = label).
 export struct ExtTab { id: string, name: string, icon: string, on: bool, source: bool }
 // A button on a plugin's overview: `id` is the settings row id ("plugin.<id>.<key>").
 export struct ExtAction { id: string, title: string, label: string }
 // A Home widget (`home.widget`): plugin `id` / `name`, card `label`, `command` run on click.
-export struct ExtWidget { id: string, name: string, label: string, icon: string, command: string, info: string }
+// `live`: the package sent content (`vivi-content`): a `value` line, `info` = its sub
+// line, a `progress` bar (< 0: none) and `rows` (src/plugins/content.rs).
+export struct ExtWidget { id: string, name: string, label: string, icon: string, command: string, info: string,
+    live: bool, value: string, progress: float, rows: [LiveRow] }
 
 export global Extensions {
     in-out property <[ExtTab]> tabs;

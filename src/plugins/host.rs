@@ -14,6 +14,14 @@
 //! * `vivi-protect <id> <path>` / `vivi-wipe <id> <path>`: make a file in the package's
 //!   own data folder private (0600) or overwrite and delete it (credentials).
 //!
+//! * `vivi-content <id> [surface] <json>` / `vivi-content-clear`: live content of the
+//!   package's Home widget and drawer tab ([`super::content`]); `vivi-drawer <id>` opens
+//!   the side drawer on its tab ([`crate::drawer::request`]).
+//!
+//! What this host offers is published as [`API_KEY`] (integer [`API_VERSION`]) and
+//! [`FEATURES_KEY`] (space-separated [`FEATURES`]), so packages need not guess from
+//! unrelated flags. Older Vivi leaves both unset.
+//!
 //! Covers are http(s) URLs or local paths; Vivi downloads them into its image cache
 //! (`plugin-covers`) and decodes them at row / tile size. Packages that never send these
 //! messages are unaffected. See docs/plugins-architecture.md ("Host API for packages").
@@ -24,6 +32,37 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+
+/// `user-data/vivi/host-api`: the integer [`API_VERSION`] while this host API exists.
+pub const API_KEY: &str = "user-data/vivi/host-api";
+/// Version of the package host API (1: issue #83, the first build that sets it).
+pub const API_VERSION: i64 = 1;
+/// `user-data/vivi/host-features`: [`FEATURES`] joined with spaces.
+pub const FEATURES_KEY: &str = "user-data/vivi/host-features";
+/// Host features a package can rely on when listed:
+/// * `dialog`: `vivi-dialog` / `vivi-dialog-close` (the shared plugin dialog),
+/// * `confirm`: `vivi-confirm`,
+/// * `media-meta`: `vivi-media-meta`,
+/// * `contributions`: manifest `[[contributes]]` points (Home widget, drawer tab, …),
+/// * `content`: `vivi-content` / `vivi-content-clear` (live Home widget and drawer tab),
+/// * `drawer`: `vivi-drawer <id> [open|close|toggle]`,
+/// * `bars`: the `bar` field on content rows and dialog rows (a native bar),
+/// * `info-dialog`: `info_only` dialogs (no search box, no per-row play / queue).
+pub const FEATURES: [&str; 8] = [
+    "dialog",
+    "confirm",
+    "media-meta",
+    "contributions",
+    "content",
+    "drawer",
+    "bars",
+    "info-dialog",
+];
+
+/// [`FEATURES`] as published in [`FEATURES_KEY`].
+pub fn features() -> String {
+    FEATURES.join(" ")
+}
 
 /// One result row (`rows` of [`DialogUpdate`]).
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -45,6 +84,8 @@ pub struct Row {
     /// Already downloaded (offline): a check mark on the tile / row.
     pub saved: bool,
     pub selected: bool,
+    /// A native bar (0–1) under the title in place of `sub` (stats, levels).
+    pub bar: Option<f64>,
 }
 
 /// A dialog filter dropdown.
@@ -88,6 +129,10 @@ pub struct DialogUpdate {
     pub grid: Option<bool>,
     /// Text the *Copy* action puts on the clipboard.
     pub copy: Option<String>,
+    /// Read-only dialog (statistics, reports): no search box, no per-row play / queue /
+    /// download buttons, double click and Enter only select. Reset when another plugin
+    /// takes the dialog over.
+    pub info_only: Option<bool>,
 }
 
 /// `vivi-confirm` payload.
@@ -375,6 +420,7 @@ fn refresh_rows() {
                 dl: r.dl,
                 saved: r.saved,
                 selected: r.selected,
+                bar: super::content::fraction(r.bar).unwrap_or(-1.0),
             }
         })
         .collect();
@@ -414,7 +460,8 @@ pub fn dialog(a: &crate::AppWindow, id: &str, u: DialogUpdate) {
     // Scrolling changes which rows get covers (see `cover_range`).
     st.on_window_changed(schedule_refresh);
     let ov = a.global::<crate::Overlays>();
-    if st.get_owner() != id {
+    let fresh = st.get_owner() != id;
+    if fresh {
         if !u.open {
             return; // someone else's dialog is showing: wait for the next open
         }
@@ -443,6 +490,7 @@ pub fn dialog(a: &crate::AppWindow, id: &str, u: DialogUpdate) {
         chips: true,
         rich: true,
         grid: u.grid_toggle.unwrap_or(st.get_caps().grid),
+        info: u.info_only.unwrap_or(!fresh && st.get_caps().info),
     });
     macro_rules! set {
         ($f:ident, $s:ident) => {
@@ -775,8 +823,25 @@ mod tests {
         assert_eq!(u.detail_cover.as_deref(), Some("https://x/big.jpg"));
         assert_eq!(u.filters.unwrap()[0].options, ["A", "B"]);
         assert_eq!(u.grid_toggle, Some(true));
+        assert_eq!(u.info_only, None);
+        assert_eq!(r.bar, None);
         let d: DialogUpdate = serde_json::from_str("{}").unwrap();
         assert_eq!(d, DialogUpdate::default());
+        let i: DialogUpdate =
+            serde_json::from_str(r#"{"info_only":true,"rows":[{"title":"Mon","bar":0.4}]}"#)
+                .unwrap();
+        assert_eq!(i.info_only, Some(true));
+        assert_eq!(i.rows.unwrap()[0].bar, Some(0.4));
+    }
+
+    #[test]
+    fn host_features_are_published_as_words() {
+        let f = features();
+        for w in ["dialog", "content", "drawer", "bars", "info-dialog"] {
+            assert!(f.split(' ').any(|x| x == w), "{w}");
+        }
+        assert!(!f.contains("  "));
+        assert!(API_VERSION >= 1);
     }
 
     #[test]

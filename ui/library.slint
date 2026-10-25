@@ -8,7 +8,7 @@ import { ScrollView } from "std-widgets.slint";
 import { TextField } from "core/controls.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
-import { ListRow } from "core/rows.slint";
+import { ListRow, LiveRow, LiveRows, MeterBar } from "core/rows.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
 import { ExtTab, ExtWidget } from "state/extensions.slint";
 import { Downloads } from "state/downloads.slint";
@@ -317,6 +317,36 @@ component WidgetCard inherits Rectangle {
     if fs.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
 }
 
+// Home → a plugin widget with live content (`vivi-content <id> home`, see
+// src/plugins/content.rs): icon and title, a large value line, a sub line, an optional
+// progress bar and up to eight rows (bars drawn natively). Click runs the widget command.
+component LiveWidgetCard inherits Rectangle {
+    in property <string> label;
+    in property <string> info;
+    in property <string> icon; // icon name (two-tone, see TriIcon)
+    in property <string> value;
+    in property <float> progress: -1;
+    in property <[LiveRow]> rows;
+    callback clicked();
+    width: 300px; border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; accessible-description: root.value + (root.info != "" ? ", " + root.info : ""); mouse-cursor: pointer; clicked => { root.clicked(); } }
+    VerticalLayout {
+        padding: 14px; spacing: 8px;
+        HorizontalLayout {
+            spacing: 10px;
+            VerticalLayout { alignment: center; TriIcon { width: 18px; height: 18px; name: root.icon; tint: Theme.accent; } }
+            Text { horizontal-stretch: 1; text: root.label; color: Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
+        }
+        if root.value != "": Text { text: root.value; color: Theme.fg-1; font-size: Metrics.font-xl; font-weight: 700; overflow: elide; }
+        if root.info != "": Text { text: root.info; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; }
+        if root.progress >= 0: MeterBar { value: root.progress; label: root.label; }
+        if root.rows.length > 0: LiveRows { rows: root.rows; label-w: 64px; value-w: 60px; }
+    }
+    fs := FocusScope { focus-on-click: false; key-pressed(e) => { if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; } reject } }
+    if fs.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+}
+
 component HeadIcon inherits Rectangle {
     in property <string> label;   // screen-reader name and hover tooltip
     in property <string> icon;    // icon name (two-tone, see TriIcon)
@@ -533,7 +563,11 @@ export component LibraryView inherits Rectangle {
                             }
                             HorizontalLayout {
                                 spacing: 10px; alignment: start;
-                                for w in root.widgets: WidgetCard { label: w.label; info: w.info; icon: Icons.plugin-duo(w.icon); clicked => { root.run-widget(w.id, w.command); } }
+                                for w in root.widgets: VerticalLayout {
+                                    alignment: start;
+                                    if !w.live: WidgetCard { label: w.label; info: w.info; icon: Icons.plugin-duo(w.icon); clicked => { root.run-widget(w.id, w.command); } }
+                                    if w.live: LiveWidgetCard { label: w.label; info: w.info; icon: Icons.plugin-duo(w.icon); value: w.value; progress: w.progress; rows: w.rows; clicked => { root.run-widget(w.id, w.command); } }
+                                }
                             }
                         }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;

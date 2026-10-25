@@ -1,12 +1,20 @@
 // Player side drawer: plugin panels (`drawer.panel` contributions), see src/drawer.rs.
 import { ExtTab, ExtAction } from "extensions.slint";
+import { LiveRow } from "../core/rows.slint";
 export global Drawer {
     in-out property <[ExtTab]> tabs;   // name = the contribution's label
     in-out property <string> tab;      // plugin id
     in-out property <string> title;
     in-out property <string> info;
     in-out property <[ExtAction]> actions;
+    // Live content of the tab (`vivi-content <id> drawer`, src/plugins/content.rs): a value
+    // line, a sub line (replaces `info`), a progress bar (< 0: none) and rows.
+    in-out property <bool> live;
+    in-out property <string> value;
+    in-out property <string> sub;
+    in-out property <float> progress: -1;
+    in-out property <[LiveRow]> rows;
     callback open(string);             // plugin id ("" = first panel)
     callback settings();
-    callback run-action(string);       // settings row id of an action ("plugin.<id>.<key>")               // the plugin's settings (Extensions window, gear)
+    callback run-action(string);       // settings row id of an action ("plugin.<id>.<key>")
 }

@@ -495,6 +495,7 @@ impl FreeMusic {
                     dl: !t.download.is_empty(),
                     saved,
                     selected: sel.as_ref() == Some(&t.id),
+                    bar: -1.0,
                 }
             })
             .collect();
@@ -756,6 +757,7 @@ impl FreeMusic {
                 chips: true,
                 rich: true,
                 grid: false,
+                info: false,
             });
         a.global::<crate::MusicDialogState>()
             .set_placeholder("Search songs, artists, albums, genres…".into());

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Live plugin content on Home widgets and in the side drawer** (#83): packages fill their Home widget and drawer tab with live content (`vivi-content <id> [home|drawer|all] <json>`: a large value line, a sub line, a progress bar and rows with native bars and section headings; partial updates merge, `vivi-content-clear` drops it), open their drawer tab (`vivi-drawer <id> [open|close|toggle]`), put a native `bar` on plugin-dialog rows and open an info-only dialog (`"info_only": true`: no search row, no per-row play / queue). Vivi announces this as `user-data/vivi/host-api` = 1 and `user-data/vivi/host-features` (a word list: `content drawer bars info-dialog …`), so packages keep their old UI on older Vivi. The control socket's `drawer` command (and `VIVI_DRAWER=<id>` in screenshot mode) opens a tab without input synthesis. Documented in docs/plugins-architecture.md.
 - **Downloads panel: a job's own "finished" wording**: a `vivi-download` report (or a built-in's `Report`) may set `done_title`, the heading of the notification when the job finishes, e.g. `"Export finished"`, so Cut & Export's clips notify "Export finished: clip.mp4" instead of "Download finished: …". Without it nothing changes; failures still say "Download failed", and older Vivi ignores the field. Documented in docs/plugins-architecture.md.
 
 ## [0.13.1] - 2026-10-20

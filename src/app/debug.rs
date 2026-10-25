@@ -13,7 +13,7 @@ pub(crate) fn screenshot_mode() -> bool {
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK [VIVI_NET_URLS=a|b VIVI_NET_NAME],
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY,
-/// VIVI_MENU, VIVI_SUB, VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
+/// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] [VIVI_MUSICPLAY=row] (a plugin dialog,
 /// searched when a query or source is given, then a result row played).
 /// Show plugin `id` in Settings → Extensions → Browse (search filtered to its name).
