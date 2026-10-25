@@ -175,6 +175,10 @@ pub struct Entry {
     /// Set when the plugin is replaced (built into Vivi or by another plugin).
     #[serde(default)]
     pub deprecated: Option<Deprecation>,
+    /// Curated position (1 = first) in the marketplace's Featured block and at the top of
+    /// Browse, where it is marked *Recommended* (`featured_rank` in `store.toml`).
+    #[serde(default)]
+    pub featured_rank: Option<u32>,
 }
 
 /// `deprecated` of a catalog entry (from the plugin's manifest).
@@ -1105,11 +1109,37 @@ pub fn install(id: &str) {
     });
 }
 
-/// Plugins the Extensions catalog marks "Recommended" (by id).
-pub const RECOMMENDED: &[&str] = &["chapter-thumbnails", "scrobbler"];
+/// Plugins Browse marks "Recommended", in order, when the catalog has no `featured_rank`
+/// (catalogs from before the field). Keep in sync with `featured_rank` in vivi-plugins.
+pub const RECOMMENDED: &[&str] = &[
+    "chapter-thumbnails",
+    "youtube",
+    "sponsorblock",
+    "night-mode",
+    "subtitle-sync",
+    "remote-control",
+];
 
-pub fn is_recommended(id: &str) -> bool {
-    RECOMMENDED.contains(&id)
+/// Recommended position of `e` (1 = first) or `None`. The catalog's `featured_rank` decides
+/// when any entry has one; otherwise [`RECOMMENDED`]. Deprecated plugins never are.
+pub fn recommended_rank(catalog: &[Entry], e: &Entry) -> Option<u32> {
+    if e.deprecated.is_some() {
+        return None;
+    }
+    if catalog.iter().any(|c| c.featured_rank.is_some()) {
+        return e.featured_rank;
+    }
+    RECOMMENDED
+        .iter()
+        .position(|id| *id == e.id)
+        .map(|i| i as u32 + 1)
+}
+
+/// Browse order: recommended plugins first by rank, then the rest in catalog order.
+pub fn browse_order(catalog: &[Entry]) -> Vec<&Entry> {
+    let mut v: Vec<&Entry> = catalog.iter().collect();
+    v.sort_by_key(|e| recommended_rank(catalog, e).unwrap_or(u32::MAX));
+    v
 }
 
 /// Install package `id` on a suggestion outside the Extensions window (the seek-bar hint)
@@ -1185,6 +1215,62 @@ pub fn action(id: &str, label: &str) {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    fn ranked(id: &str, rank: Option<u32>) -> Entry {
+        Entry {
+            id: id.into(),
+            featured_rank: rank,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn recommended_from_catalog_rank() {
+        let sha = "a".repeat(64);
+        let idx = format!(
+            r#"{{"schema": 1, "plugins": [
+            {{"id": "a", "name": "A", "version": "1.0.0", "kind": "package",
+              "url": "https://x/a.zip", "sha256": "{sha}"}},
+            {{"id": "b", "name": "B", "version": "1.0.0", "kind": "package",
+              "url": "https://x/b.zip", "sha256": "{sha}", "featured_rank": 2}},
+            {{"id": "youtube", "name": "Y", "version": "1.0.0", "kind": "package",
+              "url": "https://x/y.zip", "sha256": "{sha}"}},
+            {{"id": "c", "name": "C", "version": "1.0.0", "kind": "package",
+              "url": "https://x/c.zip", "sha256": "{sha}", "featured_rank": 1}}]}}"#
+        );
+        let c = parse_index(&idx).unwrap();
+        assert_eq!(c[1].featured_rank, Some(2));
+        assert_eq!(c[0].featured_rank, None);
+        // The catalog has ranks: the built-in list is ignored (youtube is not recommended).
+        assert_eq!(recommended_rank(&c, &c[2]), None);
+        let ids: Vec<&str> = browse_order(&c).iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, ["c", "b", "a", "youtube"]);
+    }
+
+    #[test]
+    fn recommended_fallback_and_deprecated() {
+        // No featured_rank anywhere (older catalog): RECOMMENDED order, rest keeps its order.
+        let mut c = vec![
+            ranked("ab-loop", None),
+            ranked("remote-control", None),
+            ranked("scrobbler", None),
+            ranked("chapter-thumbnails", None),
+            ranked("youtube", None),
+        ];
+        let ids: Vec<&str> = browse_order(&c).iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["chapter-thumbnails", "youtube", "remote-control", "ab-loop", "scrobbler"]
+        );
+        assert_eq!(recommended_rank(&c, &c[2]), None);
+        assert_eq!(recommended_rank(&c, &c[3]), Some(1));
+        // Deprecated plugins are never recommended, with or without a rank.
+        c[3].deprecated = Some(Deprecation::default());
+        assert_eq!(recommended_rank(&c, &c[3]), None);
+        c[4].featured_rank = Some(1);
+        c[4].deprecated = Some(Deprecation::default());
+        assert_eq!(recommended_rank(&c, &c[4]), None);
+    }
 
     #[test]
     fn deprecated_entries() {

@@ -445,8 +445,13 @@ shows up* and its `action` settings as buttons; the gear in the header switches 
 settings (the Settings `Row` component; changes go through `Settings.setting-changed`, so
 `plugin.*`, `pkg.*`, `ext.*`, `scripts.*` and `src.*` rows share one handler). Open it
 from Rust with `extwin::open(app, id, gear)`; a plugin opens its own settings with
-`plugins::run(id, "", &[])`. Browse shows a *Recommended* badge on catalog entries whose
-id is in `packages::RECOMMENDED` (core list; `chapter-thumbnails`). Core code that
+`plugins::run(id, "", &[])`. Browse lists *Recommended* plugins first, with a badge, in the
+order of the catalog's `featured_rank` (from `store.toml` in vivi-plugins; the marketplace's
+Featured block uses the same field): `chapter-thumbnails`, `youtube`, `sponsorblock`,
+`night-mode`, `subtitle-sync`, `remote-control`. A catalog without any `featured_rank` falls
+back to the same list in `packages::RECOMMENDED`; deprecated plugins are never recommended
+(`packages::recommended_rank`, `packages::browse_order`). Scrobbler is offered from
+Settings → Privacy instead (it needs an account). Core code that
 suggests a package installs it with `packages::install_and_enable(app, id)`: the window
 opens on Browse with the normal Install / permission prompt, and the package is enabled
 once installed (the seek-bar hint in `src/preview.rs` uses it).

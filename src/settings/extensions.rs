@@ -300,7 +300,8 @@ pub(crate) fn browse(r: &mut Rows) {
         );
     }
     r.header("Available plugins");
-    for e in &catalog {
+    // Recommended plugins (catalog featured_rank, else packages::RECOMMENDED) on top, by rank.
+    for e in packages::browse_order(&catalog) {
         let have = inst.iter().find(|i| i.manifest.id == e.id);
         // Deprecated plugins are only listed while installed (to uninstall them).
         if e.deprecated.is_some() && have.is_none() {
@@ -358,7 +359,7 @@ pub(crate) fn browse(r: &mut Rows) {
             size = format!("{size} {}", e.size_note);
         }
         let perms = describe_permissions(&e.permissions);
-        let rec = if packages::is_recommended(&e.id) {
+        let rec = if packages::recommended_rank(&catalog, e).is_some() {
             "Recommended"
         } else {
             ""
