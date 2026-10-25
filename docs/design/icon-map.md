@@ -12,7 +12,8 @@ Slint `Icon` (colorize) recolours the single-tone uses (glyphs of about 16 px an
 (text colour, `#D37918` accent, `#AB6314` dim accent) and writes `ui/core/duo.slint`, the `Duo` lookup that
 `TriIcon { name: "…" }` and `IconButton { duo: "…" }` use. A name resolves to `<name>-twotone.svg` when that
 file mixes text-coloured and accent parts, else to `<name>.svg`'s own layers, else to the plain `<name>.svg`
-(single-tone). All-accent art (`record-twotone`, `*-active`, menu rows) is never picked for a plain name.
+(single-tone). All-accent art (`*-active`, menu rows) is never picked for a plain name; `<name>-active` is the Duo name of the
+solid active art.
 
 Two-tone rule used for the files marked #82: the outline stays in the text colour and one secondary part
 (the note, the plus, the needle, the arrow head, the second bar) turns dim accent; glyphs that are a single
@@ -29,6 +30,11 @@ items, plugin buttons, ⋯) are `IconButton { bar: true }`; with Single-tone the
 draws `Duo.single(name)`, the plain `<name>.svg` (or every layer in the text colour when a name has no
 plain file). Everything else stays two-tone, and 16 px icons are single-tone either way.
 
+Active states: a selected navigation entry (library rail, Settings categories) draws the solid all-accent
+`<name>-active` art (filled shape, or 2 px accent strokes for line icons like Recent and Downloads), the
+inactive one the two-tone art. Player-bar toggles and side-panel tabs tint the icon accent when on (tabs also
+get an underline); menu rows have no active state (checked rows show a check mark).
+
 Comparison for #82: `docs/design/compare/icons-two-tone.jpg` (before | after, dark and light theme).
 
 Comparison: `docs/design/compare/icons.png` (old left, new right).
@@ -42,6 +48,7 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `album-twotone.svg` | r05c01 + dim note (#82) |
 | `arrow-down.svg` | r07c03 |
 | `arrow-down-twotone.svg` | r07c04 |
+| `arrow-down-active.svg` | r07c03, 2 px accent strokes (active Downloads rail entry) |
 | `arrow-left.svg` | r07c10 |
 | `arrow-left-twotone.svg` | r07c11 |
 | `arrow-right.svg` | r07c08 |
@@ -132,8 +139,9 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `hotkeys-twotone.svg` | r01c01 |
 | `info.svg` | r10c06 |
 | `info-twotone.svg` | r10c07 |
+| `info-active.svg` | r10c06, solid accent disc with the i cut out |
 | `interface.svg` | r10c08 |
-| `interface-active.svg` | r10c08 |
+| `interface-active.svg` | r10c08, pointer filled accent |
 | `interface-twotone.svg` | r10c08 + dim fill inside the outline (#82) |
 | `link.svg` | r09c02 |
 | `link-active.svg` | r09c03 |
@@ -164,11 +172,11 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `play.svg` | r01c09 |
 | `play-twotone.svg` | r01c09 outline (2 px) over a dim fill of the same shape, solid on primary buttons (#82) |
 | `playback.svg` | r01c10 |
-| `playback-active.svg` | r01c10 |
+| `playback-active.svg` | r01c11 outline, filled accent |
 | `playback-twotone.svg` | r01c11 |
 | `playback-selected-twotone.svg` | r01c11 |
 | `playback_settings.svg` | r00c02 |
-| `playback_settings-active.svg` | r00c02 |
+| `playback_settings-active.svg` | `settings-active.svg` (solid gear, play cut out) |
 | `playback_settings-twotone.svg` | r00c02, play triangle dim (#82) |
 | `playlist.svg` | r00c07 |
 | `playlist-active.svg` | r00c09 |
@@ -192,9 +200,10 @@ Comparison: `docs/design/compare/icons.png` (old left, new right).
 | `quit-twotone.svg` | r16c11 |
 | `recent.svg` | r03c04 |
 | `recent-twotone.svg` | r03c05 |
+| `recent-active.svg` | r03c04, 2 px accent strokes (active Recent rail entry) |
 | `record.svg` | r12c03 |
 | `record-active.svg` | r12c04 |
-| `record-twotone.svg` | r12c04 |
+| `record-twotone.svg` | r12c04, ring in the text colour, dot dim |
 | `refresh.svg` | r03c01 |
 | `refresh-twotone.svg` | r03c02 |
 | `remove.svg` | r08c11 |

@@ -137,6 +137,10 @@ export global Icons {
     public pure function menu-duo(name: string) -> string {
         if (name == "web") { return "link"; }
         if (name == "repeat") { return "repeat-right"; }
+        if (name == "add-file") { return "add"; }
+        if (name == "show-in-file-explorer") { return "folder"; }
+        if (name == "grid-view") { return "grid"; }
+        if (name == "list-view") { return "list"; }
         if (name == "file" || name == "folder" || name == "streaming" || name == "recent" || name == "paint"
             || name == "hotkeys" || name == "settings" || name == "remove" || name == "refresh" || name == "snapshot"
             || name == "fullscreen" || name == "pip" || name == "speed" || name == "chapters" || name == "bookmark"
@@ -148,7 +152,6 @@ export global Icons {
     public pure function menu(name: string) -> image {
         if (name == "rotate") { return @image-url("../../assets/icons/layers/rotate-twotone-b.svg"); }
         if (name == "add-audio-tracks") { return @image-url("../../assets/icons/layers/menu_add-audio-tracks-b.svg"); }
-        if (name == "add-file") { return @image-url("../../assets/icons/menu/add-file.svg"); }
         if (name == "add-folder") { return @image-url("../../assets/icons/layers/menu_add-folder-b.svg"); }
         if (name == "add-subtitle-tracks") { return @image-url("../../assets/icons/layers/menu_add-subtitle-tracks-b.svg"); }
         if (name == "add-to-playlist") { return @image-url("../../assets/icons/layers/menu_add-to-playlist-b.svg"); }
@@ -160,10 +163,8 @@ export global Icons {
         if (name == "export-playlist") { return @image-url("../../assets/icons/layers/menu_export-playlist-b.svg"); }
         if (name == "favorite") { return @image-url("../../assets/icons/layers/menu_favorite-b.svg"); }
         if (name == "go-to-source") { return @image-url("../../assets/icons/layers/menu_go-to-source-b.svg"); }
-        if (name == "grid-view") { return @image-url("../../assets/icons/menu/grid-view.svg"); }
         if (name == "hide-ui") { return @image-url("../../assets/icons/layers/menu_hide-ui-b.svg"); }
         if (name == "info") { return @image-url("../../assets/icons/layers/menu_info-b.svg"); }
-        if (name == "list-view") { return @image-url("../../assets/icons/menu/list-view.svg"); }
         if (name == "mark-as-watched") { return @image-url("../../assets/icons/layers/menu_mark-as-watched-b.svg"); }
         if (name == "more-settings") { return @image-url("../../assets/icons/layers/menu_more-settings-b.svg"); }
         if (name == "next-item") { return @image-url("../../assets/icons/layers/menu_next-item-b.svg"); }
@@ -176,7 +177,6 @@ export global Icons {
         if (name == "quit-vlc") { return @image-url("../../assets/icons/layers/menu_quit-vlc-b.svg"); }
         if (name == "record") { return @image-url("../../assets/icons/layers/menu_record-b.svg"); }
         if (name == "resync") { return @image-url("../../assets/icons/layers/menu_resync-b.svg"); }
-        if (name == "show-in-file-explorer") { return @image-url("../../assets/icons/menu/show-in-file-explorer.svg"); }
         if (name == "shuffle") { return @image-url("../../assets/icons/layers/menu_shuffle-b.svg"); }
         if (name == "stop") { return @image-url("../../assets/icons/layers/menu_stop-b.svg"); }
         if (name == "stream") { return @image-url("../../assets/icons/layers/menu_stream-b.svg"); }

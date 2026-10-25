@@ -9,7 +9,7 @@ It also writes ui/core/duo.slint: the `Duo` lookup from an icon name to its laye
 TriIcon { name: "..." } and IconButton { duo: "..." }. A name resolves to the layers of
 <name>-twotone.svg when it has both text-coloured and accent parts, else to the layers of
 <name>.svg when it has accent parts, else to the plain <name>.svg (single-tone, no accent layers).
-All-accent art (record-twotone, menu rows) is never picked for a plain name: it reads as "active".
+All-accent art (*-active, menu rows) is never picked for a plain name: it reads as "active".
 `Duo.single(name)` is the plain <name>.svg of a two-tone name, for TriIcon `flat` (player bars set
 to Single-tone).
 Run after changing an icon:  python3 tools/icon_layers.py

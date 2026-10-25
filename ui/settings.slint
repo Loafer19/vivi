@@ -265,6 +265,7 @@ export component SettingsDialog inherits Modal {
     callback refresh(int, string, bool); // category, search, advanced
     callback close();
     // Sidebar icon names (two-tone, see TriIcon) and group labels, in category order (see settings.rs CATEGORIES).
+    // The selected category draws `<name>-active` (solid accent art), like the library rail.
     property <[string]> icons: [
         "preferences", "interface",
         "privacy", "hotkeys",
@@ -314,7 +315,7 @@ export component SettingsDialog inherits Modal {
                                     height: 40px; border-radius: Metrics.radius-md;
                                     property <bool> sel: i == root.category && root.search == "";
                                     background: sel ? Theme.bg-a1 : (cta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent);
-                                    TriIcon { x: 10px; width: 22px; height: 22px; name: root.icons[i]; tint: parent.sel ? Theme.accent : Theme.fg-a2; }
+                                    TriIcon { x: 10px; width: 22px; height: 22px; name: parent.sel ? root.icons[i] + "-active" : root.icons[i]; tint: Theme.fg-a2; }
                                     Text {
                                         x: 46px; text: c; vertical-alignment: center; height: parent.height; font-size: Metrics.font-base;
                                         color: parent.sel ? Theme.fg-1 : Theme.fg-a1;

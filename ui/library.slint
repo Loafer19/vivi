@@ -427,14 +427,14 @@ export component LibraryView inherits Rectangle {
                 RailButton { label: "Music"; icon: "songs"; active-icon: @image-url("../assets/icons/layers/songs-active-b.svg"); active-accent: @image-url("../assets/icons/layers/songs-active-a.svg"); active-dim: @image-url("../assets/icons/layers/songs-active-d.svg"); active: root.section == "music"; clicked => { root.navigate("music"); } }
                 RailButton { label: "Streams"; icon: "streaming"; active-icon: @image-url("../assets/icons/layers/streaming-active-b.svg"); active-accent: @image-url("../assets/icons/layers/streaming-active-a.svg"); active-dim: @image-url("../assets/icons/layers/streaming-active-d.svg"); active: root.section == "network"; clicked => { root.navigate("network"); } }
                 RailButton { label: "Playlists"; icon: "playlist"; active-icon: @image-url("../assets/icons/layers/playlist-active-b.svg"); active-accent: @image-url("../assets/icons/layers/playlist-active-a.svg"); active-dim: @image-url("../assets/icons/layers/playlist-active-d.svg"); active: root.section == "playlists"; clicked => { root.navigate("playlists"); } }
-                RailButton { label: "Recently played"; icon: "recent"; active-icon: @image-url("../assets/icons/recent.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
+                RailButton { label: "Recently played"; icon: "recent"; active-icon: @image-url("../assets/icons/layers/recent-active-b.svg"); active-accent: @image-url("../assets/icons/layers/recent-active-a.svg"); active-dim: @image-url("../assets/icons/layers/recent-active-d.svg"); active: root.section == "recent"; clicked => { root.navigate("recent"); } }
                 // Shared Downloads panel; the badge counts queued / running / paused jobs.
                 Rectangle {
                     width: 32px; height: 32px;
                     RailButton {
                         label: Downloads.active > 0 ? "Downloads (" + Downloads.active + " active)" : "Downloads";
                         icon: "arrow-down";
-                        active-icon: @image-url("../assets/icons/layers/arrow-down-twotone-b.svg"); active-accent: @image-url("../assets/icons/layers/arrow-down-twotone-a.svg"); active-dim: @image-url("../assets/icons/layers/arrow-down-twotone-d.svg");
+                        active-icon: @image-url("../assets/icons/layers/arrow-down-active-b.svg"); active-accent: @image-url("../assets/icons/layers/arrow-down-active-a.svg"); active-dim: @image-url("../assets/icons/layers/arrow-down-active-d.svg");
                         active: root.section == "downloads"; clicked => { root.navigate("downloads"); }
                     }
                     if Downloads.active > 0: Rectangle {
