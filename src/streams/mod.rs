@@ -8,7 +8,7 @@
 //!   contribute `streams.music` (or a known music `sidebar.source`).
 //! * Plugin dialogs (the `MusicDialogState` protocol) are shown as pages here instead of
 //!   modals: inside a hub tab, or full width as a service page (`service:<id>`, opened
-//!   from the plugin's sidebar icon) with a back arrow to the hub. [`open_dialog`]
+//!   from the plugin's sidebar icon) under the breadcrumb Streams ▸ <service>. [`open_dialog`]
 //!   decides; every plugin opens its dialog through it.
 //! * Favorites, Recent and the URL history are the core's ([`store`]), migrated once from
 //!   Network Streams' `saved.json` / `recent.json` and the global Recent list.
@@ -793,12 +793,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                 a.global::<crate::Dialogs>().set_net_urls(url);
             }
             a.global::<crate::Overlays>().set_network_open(true);
-        }
-    });
-    let w = app.as_weak();
-    st.on_back(move || {
-        if let Some(a) = w.upgrade() {
-            go(&a, Page::tab(Tab::Music));
         }
     });
     let w = app.as_weak();

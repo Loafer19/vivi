@@ -1,6 +1,7 @@
 //! Where a Streams hub request goes (#86): hub tabs, service pages, the `VIVI_PAGE` /
 //! IPC `page` syntax and the 0.13 entry points that stay as hidden aliases for one
-//! release (Open Network Stream, Network Streams, the Radio widget).
+//! release (Open Network Stream, Network Streams, the Radio widget, `VIVI_NETWORK`); they are
+//! removed in 0.15.0.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {

@@ -12,7 +12,7 @@
 - **Stream favorites and history are core**: they move once from Network Streams' `saved.json` / `recent.json` (and the URLs of the global Recent list) to `favorites.json`, `history.json` and `urls.json` in `~/.local/share/vivi/streams/`; the old files are left as they were for older Vivi.
 
 ### Deprecated
-- ***Open Network Stream*** (palette and player menu) and the Network Streams *Browse…* / palette entries are hidden aliases for one release: they open the Streams hub (the URL bar or the Radio tab). Use *Streams: …* or `VIVI_PAGE` instead.
+- ***Open Network Stream*** (palette and player menu) and the Network Streams *Browse…* / palette entries are hidden aliases for one release: they open the Streams hub (the URL bar or the Radio tab), and so does the `VIVI_NETWORK` test hook (Radio tab). The aliases are removed in **0.15.0**; use *Streams: …*, IPC `page` or `VIVI_PAGE` instead.
 
 ### Fixed
 - **Icons whose active and inactive states looked the same**: the library rail's *Recently played* and *Downloads* entries and the selected Settings category now show the solid accent icon like *Home* and the other rail entries (Settings no longer just tints the two-tone icon). New or redrawn active art for Recent, Downloads, About, Interface, Playback and Playback settings, which were missing or plain grey copies. The *Recording* category and the *Offline downloads* plugin icon get two-tone art, and the *Add file*, *Show in folder*, *Grid view* and *List view* menu rows are two-tone like the other menu rows. *Player bar icons: Single-tone* still draws them in one color.

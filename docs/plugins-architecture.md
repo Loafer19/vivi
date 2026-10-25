@@ -142,9 +142,11 @@ packages):
 
 * **Page** when the owner is a *source* (`sidebar.source`), a `streams.music` service or the
   radio / TV directory (Network Streams): `MusicDialogState.page` is set and the Library shows
-  the dialog body full width with the now-playing card and a back arrow (*Streams* on the
-  service's own page, reached from its sidebar icon; inside the hub on the Radio / TV / Music
-  tabs). If the user is elsewhere (the player, another section) the Library opens at that
+  the dialog body full width with the now-playing card. A page has no title row of its own
+  (the dialog title, back arrow and close X are modal only; the list / grid toggle moves to the
+  end of the search row): the Library header's breadcrumb (*Streams ▸ <service>*) and back
+  arrow cover it, both on the service's own page (reached from its sidebar icon) and inside
+  the hub on the Radio / TV / Music tabs. If the user is elsewhere (the player, another section) the Library opens at that
   plugin's place: `service:<id>`, or `streams:music:<id>` / `streams:radio` / `streams:tv`
   when the hub was what asked for it.
 * **Modal** otherwise (Auto-tagger review, a package's settings or info dialog), unchanged.

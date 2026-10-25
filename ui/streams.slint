@@ -253,7 +253,7 @@ export component StreamsHub inherits VerticalLayout {
         // Sized from outside: the dialog body's rows follow its width.
         vertical-stretch: 1; horizontal-stretch: 1; min-width: 0px;
         MusicPane {
-            x: 0; y: 0; width: parent.width; height: parent.height; page: true; show-back: false;
+            x: 0; y: 0; width: parent.width; height: parent.height; page: true;
             command(o, n, a) => { root.command(o, n, a); }
         }
     }
@@ -269,16 +269,15 @@ export component StreamsHub inherits VerticalLayout {
     if NowPlaying.show || NowPlaying.bar: NowBar { }
 }
 
-// A service's own page (its sidebar icon): the plugin dialog full width, a back arrow to
-// the hub and the now-playing card.
+// A service's own page (its sidebar icon): the plugin dialog full width (the Library header
+// has the breadcrumb and back arrow) and the now-playing card.
 export component ServicePage inherits VerticalLayout {
     callback command(string, string, string);
     spacing: 10px;
     if MusicDialogState.page && Streams.page-owner != "": Rectangle {
         vertical-stretch: 1; horizontal-stretch: 1; min-width: 0px;
         MusicPane {
-            x: 0; y: 0; width: parent.width; height: parent.height; page: true; show-back: true;
-            back => { Streams.back(); }
+            x: 0; y: 0; width: parent.width; height: parent.height; page: true;
             command(o, n, a) => { root.command(o, n, a); }
         }
     }

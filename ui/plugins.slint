@@ -618,16 +618,28 @@ component CoverTile inherits Rectangle {
     ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub + (root.fm.saved ? ", downloaded" : ""); accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
 }
 
+// List / grid toggle of the plugin dialog: in the modal's title row, or at the end of the
+// search row on a page.
+component ViewToggle inherits HorizontalLayout {
+    in property <bool> grid;
+    callback view(bool);
+    alignment: center; spacing: 2px; padding-right: 8px;
+    VerticalLayout { alignment: center;
+        ViewButton { label: "List view"; active: !root.grid; clicked => { root.view(false); }
+            base: @image-url("../assets/icons/layers/list-twotone-b.svg"); accent: @image-url("../assets/icons/layers/list-twotone-a.svg"); dim: @image-url("../assets/icons/layers/list-twotone-d.svg"); } }
+    VerticalLayout { alignment: center;
+        ViewButton { label: "Grid view"; active: root.grid; clicked => { root.view(true); }
+            base: @image-url("../assets/icons/layers/grid-twotone-b.svg"); accent: @image-url("../assets/icons/layers/grid-twotone-a.svg"); dim: @image-url("../assets/icons/layers/grid-twotone-d.svg"); } }
+}
+
 // Shared dialog body of the music plugins (Auto-tagger, Free Music, Network Streams,
 // package dialogs): optional source dropdown, query + search button, result list, a
 // detail pane (tag diff or licence), status line and two actions. The owner plugin id
 // routes the callbacks (ui/music-pane.slint binds it to MusicDialogState). Shown in a
-// Modal, or as a full-width Library page (`page`, Streams hub #86): no Close button,
-// an optional back arrow instead of the close X.
+// Modal, or as a full-width Library page (`page`, Streams hub #86): no title row (the
+// Library header has the breadcrumb and back arrow), no Close button.
 export component MusicBody inherits Rectangle {
     in property <bool> page;
-    in property <bool> show-back;     // page mode: back arrow in the header (service pages)
-    callback back();
     in property <string> title;
     in property <[Item]> results;
     in property <[image]> logos;
@@ -675,24 +687,15 @@ export component MusicBody inherits Rectangle {
     in-out property <int> selected: -1;
     init => { root.selected = -1; }
     VerticalLayout {
-        Rectangle {
-            height: 44px; background: root.page ? transparent : Theme.bg-a3;
+        // Modal only: on a page the Library header already shows the title (breadcrumb)
+        // and the back arrow, and the list / grid toggle moves into the search row.
+        if !root.page: Rectangle {
+            height: 44px; background: Theme.bg-a3;
             HorizontalLayout {
-                padding-left: root.page && !root.show-back ? 12px : 16px; padding-right: 8px; spacing: 8px;
-                if root.page && root.show-back: VerticalLayout { alignment: center;
-                    Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: bk.has-hover ? Theme.bg-a1 : transparent;
-                        TriIcon { x: 5px; y: 5px; width: 20px; height: 20px; name: "arrow-left"; tint: bk.has-hover ? Theme.fg-1 : Theme.fg-a2; }
-                        bk := TouchArea { accessible-role: button; accessible-label: "Back to Streams"; mouse-cursor: pointer; clicked => { root.back(); } } } }
+                padding-left: 16px; padding-right: 8px; spacing: 8px;
                 Text { horizontal-stretch: 1; text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
-                if root.can-grid: HorizontalLayout { alignment: center; spacing: 2px; padding-right: 8px;
-                    VerticalLayout { alignment: center;
-                        ViewButton { label: "List view"; active: !root.grid; clicked => { root.view(false); }
-                            base: @image-url("../assets/icons/layers/list-twotone-b.svg"); accent: @image-url("../assets/icons/layers/list-twotone-a.svg"); dim: @image-url("../assets/icons/layers/list-twotone-d.svg"); } }
-                    VerticalLayout { alignment: center;
-                        ViewButton { label: "Grid view"; active: root.grid; clicked => { root.view(true); }
-                            base: @image-url("../assets/icons/layers/grid-twotone-b.svg"); accent: @image-url("../assets/icons/layers/grid-twotone-a.svg"); dim: @image-url("../assets/icons/layers/grid-twotone-d.svg"); } }
-                }
-                if !root.page: VerticalLayout { alignment: center;
+                if root.can-grid: ViewToggle { grid: root.grid; view(g) => { root.view(g); } }
+                VerticalLayout { alignment: center;
                     Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: mx.has-hover ? Theme.bg-a1 : transparent;
                         Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/close.svg"); }
                         mx := TouchArea { accessible-role: button; accessible-label: "Close"; mouse-cursor: pointer; clicked => { root.close(); } } } }
@@ -715,6 +718,7 @@ export component MusicBody inherits Rectangle {
                 }
             }
             FlatButton { height: 36px; text: root.busy ? "…" : root.search-label; enabled: !root.busy; clicked => { root.selected = -1; root.search(); } }
+            if root.page && root.can-grid: ViewToggle { grid: root.grid; view(g) => { root.view(g); } }
         }
         if root.info-only: Rectangle { height: 12px; }
         // Filter chips: one row that scrolls sideways (drag or wheel) with faded edges when
