@@ -510,11 +510,17 @@ mod tests {
         assert_eq!(p(&["vivi-indicator", "cast", "tv"]), None);
         is(
             &["vivi-indicator-clear", "cast"],
-            M::IndicatorClear { id: "cast", key: "" },
+            M::IndicatorClear {
+                id: "cast",
+                key: "",
+            },
         );
         is(
             &["vivi-indicator-clear", "cast", "tv"],
-            M::IndicatorClear { id: "cast", key: "tv" },
+            M::IndicatorClear {
+                id: "cast",
+                key: "tv",
+            },
         );
     }
 }

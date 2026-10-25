@@ -45,7 +45,12 @@ pub fn parse_plugin(json: &str) -> Option<PluginIndicator> {
     if i.icon.is_empty() && i.tip.is_empty() {
         return None;
     }
-    if i.icon.is_empty() || !i.icon.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+    if i.icon.is_empty()
+        || !i
+            .icon
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
         i.icon = "extension".into();
     }
     Some(i)
@@ -142,7 +147,12 @@ fn current(p: &Player) -> Vec<Indicator> {
     PLUGINS.with(|m| {
         for ((id, key), i) in m.borrow().iter() {
             if crate::plugins::loaded(id) {
-                v.push(chip(&format!("plugin:{id}:{key}"), &i.icon, &i.tip, &i.label));
+                v.push(chip(
+                    &format!("plugin:{id}:{key}"),
+                    &i.icon,
+                    &i.tip,
+                    &i.label,
+                ));
             }
         }
     });
@@ -243,19 +253,32 @@ mod tests {
 
     #[test]
     fn plugin_json() {
-        let i = parse_plugin(r#"{"icon":"cast","tip":"Casting to TV","label":"  Living room TV  "}"#).unwrap();
+        let i =
+            parse_plugin(r#"{"icon":"cast","tip":"Casting to TV","label":"  Living room TV  "}"#)
+                .unwrap();
         assert_eq!(i.icon, "cast");
         assert_eq!(i.label, "Living room ");
         assert_eq!(parse_plugin(r#"{"tip":"x"}"#).unwrap().icon, "extension");
-        assert_eq!(parse_plugin(r#"{"icon":"../../etc","tip":"x"}"#).unwrap().icon, "extension");
+        assert_eq!(
+            parse_plugin(r#"{"icon":"../../etc","tip":"x"}"#)
+                .unwrap()
+                .icon,
+            "extension"
+        );
         assert!(parse_plugin("{}").is_none());
         assert!(parse_plugin("nope").is_none());
     }
 
     #[test]
     fn clicks() {
-        assert_eq!(click_target("sleep", false), Click::Panel(PanelTab::Playback));
-        assert_eq!(click_target("speed", false), Click::Panel(PanelTab::Playback));
+        assert_eq!(
+            click_target("sleep", false),
+            Click::Panel(PanelTab::Playback)
+        );
+        assert_eq!(
+            click_target("speed", false),
+            Click::Panel(PanelTab::Playback)
+        );
         assert_eq!(click_target("leveling", false), Click::Settings("Audio"));
         assert_eq!(click_target("remote", false), Click::Settings("General"));
         assert_eq!(click_target("remote", true), Click::Settings("Controls"));

@@ -389,7 +389,11 @@ impl Lib {
                 crumbs.push(("bookmarks".into(), "Bookmarks".into()));
                 let dir = crate::bookmarks::thumbs_dir();
                 for (path, title, m) in crate::bookmarks::list_all() {
-                    let file = if title.is_empty() { store::display_name(&path) } else { title };
+                    let file = if title.is_empty() {
+                        store::display_name(&path)
+                    } else {
+                        title
+                    };
                     let mut sub = format!("{file} · {}", crate::bookmarks::short_time(m.time));
                     if !m.note.is_empty() {
                         sub = format!("{sub} · {}", m.note);

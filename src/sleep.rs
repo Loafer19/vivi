@@ -342,8 +342,7 @@ fn tick() {
         }
         return;
     }
-    let at_end = matches!(m, Mode::EndOfFile)
-        || (matches!(m, Mode::Items(_)) && items <= 1);
+    let at_end = matches!(m, Mode::EndOfFile) || (matches!(m, Mode::Items(_)) && items <= 1);
     let eof = at_end && p.get("eof-reached").as_deref() == Some("yes");
     if eof || left.is_some_and(|l| l <= 0.25) {
         finish(&a, &p);
@@ -392,7 +391,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         if let Err(e) = cfg.borrow().save() {
             eprintln!("sleep: saving the fade failed: {e}");
         }
-        a.global::<crate::Status>().set_sleep_fade(secs.clamp(0, 120));
+        a.global::<crate::Status>()
+            .set_sleep_fade(secs.clamp(0, 120));
         if let Some((_, p, _)) = ctx() {
             publish(&p);
         }
@@ -463,8 +463,17 @@ mod tests {
         assert_eq!(clock(1421.0), "23:41");
         assert_eq!(clock(3723.0), "1:02:03");
         assert_eq!(describe(Mode::Off, None, 0), "");
-        assert_eq!(describe(Mode::Minutes(30), Some(90.0), 0), "Pausing in 1:30");
-        assert_eq!(describe(Mode::Items(3), None, 3), "Pausing after 3 files (this one included)");
-        assert_eq!(describe(Mode::Items(3), Some(5.0), 1), "Pausing at the end of this file");
+        assert_eq!(
+            describe(Mode::Minutes(30), Some(90.0), 0),
+            "Pausing in 1:30"
+        );
+        assert_eq!(
+            describe(Mode::Items(3), None, 3),
+            "Pausing after 3 files (this one included)"
+        );
+        assert_eq!(
+            describe(Mode::Items(3), Some(5.0), 1),
+            "Pausing at the end of this file"
+        );
     }
 }

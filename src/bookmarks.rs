@@ -154,8 +154,11 @@ pub fn all(db: &Db) -> Vec<(String, String, Mark)> {
         })
         .collect();
     v.sort_by(|a, b| {
-        a.0.cmp(&b.0)
-            .then(a.2.time.partial_cmp(&b.2.time).unwrap_or(std::cmp::Ordering::Equal))
+        a.0.cmp(&b.0).then(
+            a.2.time
+                .partial_cmp(&b.2.time)
+                .unwrap_or(std::cmp::Ordering::Equal),
+        )
     });
     v
 }
@@ -168,7 +171,10 @@ pub fn lib_key(path: &str, time: f64) -> String {
 /// (path, seconds) of a [`lib_key`].
 pub fn parse_lib_key(key: &str) -> Option<(String, f64)> {
     let (t, path) = key.split_once('\u{1f}')?;
-    let t = t.parse::<f64>().ok().filter(|t| t.is_finite() && *t >= 0.0)?;
+    let t = t
+        .parse::<f64>()
+        .ok()
+        .filter(|t| t.is_finite() && *t >= 0.0)?;
     (!path.is_empty()).then(|| (path.to_string(), t))
 }
 
@@ -236,7 +242,9 @@ pub fn refresh() {
         .iter()
         .map(|m| {
             let img = (!m.thumb.is_empty())
-                .then(|| crate::images::get(&dir.join(&m.thumb), crate::images::TILE, |_| refresh()))
+                .then(|| {
+                    crate::images::get(&dir.join(&m.thumb), crate::images::TILE, |_| refresh())
+                })
                 .flatten();
             BookmarkRow {
                 time: m.time as f32,
@@ -282,8 +290,11 @@ pub fn open_at(p: &Player, path: &str, time: f64) {
 
 /// Delete the bookmark of `path` at `time` (Library context menu).
 pub fn remove_at(path: &str, time: f64) {
-    let Some(i) = with_db(|db| marks(db, path).iter().position(|m| (m.time - time).abs() < 0.01))
-    else {
+    let Some(i) = with_db(|db| {
+        marks(db, path)
+            .iter()
+            .position(|m| (m.time - time).abs() < 0.01)
+    }) else {
         return;
     };
     if let Some(m) = with_db(|db| remove(db, path, i)) {
@@ -336,7 +347,10 @@ pub fn add_current(p: &Player, log: bool) {
         }
     }
     if log {
-        eprintln!("bookmark at {t:.2}: {}", if r.is_ok() { "added" } else { "exists" });
+        eprintln!(
+            "bookmark at {t:.2}: {}",
+            if r.is_ok() { "added" } else { "exists" }
+        );
     }
     refresh();
 }
@@ -383,7 +397,9 @@ pub fn setup(app: &AppWindow, pl: &Rc<Player>, log: bool) {
         }
     });
     g.on_jump(|i| {
-        let (Some(p), Some(i)) = (player(), index(i)) else { return };
+        let (Some(p), Some(i)) = (player(), index(i)) else {
+            return;
+        };
         let path = current();
         if let Some(t) = with_db(|db| marks(db, &path).get(i).map(|m| m.time)) {
             p.seek_abs(t);
@@ -434,7 +450,10 @@ mod tests {
         assert_eq!(add(&mut db, "/f.mkv", "", mark(3725.0)), Ok(2));
         assert_eq!(add(&mut db, "/f.mkv", "", mark(90.3)), Err(1));
         let m = marks(&db, "/f.mkv");
-        assert_eq!(m.iter().map(|m| m.time).collect::<Vec<_>>(), [10.0, 90.0, 3725.0]);
+        assert_eq!(
+            m.iter().map(|m| m.time).collect::<Vec<_>>(),
+            [10.0, 90.0, 3725.0]
+        );
         assert_eq!(m[1].label, "Bookmark at 1:30");
         assert_eq!(m[2].label, "Bookmark at 1:02:05");
         assert_eq!(db[&key("/f.mkv")].title, "F");
@@ -465,7 +484,10 @@ mod tests {
         add(&mut db, "/a", "A", mark(30.0)).unwrap();
         add(&mut db, "/b", "B", mark(2.0)).unwrap();
         let v: Vec<(String, f64)> = all(&db).into_iter().map(|(p, _, m)| (p, m.time)).collect();
-        assert_eq!(v, [("/a".into(), 30.0), ("/b".into(), 2.0), ("/b".into(), 20.0)]);
+        assert_eq!(
+            v,
+            [("/a".into(), 30.0), ("/b".into(), 2.0), ("/b".into(), 20.0)]
+        );
     }
 
     #[test]
@@ -480,7 +502,10 @@ mod tests {
         add(&mut db, "/f", "T", mark(40.0)).unwrap();
         save_to(&f, &db).unwrap();
         let text = std::fs::read_to_string(&f).unwrap();
-        assert!(!text.contains("\"note\": \"\""), "empty notes are not written");
+        assert!(
+            !text.contains("\"note\": \"\""),
+            "empty notes are not written"
+        );
         assert_eq!(load_from(&f), db);
         assert!(load_from(&dir.join("missing.json")).is_empty());
         std::fs::write(&f, "not json").unwrap();

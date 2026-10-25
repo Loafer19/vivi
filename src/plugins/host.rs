@@ -842,7 +842,15 @@ mod tests {
     #[test]
     fn host_features_are_published_as_words() {
         let f = features();
-        for w in ["dialog", "content", "drawer", "bars", "info-dialog", "indicators", "sleep"] {
+        for w in [
+            "dialog",
+            "content",
+            "drawer",
+            "bars",
+            "info-dialog",
+            "indicators",
+            "sleep",
+        ] {
             assert!(f.split(' ').any(|x| x == w), "{w}");
         }
         assert!(!f.contains("  "));
