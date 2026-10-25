@@ -744,7 +744,7 @@ pub const HUB_LANGUAGES: [&str; 12] = [
 ];
 /// Bitrate filter (label, minimum kbps).
 pub const HUB_BITRATES: [(&str, u32); 5] = [
-    ("Any", 0),
+    ("Any bitrate", 0),
     ("64+ kbps", 64),
     ("128+ kbps", 128),
     ("192+ kbps", 192),

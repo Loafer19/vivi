@@ -548,6 +548,8 @@ export component LibraryView inherits Rectangle {
                                 SecondaryButton { icon: @image-url("../assets/icons/new_folder.svg"); text: "Add folders"; clicked => { root.add-folders(); } }
                             }
                         }
+                        // Streams: favorites and recent streams (#86), above the source chips.
+                        if Streams.home.length > 0: StreamsRow { open-hub => { root.navigate("streams"); } }
                         if root.sources.length > 0: VerticalLayout {
                             spacing: 12px;
                             HorizontalLayout {
@@ -584,7 +586,6 @@ export component LibraryView inherits Rectangle {
                                 }
                             }
                         }
-                        if Streams.home.length > 0: StreamsRow { open-hub => { root.navigate("streams"); } }
                         if root.continue-items.length > 0: Shelf { title: "Continue Watching"; items: root.continue-items; max: root.rows-max;
                             title-clicked => { root.navigate("recent"); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                         if root.listen-items.length > 0: Shelf { title: "Listen Again"; items: root.listen-items; max: root.rows-max;

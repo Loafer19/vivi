@@ -6,6 +6,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { TextField } from "core/controls.slint";
+import { Icons } from "core/icons.slint";
 import { FlatButton, PrimaryButton } from "core/buttons.slint";
 import { Streams, StreamCard, StreamService } from "state/streams.slint";
 import { NowPlaying } from "state/now-playing.slint";
@@ -238,7 +239,7 @@ export component StreamsHub inherits VerticalLayout {
     // Music: the service switcher (each service keeps its own chips, filters, actions).
     if Streams.tab == "music" && Streams.services.length > 0: HorizontalLayout {
         spacing: 8px; alignment: start;
-        for s in Streams.services: Tab { text: s.name; icon: s.icon; active: Streams.service == s.id; clicked => { Streams.pick-service(s.id); } }
+        for s in Streams.services: Tab { text: s.name; icon: Icons.plugin-duo(s.icon); active: Streams.service == s.id; clicked => { Streams.pick-service(s.id); } }
     }
     if Streams.tab == "recent": StreamGrid {
         vertical-stretch: 1; cards: Streams.recent; removable: true;

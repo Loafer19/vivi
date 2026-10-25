@@ -1406,18 +1406,22 @@ impl NetworkStreams {
                 opts.into_iter().map(SharedString::from).collect::<Vec<_>>(),
             )),
         };
-        let any = |l: &mut dyn Iterator<Item = String>| {
-            std::iter::once("Any".to_string())
+        // "Any country" etc.: the dropdowns have no label of their own.
+        let any = |what: &str, l: &mut dyn Iterator<Item = String>| {
+            std::iter::once(format!("Any {what}"))
                 .chain(l)
                 .collect::<Vec<_>>()
         };
-        let countries = any(&mut HUB_COUNTRIES.iter().map(|c| c.0.to_string()));
+        let countries = any(
+            "country",
+            &mut HUB_COUNTRIES.iter().map(|c| c.0.to_string()),
+        );
         let v = if self.hub == "tv" {
             vec![
                 f("Country", countries, self.t_country),
                 f(
                     "Category",
-                    any(&mut CATEGORY_CHIPS.iter().map(|c| c.0.to_string())),
+                    any("group", &mut CATEGORY_CHIPS.iter().map(|c| c.0.to_string())),
                     self.t_category,
                 ),
                 f(
@@ -1431,12 +1435,12 @@ impl NetworkStreams {
                 f("Country", countries, self.r_country),
                 f(
                     "Genre",
-                    any(&mut HUB_GENRES.iter().map(|g| g.to_string())),
+                    any("genre", &mut HUB_GENRES.iter().map(|g| g.to_string())),
                     self.r_genre,
                 ),
                 f(
                     "Language",
-                    any(&mut HUB_LANGUAGES.iter().map(|g| g.to_string())),
+                    any("language", &mut HUB_LANGUAGES.iter().map(|g| g.to_string())),
                     self.r_lang,
                 ),
                 f(
