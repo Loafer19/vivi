@@ -854,25 +854,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn folder_pairing() {
-        let p = |s: &str| PathBuf::from(s);
-        assert!(sub_matches(&p("/a/Ep01.mp4"), &p("/a/Ep01.srt")));
-        assert!(sub_matches(&p("/a/Ep01.mp4"), &p("/a/Ep01_English.srt")));
-        assert!(sub_matches(&p("/a/ep01.mp4"), &p("/a/EP01.en.srt")));
-        assert!(!sub_matches(&p("/a/Ep01.mp4"), &p("/a/Ep010.srt")));
-        let pairs = pair_folder(
-            &[p("/a/Ep01.mp4"), p("/a/Ep02.mp4")],
-            &[p("/a/Ep01_English.srt"), p("/a/Ep01.srt")],
-        );
-        assert_eq!(pairs[0].1, Some(p("/a/Ep01.srt")));
-        assert_eq!(pairs[1].1, None);
-        assert_eq!(
-            breadcrumb(&p("/home/u/Videos/Shows/The Wand/S01")),
-            "Videos / Shows / The Wand / S01"
-        );
-    }
-
-    #[test]
     fn hash_known_value() {
         // 128 KiB of zeros plus one 0x01 byte at the start: size + 1.
         let p = std::env::temp_dir().join(format!("vivi-hash-{}", std::process::id()));

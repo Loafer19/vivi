@@ -58,5 +58,4 @@ pub fn save_pick(file: &Path, key: &str, pick: Option<Pick>) {
 // ---------- local folders ----------
 
 // "From Computer" (Load from Computer…) is core since 0.15.0 (#84): src/sublocal.rs.
-pub(crate) use crate::sublocal::{breadcrumb, file_name, has_ext, SUB_EXT};
-pub use crate::sublocal::{pair_folder, sub_matches};
+pub(crate) use crate::sublocal::{file_name, has_ext, SUB_EXT};
