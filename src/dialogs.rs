@@ -328,6 +328,49 @@ pub fn show_qr(a: &AppWindow, title: &str, text: &str, caption: &str) {
     a.global::<crate::Overlays>().set_qr_open(true);
 }
 
+/// Owner of the player's own confirmations (no plugin has this id): answers go to
+/// [`core_answer`] instead of a plugin.
+pub const CORE: &str = "vivi:core";
+
+thread_local! {
+    /// Core confirmations waiting for an answer: key → what to do on "yes".
+    static PENDING: RefCell<Vec<(String, Box<dyn FnOnce()>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Ask the user to confirm a core action (e.g. Settings → Privacy → Clear bookmarks);
+/// `yes` runs when they do. Esc / × / Cancel drop it.
+pub fn confirm_core(
+    a: &AppWindow,
+    key: &str,
+    title: &str,
+    heading: &str,
+    text: &str,
+    ok: &str,
+    yes: impl FnOnce() + 'static,
+) {
+    PENDING.with(|p| {
+        let mut p = p.borrow_mut();
+        p.retain(|(k, _)| k != key);
+        p.push((key.to_string(), Box::new(yes)));
+    });
+    confirm(a, CORE, key, title, heading, text, ok);
+}
+
+/// The answer to a [`confirm_core`] question: `[key, "yes" | "no"]`.
+pub fn core_answer(args: &[String]) {
+    let (Some(key), Some(answer)) = (args.first(), args.get(1)) else {
+        return;
+    };
+    let f = PENDING.with(|p| {
+        let mut p = p.borrow_mut();
+        let i = p.iter().position(|(k, _)| k == key)?;
+        Some(p.remove(i).1)
+    });
+    if let Some(f) = f.filter(|_| answer == "yes") {
+        f();
+    }
+}
+
 /// Ask the user to confirm something for plugin `owner`; the answer arrives as plugin
 /// command `confirm <key> yes|no` (also "no" when the dialog is closed with Esc / ×).
 pub fn confirm(

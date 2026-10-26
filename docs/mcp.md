@@ -136,6 +136,20 @@ fix. Results always carry `structuredContent`; list tools take `offset` / `limit
 | `get_chapters` | – | `current` index and `chapters` (`index`, `title`, `start` s) |
 | `seek_chapter` | `index` *or* `offset` (+1/-1) | Jump to a chapter |
 
+**Bookmarks, A-B loop, sleep timer**
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_bookmarks` | – | Bookmarks of the playing file (`time` s, `label`, `note`, `thumb`, `created`), sorted; the 0-based index is used below |
+| `add_bookmark` | `label`, `note` (optional) | Bookmark the playing position; `added: false` when one is already within half a second; returns `index` and the list |
+| `remove_bookmark` | `index` | Delete a bookmark and its saved frame (destructive) |
+| `jump_to_bookmark` | `index` | Seek to a bookmark |
+| `export_bookmarks_as_chapters` | `to` (`player`/`file`), `path` | `player`: add the bookmarks to the chapter list until the file closes (`added`, `chapters`); `file`: write an FFmpeg metadata chapters file (the file's chapters plus bookmarks; default `<video>.ffmetadata` next to a local video) for `mpv --chapters-file=` or `ffmpeg -i video -i file -map_metadata 1 -codec copy out` |
+| `get_ab_loop` / `set_ab_loop` | `set` (`a`/`b`: at the playhead) *or* `a`, `b` (s, `null` clears) *or* `clear` | The A-B loop (`a`, `b`, `active`, `state`); the seek bar, side panel and top-bar chip follow |
+| `get_sleep_timer` | – | `mode` (`off`, `min:<n>`, `eof`, `chapter`, `items:<n>`), `active`, `remaining` s, `items_left`, `fade` s |
+| `set_sleep_timer` | `minutes` (1–1440) *or* `timer` | Pause after some minutes, at the end of the file (`eof`) or chapter (`chapter`), or after n queue items (`items:<n>`); fades the volume out first |
+| `cancel_sleep_timer` | – | Turn the sleep timer off |
+
 **Audio, lyrics, visualizer, screenshots**
 
 | Tool | Arguments | What it does |

@@ -1014,6 +1014,13 @@ pub fn file_loaded() {
 /// Send a command to one plugin (no-op when it is disabled).
 /// UI callbacks of a package's host dialog are forwarded to it (see [`host`]).
 pub fn command(id: &str, name: &str, args: &[String]) {
+    // The player's own confirmation dialogs (src/dialogs.rs).
+    if id == crate::dialogs::CORE {
+        if name == "confirm" {
+            crate::dialogs::core_answer(args);
+        }
+        return;
+    }
     let builtin = with(|r| {
         let Some(a) = r.app.upgrade() else {
             return true;

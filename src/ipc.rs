@@ -779,6 +779,89 @@ fn handle(
             }
             Ok(json!(crate::bookmarks::current_marks()))
         }
+        "bookmark_add" => {
+            // Bookmark the playing position: {"label"?, "note"?}.
+            let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
+            match crate::bookmarks::add_here(p, &s("label"), &s("note"), false) {
+                Ok(i) => Ok(json!({ "added": true, "index": i, "bookmarks": crate::bookmarks::current_marks() })),
+                Err(usize::MAX) => Err("nothing is playing".into()),
+                Err(i) => Ok(json!({ "added": false, "index": i, "bookmarks": crate::bookmarks::current_marks() })),
+            }
+        }
+        "bookmark_remove" | "bookmark_jump" => {
+            // {"index": n} of the playing file's bookmarks (see "bookmarks").
+            let i = args["index"]
+                .as_u64()
+                .ok_or("missing \"index\" (0-based, see list_bookmarks)")? as usize;
+            let n = crate::bookmarks::current_marks().len();
+            if i >= n {
+                return Err(format!("no bookmark {i}: this file has {n}"));
+            }
+            if cmd == "bookmark_jump" {
+                crate::bookmarks::jump(p, i);
+                let t = crate::bookmarks::current_marks()[i].time;
+                return Ok(json!({ "time": t }));
+            }
+            crate::bookmarks::remove_current(i);
+            Ok(json!(crate::bookmarks::current_marks()))
+        }
+        "bookmarks_export" => {
+            // {"to": "player"} merges the bookmarks into the chapter list (until the file
+            // closes); {"to": "file", "path": "/x.ffmetadata"} writes an FFmpeg metadata
+            // chapters file (default: <video>.ffmetadata next to a local video).
+            match args["to"].as_str().unwrap_or("player") {
+                "player" => {
+                    let added = crate::bookmarks::to_chapters(p)?;
+                    Ok(json!({ "added": added, "chapters": p.chapters().len() }))
+                }
+                "file" => {
+                    let path = match args["path"].as_str() {
+                        Some(s) if !s.trim().is_empty() => std::path::PathBuf::from(s.trim()),
+                        _ => {
+                            let cur = p.get("path").unwrap_or_default();
+                            if !std::path::Path::new(&cur).is_file() {
+                                return Err("give a \"path\" (the playing file is not a local file)".into());
+                            }
+                            crate::bookmarks::chapters_file_for(&cur)
+                        }
+                    };
+                    let f = crate::bookmarks::to_chapters_file(p, Some(path))?;
+                    Ok(json!({ "path": f.to_string_lossy() }))
+                }
+                t => Err(format!("unknown \"to\" {t:?} (player or file)")),
+            }
+        }
+        "ab_loop" => {
+            // No arguments: the state. {"set": "a" | "b"} at the playhead,
+            // {"a": n, "b": n} (null clears that point), {"clear": true}.
+            if args["clear"].as_bool() == Some(true) {
+                crate::abloop::set_both(a, p, Some(None), Some(None))?;
+            } else if let Some(w) = args["set"].as_str() {
+                let which = match w {
+                    "a" | "A" => crate::abloop::Point::A,
+                    "b" | "B" => crate::abloop::Point::B,
+                    _ => return Err("\"set\" is \"a\" or \"b\"".into()),
+                };
+                if p.get("time-pos").is_none() {
+                    return Err("nothing is playing".into());
+                }
+                crate::abloop::set(a, p, which);
+            } else {
+                let pt = |k: &str| -> Result<Option<Option<f64>>, String> {
+                    match &args[k] {
+                        Value::Null if args.get(k).is_none() => Ok(None),
+                        Value::Null => Ok(Some(None)),
+                        Value::Number(n) => Ok(Some(n.as_f64())),
+                        _ => Err(format!("\"{k}\" is seconds or null")),
+                    }
+                };
+                let (x, y) = (pt("a")?, pt("b")?);
+                if x.is_some() || y.is_some() {
+                    crate::abloop::set_both(a, p, x, y)?;
+                }
+            }
+            Ok(crate::abloop::state_json(p))
+        }
         "drawer" => {
             // Open / close / toggle the plugin side drawer (screenshots, scripts); it
             // shows while media plays.

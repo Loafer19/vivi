@@ -406,7 +406,9 @@ impl Lib {
                         false,
                     );
                     it.icon = "bookmark".into();
-                    if !m.thumb.is_empty() {
+                    // Only once the frame is saved (a miss would stick in the image cache);
+                    // the page renders again when it is (bookmarks::changed).
+                    if !m.thumb.is_empty() && dir.join(&m.thumb).is_file() {
                         let f = dir.join(&m.thumb).to_string_lossy().into_owned();
                         it.thumb_key = f.as_str().into();
                         if let Some(img) = picture(&f) {
@@ -978,11 +980,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 let path = key.strip_prefix("video:").unwrap_or(&key).to_string();
                 match action.as_str() {
                     "play" => a.global::<crate::Library>().invoke_open(key, kind),
+                    // remove_at re-renders this page (bookmarks::changed).
                     "delete-bookmark" => {
                         if let Some((path, t)) = crate::bookmarks::parse_lib_key(&key) {
                             crate::bookmarks::remove_at(&path, t);
                         }
-                        render();
                     }
                     "enqueue" => {
                         if a.global::<crate::Playback>().get_has_media() {

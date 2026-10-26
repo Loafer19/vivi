@@ -639,6 +639,11 @@ export component SidePanel inherits Rectangle {
                         save(l, n) => { Bookmarks.rename(i, l, n); Bookmarks.editing = -1; }
                         delete => { Bookmarks.editing = -1; Bookmarks.remove(i); }
                     }
+                    if Bookmarks.items.length > 0: HorizontalLayout {
+                        spacing: 8px; padding-top: 6px;
+                        SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Use as chapters"; icon: @image-url("../assets/icons/chapters.svg"); clicked => { Bookmarks.export("player"); } }
+                        SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Save chapters…"; icon: @image-url("../assets/icons/save.svg"); clicked => { Bookmarks.export("file"); } }
+                    }
                 }
                 // ---- Chapters ----
                 if root.tab == PanelTab.chapters: VerticalLayout {

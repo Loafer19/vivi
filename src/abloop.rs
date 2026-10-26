@@ -3,7 +3,9 @@
 //! `AbNudge`, `FrameStep`). `Shift+L` keeps mpv's own `ab-loop` cycle. The loop is
 //! shown by the seek-bar A/B overlay (`Playback.ab-a` / `ab-b`), which follows mpv's
 //! `ab-loop-a` / `ab-loop-b` properties whoever sets them ([`sync`]); feedback is a
-//! toast. This replaces the A-B Loop & Frame Step package (`ab-loop`).
+//! toast. This replaces the A-B Loop & Frame Step package (`ab-loop`). The control
+//! socket's `ab_loop` command (vivi-mcp `get_ab_loop` / `set_ab_loop`) reads and sets
+//! the points; the top-bar chip follows every change at once.
 
 use crate::player::Player;
 use crate::AppWindow;
@@ -130,6 +132,8 @@ pub fn sync(app: &AppWindow, p: &Player) {
     pb.set_ab_a(a.map_or(-1.0, |v| v as f32));
     pb.set_ab_b(b.map_or(-1.0, |v| v as f32));
     pb.set_ab_state(state_text(a, b).into());
+    // The top-bar A-B chip follows at once (not on the next status tick).
+    crate::status::refresh();
 }
 
 /// Alt+A / Alt+B: set a loop point at the playhead.
@@ -186,6 +190,36 @@ pub fn nudge_last(app: &AppWindow, p: &Player, dir: f64) {
     sync(app, p);
     let name = if which == Point::A { "A" } else { "B" };
     crate::plugins::toast(app, &format!("Loop point {name}: {}", fmt(v)));
+}
+
+/// Loop points from the control socket: each point set, kept (`None` in `keep`) or
+/// cleared; A after B swaps them. Err for a negative or non-finite time.
+pub fn set_both(
+    app: &AppWindow,
+    p: &Player,
+    a: Option<Option<f64>>,
+    b: Option<Option<f64>>,
+) -> Result<(), String> {
+    let ok = |t: Option<f64>| match t {
+        Some(v) if !v.is_finite() || v < 0.0 => Err(format!("invalid loop point {v}")),
+        _ => Ok(t),
+    };
+    let x = ok(a.unwrap_or_else(|| point(p, "ab-loop-a")))?;
+    let y = ok(b.unwrap_or_else(|| point(p, "ab-loop-b")))?;
+    let (x, y) = match (x, y) {
+        (Some(x), Some(y)) if x > y => (Some(y), Some(x)),
+        v => v,
+    };
+    write(p, x, y);
+    LAST.with(|l| l.set(if b.is_some() { Point::B } else { Point::A }));
+    sync(app, p);
+    Ok(())
+}
+
+/// Control socket `ab_loop` state: the points (null = unset) and the panel's line.
+pub fn state_json(p: &Player) -> serde_json::Value {
+    let (a, b) = (point(p, "ab-loop-a"), point(p, "ab-loop-b"));
+    serde_json::json!({ "a": a, "b": b, "active": a.is_some() && b.is_some(), "state": state_text(a, b) })
 }
 
 /// `,` / `.`: one frame back / forward while paused, otherwise a 1 s seek.

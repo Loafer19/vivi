@@ -294,6 +294,28 @@ fn tools() -> Vec<Tool> {
         tool("get_chapters", "Chapters", "chapters", "Chapters of the current item (index, title, start in seconds) and the current chapter.", none.clone(), &[]).ro(),
         tool("seek_chapter", "Go to chapter", "seek_chapter", "Jump to a chapter by index (0-based), or by offset (+1 next, -1 previous).",
             json!({ "index": { "type": "integer", "minimum": 0 }, "offset": { "type": "integer" } }), &[]).repeats(),
+        // Bookmarks and A-B loop
+        tool("list_bookmarks", "Bookmarks", "bookmarks", "Bookmarks of the playing file, sorted by time: time (s), label, note, thumb (saved frame file name), created (Unix time). Indexes are 0-based and used by jump_to_bookmark / remove_bookmark.", none.clone(), &[]).ro(),
+        tool("add_bookmark", "Add bookmark", "bookmark_add", "Bookmark the playing position (like Ctrl+B), optionally with a label and note. Returns added (false when one exists within half a second), its index and the list.",
+            json!({ "label": { "type": "string", "description": "Name (default: \"Bookmark at m:ss\")" }, "note": { "type": "string" } }), &[]).repeats(),
+        tool("remove_bookmark", "Delete bookmark", "bookmark_remove", "Delete one bookmark of the playing file by index (see list_bookmarks), with its saved frame. Returns the remaining list.",
+            json!({ "index": { "type": "integer", "minimum": 0 } }), &["index"]).destructive().repeats(),
+        tool("jump_to_bookmark", "Go to bookmark", "bookmark_jump", "Seek to a bookmark of the playing file by index (see list_bookmarks).",
+            json!({ "index": { "type": "integer", "minimum": 0 } }), &["index"]),
+        tool("export_bookmarks_as_chapters", "Bookmarks to chapters", "bookmarks_export", "Turn the playing file's bookmarks into chapters: to player (default) adds them to the chapter list until the file closes; to file writes an FFmpeg metadata chapters file with the file's chapters and bookmarks (path, default <video>.ffmetadata next to a local video; an existing file is replaced). Usable with mpv --chapters-file or ffmpeg -i video -i file -map_metadata 1 -codec copy.",
+            json!({ "to": { "type": "string", "enum": ["player", "file"], "default": "player" },
+                    "path": { "type": "string", "description": "Output file for to: file (absolute)" } }), &[]),
+        tool("get_ab_loop", "A-B loop", "ab_loop", "The A-B loop: points a and b in seconds (null = unset), active (both set) and the panel's state text.", none.clone(), &[]).ro(),
+        tool("set_ab_loop", "Set A-B loop", "ab_loop", "Set the A-B loop: set \"a\" or \"b\" puts that point at the playhead; or give a / b in seconds (null clears that point; a after b swaps them); or clear: true. The seek bar, side panel and top-bar chip follow. Returns the new state.",
+            json!({ "set": { "type": "string", "enum": ["a", "b"] },
+                    "a": { "type": ["number", "null"], "minimum": 0 }, "b": { "type": ["number", "null"], "minimum": 0 },
+                    "clear": { "type": "boolean" } }), &[]),
+        // Sleep timer
+        tool("get_sleep_timer", "Sleep timer", "sleep", "The sleep timer: mode (off, min:<n>, eof, chapter, items:<n>), active, remaining seconds (minutes and chapter modes), items_left, fade (seconds of volume fade-out before it pauses).", none.clone(), &[]).ro(),
+        tool("set_sleep_timer", "Set sleep timer", "sleep", "Pause playback later: minutes (1-1440), or timer = min:<n>, eof (end of the file), chapter (end of the chapter), items:<n> (after n queue items, counting the current one) or off. The volume fades out over the last seconds first. Returns the state.",
+            json!({ "minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
+                    "timer": { "type": "string", "minLength": 2, "description": "off, min:<n>, eof, chapter or items:<n>" } }), &[]),
+        tool("cancel_sleep_timer", "Cancel sleep timer", "sleep", "Turn the sleep timer off (the volume is put back if it was fading). Returns the state.", none.clone(), &[]).fixed(json!({ "timer": "off" })),
         // Audio
         tool("list_eq_presets", "Equalizer presets", "eq_presets", "Equalizer presets (built-in and custom), the current one and whether the equalizer is on.", none.clone(), &[]).ro(),
         tool("set_eq_preset", "Select equalizer preset", "eq_preset", "Select an equalizer preset by name (see list_eq_presets), or \"Off\" to turn the equalizer off.",
@@ -428,6 +450,7 @@ fn validate(schema: &Value, args: &Value) -> Result<(), String> {
             "boolean" => v.is_boolean(),
             "array" => v.is_array(),
             "object" => v.is_object(),
+            "null" => v.is_null(),
             _ => true,
         };
         if !types.is_empty() && !types.iter().any(|t| fits(t)) {
@@ -1072,6 +1095,11 @@ mod tests {
             .contains("empty"));
         assert!(validate(&get("playlist_play"), &json!({ "index": 1.5 })).is_err());
         assert!(validate(&get("set_audio_track"), &json!({ "id": "auto" })).is_ok());
+        assert!(validate(&get("set_ab_loop"), &json!({ "a": null, "b": 4.5 })).is_ok());
+        assert!(validate(&get("set_ab_loop"), &json!({ "a": "x" })).is_err());
+        assert!(validate(&get("set_sleep_timer"), &json!({ "minutes": 0 })).is_err());
+        assert!(validate(&get("remove_bookmark"), &json!({})).is_err());
+        assert!(validate(&get("cancel_sleep_timer"), &json!({ "timer": "eof" })).is_err());
     }
 
     #[test]

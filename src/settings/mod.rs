@@ -414,6 +414,40 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             }
                             return;
                         }
+                        "privacy.bookmarks" => {
+                            drop(c);
+                            let n = crate::bookmarks::count();
+                            if n == 0 {
+                                a.global::<crate::Settings>()
+                                    .set_status("No bookmarks to clear".into());
+                                return;
+                            }
+                            let w = a.as_weak();
+                            crate::dialogs::confirm_core(
+                                &a,
+                                "clear-bookmarks",
+                                "Clear bookmarks",
+                                &format!(
+                                    "Delete {n} bookmark{}?",
+                                    if n == 1 { "" } else { "s" }
+                                ),
+                                "Every saved bookmark of every file and its saved frame is deleted. This cannot be undone.",
+                                "Clear",
+                                move || {
+                                    let n = crate::bookmarks::clear_all();
+                                    if let Some(a) = w.upgrade() {
+                                        a.global::<crate::Settings>().set_status(
+                                            format!(
+                                                "{n} bookmark{} cleared",
+                                                if n == 1 { "" } else { "s" }
+                                            )
+                                            .into(),
+                                        );
+                                    }
+                                },
+                            );
+                            return;
+                        }
                         "privacy.watch_later" => {
                             let _ = std::fs::remove_dir_all(store::watch_later_dir());
                             let _ = std::fs::create_dir_all(store::watch_later_dir());

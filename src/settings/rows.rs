@@ -325,6 +325,12 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             "Delete every saved playback position (watch-later).",
             "Clear",
         )
+        .action(
+            "privacy.bookmarks",
+            "Clear bookmarks",
+            "Delete every saved bookmark and its saved frame (asks first).",
+            "Clear",
+        )
         .header("Network")
         .stub_toggle(
             "stub.privacy.metadata",

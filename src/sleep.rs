@@ -3,7 +3,7 @@
 //! (then pausing and putting the volume back). One timer for the side panel
 //! (Playback → Sleep Timer), the top-bar moon indicator (src/status.rs), IPC
 //! (`sleep`) and packages (`vivi-sleep <spec>`); its state is published in mpv's
-//! `user-data/vivi/sleep`.
+//! `user-data/vivi/sleep` (once a second while counting down).
 
 use crate::config::Config;
 use crate::player::Player;
@@ -118,6 +118,9 @@ struct Timer {
     keep_open: Option<String>,
     /// The last state text shown (to only touch the UI on changes).
     shown: String,
+    /// Whole seconds left when `user-data/vivi/sleep` was last published, so packages
+    /// (Remote Control) see the countdown once a second.
+    published: Option<i64>,
 }
 
 type Ctx = (slint::Weak<AppWindow>, Rc<Player>, Rc<RefCell<Config>>);
@@ -360,14 +363,20 @@ fn tick() {
         }
     }
     let text = describe(m, left, items);
-    let changed = T.with(|t| {
+    let secs = left.map(|l| l.ceil() as i64);
+    let (changed, republish) = T.with(|t| {
         let mut t = t.borrow_mut();
         let c = t.shown != text;
         t.shown = text.clone();
-        c
+        let r = c || t.published != secs;
+        t.published = secs;
+        (c, r)
     });
     if changed {
         g.set_sleep_state(text.into());
+    }
+    if republish {
+        publish(&p);
     }
     TICK.with(|t| {
         if !t.running() {

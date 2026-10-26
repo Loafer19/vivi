@@ -4,12 +4,19 @@
 
 ### Added
 - **Load subtitles from your computer without Subtitle Search** (#84): the Subtitle menu's *Load from Computer…* and the side panel's *From computer…* open the Add Subtitles dialog on its From Computer half, now built into the player: *To This File* lists the subtitle files of the video's folder (or one you choose) with the matching one checked, *To This Folder* pairs every video of the folder with its subtitle and attaches it when that video plays. With Subtitle Search on, the same dialog also has *From OpenSubtitles*; with it off, the dialog shows only the local source. The per-file offset (`Alt+Z` / `Alt+X`) is unchanged.
+- **Bookmarks become chapters**: below the side panel's bookmark list, *Use as chapters* adds the file's bookmarks to its chapter list (chapter menu, seek-bar ticks and chapter navigation; until the file closes) and *Save chapters…* writes an FFmpeg metadata chapters file (`<video>.ffmetadata`, the file's own chapters plus the bookmarks) for `mpv --chapters-file=` or `ffmpeg -map_metadata` — Vivi itself needs no ffmpeg. Control socket: `bookmarks_export` (`{"to": "player"}` or `{"to": "file", "path": …}`).
+- **Settings → Privacy → Clear bookmarks** deletes every bookmark and its saved frame after a confirmation.
+- **Bookmarks, A-B loop and sleep timer for agents and scripts**: control-socket commands `bookmark_add` (`label`, `note`), `bookmark_remove` / `bookmark_jump` (`index`) and `ab_loop` (state; `{"set": "a"|"b"}` at the playhead, `{"a": s, "b": s}` with `null` clearing a point, `{"clear": true}`), and vivi-mcp tools `list_bookmarks`, `add_bookmark`, `remove_bookmark`, `jump_to_bookmark`, `export_bookmarks_as_chapters`, `get_ab_loop`, `set_ab_loop`, `get_sleep_timer`, `set_sleep_timer` and `cancel_sleep_timer`. The top-bar A-B chip now follows a loop set from anywhere at once.
+- **Packages see the sleep-timer countdown**: `user-data/vivi/sleep` is updated every second while the timer counts down (it changed only when the timer was set), so the Remote Control extension (1.3.0) shows and sets the player's own timer.
 
 ### Changed
 - **Free Music: Jamendo tracks are no longer downloaded in the app** (#85). Jamendo's API terms do not allow apps that offer offline access, so a Jamendo track's *Download* button is now *Open on Jamendo* (download it on the site; the row has no download mark and the detail pane says why). Internet Archive / FMA downloads are unchanged, and Jamendo copies saved by older versions still play from the file.
 
 ### Removed
 - **The 0.13 stream entry points** (#86), hidden aliases since 0.14.0: `VIVI_PAGE` / IPC `page` values `network`, `app:network`, `open-network`, `action:network`, `network-streams:open` and `nav:network`, the Network Streams *Browse streams* setting action and the `VIVI_NETWORK` debug variable. The player menu's *Open Stream / URL…* and the Library's *Open stream* go straight to the Streams hub URL bar (`streams:url`).
+
+### Fixed
+- **Library → Bookmarks / Playlists** refresh when bookmarks are added, renamed or deleted elsewhere (side panel, keys, control socket) and when a saved frame is ready; a frame still being saved no longer leaves the row without its picture.
 
 ## [0.14.0] - 2026-10-25
 

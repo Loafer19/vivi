@@ -4,6 +4,12 @@
 //! Shown as accent pins on the seek bar (`Bookmarks.times`), listed in the side panel's
 //! Bookmarks tab (jump, rename + note, delete) and across files in the Library
 //! (Playlists → Bookmarks, [`all`]). Ctrl+B / the toolbar button adds one.
+//!
+//! Since 0.15.0 the bookmarks of a file can become chapters: merged into the player's
+//! chapter list ([`merge_chapters`], for the chapter list, seek-bar ticks and chapter
+//! keys until the file closes) or written as an FFmpeg metadata file ([`ffmetadata`],
+//! for `mpv --chapters-file` or `ffmpeg -i in -i x.ffmetadata -map_metadata 1`). Settings
+//! → Privacy → *Clear bookmarks* deletes them all ([`clear_all`]).
 
 use crate::player::Player;
 use crate::{AppWindow, BookmarkRow};
@@ -178,6 +184,73 @@ pub fn parse_lib_key(key: &str) -> Option<(String, f64)> {
     (!path.is_empty()).then(|| (path.to_string(), t))
 }
 
+/// Chapter title of a bookmark: its name (the default one when it has none).
+fn chapter_title(m: &Mark) -> String {
+    if m.label.trim().is_empty() {
+        default_label(m.time)
+    } else {
+        m.label.trim().to_string()
+    }
+}
+
+/// The file's chapters (title, start) plus its bookmarks, sorted by time. A bookmark
+/// within half a second of a chapter start (or another bookmark) adds nothing.
+pub fn merge_chapters(chapters: &[(String, f64)], marks: &[Mark]) -> Vec<(String, f64)> {
+    let mut out: Vec<(String, f64)> = chapters.to_vec();
+    for m in marks {
+        if !out.iter().any(|(_, t)| (t - m.time).abs() < SAME) {
+            out.push((chapter_title(m), m.time.max(0.0)));
+        }
+    }
+    out.sort_by(|a, b| a.1.total_cmp(&b.1));
+    out
+}
+
+/// One line value of an FFmpeg metadata file: `=`, `;`, `#`, backslashes and line breaks
+/// are escaped with a backslash.
+fn ff_escape(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars() {
+        if matches!(c, '=' | ';' | '#' | '\\' | '\n') {
+            o.push('\\');
+        }
+        if c != '\r' {
+            o.push(c);
+        }
+    }
+    o
+}
+
+/// FFmpeg metadata (`;FFMETADATA1`) with one `[CHAPTER]` per entry (milliseconds); a
+/// chapter ends where the next one starts, the last one at `duration` (or one second
+/// after its start when the length is unknown).
+pub fn ffmetadata(title: &str, chapters: &[(String, f64)], duration: Option<f64>) -> String {
+    let mut s = String::from(";FFMETADATA1\n");
+    if !title.trim().is_empty() {
+        s += &format!("title={}\n", ff_escape(title.trim()));
+    }
+    let ms = |t: f64| (t.max(0.0) * 1000.0).round() as u64;
+    for (i, (name, start)) in chapters.iter().enumerate() {
+        let end = chapters
+            .get(i + 1)
+            .map(|c| c.1)
+            .or(duration.filter(|d| *d > *start))
+            .unwrap_or(start + 1.0);
+        s += &format!(
+            "\n[CHAPTER]\nTIMEBASE=1/1000\nSTART={}\nEND={}\ntitle={}\n",
+            ms(*start),
+            ms(end).max(ms(*start)),
+            ff_escape(name)
+        );
+    }
+    s
+}
+
+/// Default chapters file of `path`: `<stem>.ffmetadata` next to it.
+pub fn chapters_file_for(path: &str) -> PathBuf {
+    Path::new(path).with_extension("ffmetadata")
+}
+
 // ---------------------------------------------------------------------------------
 // Runtime: the loaded database, the playing file and the side panel / seek bar.
 
@@ -266,6 +339,18 @@ pub fn refresh() {
     g.set_items(slint::ModelRc::new(slint::VecModel::from(rows)));
 }
 
+/// Bookmarks changed: the side panel, the seek bar and the Library's Bookmarks and
+/// Playlists pages (when one is showing).
+pub fn changed() {
+    refresh();
+    if let Some(a) = app() {
+        let lib = a.global::<crate::Library>();
+        if matches!(lib.get_nav().as_str(), "bookmarks" | "playlists") {
+            lib.invoke_refresh();
+        }
+    }
+}
+
 /// The playing file changed: show its bookmarks; apply a pending open-at-time.
 pub fn file_loaded(p: &Player) {
     let path = p.get("path").unwrap_or_default();
@@ -302,7 +387,7 @@ pub fn remove_at(path: &str, time: f64) {
         save();
         drop_thumb(&m);
     }
-    refresh();
+    changed();
 }
 
 fn drop_thumb(m: &Mark) {
@@ -315,45 +400,270 @@ fn drop_thumb(m: &Mark) {
 
 /// Bookmark the current position (Ctrl+B, toolbar, side panel +).
 pub fn add_current(p: &Player, log: bool) {
+    let _ = add_here(p, "", "", log);
+}
+
+/// Bookmark the current position with a name and note ("" = the default name):
+/// `Ok(index)` of the new bookmark, `Err(index)` of one already within half a second,
+/// `Err(usize::MAX)` when nothing is playing. Toasts the result.
+pub fn add_here(p: &Player, label: &str, note: &str, log: bool) -> Result<usize, usize> {
     let path = p.get("path").unwrap_or_default();
     if path.is_empty() {
-        return;
+        return Err(usize::MAX);
     }
     let t: f64 = p.mpv.get_property("time-pos").unwrap_or(0.0);
     let title = p.get("media-title").unwrap_or_default();
+    // An existing bookmark: no frame is captured.
+    if let Some(i) = with_db(|db| {
+        marks(db, &path)
+            .iter()
+            .position(|x| (x.time - t).abs() < SAME)
+    }) {
+        if let Some(a) = app() {
+            crate::plugins::toast(&a, &format!("Already bookmarked at {}", short_time(t)));
+        }
+        if log {
+            eprintln!("bookmark at {t:.2}: exists");
+        }
+        return Err(i);
+    }
     let thumb = frame(p, &path, t);
     let m = Mark {
         time: t,
-        label: String::new(),
-        note: String::new(),
-        thumb: thumb.clone().unwrap_or_default(),
+        label: label.trim().to_string(),
+        note: note.trim().to_string(),
+        thumb: thumb.unwrap_or_default(),
         created: now(),
     };
     let r = with_db(|db| add(db, &path, &title, m));
-    let a = app();
-    match r {
-        Ok(_) => {
-            save();
-            if let Some(a) = &a {
-                crate::plugins::toast(a, &format!("Bookmarked {}", short_time(t)));
-            }
-        }
-        Err(_) => {
-            if let Some(f) = thumb {
-                let _ = std::fs::remove_file(thumbs_dir().join(f));
-            }
-            if let Some(a) = &a {
-                crate::plugins::toast(a, &format!("Already bookmarked at {}", short_time(t)));
-            }
+    if r.is_ok() {
+        save();
+        if let Some(a) = app() {
+            crate::plugins::toast(&a, &format!("Bookmarked {}", short_time(t)));
         }
     }
     if log {
-        eprintln!(
-            "bookmark at {t:.2}: {}",
-            if r.is_ok() { "added" } else { "exists" }
-        );
+        eprintln!("bookmark at {t:.2}: added");
     }
-    refresh();
+    changed();
+    r
+}
+
+/// Seek to bookmark `i` of the playing file; false when there is none.
+pub fn jump(p: &Player, i: usize) -> bool {
+    let path = current();
+    match with_db(|db| marks(db, &path).get(i).map(|m| m.time)) {
+        Some(t) => {
+            p.seek_abs(t);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Delete bookmark `i` of the playing file (and its frame).
+pub fn remove_current(i: usize) -> Option<Mark> {
+    let path = current();
+    let m = with_db(|db| remove(db, &path, i));
+    if let Some(m) = &m {
+        save();
+        drop_thumb(m);
+    }
+    changed();
+    m
+}
+
+/// Number of saved bookmarks (all files).
+pub fn count() -> usize {
+    with_db(|db| db.values().map(|e| e.marks.len()).sum())
+}
+
+/// Delete every bookmark and saved frame (Settings → Privacy); the number deleted.
+pub fn clear_all() -> usize {
+    let n = count();
+    with_db(|db| db.clear());
+    save();
+    if let Ok(rd) = std::fs::read_dir(thumbs_dir()) {
+        for f in rd.flatten().map(|e| e.path()) {
+            crate::images::forget(&f);
+            let _ = std::fs::remove_file(&f);
+        }
+    }
+    changed();
+    n
+}
+
+/// The playing file's chapters as mpv has them (untitled ones keep an empty title).
+fn raw_chapters(p: &Player) -> Vec<(String, f64)> {
+    let n: i64 = p.mpv.get_property("chapter-list/count").unwrap_or(0);
+    (0..n)
+        .map(|i| {
+            let t: f64 = p
+                .mpv
+                .get_property(&format!("chapter-list/{i}/time"))
+                .unwrap_or(0.0);
+            (
+                p.get(&format!("chapter-list/{i}/title"))
+                    .unwrap_or_default(),
+                t,
+            )
+        })
+        .collect()
+}
+
+/// Merge the playing file's bookmarks into mpv's chapter list (until the file closes):
+/// the number of chapters added.
+pub fn to_chapters(p: &Player) -> Result<usize, String> {
+    let ms = current_marks();
+    if ms.is_empty() {
+        return Err("This file has no bookmarks".into());
+    }
+    let before = raw_chapters(p);
+    let merged = merge_chapters(&before, &ms);
+    let added = merged.len() - before.len();
+    if added > 0 {
+        set_chapter_list(p, &merged)?;
+    }
+    Ok(added)
+}
+
+/// Write the playing file's chapters and bookmarks as an FFmpeg metadata file:
+/// `path`, else a save dialog (default `<video>.ffmetadata` next to the file).
+/// `Err("")` when the dialog was cancelled.
+pub fn to_chapters_file(p: &Player, path: Option<PathBuf>) -> Result<PathBuf, String> {
+    let file = current();
+    let ms = current_marks();
+    if ms.is_empty() {
+        return Err("This file has no bookmarks".into());
+    }
+    let out = match path {
+        Some(p) => p,
+        None => {
+            let def = chapters_file_for(&file);
+            let mut d = rfd::FileDialog::new()
+                .set_title("Save bookmarks as chapters")
+                .add_filter("FFmpeg metadata", &["ffmetadata", "txt"]);
+            if let Some(dir) = def.parent().filter(|d| d.is_dir()) {
+                d = d.set_directory(dir);
+            }
+            if let Some(n) = def.file_name() {
+                d = d.set_file_name(n.to_string_lossy());
+            }
+            d.save_file().ok_or_else(String::new)?
+        }
+    };
+    let chapters = merge_chapters(&raw_chapters(p), &ms);
+    let duration: Option<f64> = p
+        .mpv
+        .get_property::<f64>("duration")
+        .ok()
+        .filter(|d| d.is_finite() && *d > 0.0);
+    let title = p.get("media-title").unwrap_or_default();
+    std::fs::write(&out, ffmetadata(&title, &chapters, duration))
+        .map_err(|e| format!("{}: {e}", out.display()))?;
+    Ok(out)
+}
+
+/// Replace mpv's `chapter-list` (an array of {title, time} maps).
+fn set_chapter_list(p: &Player, chapters: &[(String, f64)]) -> Result<(), String> {
+    use libmpv2_sys as sys;
+    use std::ffi::CString;
+    let cstr = |s: &str| CString::new(s.replace('\0', "")).unwrap_or_default();
+    let (k_title, k_time) = (cstr("title"), cstr("time"));
+    let titles: Vec<CString> = chapters.iter().map(|(t, _)| cstr(t)).collect();
+    // Per chapter: the [title, time] values and their two keys.
+    let mut values: Vec<[sys::mpv_node; 2]> = chapters
+        .iter()
+        .zip(&titles)
+        .map(|((_, t), title)| {
+            // SAFETY: mpv_node is plain C data; every union member is valid when zeroed.
+            let mut a: sys::mpv_node = unsafe { std::mem::zeroed() };
+            a.format = sys::mpv_format_MPV_FORMAT_STRING;
+            a.u.string = title.as_ptr() as *mut _;
+            // SAFETY: as above.
+            let mut b: sys::mpv_node = unsafe { std::mem::zeroed() };
+            b.format = sys::mpv_format_MPV_FORMAT_DOUBLE;
+            b.u.double_ = *t;
+            [a, b]
+        })
+        .collect();
+    let mut keys: Vec<[*mut std::os::raw::c_char; 2]> = chapters
+        .iter()
+        .map(|_| [k_title.as_ptr() as *mut _, k_time.as_ptr() as *mut _])
+        .collect();
+    let mut maps: Vec<sys::mpv_node_list> = values
+        .iter_mut()
+        .zip(keys.iter_mut())
+        .map(|(v, k)| sys::mpv_node_list {
+            num: 2,
+            values: v.as_mut_ptr(),
+            keys: k.as_mut_ptr(),
+        })
+        .collect();
+    let mut items: Vec<sys::mpv_node> = maps
+        .iter_mut()
+        .map(|m| {
+            // SAFETY: as above.
+            let mut n: sys::mpv_node = unsafe { std::mem::zeroed() };
+            n.format = sys::mpv_format_MPV_FORMAT_NODE_MAP;
+            n.u.list = m;
+            n
+        })
+        .collect();
+    let mut arr = sys::mpv_node_list {
+        num: items.len() as _,
+        values: items.as_mut_ptr(),
+        keys: std::ptr::null_mut(),
+    };
+    // SAFETY: as above.
+    let mut root: sys::mpv_node = unsafe { std::mem::zeroed() };
+    root.format = sys::mpv_format_MPV_FORMAT_NODE_ARRAY;
+    root.u.list = &mut arr;
+    let name = cstr("chapter-list");
+    // SAFETY: valid handle owned by `p.mpv`; mpv copies the node during the call and every
+    // pointer in it (keys, strings, values, lists) outlives the call.
+    let r = unsafe {
+        sys::mpv_set_property(
+            p.mpv.ctx.as_ptr(),
+            name.as_ptr(),
+            sys::mpv_format_MPV_FORMAT_NODE,
+            &mut root as *mut sys::mpv_node as *mut std::os::raw::c_void,
+        )
+    };
+    if r < 0 {
+        return Err(format!(
+            "the player refused the chapter list (mpv error {r})"
+        ));
+    }
+    Ok(())
+}
+
+/// Side panel buttons / IPC: bookmarks → chapters in the player (`player`) or a
+/// chapters file (`file`), with a toast.
+pub fn export(p: &Player, to: &str) {
+    let msg = match to {
+        "file" => match to_chapters_file(p, None) {
+            Ok(f) => format!(
+                "Chapters saved to {}",
+                f.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
+            Err(e) if e.is_empty() => return,
+            Err(e) => e,
+        },
+        _ => match to_chapters(p) {
+            Ok(0) => "Every bookmark is already a chapter".into(),
+            Ok(n) => format!(
+                "{n} bookmark{} added as chapters",
+                if n == 1 { "" } else { "s" }
+            ),
+            Err(e) => e,
+        },
+    };
+    if let Some(a) = app() {
+        crate::plugins::toast(&a, &msg);
+    }
 }
 
 /// Save the current video frame for a bookmark (not for audio or cover art); the
@@ -382,7 +692,7 @@ fn frame(p: &Player, path: &str, t: f64) -> Option<String> {
         let src = path.to_string();
         std::thread::spawn(move || {
             if grab(&src, t, &out).is_some() {
-                let _ = slint::invoke_from_event_loop(refresh);
+                let _ = slint::invoke_from_event_loop(changed);
             }
         });
         return Some(name);
@@ -396,7 +706,7 @@ fn frame(p: &Player, path: &str, t: f64) -> Option<String> {
         });
         let _ = std::fs::remove_file(&raw);
         if matches!(r, Ok(Ok(()))) {
-            let _ = slint::invoke_from_event_loop(refresh);
+            let _ = slint::invoke_from_event_loop(changed);
         }
     });
     Some(name)
@@ -461,12 +771,13 @@ pub fn setup(app: &AppWindow, pl: &Rc<Player>, log: bool) {
         }
     });
     g.on_jump(|i| {
-        let (Some(p), Some(i)) = (player(), index(i)) else {
-            return;
-        };
-        let path = current();
-        if let Some(t) = with_db(|db| marks(db, &path).get(i).map(|m| m.time)) {
-            p.seek_abs(t);
+        if let (Some(p), Some(i)) = (player(), index(i)) {
+            jump(&p, i);
+        }
+    });
+    g.on_export(|to| {
+        if let Some(p) = player() {
+            export(&p, &to);
         }
     });
     g.on_rename(|i, label, note| {
@@ -475,16 +786,12 @@ pub fn setup(app: &AppWindow, pl: &Rc<Player>, log: bool) {
         if with_db(|db| rename(db, &path, i, &label, &note)) {
             save();
         }
-        refresh();
+        changed();
     });
     g.on_remove(|i| {
-        let Some(i) = index(i) else { return };
-        let path = current();
-        if let Some(m) = with_db(|db| remove(db, &path, i)) {
-            save();
-            drop_thumb(&m);
+        if let Some(i) = index(i) {
+            remove_current(i);
         }
-        refresh();
     });
 }
 
@@ -592,5 +899,45 @@ mod tests {
         assert_eq!(short_time(59.9), "0:59");
         assert_eq!(short_time(3600.0), "1:00:00");
         assert_eq!(short_time(-3.0), "0:00");
+    }
+
+    #[test]
+    fn bookmarks_merge_into_chapters() {
+        let ch = vec![("Intro".to_string(), 0.0), ("Part 2".to_string(), 120.0)];
+        let mut named = mark(60.0);
+        named.label = "  Fight  ".into();
+        // 120.3 is within half a second of "Part 2": nothing added.
+        let ms = [mark(300.0), named, mark(120.3)];
+        let m = merge_chapters(&ch, &ms);
+        assert_eq!(
+            m,
+            vec![
+                ("Intro".to_string(), 0.0),
+                ("Fight".to_string(), 60.0),
+                ("Part 2".to_string(), 120.0),
+                ("Bookmark at 5:00".to_string(), 300.0),
+            ]
+        );
+        assert_eq!(merge_chapters(&[], &[]), vec![]);
+    }
+
+    #[test]
+    fn ffmetadata_chapters_file() {
+        assert_eq!(ff_escape("a=b;c#d\\e\nf\r"), "a\\=b\\;c\\#d\\\\e\\\nf");
+        let ch = vec![("One".to_string(), 0.0), ("Two = 2".to_string(), 61.5)];
+        assert_eq!(
+            ffmetadata(" Film ", &ch, Some(90.0)),
+            ";FFMETADATA1\ntitle=Film\n\
+             \n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=61500\ntitle=One\n\
+             \n[CHAPTER]\nTIMEBASE=1/1000\nSTART=61500\nEND=90000\ntitle=Two \\= 2\n"
+        );
+        // Unknown length: the last chapter is one second long; no title line.
+        let s = ffmetadata("", &ch[1..], None);
+        assert!(s.starts_with(";FFMETADATA1\n\n[CHAPTER]"));
+        assert!(s.contains("START=61500\nEND=62500\n"));
+        assert_eq!(
+            chapters_file_for("/v/Film.2024.mkv"),
+            PathBuf::from("/v/Film.2024.ffmetadata")
+        );
     }
 }
