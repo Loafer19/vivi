@@ -11,7 +11,7 @@ pub(crate) fn screenshot_mode() -> bool {
 
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
-/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>, VIVI_NETWORK (alias: Streams hub Radio tab),
+/// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>,
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY, VIVI_PAGE=<streams hub page>,
 /// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] [VIVI_MUSICPLAY=row] (a plugin dialog,
@@ -99,16 +99,6 @@ pub(crate) fn debug_ui(app: &AppWindow) {
                 slint::Timer::single_shot(Duration::from_secs(12), move || {
                     plugins::command(&id, "primary", &[row]);
                 });
-            }
-        });
-    }
-    // VIVI_NETWORK: hidden alias (until 0.15.0) of the old Open Network Stream dialog; opens
-    // the Streams hub Radio tab like the other 0.13 entry points (src/streams/route.rs).
-    if var("VIVI_NETWORK").is_some() {
-        let w = app.as_weak();
-        slint::Timer::single_shot(Duration::from_millis(1500), move || {
-            if let Some(a) = w.upgrade() {
-                crate::streams::open_page(&a, "network-streams:open");
             }
         });
     }

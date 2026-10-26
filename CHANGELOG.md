@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Removed
+- **The 0.13 stream entry points** (#86), hidden aliases since 0.14.0: `VIVI_PAGE` / IPC `page` values `network`, `app:network`, `open-network`, `action:network`, `network-streams:open` and `nav:network`, the Network Streams *Browse streams* setting action and the `VIVI_NETWORK` debug variable. The player menu's *Open Stream / URL…* and the Library's *Open stream* go straight to the Streams hub URL bar (`streams:url`).
+
 ## [0.14.0] - 2026-10-25
 
 Highlights: the **Streams hub** puts radio, TV, music services and pasted links on one Library page; **bookmarks** are saved per file and shown on the seek bar; the **sleep timer** gains custom minutes, end of chapter, N items and a fade-out; **top-bar indicators** show what is on (sleep timer, loudness, A-B loop, speed, remote); plugins can put live content on Home widgets and in the side drawer.

@@ -693,7 +693,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
             "clear-queue" => a.global::<crate::Panel>().invoke_queue_clear(),
             "open-file" => a.global::<crate::Playback>().invoke_open_file(),
             "open-folder" => a.global::<crate::Library>().invoke_open_folder(),
-            "open-network" => crate::streams::open_page(a, "open-network"),
+            "open-network" => crate::streams::open_page(a, "streams:url"),
             "library" => a.global::<crate::Overlays>().set_library_open(true),
             _ => {}
         },

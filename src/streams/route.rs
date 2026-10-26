@@ -1,7 +1,6 @@
-//! Where a Streams hub request goes (#86): hub tabs, service pages, the `VIVI_PAGE` /
-//! IPC `page` syntax and the 0.13 entry points that stay as hidden aliases for one
-//! release (Open Network Stream, Network Streams, the Radio widget, `VIVI_NETWORK`); they are
-//! removed in 0.15.0.
+//! Where a Streams hub request goes (#86): hub tabs, service pages and the `VIVI_PAGE` /
+//! IPC `page` syntax. (The 0.13 entry points that were hidden aliases in 0.14 are gone
+//! since 0.15.0.)
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -138,30 +137,6 @@ pub fn parse(s: &str) -> Option<Page> {
     })
 }
 
-/// The 0.13 entry points (palette ids, menu commands, plugin commands, `VIVI_*` hooks)
-/// that open the hub for one more release, so keymaps and habits keep working.
-pub fn alias(id: &str) -> Option<Page> {
-    let url = Page::Hub {
-        tab: Tab::Recent,
-        service: None,
-        focus_url: true,
-    };
-    Some(match id {
-        // Open Network Stream / Open URL (palette, File menu, Library action, Ctrl+N style
-        // keymap entries, the welcome screen).
-        "network" | "app:network" | "open-network" | "action:network" | "open-url"
-        | "app:open-url" => url,
-        // The Network Streams browser and its Radio stations widget.
-        "network-streams" | "network-streams:open" | "network-streams:radio" | "radio" => {
-            Page::tab(Tab::Radio)
-        }
-        "network-streams:tv" => Page::tab(Tab::Tv),
-        // The old Library section.
-        "nav:network" => Page::tab(Tab::Recent),
-        _ => return None,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,22 +189,17 @@ mod tests {
     }
 
     #[test]
-    fn legacy_aliases_open_the_hub() {
-        for id in ["network", "app:network", "open-network", "action:network"] {
-            assert_eq!(
-                alias(id),
-                Some(Page::Hub {
-                    tab: Tab::Recent,
-                    service: None,
-                    focus_url: true
-                }),
-                "{id}"
-            );
+    fn old_entry_points_are_gone() {
+        for id in [
+            "network",
+            "app:network",
+            "open-network",
+            "action:network",
+            "network-streams:open",
+            "nav:network",
+        ] {
+            assert_eq!(parse(id), None, "{id}");
         }
-        assert_eq!(alias("network-streams:open"), Some(Page::tab(Tab::Radio)));
-        assert_eq!(alias("network-streams:tv"), Some(Page::tab(Tab::Tv)));
-        assert_eq!(alias("nav:network"), Some(Page::tab(Tab::Recent)));
-        assert_eq!(alias("app:library"), None);
     }
 
     #[test]

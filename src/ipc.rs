@@ -809,10 +809,7 @@ fn handle(
             // Open a Streams hub place (#86): {"page": "streams:radio"} etc. (scripts,
             // screenshots; see src/streams/route.rs).
             let page = args["page"].as_str().unwrap_or("streams");
-            if crate::streams::route::parse(page)
-                .or_else(|| crate::streams::route::alias(page))
-                .is_none()
-            {
+            if crate::streams::route::parse(page).is_none() {
                 return Err(format!("unknown page {page:?}"));
             }
             crate::streams::open_page(a, page);

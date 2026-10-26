@@ -12,8 +12,6 @@
 //!   decides; every plugin opens its dialog through it.
 //! * Favorites, Recent and the URL history are the core's ([`store`]), migrated once from
 //!   Network Streams' `saved.json` / `recent.json` and the global Recent list.
-//! * The 0.13 entry points (Open Network Stream, Network Streams, the Radio widget) are
-//!   hidden aliases for one release ([`route::alias`]).
 
 pub mod nowplaying;
 pub mod route;
@@ -221,9 +219,9 @@ fn strings(v: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
 
 // ---------- navigation ----------
 
-/// Open a hub place by its `VIVI_PAGE` / IPC syntax or an old entry point id.
+/// Open a hub place by its `VIVI_PAGE` / IPC syntax.
 pub fn open_page(a: &AppWindow, s: &str) {
-    match route::parse(s).or_else(|| route::alias(s)) {
+    match route::parse(s) {
         Some(p) => go(a, p),
         None => eprintln!("vivi: streams: unknown page {s:?}"),
     }

@@ -855,12 +855,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let lib = lib.clone();
         let render = render.clone();
         app.global::<crate::Library>().on_navigate(move |key| {
-            // The 0.13 Network section is the Streams hub now.
-            let key: slint::SharedString = if key == "network" {
-                "streams".into()
-            } else {
-                key
-            };
             {
                 let mut l = lib.borrow_mut();
                 if l.nav != key.as_str() {
@@ -927,7 +921,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             match kind.as_str() {
                 "action" => match key.as_str() {
                     "action:add-folder" => a.global::<crate::Library>().invoke_add_folder(),
-                    "action:network" => crate::streams::open_page(&a, "action:network"),
+                    "action:network" => crate::streams::open_page(&a, "streams:url"),
                     "action:create-playlist" => {
                         a.global::<crate::Library>().invoke_create_playlist()
                     }

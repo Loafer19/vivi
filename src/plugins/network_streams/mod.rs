@@ -829,7 +829,7 @@ pub fn drawer_text(
     if stream {
         s += info;
     } else {
-        s += "No network stream is playing. Browse streams to pick a radio station or TV channel.";
+        s += "No network stream is playing. Pick a radio station or TV channel in Library → Streams.";
     }
     let n = |k: usize, one: &str| format!("{k} {one}{}", if k == 1 { "" } else { "s" });
     s += &format!(
@@ -852,12 +852,6 @@ impl Plugin for NetworkStreams {
         // source, palette entry or Home widget of its own.
         .contribute(contrib::CONTEXT_PLAYER, "Stream info", "info")
         .contribute(contrib::DRAWER_PANEL, "Network Streams", "drawer")
-        .setting(SettingSpec::action(
-            "open",
-            "Browse streams",
-            "Opens the streams browser.",
-            "Browse…",
-        ))
         .setting(SettingSpec::action(
             "info",
             "Stream info",
@@ -909,17 +903,6 @@ impl Plugin for NetworkStreams {
                     hub_store::recent().len(),
                 );
                 cx.app.global::<crate::Drawer>().set_info(text.into());
-            }
-            // The 0.13 browser (palette, keymaps, the drawer's button): the hub's Radio
-            // tab, for one release.
-            "open" => {
-                cx.app.global::<crate::Overlays>().set_drawer_open(false);
-                let w = cx.app.as_weak();
-                crate::streams::later(move || {
-                    if let Some(a) = w.upgrade() {
-                        crate::streams::open_page(&a, "network-streams:open");
-                    }
-                });
             }
             "hub" => self.hub_open(cx, args),
             "filter" if !self.hub.is_empty() => {
