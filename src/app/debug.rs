@@ -46,6 +46,17 @@ pub(crate) fn debug_ui(app: &AppWindow) {
         app.global::<crate::Settings>()
             .invoke_refresh(n, q.into(), adv);
     }
+    // VIVI_SETTINGS_ACTION=<row id>: press a Settings action button after 3 s, e.g.
+    // privacy.bookmarks (its confirmation dialog).
+    if let Some(id) = var("VIVI_SETTINGS_ACTION") {
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(3000), move || {
+            if let Some(a) = w.upgrade() {
+                a.global::<crate::Settings>()
+                    .invoke_setting_changed(id.into(), "".into());
+            }
+        });
+    }
     if let Some(p) = var("VIVI_CUSTOMIZE") {
         app.global::<crate::Customize>()
             .invoke_select_profile(p.into());
