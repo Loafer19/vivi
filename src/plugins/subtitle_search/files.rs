@@ -55,74 +55,8 @@ pub fn save_pick(file: &Path, key: &str, pick: Option<Pick>) {
     }
 }
 
-pub(crate) const SUB_EXT: &[&str] = &["srt", "ass", "ssa", "vtt", "sub"];
-pub(crate) const VIDEO_EXT: &[&str] = &[
-    "mp4", "mkv", "webm", "avi", "mov", "m4v", "wmv", "flv", "ts", "m2ts", "mpg", "mpeg", "ogv",
-];
+// ---------- local folders ----------
 
-pub(crate) fn has_ext(p: &Path, exts: &[&str]) -> bool {
-    p.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| exts.iter().any(|x| x.eq_ignore_ascii_case(e)))
-}
-
-pub(crate) fn file_name(p: &Path) -> String {
-    p.file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-/// Files of `dir` with one of `exts`, sorted by name.
-pub(crate) fn files_with(dir: &Path, exts: &[&str]) -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map(|r| r.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
-    v.retain(|p| p.is_file() && has_ext(p, exts));
-    v.sort_by_key(|p| file_name(p).to_lowercase());
-    v
-}
-
-/// Whether subtitle `sub` belongs to `video`: same stem, or the stem followed by a
-/// separator (`Movie.en.srt`, `Movie_English.srt`), case-insensitive.
-pub fn sub_matches(video: &Path, sub: &Path) -> bool {
-    let v = video
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    let s = sub
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    !v.is_empty()
-        && (s == v
-            || s.strip_prefix(&v)
-                .is_some_and(|r| r.starts_with(['.', '_', '-', ' ', '['])))
-}
-
-/// Pair each video of a folder with its best subtitle (exact stem first).
-pub fn pair_folder(videos: &[PathBuf], subs: &[PathBuf]) -> Vec<(PathBuf, Option<PathBuf>)> {
-    videos
-        .iter()
-        .map(|v| {
-            let stem = v.file_stem().map(|s| s.to_string_lossy().to_lowercase());
-            let exact = subs
-                .iter()
-                .find(|s| s.file_stem().map(|x| x.to_string_lossy().to_lowercase()) == stem);
-            let sub = exact.or_else(|| subs.iter().find(|s| sub_matches(v, s)));
-            (v.clone(), sub.cloned())
-        })
-        .collect()
-}
-
-/// "Videos / Shows / The Wand / S01": the last four components of a folder.
-pub(crate) fn breadcrumb(dir: &Path) -> String {
-    let parts: Vec<String> = dir
-        .components()
-        .filter_map(|c| match c {
-            std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect();
-    let n = parts.len().saturating_sub(4);
-    parts[n..].join(" / ")
-}
+// "From Computer" (Load from Computer…) is core since 0.15.0 (#84): src/sublocal.rs.
+pub(crate) use crate::sublocal::{breadcrumb, file_name, has_ext, SUB_EXT};
+pub use crate::sublocal::{pair_folder, sub_matches};

@@ -97,14 +97,6 @@ pub struct SubtitleSearch {
     /// The playing file's key (path) and its remembered pick.
     key: Option<String>,
     pick: Option<Pick>,
-    /// "From Computer": scanned folder, its subtitle files (To This File) with the
-    /// checked ones, or its videos paired with subtitles (To This Folder).
-    dir: Option<PathBuf>,
-    subs: Vec<PathBuf>,
-    checked: Vec<bool>,
-    pairs: Vec<(PathBuf, Option<PathBuf>)>,
-    /// Subtitles assigned with "To This Folder", attached when that video loads.
-    assigned: HashMap<PathBuf, PathBuf>,
     /// Automatic exact-match lookup running for the playing file.
     auto_rx: Option<Receiver<Auto>>,
     /// Files tried automatically this session (one lookup per file).
@@ -210,112 +202,6 @@ fn compact(n: i64) -> String {
 }
 
 impl SubtitleSearch {
-    /// Rescan the "From Computer" folder and show it in the dialog.
-    fn scan_local(&mut self, cx: &Ctx) {
-        let folder = cx.app.global::<crate::Subtitles>().get_target() == 1;
-        let Some(dir) = self.dir.clone() else {
-            cx.app
-                .global::<crate::Subtitles>()
-                .set_folder("Choose a folder…".into());
-            cx.app
-                .global::<crate::Subtitles>()
-                .set_local(ModelRc::default());
-            Self::status(
-                cx,
-                "Open a local file or click the folder bar to choose a folder.",
-                false,
-            );
-            return;
-        };
-        cx.app
-            .global::<crate::Subtitles>()
-            .set_folder(breadcrumb(&dir).into());
-        self.subs = files_with(&dir, SUB_EXT);
-        let items: Vec<Item> = if folder {
-            self.pairs = pair_folder(&files_with(&dir, VIDEO_EXT), &self.subs);
-            self.pairs
-                .iter()
-                .map(|(v, s)| Item {
-                    key: file_name(v).into(),
-                    label: s.as_deref().map(file_name).unwrap_or_default().into(),
-                    selected: s.is_some(),
-                })
-                .collect()
-        } else {
-            let video = cx.local_path();
-            // Preselect the subtitle mpv would pick: the exact name, else the first match.
-            let stem = |p: &Path| p.file_stem().map(|s| s.to_string_lossy().to_lowercase());
-            let pick = video.as_deref().and_then(|v| {
-                self.subs
-                    .iter()
-                    .position(|s| stem(s) == stem(v))
-                    .or_else(|| self.subs.iter().position(|s| sub_matches(v, s)))
-            });
-            self.checked = (0..self.subs.len()).map(|i| Some(i) == pick).collect();
-            self.local_items()
-        };
-        let empty = items.is_empty();
-        cx.app
-            .global::<crate::Subtitles>()
-            .set_local(ModelRc::new(VecModel::from(items)));
-        Self::status(
-            cx,
-            match (empty, folder) {
-                (true, false) => "No subtitle files in this folder.",
-                (true, true) => "No videos in this folder.",
-                _ => "",
-            },
-            false,
-        );
-    }
-    fn local_items(&self) -> Vec<Item> {
-        self.subs
-            .iter()
-            .zip(&self.checked)
-            .map(|(s, c)| Item {
-                key: file_name(s).into(),
-                label: "".into(),
-                selected: *c,
-            })
-            .collect()
-    }
-    fn save_local(&mut self, cx: &Ctx) {
-        let current = cx.local_path().and_then(|p| std::fs::canonicalize(p).ok());
-        let mut loaded = 0;
-        if cx.app.global::<crate::Subtitles>().get_target() == 0 {
-            for (s, _) in self.subs.iter().zip(&self.checked).filter(|(_, c)| **c) {
-                let flag = if loaded == 0 { "select" } else { "auto" };
-                cx.player.cmd("sub-add", &[&s.to_string_lossy(), flag]);
-                loaded += 1;
-            }
-            if loaded == 0 {
-                Self::status(cx, "Select at least one subtitle file", false);
-                return;
-            }
-            cx.toast(&format!(
-                "{loaded} subtitle file{} added",
-                if loaded == 1 { "" } else { "s" }
-            ));
-        } else {
-            let mut n = 0;
-            for (v, s) in &self.pairs {
-                let (Some(s), Ok(v)) = (s, std::fs::canonicalize(v)) else {
-                    continue;
-                };
-                if current.as_ref() == Some(&v) {
-                    cx.player.cmd("sub-add", &[&s.to_string_lossy(), "select"]);
-                }
-                self.assigned.insert(v, s.clone());
-                n += 1;
-            }
-            cx.toast(&format!(
-                "Subtitles assigned to {n} video{}",
-                if n == 1 { "" } else { "s" }
-            ));
-        }
-        Self::status(cx, "", false);
-        cx.app.global::<crate::Overlays>().set_subs_open(false);
-    }
     fn creds(cx: &Ctx) -> Creds {
         let mut key = cx.get("api-key").trim().to_string();
         if key.is_empty() {
@@ -446,19 +332,7 @@ impl SubtitleSearch {
     }
     /// External subtitle files mpv already has for this item.
     fn loaded_subs(cx: &Ctx) -> Vec<PathBuf> {
-        let n: usize = cx
-            .player
-            .get("track-list/count")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
-        (0..n)
-            .filter_map(|i| cx.player.get(&format!("track-list/{i}/external-filename")))
-            .filter(|f| !f.is_empty())
-            .map(|f| {
-                let p = PathBuf::from(f);
-                std::fs::canonicalize(&p).unwrap_or(p)
-            })
-            .collect()
+        crate::sublocal::loaded_subs(&cx.player)
     }
     /// Put a downloaded subtitle in place (next to the video when that setting is on),
     /// load it, remember it for this file and close the dialog.
@@ -769,15 +643,12 @@ impl Plugin for SubtitleSearch {
                 cx.app.global::<crate::Subtitles>().set_auto_exact(cx.flag("auto-exact"));
                 cx.app.global::<crate::Subtitles>().set_sync(Self::sync_available(cx).is_some());
                 self.set_hits(cx, Vec::new());
-                self.dir = cx
-                    .local_path()
-                    .and_then(|p| p.parent().map(Path::to_path_buf));
                 // Without an API key only the local source works.
                 if Self::creds(cx).key.is_empty() && std::env::var_os("VIVI_SUBS").is_none() {
                     cx.app.global::<crate::Subtitles>().set_source(1);
                 }
                 if cx.app.global::<crate::Subtitles>().get_source() == 1 {
-                    self.scan_local(cx);
+                    crate::sublocal::open(&cx.app, &cx.player);
                 } else if Self::creds(cx).key.is_empty() {
                     Self::status(cx, NO_KEY, false);
                 } else {
@@ -807,32 +678,16 @@ impl Plugin for SubtitleSearch {
             }
             "mode" => {
                 if cx.app.global::<crate::Subtitles>().get_source() == 1 {
-                    self.scan_local(cx);
+                    crate::sublocal::command(&cx.app, &cx.player, "mode", "");
                 } else {
                     let key = Self::creds(cx).key;
                     Self::status(cx, if key.is_empty() { NO_KEY } else { "" }, false);
                 }
             }
-            "browse" => {
-                let mut d = rfd::FileDialog::new().set_title("Folder with subtitles");
-                if let Some(dir) = &self.dir {
-                    d = d.set_directory(dir);
-                }
-                if let Some(dir) = d.pick_folder() {
-                    self.dir = Some(dir);
-                    self.scan_local(cx);
-                }
+            // From Computer (core since 0.15.0, #84).
+            "browse" | "toggle" | "save-local" => {
+                crate::sublocal::command(&cx.app, &cx.player, name, arg)
             }
-            "toggle" => {
-                let Some(i) = idx else { return };
-                if cx.app.global::<crate::Subtitles>().get_target() == 0 {
-                    if let Some(c) = self.checked.get_mut(i) {
-                        *c = !*c;
-                    }
-                    cx.app.global::<crate::Subtitles>().set_local(ModelRc::new(VecModel::from(self.local_items())));
-                }
-            }
-            "save-local" => self.save_local(cx),
             "select" => self.select(cx, idx),
             "preview" => self.fetch(cx, idx, true),
             "download" => self.fetch(cx, idx, false),
@@ -890,10 +745,8 @@ impl Plugin for SubtitleSearch {
         if let Some(p) = &self.pick {
             want.push(PathBuf::from(&p.path));
         }
-        if let Some(v) = cx.local_path().and_then(|p| std::fs::canonicalize(p).ok()) {
-            if let Some(s) = self.assigned.get(&v) {
-                want.push(s.clone());
-            }
+        if let Some(s) = cx.local_path().as_deref().and_then(crate::sublocal::assigned_for) {
+            want.push(s);
         }
         if let Some(s) = want.first() {
             let c = std::fs::canonicalize(s).unwrap_or(s.clone());

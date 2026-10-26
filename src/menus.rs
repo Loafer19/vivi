@@ -240,6 +240,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 "add-subtitle-tracks",
                 "",
             )));
+            v.push(row("sub-local", "Load from Computer…", "folder", ""));
             v.extend(plugin_rows(contrib::MENU_SUBTITLES, "subtitle"));
             v.push(row("panel:0", "Subtitle Settings…", "subtitle", ""));
             v
@@ -656,6 +657,7 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                 p.set("video-rotate", &((r + 90) % 360).to_string());
             }
             "add-sub" if a.global::<crate::Subtitles>().get_plugin() => a.invoke_add_subs(),
+            "sub-local" => crate::sublocal::open_dialog(a, p),
             "add-sub" | "add-audio" => {
                 let sub = id == "add-sub";
                 if let Some(f) = rfd::FileDialog::new()

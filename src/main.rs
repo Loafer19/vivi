@@ -36,6 +36,7 @@ mod sleep;
 mod status;
 mod store;
 mod streams;
+mod sublocal;
 mod suboffset;
 mod tray;
 mod util;

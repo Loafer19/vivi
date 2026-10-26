@@ -180,6 +180,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
                 }
             });
     }
+    crate::sublocal::setup(app, player);
     let p = player.clone();
     app.global::<crate::Panel>().on_load_sub(move || {
         if let Some(f) = rfd::FileDialog::new()

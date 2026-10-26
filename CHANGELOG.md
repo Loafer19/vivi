@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Load subtitles from your computer without Subtitle Search** (#84): the Subtitle menu's *Load from Computer…* and the side panel's *From computer…* open the Add Subtitles dialog on its From Computer half, now built into the player: *To This File* lists the subtitle files of the video's folder (or one you choose) with the matching one checked, *To This Folder* pairs every video of the folder with its subtitle and attaches it when that video plays. With Subtitle Search on, the same dialog also has *From OpenSubtitles*; with it off, the dialog shows only the local source. The per-file offset (`Alt+Z` / `Alt+X`) is unchanged.
+
 ### Changed
 - **Free Music: Jamendo tracks are no longer downloaded in the app** (#85). Jamendo's API terms do not allow apps that offer offline access, so a Jamendo track's *Download* button is now *Open on Jamendo* (download it on the site; the row has no download mark and the detail pane says why). Internet Archive / FMA downloads are unchanged, and Jamendo copies saved by older versions still play from the file.
 

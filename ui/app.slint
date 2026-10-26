@@ -590,10 +590,11 @@ export component AppWindow inherits Window {
     out property <int> karaoke-cols: max(10, floor((root.width - 2 * max(40px, root.width * 0.08)) / (root.karaoke-big * 0.55 * 0.6)));
     // Network stream loading overlay (core, see loading.rs).
     // Now-playing card for audio-only network streams (Network Streams plugin).
-    // "Add subtitles": the search dialog when the Subtitle Search plugin is on.
+    // "Add subtitles": the search dialog when the Subtitle Search plugin is on, else its
+    // From Computer half (core, #84).
     public function add-subs() {
         if (Subtitles.plugin) { Overlays.subs-open = true; root.plugin-command("subtitle-search", "open", ""); }
-        else { Panel.load-sub(); }
+        else { Subtitles.open-local(); }
     }
 
     // Side panel
@@ -898,6 +899,7 @@ export component AppWindow inherits Window {
         subs-enabled: Subtitles.plugin; subs-offset: Subtitles.offset; subs-has-pick: Subtitles.has-pick; subs-pick-label: Subtitles.pick-label; subs-sync: Subtitles.sync;
         subs(n, a) => { if (n == "offset" || n == "sync") { Panel.sub-offset(n, a); } else { root.plugin-command("subtitle-search", n, a); } }
         find-subs() => { root.add-subs(); }
+        load-local() => { Subtitles.open-local(); }
         open-settings(c) => { Settings.category = c; Overlays.settings-open = true; Settings.refresh(c, "", false); }
         queue: Panel.queue; playlists: Panel.playlists;
         queue-play(i) => { Panel.queue-play(i); }
@@ -1300,7 +1302,7 @@ export component AppWindow inherits Window {
         close => { Overlays.qr-open = false; }
     }
 
-    // ---------- Add Subtitles (Subtitle Search plugin) ----------
+    // ---------- Add Subtitles (From Computer: core; From OpenSubtitles: Subtitle Search) ----------
     if Overlays.subs-open: SubtitleDialog {
         width: root.width; height: root.height;
         hits: Subtitles.hits; langs: Subtitles.langs; selected: Subtitles.selected;
@@ -1308,8 +1310,11 @@ export component AppWindow inherits Window {
         status: Subtitles.status; busy: Subtitles.busy;
         query <=> Subtitles.query; lang <=> Subtitles.lang;
         local: Subtitles.local; folder: Subtitles.folder;
-        target <=> Subtitles.target; source <=> Subtitles.source;
-        cmd(n, a) => { root.plugin-command("subtitle-search", n, a); }
+        target <=> Subtitles.target; source <=> Subtitles.source; online: Subtitles.plugin;
+        cmd(n, a) => {
+            if (!Subtitles.plugin || n == "browse" || n == "toggle" || n == "save-local") { Subtitles.local(n, a); }
+            else { root.plugin-command("subtitle-search", n, a); }
+        }
         close => { Overlays.subs-open = false; fs.focus(); }
     }
 

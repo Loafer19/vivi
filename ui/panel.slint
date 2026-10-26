@@ -335,6 +335,7 @@ export component SidePanel inherits Rectangle {
     in property <bool> subs-sync;
     callback subs(string, string);
     callback find-subs();
+    callback load-local(); // Load from Computer (core, #84)
     // Settings-window category to open (see settings.rs CATEGORIES).
     callback open-settings(int);
 
@@ -562,7 +563,10 @@ export component SidePanel inherits Rectangle {
                         OptionList { items: root.sub-tracks; empty-text: "No subtitle tracks"; pick(it) => { root.set-prop("sid", it.key); } }
                         HorizontalLayout { spacing: 8px;
                             SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Add file…"; icon: @image-url("../assets/icons/add.svg"); clicked => { root.load-sub(); } }
-                            if root.subs-enabled: SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Find online…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.find-subs(); } }
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "From computer…"; icon: @image-url("../assets/icons/folder.svg"); clicked => { root.load-local(); } }
+                        }
+                        if root.subs-enabled: HorizontalLayout { spacing: 8px;
+                            SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Find online…"; icon: @image-url("../assets/icons/search.svg"); clicked => { root.find-subs(); } }
                         }
                         if root.subs-has-pick: Line { label: "OpenSubtitles Pick"; hint: root.subs-pick-label;
                             SecondaryButton { size: ButtonSize.sm; width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }

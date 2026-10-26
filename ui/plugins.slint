@@ -382,6 +382,7 @@ export component SubtitleDialog inherits Modal {
     in-out property <string> lang;
     in-out property <int> target;    // 0 this file, 1 this folder
     in-out property <int> source;    // 0 OpenSubtitles, 1 Computer
+    in property <bool> online: true; // Subtitle Search is on (else From Computer only)
     callback cmd(string, string);    // → plugin-command("subtitle-search", …)
     callback close();
     property <bool> ok: root.selected >= 0 && root.selected < root.hits.length && !root.busy;
@@ -409,7 +410,7 @@ export component SubtitleDialog inherits Modal {
                         width: 170px; options: ["To This File", "To This Folder"]; value: self.options[root.target];
                         selected(i, o) => { root.target = i; root.cmd("mode", ""); }
                     }
-                    Dropdown {
+                    if root.online: Dropdown {
                         width: 190px; options: ["From Computer", "From OpenSubtitles"]; value: root.source == 1 ? "From Computer" : "From OpenSubtitles";
                         selected(i, o) => { root.source = i == 0 ? 1 : 0; root.cmd("mode", ""); }
                     }

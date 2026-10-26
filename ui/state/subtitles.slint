@@ -22,4 +22,7 @@ export global Subtitles {
     in-out property <string> folder;
     in-out property <int> target;
     in-out property <int> source;
+    // Load from Computer (core, src/sublocal.rs; works with the plugin off, #84).
+    callback open-local();
+    callback local(string, string);
 }
