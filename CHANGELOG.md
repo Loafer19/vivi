@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Free Music: Jamendo tracks are no longer downloaded in the app** (#85). Jamendo's API terms do not allow apps that offer offline access, so a Jamendo track's *Download* button is now *Open on Jamendo* (download it on the site; the row has no download mark and the detail pane says why). Internet Archive / FMA downloads are unchanged, and Jamendo copies saved by older versions still play from the file.
+
 ### Removed
 - **The 0.13 stream entry points** (#86), hidden aliases since 0.14.0: `VIVI_PAGE` / IPC `page` values `network`, `app:network`, `open-network`, `action:network`, `network-streams:open` and `nav:network`, the Network Streams *Browse streams* setting action and the `VIVI_NETWORK` debug variable. The player menu's *Open Stream / URL…* and the Library's *Open stream* go straight to the Streams hub URL bar (`streams:url`).
 

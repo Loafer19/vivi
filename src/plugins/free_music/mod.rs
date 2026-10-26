@@ -4,10 +4,13 @@
 //! collection stands in for the Free Music Archive, whose API is gone). Both sources
 //! are searched in parallel and merged with source badges; filters (genre, mood,
 //! licence, length), sort, infinite scroll, album / artist pages and "play similar".
-//! Downloads land in a library folder with tags, cover, licence and attribution (in the
-//! tags and in a `<file>.licence.txt`), through a built-in queue or the Offline
-//! Downloads plugin; downloaded tracks are marked and play from the file. The licence
-//! is shown on every row, in the detail pane and on the now-playing card.
+//! Internet Archive / FMA downloads land in a library folder with tags, cover, licence
+//! and attribution (in the tags and in a `<file>.licence.txt`), through a built-in queue
+//! or the Offline Downloads plugin; downloaded tracks are marked and play from the file.
+//! Jamendo tracks stream only: its API terms forbid apps that offer offline access, so
+//! their Download button is *Open on Jamendo* (download on the site; #85). Copies saved
+//! by older versions still play from the file. The licence is shown on every row, in the
+//! detail pane and on the now-playing card.
 
 use super::auto_tagger::{self, Tags};
 use super::web;
@@ -266,6 +269,15 @@ fn is_cover(img: &slint::Image) -> bool {
     s.width > 0 && s.height > 0 && s.width < 2 * s.height
 }
 
+/// Whether Vivi downloads the track itself: the artist allows it and it is not from
+/// Jamendo, whose API terms forbid apps that offer offline access (#85).
+fn downloadable(t: &Track) -> bool {
+    !t.download.is_empty() && t.source != JAMENDO
+}
+
+/// Why a Jamendo track has no in-app download.
+const JAMENDO_DL: &str = "Jamendo tracks stream here; download them on jamendo.com (Open on Jamendo). Jamendo's API terms do not allow in-app downloads.";
+
 /// Label of the action that opens the track's page on its source.
 fn page_label(t: &Track) -> String {
     match t.source {
@@ -492,7 +504,7 @@ impl FreeMusic {
                     dur: t.length().into(),
                     has_cover: img.is_some(),
                     cover: img.unwrap_or_default(),
-                    dl: !t.download.is_empty(),
+                    dl: downloadable(t),
                     saved,
                     selected: sel.as_ref() == Some(&t.id),
                     bar: -1.0,
@@ -592,6 +604,7 @@ impl FreeMusic {
             .set_actions(ModelRc::new(VecModel::from(acts)));
         cx.app.global::<crate::MusicDialogState>().set_secondary(
             match self.selected() {
+                Some(t) if t.source == JAMENDO => "Open on Jamendo",
                 Some(t) if t.download.is_empty() => "Preview only",
                 _ => "Download",
             }
@@ -677,7 +690,9 @@ impl FreeMusic {
             "\n\nAttribution (Copy credit; also saved in the tags and a .licence.txt):\n{}",
             t.attribution()
         );
-        d += &if t.download.is_empty() {
+        d += &if t.source == JAMENDO {
+            format!("\n\n{JAMENDO_DL}")
+        } else if t.download.is_empty() {
             "\n\nThe artist allows streaming only, no download.".to_string()
         } else {
             format!("\n\nDownloads to {}", Self::folder(cx).display())
@@ -923,6 +938,10 @@ impl FreeMusic {
     }
 
     fn download(&mut self, cx: &Ctx, t: Track) {
+        if t.source == JAMENDO {
+            Self::ui(cx, JAMENDO_DL, false);
+            return;
+        }
         if t.download.is_empty() {
             Self::ui(
                 cx,
@@ -1056,7 +1075,7 @@ impl Plugin for FreeMusic {
         Manifest::builtin(
             ID,
             "Free Music",
-            "Search and browse Creative Commons and public-domain music from Jamendo, the Internet Archive and the Free Music Archive: genres, moods, licence filters, album and artist pages, play similar, the licence on every track and on the now-playing card, and downloads with tags, cover and licence attribution that play from disk once saved.",
+            "Search and browse Creative Commons and public-domain music from Jamendo, the Internet Archive and the Free Music Archive: genres, moods, licence filters, album and artist pages, play similar, the licence on every track and on the now-playing card, and Internet Archive downloads with tags, cover and licence attribution that play from disk once saved (Jamendo tracks link to jamendo.com for downloading).",
             "free-music",
         )
         .source("open")
@@ -1202,6 +1221,8 @@ impl Plugin for FreeMusic {
                 None => Self::ui(cx, "Select a track first", false),
             },
             "secondary" => match self.at(args).or_else(|| self.selected().cloned()) {
+                // Jamendo: its page, where the listener downloads it themselves (#85).
+                Some(t) if t.source == JAMENDO => crate::settings::open_url(&t.page),
                 Some(t) => self.download(cx, t),
                 None => Self::ui(cx, "Select a track first", false),
             },
@@ -1460,6 +1481,22 @@ mod tests {
         assert_eq!(page_label(&tr), "Open on Internet Archive");
         tr.source = JAMENDO;
         assert_eq!(page_label(&tr), "Open on Jamendo");
+    }
+
+    #[test]
+    fn jamendo_tracks_are_not_downloaded_in_app() {
+        // #85: Jamendo's API terms forbid offline access in apps.
+        let mut tr = t("Song", "Artist");
+        tr.download = "https://example.org/song.mp3".into();
+        tr.source = IA;
+        assert!(downloadable(&tr));
+        tr.source = FMA;
+        assert!(downloadable(&tr));
+        tr.source = JAMENDO;
+        assert!(!downloadable(&tr));
+        tr.source = IA;
+        tr.download.clear();
+        assert!(!downloadable(&tr));
     }
 
     #[test]

@@ -14,7 +14,7 @@
 - **Lyrics karaoke**: full-screen synced lyrics with word highlight, click a line to jump there, Find Lyrics, save as `.lrc` or embed; music-service songs and radio streams too
 - **Subtitles**: OpenSubtitles hash-first search, language chips, preview, one-click load, per-file offset, auto-sync
 - **Auto-tagger**: AcoustID + MusicBrainz and more, confidence-ranked, per-field alternatives, undo; can name untagged songs as they play (nothing is written until you review)
-- **Free Music**: Jamendo + Internet Archive/FMA search, album/artist pages, download queue
+- **Free Music**: Jamendo + Internet Archive/FMA search, album/artist pages, download queue (Internet Archive/FMA; Jamendo links to its site)
 - **Network Streams / IPTV**: radio, iptv-org TV, M3U playlists, XMLTV now/next guide, favorites
 - **Remote Control**: control playback from your phone, pair with a QR code
 - **MCP**: let Claude, Cursor and other AI agents control the player ([docs/mcp.md](docs/mcp.md))
