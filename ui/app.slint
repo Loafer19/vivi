@@ -1312,7 +1312,7 @@ export component AppWindow inherits Window {
         local: Subtitles.local; folder: Subtitles.folder;
         target <=> Subtitles.target; source <=> Subtitles.source; online: Subtitles.plugin;
         cmd(n, a) => {
-            if (!Subtitles.plugin || n == "browse" || n == "toggle" || n == "save-local") { Subtitles.local(n, a); }
+            if (!Subtitles.plugin || n == "browse" || n == "toggle" || n == "save-local") { Subtitles.local-cmd(n, a); }
             else { root.plugin-command("subtitle-search", n, a); }
         }
         close => { Overlays.subs-open = false; fs.focus(); }

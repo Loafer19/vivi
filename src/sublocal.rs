@@ -50,7 +50,7 @@ pub fn setup(app: &AppWindow, player: &std::rc::Rc<Player>) {
         }
     });
     let (w, p) = (app.as_weak(), player.clone());
-    g.on_local(move |name, arg| {
+    g.on_local_cmd(move |name, arg| {
         if let Some(a) = w.upgrade() {
             command(&a, &p, &name, &arg);
         }
@@ -130,7 +130,9 @@ pub fn file_loaded(a: &AppWindow, p: &Player) {
             p.cmd("sub-add", &[&s.to_string_lossy(), "select"]);
         }
     }
-    if a.global::<crate::Overlays>().get_subs_open() && a.global::<crate::Subtitles>().get_source() == 1 {
+    if a.global::<crate::Overlays>().get_subs_open()
+        && a.global::<crate::Subtitles>().get_source() == 1
+    {
         open(a, p);
     }
 }
@@ -256,7 +258,10 @@ fn save(a: &AppWindow, p: &Player) {
             }
             n
         });
-        format!("Subtitles assigned to {n} video{}", if n == 1 { "" } else { "s" })
+        format!(
+            "Subtitles assigned to {n} video{}",
+            if n == 1 { "" } else { "s" }
+        )
     };
     crate::plugins::toast(a, &msg);
     status(a, "");

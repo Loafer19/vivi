@@ -745,7 +745,11 @@ impl Plugin for SubtitleSearch {
         if let Some(p) = &self.pick {
             want.push(PathBuf::from(&p.path));
         }
-        if let Some(s) = cx.local_path().as_deref().and_then(crate::sublocal::assigned_for) {
+        if let Some(s) = cx
+            .local_path()
+            .as_deref()
+            .and_then(crate::sublocal::assigned_for)
+        {
             want.push(s);
         }
         if let Some(s) = want.first() {

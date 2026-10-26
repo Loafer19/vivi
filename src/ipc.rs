@@ -783,16 +783,21 @@ fn handle(
             // Bookmark the playing position: {"label"?, "note"?}.
             let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
             match crate::bookmarks::add_here(p, &s("label"), &s("note"), false) {
-                Ok(i) => Ok(json!({ "added": true, "index": i, "bookmarks": crate::bookmarks::current_marks() })),
+                Ok(i) => Ok(
+                    json!({ "added": true, "index": i, "bookmarks": crate::bookmarks::current_marks() }),
+                ),
                 Err(usize::MAX) => Err("nothing is playing".into()),
-                Err(i) => Ok(json!({ "added": false, "index": i, "bookmarks": crate::bookmarks::current_marks() })),
+                Err(i) => Ok(
+                    json!({ "added": false, "index": i, "bookmarks": crate::bookmarks::current_marks() }),
+                ),
             }
         }
         "bookmark_remove" | "bookmark_jump" => {
             // {"index": n} of the playing file's bookmarks (see "bookmarks").
             let i = args["index"]
                 .as_u64()
-                .ok_or("missing \"index\" (0-based, see list_bookmarks)")? as usize;
+                .ok_or("missing \"index\" (0-based, see list_bookmarks)")?
+                as usize;
             let n = crate::bookmarks::current_marks().len();
             if i >= n {
                 return Err(format!("no bookmark {i}: this file has {n}"));
@@ -820,7 +825,9 @@ fn handle(
                         _ => {
                             let cur = p.get("path").unwrap_or_default();
                             if !std::path::Path::new(&cur).is_file() {
-                                return Err("give a \"path\" (the playing file is not a local file)".into());
+                                return Err(
+                                    "give a \"path\" (the playing file is not a local file)".into(),
+                                );
                             }
                             crate::bookmarks::chapters_file_for(&cur)
                         }
