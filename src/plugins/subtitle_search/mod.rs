@@ -332,7 +332,7 @@ impl SubtitleSearch {
     }
     /// External subtitle files mpv already has for this item.
     fn loaded_subs(cx: &Ctx) -> Vec<PathBuf> {
-        crate::sublocal::loaded_subs(&cx.player)
+        crate::sublocal::loaded_subs(cx.player)
     }
     /// Put a downloaded subtitle in place (next to the video when that setting is on),
     /// load it, remember it for this file and close the dialog.
@@ -648,7 +648,7 @@ impl Plugin for SubtitleSearch {
                     cx.app.global::<crate::Subtitles>().set_source(1);
                 }
                 if cx.app.global::<crate::Subtitles>().get_source() == 1 {
-                    crate::sublocal::open(&cx.app, &cx.player);
+                    crate::sublocal::open(cx.app, cx.player);
                 } else if Self::creds(cx).key.is_empty() {
                     Self::status(cx, NO_KEY, false);
                 } else {
@@ -678,7 +678,7 @@ impl Plugin for SubtitleSearch {
             }
             "mode" => {
                 if cx.app.global::<crate::Subtitles>().get_source() == 1 {
-                    crate::sublocal::command(&cx.app, &cx.player, "mode", "");
+                    crate::sublocal::command(cx.app, cx.player, "mode", "");
                 } else {
                     let key = Self::creds(cx).key;
                     Self::status(cx, if key.is_empty() { NO_KEY } else { "" }, false);
@@ -686,7 +686,7 @@ impl Plugin for SubtitleSearch {
             }
             // From Computer (core since 0.15.0, #84).
             "browse" | "toggle" | "save-local" => {
-                crate::sublocal::command(&cx.app, &cx.player, name, arg)
+                crate::sublocal::command(cx.app, cx.player, name, arg)
             }
             "select" => self.select(cx, idx),
             "preview" => self.fetch(cx, idx, true),

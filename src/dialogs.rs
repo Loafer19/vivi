@@ -332,9 +332,11 @@ pub fn show_qr(a: &AppWindow, title: &str, text: &str, caption: &str) {
 /// [`core_answer`] instead of a plugin.
 pub const CORE: &str = "vivi:core";
 
+/// A core confirmation waiting for an answer: its key and what to do on "yes".
+type Pending = (String, Box<dyn FnOnce()>);
+
 thread_local! {
-    /// Core confirmations waiting for an answer: key → what to do on "yes".
-    static PENDING: RefCell<Vec<(String, Box<dyn FnOnce()>)>> = const { RefCell::new(Vec::new()) };
+    static PENDING: RefCell<Vec<Pending>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Ask the user to confirm a core action (e.g. Settings → Privacy → Clear bookmarks);
