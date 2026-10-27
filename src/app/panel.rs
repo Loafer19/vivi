@@ -195,7 +195,7 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     // Debug/screenshot helpers.
     if let Some(c) = std::env::var("VIVI_SETTINGS")
         .ok()
-        .and_then(|c| c.parse().ok())
+        .map(|c| super::debug::settings_index(&c))
     {
         app.global::<crate::Settings>().set_category(c);
         app.global::<crate::Overlays>().set_settings_open(true);

@@ -62,7 +62,7 @@ fn call_vivi_t(cmd: &str, args: Value, timeout: Duration) -> Result<Value, Strin
     let mut s = UnixStream::connect(&path).map_err(|e| {
         format!(
             "cannot reach Vivi at {} ({e}). Is Vivi running with remote control enabled \
-             (Settings → General → Remote control, or VIVI_IPC=1)?",
+             (Settings → Controls → Remotes, or VIVI_IPC=1)?",
             path.display()
         )
     })?;

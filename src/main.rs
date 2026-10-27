@@ -19,6 +19,7 @@ mod loading;
 mod loopsync;
 mod menus;
 mod mini;
+mod mouse;
 #[cfg(target_os = "linux")]
 mod mpris;
 mod notify;
@@ -126,6 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     let (toggle_fs, open_file) = app::wiring::transport::wire(&app, &player);
+    mouse::wire(&app, &player);
 
     app::wiring::keys::wire(&app, &player, toggle_fs, open_file);
 

@@ -747,12 +747,23 @@ export component AppWindow inherits Window {
         mouse-cursor: root.show-ui ? MouseCursor.default : MouseCursor.none;
         changed mouse-x => { root.activity(); }
         changed mouse-y => { root.activity(); }
-        clicked => { fs.focus(); if (Playback.has-media) { Playback.toggle-play(); } }
-        double-clicked => { Playback.toggle-fullscreen(); }
+        // Buttons and the wheel do what Settings → Controls → Mouse says (mouse.rs); by
+        // default click plays / pauses and double-click toggles fullscreen.
+        clicked => { fs.focus(); Playback.mouse("click"); }
+        double-clicked => { Playback.mouse("double-click"); }
         pointer-event(e) => {
             if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down && Playback.has-media) {
                 Menus.menu-request("main", self.mouse-x, self.mouse-y, "");
             }
+            if (e.kind == PointerEventKind.down) {
+                if (e.button == PointerEventButton.middle) { Playback.mouse("middle"); }
+                if (e.button == PointerEventButton.back) { Playback.mouse("back"); }
+                if (e.button == PointerEventButton.forward) { Playback.mouse("forward"); }
+            }
+        }
+        scroll-event(e) => {
+            root.activity();
+            Playback.wheel(e.delta-y / 1px) ? EventResult.accept : EventResult.reject
         }
     }
 
@@ -822,7 +833,7 @@ export component AppWindow inherits Window {
         widgets: Extensions.widgets;
         run-widget(id, cmd) => { Extensions.run(id, cmd); }
         open-extensions() => { Extensions.select(Extensions.tab, false); }
-        add-folders() => { Settings.category = 8; Overlays.settings-open = true; Settings.refresh(8, "", false); }
+        add-folders() => { Settings.category = 11; Overlays.settings-open = true; Settings.refresh(11, "", false); }
         clear-recent() => { Library.clear-recent(); }
         forget-recent(it) => { Library.menu(it.recent-key, it.kind, "forget-recent"); }
         popout() => {
@@ -930,6 +941,7 @@ export component AppWindow inherits Window {
         saturation <=> Panel.pv-saturation;
         gamma <=> Panel.pv-gamma;
         speed <=> Panel.pv-speed;
+        speed-step: Panel.pv-speed-step;
         save-preset() => { Panel.save-preset(); }
         close() => { Overlays.panel-open = false; }
     }

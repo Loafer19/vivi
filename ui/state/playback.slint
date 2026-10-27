@@ -32,6 +32,10 @@ export global Playback {
     callback volume-changed(float);
     callback toggle-mute();
     callback toggle-fullscreen();
+    // A mouse button on the video ("click", "double-click", "middle", "back", "forward")
+    // and a wheel turn (delta-y in px; true when it did something), see mouse.rs.
+    callback mouse(string);
+    callback wheel(float) -> bool;
     callback prev();
     callback next();
     callback stop();

@@ -359,6 +359,8 @@ export component SidePanel inherits Rectangle {
     in-out property <float> saturation: 0;
     in-out property <float> gamma: 0;
     in-out property <float> speed: 1;
+    // Settings → Controls → Skip Amounts → Speed step.
+    in property <float> speed-step: 0.05;
     // Local toggles mirrored to mpv on change (session only).
     in-out property <bool> stats-on;
     in-out property <bool> reverse-on;
@@ -419,7 +421,7 @@ export component SidePanel inherits Rectangle {
                             ValueChip { text: round(root.speed * 100) / 100 + "×"; }
                         }
                         Slider {
-                            value: root.speed; minimum: 0.25; maximum: 2; step: 0.05; ticks: 6;
+                            value: root.speed; minimum: 0.25; maximum: 2; step: root.speed-step; ticks: 6;
                             labels: ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
                             changed(v) => { root.speed = v; root.set-prop("speed", v); }
                         }
@@ -478,7 +480,7 @@ export component SidePanel inherits Rectangle {
                             if root.lyrics-can-save-lrc: SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Save as .lrc"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.lyrics("save-lrc", ""); } }
                             if root.lyrics-can-embed: SecondaryButton { size: ButtonSize.sm; horizontal-stretch: 1; text: "Embed in tags"; icon: @image-url("../assets/icons/music.svg"); clicked => { root.lyrics("embed", ""); } } }
                     }
-                    AdvancedLink { clicked => { root.open-settings(4); } }
+                    AdvancedLink { clicked => { root.open-settings(7); } }
                 }
                 // ---- Video ----
                 if root.tab == PanelTab.video: VerticalLayout {
@@ -518,7 +520,7 @@ export component SidePanel inherits Rectangle {
                         VideoFilters { }
                     }
                     PresetCard { name: root.preset-name; save => { root.save-preset(); } }
-                    AdvancedLink { clicked => { root.open-settings(5); } }
+                    AdvancedLink { clicked => { root.open-settings(8); } }
                 }
                 // ---- Audio ----
                 if root.tab == PanelTab.audio: VerticalLayout {
@@ -550,7 +552,7 @@ export component SidePanel inherits Rectangle {
                         AudioEffects { }
                     }
                     PresetCard { name: root.preset-name; save => { root.save-preset(); } }
-                    AdvancedLink { clicked => { root.open-settings(6); } }
+                    AdvancedLink { clicked => { root.open-settings(9); } }
                 }
                 // ---- Subtitles ----
                 if root.tab == PanelTab.subtitles: VerticalLayout {
@@ -616,7 +618,7 @@ export component SidePanel inherits Rectangle {
                             ColorField { value <=> root.sub-outline-color; accepted(t) => { root.set-prop("sub-border-color", t); } } }
                     }
                     PresetCard { name: root.preset-name; save => { root.save-preset(); } }
-                    AdvancedLink { clicked => { root.open-settings(7); } }
+                    AdvancedLink { clicked => { root.open-settings(10); } }
                 }
                 // ---- Bookmarks (src/bookmarks.rs, saved per file) ----
                 if root.tab == PanelTab.bookmarks: VerticalLayout {

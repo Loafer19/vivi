@@ -184,7 +184,25 @@ pub struct Controls {
     pub short_skip: u32,
     /// Shift+arrow seek step in seconds.
     pub long_skip: u32,
+    /// Playback speed step (one of [`SPEED_STEPS`]): the side panel's speed slider and the
+    /// scroll wheel set to Speed.
+    pub speed_step: f64,
+    /// Mouse buttons on the video: action ids of [`crate::mouse::ACTIONS`].
+    pub mouse_click: String,
+    pub mouse_double_click: String,
+    pub mouse_middle: String,
+    /// Button 4 (back).
+    pub mouse_back: String,
+    /// Button 5 (forward).
+    pub mouse_forward: String,
+    /// Scroll wheel on the video: an id of [`crate::mouse::WHEEL`].
+    pub wheel: String,
+    /// Scrolling down raises the value instead.
+    pub wheel_reverse: bool,
 }
+
+/// Choices of `controls.speed_step`.
+pub const SPEED_STEPS: [f64; 3] = [0.05, 0.1, 0.25];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -260,6 +278,17 @@ impl Default for Controls {
         Self {
             short_skip: 5,
             long_skip: 60,
+            // The speed slider's step before it was a setting.
+            speed_step: 0.05,
+            // The mouse as it worked before it was a setting: click plays / pauses,
+            // double-click toggles fullscreen, other buttons and the wheel do nothing.
+            mouse_click: "play-pause".into(),
+            mouse_double_click: "fullscreen".into(),
+            mouse_middle: "none".into(),
+            mouse_back: "none".into(),
+            mouse_forward: "none".into(),
+            wheel: "none".into(),
+            wheel_reverse: false,
         }
     }
 }
@@ -437,6 +466,7 @@ impl Config {
     fn migrated(mut self) -> Self {
         let i = &mut self.interface;
         migrate_toolbar(i);
+        migrate_controls(&mut self.controls, &mut self.stubs);
         self
     }
 
@@ -628,6 +658,33 @@ pub fn volume_style_name(s: &str) -> &'static str {
 /// Icon styles of the player's top and bottom bars (other icons are always two-tone).
 pub const BAR_ICONS: [&str; 2] = ["Two-tone", "Single-tone"];
 
+/// Settings → Controls (#92): the old placeholder wheel rows (`stub.controls.wheel`,
+/// `stub.controls.reverse`) become `controls.wheel` / `controls.wheel_reverse`, and
+/// unknown mouse actions, wheel modes or speed steps fall back to the defaults.
+pub fn migrate_controls(c: &mut Controls, stubs: &mut BTreeMap<String, String>) {
+    use crate::mouse::{id_of, ACTIONS, WHEEL};
+    if let Some(w) = stubs.remove("stub.controls.wheel") {
+        c.wheel = w;
+    }
+    if let Some(r) = stubs.remove("stub.controls.reverse") {
+        c.wheel_reverse = r == "true";
+    }
+    let d = Controls::default();
+    for (v, def) in [
+        (&mut c.mouse_click, &d.mouse_click),
+        (&mut c.mouse_double_click, &d.mouse_double_click),
+        (&mut c.mouse_middle, &d.mouse_middle),
+        (&mut c.mouse_back, &d.mouse_back),
+        (&mut c.mouse_forward, &d.mouse_forward),
+    ] {
+        *v = id_of(&ACTIONS, v.as_str()).unwrap_or(def.as_str()).into();
+    }
+    c.wheel = id_of(&WHEEL, &c.wheel).unwrap_or(d.wheel.as_str()).into();
+    if !SPEED_STEPS.iter().any(|s| (s - c.speed_step).abs() < 1e-9) {
+        c.speed_step = d.speed_step;
+    }
+}
+
 /// The canonical [`BAR_ICONS`] name, ignoring case; unknown values fall back to "Two-tone".
 pub fn bar_icons_name(s: &str) -> &'static str {
     BAR_ICONS
@@ -783,6 +840,58 @@ mod toolbar_tests {
             sanitize_toolbar(&plug),
             vec!["plug:lyrics|karaoke".to_string()]
         );
+    }
+    #[test]
+    fn controls_defaults_and_old_configs() {
+        // A config written before #92 keeps the old mouse: click plays / pauses,
+        // double-click is fullscreen, the wheel does nothing.
+        let c: Config = toml::from_str("[controls]\nshort_skip = 10\nlong_skip = 30\n").unwrap();
+        let c = c.migrated();
+        assert_eq!((c.controls.short_skip, c.controls.long_skip), (10, 30));
+        assert_eq!(c.controls.mouse_click, "play-pause");
+        assert_eq!(c.controls.mouse_double_click, "fullscreen");
+        for b in [
+            &c.controls.mouse_middle,
+            &c.controls.mouse_back,
+            &c.controls.mouse_forward,
+        ] {
+            assert_eq!(b, "none");
+        }
+        assert_eq!(c.controls.wheel, "none");
+        assert!(!c.controls.wheel_reverse);
+        assert_eq!(c.controls.speed_step, 0.05);
+        assert_eq!(
+            c.controls,
+            Controls {
+                short_skip: 10,
+                long_skip: 30,
+                ..Default::default()
+            }
+        );
+    }
+    #[test]
+    fn migrates_wheel_stubs_and_bad_values() {
+        let c: Config = toml::from_str(
+            "[controls]\nmouse_middle = \"Mute\"\nmouse_back = \"bogus\"\nspeed_step = 0.3\n\
+             [stubs]\n\"stub.controls.wheel\" = \"Seek\"\n\"stub.controls.reverse\" = \"true\"\n\
+             \"stub.general.devmode\" = \"true\"\n",
+        )
+        .unwrap();
+        let c = c.migrated();
+        assert_eq!(c.controls.wheel, "seek");
+        assert!(c.controls.wheel_reverse);
+        assert_eq!(c.controls.mouse_middle, "mute"); // a label is accepted
+        assert_eq!(c.controls.mouse_back, "none"); // unknown → default
+        assert_eq!(c.controls.speed_step, 0.05);
+        assert!(!c.stubs.contains_key("stub.controls.wheel"));
+        assert!(!c.stubs.contains_key("stub.controls.reverse"));
+        assert_eq!(
+            c.stubs.get("stub.general.devmode").map(String::as_str),
+            Some("true")
+        );
+        // Saved and loaded again it stays the same.
+        let again: Config = toml::from_str(&toml::to_string_pretty(&c).unwrap()).unwrap();
+        assert_eq!(again.migrated().controls, c.controls);
     }
     #[test]
     fn migrates_old_bar() {

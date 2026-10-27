@@ -4,6 +4,7 @@
 //! Ids that need more than an assignment (file pickers, rescans, presets) stay in `settings.rs`.
 
 use crate::config::Config;
+use crate::mouse;
 
 pub(super) struct Field {
     pub id: &'static str,
@@ -14,6 +15,22 @@ pub(super) struct Field {
 
 fn on(v: &str) -> bool {
     v == "true"
+}
+
+/// "0.1×" for a speed step.
+pub(super) fn speed_step_label(s: f64) -> String {
+    format!("{s}×")
+}
+
+fn action_label(id: &str) -> String {
+    mouse::label_of(&mouse::ACTIONS, id).into()
+}
+
+/// Store a mouse action given by label or id; unknown values leave it unchanged.
+fn set_action(slot: &mut String, v: &str) {
+    if let Some(id) = mouse::id_of(&mouse::ACTIONS, v) {
+        *slot = id.into();
+    }
 }
 
 /// General category (log file path is handled with its file picker in `settings.rs`).
@@ -197,6 +214,63 @@ pub(super) const OTHER: &[Field] = &[
         id: "controls.long_skip",
         get: None,
         set: |c, v| c.controls.long_skip = super::lead_num(v),
+    },
+    Field {
+        id: "controls.speed_step",
+        get: Some(|c| speed_step_label(c.controls.speed_step)),
+        set: |c, v| {
+            let n = v
+                .trim()
+                .trim_end_matches('×')
+                .trim()
+                .parse::<f64>()
+                .unwrap_or(0.0);
+            if let Some(s) = crate::config::SPEED_STEPS
+                .into_iter()
+                .find(|s| (s - n).abs() < 1e-9)
+            {
+                c.controls.speed_step = s;
+            }
+        },
+    },
+    Field {
+        id: "controls.mouse_click",
+        get: Some(|c| action_label(&c.controls.mouse_click)),
+        set: |c, v| set_action(&mut c.controls.mouse_click, v),
+    },
+    Field {
+        id: "controls.mouse_double_click",
+        get: Some(|c| action_label(&c.controls.mouse_double_click)),
+        set: |c, v| set_action(&mut c.controls.mouse_double_click, v),
+    },
+    Field {
+        id: "controls.mouse_middle",
+        get: Some(|c| action_label(&c.controls.mouse_middle)),
+        set: |c, v| set_action(&mut c.controls.mouse_middle, v),
+    },
+    Field {
+        id: "controls.mouse_back",
+        get: Some(|c| action_label(&c.controls.mouse_back)),
+        set: |c, v| set_action(&mut c.controls.mouse_back, v),
+    },
+    Field {
+        id: "controls.mouse_forward",
+        get: Some(|c| action_label(&c.controls.mouse_forward)),
+        set: |c, v| set_action(&mut c.controls.mouse_forward, v),
+    },
+    Field {
+        id: "controls.wheel",
+        get: Some(|c| mouse::label_of(&mouse::WHEEL, &c.controls.wheel).into()),
+        set: |c, v| {
+            if let Some(id) = mouse::id_of(&mouse::WHEEL, v) {
+                c.controls.wheel = id.into();
+            }
+        },
+    },
+    Field {
+        id: "controls.wheel_reverse",
+        get: Some(|c| c.controls.wheel_reverse.to_string()),
+        set: |c, v| c.controls.wheel_reverse = on(v),
     },
     Field {
         id: "audio.volume_step",
@@ -419,6 +493,42 @@ mod tests {
         assert_eq!(c.audio.volume_max, 150);
         set(&mut c, "playback.speed", "1.234");
         assert_eq!(c.playback.speed, 1.23);
+        let mut c = Config::default();
+        for (id, v) in [
+            ("controls.speed_step", "0.25×"),
+            ("controls.mouse_click", "Mute"),
+            ("controls.mouse_double_click", "Nothing"),
+            ("controls.mouse_middle", "Play / pause"),
+            ("controls.mouse_back", "Short skip backward"),
+            ("controls.mouse_forward", "Next in queue"),
+            ("controls.wheel", "Speed"),
+            ("controls.wheel_reverse", "true"),
+        ] {
+            assert!(set(&mut c, id, v), "{id}");
+            assert_eq!(get(&c, id), v, "{id}");
+        }
+        let k = &c.controls;
+        assert_eq!(k.speed_step, 0.25);
+        assert_eq!(
+            [
+                &k.mouse_click,
+                &k.mouse_double_click,
+                &k.mouse_middle,
+                &k.mouse_back,
+                &k.mouse_forward
+            ],
+            ["mute", "none", "play-pause", "skip-back", "next"]
+        );
+        assert_eq!(k.wheel, "speed");
+        // Values that are not choices leave the setting as it was.
+        set(&mut c, "controls.speed_step", "0.3");
+        set(&mut c, "controls.wheel", "Zoom");
+        set(&mut c, "controls.mouse_click", "Explode");
+        assert_eq!(
+            (c.controls.speed_step, c.controls.wheel.as_str()),
+            (0.25, "speed")
+        );
+        assert_eq!(c.controls.mouse_click, "mute");
         set(&mut c, "subtitles.language", " en ");
         assert_eq!(c.subtitles.language, "en");
     }

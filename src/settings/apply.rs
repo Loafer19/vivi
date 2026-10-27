@@ -40,6 +40,9 @@ pub fn apply_theme(a: &AppWindow, c: &Config) {
     SHORT_SKIP.store(c.controls.short_skip.max(1), Ordering::Relaxed);
     LONG_SKIP.store(c.controls.long_skip.max(1), Ordering::Relaxed);
     VOLUME_STEP.store(c.audio.volume_step.clamp(1, 50) as u32, Ordering::Relaxed);
+    crate::mouse::configure(&c.controls);
+    a.global::<crate::Panel>()
+        .set_pv_speed_step(c.controls.speed_step as f32);
 }
 
 pub(crate) fn yes(b: bool) -> &'static str {

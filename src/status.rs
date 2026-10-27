@@ -69,7 +69,7 @@ pub fn click_target(id: &str, remote_extension: bool) -> Click {
     match id {
         "sleep" | "ab-loop" | "speed" => Click::Panel(PanelTab::Playback),
         "leveling" => Click::Settings("Audio"),
-        "remote" if remote_extension => Click::Settings("Controls"),
+        "remote" if remote_extension => Click::Settings("Remotes"),
         "remote" => Click::Settings("General"),
         _ => match id.strip_prefix("plugin:").and_then(|r| r.split_once(':')) {
             Some((p, k)) => Click::Plugin {
@@ -289,7 +289,7 @@ mod tests {
         );
         assert_eq!(click_target("leveling", false), Click::Settings("Audio"));
         assert_eq!(click_target("remote", false), Click::Settings("General"));
-        assert_eq!(click_target("remote", true), Click::Settings("Controls"));
+        assert_eq!(click_target("remote", true), Click::Settings("Remotes"));
         assert_eq!(
             click_target("plugin:cast:tv", false),
             Click::Plugin {

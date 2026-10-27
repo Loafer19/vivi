@@ -207,8 +207,15 @@ pub const BINDINGS: &[Binding] = &[
 
 /// Mouse and drag & drop as (action, input), listed after the keys.
 pub const MOUSE: &[(&str, &str)] = &[
-    ("Fullscreen", "Double-click"),
-    ("Play / pause", "Click"),
+    // Click and double-click are settings (Settings → Controls → Mouse, `mouse.rs`).
+    (
+        "Fullscreen (default, Settings → Controls → Mouse)",
+        "Double-click",
+    ),
+    (
+        "Play / pause (default, Settings → Controls → Mouse)",
+        "Click",
+    ),
     ("Context menu", "Right-click"),
     ("Open files or add them to the queue", "Drop files"),
 ];

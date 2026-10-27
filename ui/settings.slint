@@ -267,16 +267,13 @@ export component SettingsDialog inherits Modal {
     // Sidebar icon names (two-tone, see TriIcon) and group labels, in category order (see settings.rs CATEGORIES).
     // The selected category draws `<name>-active` (solid accent art), like the library rail.
     property <[string]> icons: [
-        "preferences", "interface",
-        "privacy", "hotkeys",
-        "playback", "video",
-        "audio", "subtitles",
-        "folder", "streaming",
-        "speed", "record",
-        "plugins", "info",
+        "preferences", "interface", "privacy",
+        "skip", "hotkeys", "mouse", "remote",
+        "playback", "video", "audio", "subtitles", "folder",
+        "streaming", "speed", "record", "plugins", "info",
     ];
     function group(i: int) -> string {
-        i == 0 ? "App" : i == 4 ? "Media" : i == 9 ? "System" : ""
+        i == 0 ? "App" : i == 3 ? "Controls" : i == 7 ? "Media" : i == 12 ? "System" : ""
     }
     function go(i: int) { root.search = ""; root.category = i; root.advanced = false; root.refresh(i, "", false); }
 

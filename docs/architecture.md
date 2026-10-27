@@ -66,7 +66,7 @@ distribution and the package format are in [plugins-architecture.md](plugins-arc
 ## Screenshot hooks
 
 Debug builds (or `VIVI_SCREENSHOT=1`) read env vars in `src/app/debug.rs` to open a UI
-state directly: `VIVI_SETTINGS=<n>`, `VIVI_PANEL=<n>`, `VIVI_CUSTOMIZE=<profile>`,
+state directly: `VIVI_SETTINGS=<n or category name>`, `VIVI_MOUSE=<button>,…`, `VIVI_PANEL=<n>`, `VIVI_CUSTOMIZE=<profile>`,
 `VIVI_LIB`, `VIVI_URL`, `VIVI_MUSIC`, `VIVI_STREAM_ERROR=<url>` (the failed-stream
 banner with Retry / Copy), and others listed there.
 

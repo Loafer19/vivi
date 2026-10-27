@@ -12,8 +12,8 @@ AI client (Claude Desktop, Cursor, …) ──stdio/JSON-RPC──▶ vivi-mcp �
 
 ## 1. Enable remote control in Vivi
 
-The socket is **off by default**. Turn on *Settings → General → Remote control → Allow AI
-agents and scripts* and restart Vivi, or start it once with `VIVI_IPC=1 vivi`.
+The socket is **off by default**. Turn on *Settings → Controls → Remotes → Allow AI
+agents and scripts* (Settings → General → Remote control before 0.15) and restart Vivi, or start it once with `VIVI_IPC=1 vivi`.
 
 The socket is `$XDG_RUNTIME_DIR/vivi.sock` (fallback `~/.cache/vivi/vivi.sock`, override
 with `VIVI_SOCKET`), created with mode `0600`: only your user can connect. There is no

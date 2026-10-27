@@ -39,7 +39,7 @@ instant startup, a simple interface by default with deep customization when you 
 - Player bar icons (Settings → General → Appearance): the icons of the player's top and bottom bars, including the top-right close button, are two-tone by default or single-tone; applies at once and is saved as `interface.bar_icons`
 - First-run onboarding: theme, accent color, hotkeys intro (skippable)
 - Music visualizer for audio-only files and streams (no video track; cover art does not count), fed from what mpv actually plays, so EQ and audio filters show up: Spectrometer, Scope, Spectrum, Waveform, Radial, Particles and Pitch modes, drawn in the theme accent (or the main color of the song's album art) and reacting to frequencies, beats/onsets, loudness and the dominant note. Pick a mode from the dropdown at the top left, the side panel (Playback → Display) or the command palette, or press `V` / `Shift+V` to cycle; it fills the window in fullscreen (`F`). See [docs/screenshots/visualizer.png](screenshots/visualizer.png)
-- Settings window rebuilt per Figma: grouped sidebar (App / Media / System), 13 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
+- Settings window rebuilt per Figma: grouped sidebar (App / Controls / Media / System), 16 pages with toggles, accent sliders, segmented controls and path fields, all backed by mpv options
 - Plugins (Settings → Extensions): Skip Intro & Credits, synced karaoke Lyrics (LRCLIB / `.lrc`), Subtitle Search (OpenSubtitles), Auto-tagger (AcoustID + MusicBrainz + Cover Art Archive), Free Music (Internet Archive / Jamendo), Network Streams (Internet radio, iptv-org TV, music genres, SomaFM, M3U/IPTV, saved streams), the visualizer, plus downloadable plugins installed and updated from Settings → Extensions → Browse (Discord Rich Presence, Remote Control (phone web page), YouTube & yt-dlp downloads, Night Mode, Playback Statistics, ListenBrainz Scrobbler, Subtitle Auto-Sync, SponsorBlock, Chapters & Previews with scene chapters) and mpv Lua/JS scripts from `~/.config/vivi/scripts`. See [Plugins](#plugins)
 - 10-band equalizer with VLC presets (plus Bass, Vocal and Night) and custom presets, `Alt+E` to cycle presets and `Alt+Shift+E` to turn it on / off, an *Auto pre-amp / prevent clipping* option (on by default: the preamp drops by the largest band boost), plus video filters (adjust, crop, colour effects) and audio effects (compressor, reverb, delay), saved in `~/.config/vivi/fx.toml`
 - Per-show presets: delays, subtitle size/position and track languages applied automatically to every episode
@@ -168,10 +168,19 @@ Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv lo
 | Alt+K | Skip intro, credits or segment (the Skip button) |
 | Alt+Shift+K | Undo the last skip or mute |
 | Esc | Close the top dialog or panel, then leave miniplayer / fullscreen |
-| Double-click | Fullscreen |
-| Click | Play / pause |
+| Double-click | Fullscreen (default, Settings → Controls → Mouse) |
+| Click | Play / pause (default, Settings → Controls → Mouse) |
 | Right-click | Context menu |
 | Drop files | Open files or add them to the queue |
+
+### Controls settings
+
+Settings has a **Controls** group (#92) with four pages:
+
+- **Skip Amounts**: short skip (`←` / `→`), long skip (`Shift` + `←` / `→`), volume step (`↑` / `↓`) and **Speed step** (0.05, 0.1 or 0.25; default 0.05, the step the side panel's speed slider always had). The speed step is the step of the side panel's speed slider (Playback → Speed, next to the speed value chip) and of the scroll wheel set to *Speed*. Vivi has no speed keys of its own: mpv's `[` / `]` are the lyrics offset.
+- **Keyboard Shortcuts**: the table above.
+- **Mouse**: what a button does on the video. *Left click*, *Left double-click*, *Middle click*, *Back button (4)* and *Forward button (5)* each pick one of Play / pause, Mute, Fullscreen, Next in queue, Previous in queue, Short / Long skip forward or backward, or Nothing. Defaults are the old behaviour: click plays / pauses, double-click toggles fullscreen (a double-click also counts as two clicks, so with the defaults playback is unchanged), the other buttons do nothing. **Scroll wheel** over the video picks Volume (volume step), Speed (speed step), Seek (short skip) or Nothing (the default; the volume control's own wheel is unchanged), with *Reverse scroll direction*. Right-click (context menu) and dropping files are fixed. Stored as `[controls]` `mouse_click`, `mouse_double_click`, `mouse_middle`, `mouse_back`, `mouse_forward` (action ids such as `play-pause`, `skip-forward`, `none`), `wheel`, `wheel_reverse` and `speed_step`; the placeholder wheel rows of older versions (`stub.controls.wheel`, `stub.controls.reverse`) are carried over once, and unknown values fall back to the defaults.
+- **Remotes**: *Phone remote control* (installs, enables or opens the settings of the Remote Control extension) and *Allow AI agents and scripts* (the local control socket for vivi-mcp, `general.remote_control`; it used to be under General). The top bar's remote chip opens this page.
 
 ## Streams
 

@@ -1,6 +1,6 @@
 //! Local control socket for external tools such as `vivi-mcp` (the MCP server for AI
-//! agents, issue #68). Off by default: enable "Remote control" in Settings → General
-//! (`general.remote_control`) or start Vivi with `VIVI_IPC=1`.
+//! agents, issue #68). Off by default: enable "Allow AI agents and scripts" in Settings →
+//! Controls → Remotes (`general.remote_control`) or start Vivi with `VIVI_IPC=1`.
 //!
 //! Protocol: one JSON object per line, `{"cmd": "...", "args": {...}}`, answered with
 //! `{"ok": true, "result": ...}` or `{"ok": false, "error": "..."}`. The socket lives at

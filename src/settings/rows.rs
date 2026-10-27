@@ -251,13 +251,6 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             &schema::get(c, "general.close_button"),
             &crate::config::CLOSE_BUTTON,
         )
-        .header("Remote control")
-        .toggle(
-            "general.remote_control",
-            "Allow AI agents and scripts",
-            "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.",
-            schema::get(c, "general.remote_control") == "true",
-        )
         .header("Diagnostics")
         .toggle(
             "general.save_log",
@@ -345,9 +338,14 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             scrobbler_action(c),
         );
 
-    // ---------- Controls ----------
-    r.cat("Controls")
-        .header("Skip Amounts")
+    // ---------- Controls (#92): Skip Amounts, Keyboard Shortcuts, Mouse, Remotes ----------
+    let speed_steps: Vec<String> = crate::config::SPEED_STEPS
+        .iter()
+        .map(|s| schema::speed_step_label(*s))
+        .collect();
+    let speed_steps: Vec<&str> = speed_steps.iter().map(String::as_str).collect();
+    r.cat("Skip Amounts")
+        .header("Seeking")
         .choice(
             "controls.short_skip",
             "Short skip",
@@ -362,6 +360,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             &format!("{} s", c.controls.long_skip),
             &["30 s", "60 s", "120 s", "300 s"],
         )
+        .header("Volume and speed")
         .choice(
             "audio.volume_step",
             "Volume step",
@@ -369,26 +368,55 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             &format!("{} %", c.audio.volume_step),
             &["1 %", "2 %", "5 %", "10 %"],
         )
-        .header("Keyboard Shortcuts");
+        .choice(
+            "controls.speed_step",
+            "Speed step",
+            "Speed change of the side panel's speed slider and of the scroll wheel when it is set to Speed (Mouse).",
+            &schema::get(c, "controls.speed_step"),
+            &speed_steps,
+        );
+
+    r.cat("Keyboard Shortcuts").header("Player");
     for (t, k) in crate::keymap::rows() {
         r.push("", t, "", "key", k.into());
     }
-    r.header("Mouse");
-    for (t, k) in crate::keymap::MOUSE {
+
+    let actions: Vec<&str> = crate::mouse::ACTIONS.iter().map(|(_, l)| *l).collect();
+    let wheel: Vec<&str> = crate::mouse::WHEEL.iter().map(|(_, l)| *l).collect();
+    r.cat("Mouse").header("Buttons on the video");
+    for (_, id, title) in crate::mouse::BUTTONS {
+        let info = match id {
+            "controls.mouse_click" => "A double-click also counts as two clicks.",
+            "controls.mouse_back" | "controls.mouse_forward" => {
+                "The side buttons of mice that have them."
+            }
+            _ => "",
+        };
+        r.choice(id, title, info, &schema::get(c, id), &actions);
+    }
+    r.header("Scroll wheel")
+        .choice(
+            "controls.wheel",
+            "Scroll wheel",
+            "What turning the wheel over the video does: volume by the volume step, speed by the speed step, seeking by the short skip (Skip Amounts).",
+            &schema::get(c, "controls.wheel"),
+            &wheel,
+        )
+        .toggle(
+            "controls.wheel_reverse",
+            "Reverse scroll direction",
+            "Scrolling down raises the volume or speed and seeks forward.",
+            c.controls.wheel_reverse,
+        )
+        .enabled(c.controls.wheel != "none")
+        .header("Always");
+    for (t, k) in crate::keymap::MOUSE
+        .iter()
+        .filter(|(_, k)| !matches!(*k, "Click" | "Double-click"))
+    {
         r.push("", t, "", "key", (*k).into());
     }
-    r.stub_choice(
-        "stub.controls.wheel",
-        "Scroll wheel",
-        &s(""),
-        &["Volume", "Seek", "Nothing"],
-    )
-    .stub_toggle(
-        "stub.controls.reverse",
-        "Reverse scroll direction",
-        &s(""),
-        false,
-    );
+
     // The phone remote is the Remote Control extension: a pointer with Install / Enable /
     // Settings, like the seek-bar hint for Chapter Thumbnails.
     let (rc_info, rc_label) = match remote_control_action(c) {
@@ -396,12 +424,16 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         Some(_) => ("Control Vivi from a phone or tablet browser on the same network (QR pairing, PIN). The Remote Control extension is installed but off.", "Enable"),
         None => ("Remote Control is on: pair a phone, change the port or the PIN in its settings.", "Settings…"),
     };
-    r.header("Remotes").action(
-        REMOTE_CONTROL_ROW,
-        "Phone remote control",
-        rc_info,
-        rc_label,
-    );
+    r.cat("Remotes")
+        .header("Phone or tablet")
+        .action(REMOTE_CONTROL_ROW, "Phone remote control", rc_info, rc_label)
+        .header("AI agents and scripts")
+        .toggle(
+            "general.remote_control",
+            "Allow AI agents and scripts",
+            "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.",
+            schema::get(c, "general.remote_control") == "true",
+        );
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];

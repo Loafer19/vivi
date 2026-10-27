@@ -10,7 +10,7 @@ pub(crate) fn screenshot_mode() -> bool {
 }
 
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
-/// VIVI_SETTINGS=<category> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
+/// VIVI_SETTINGS=<category index or name> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>,
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY, VIVI_PAGE=<streams hub page>,
 /// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
@@ -26,7 +26,7 @@ pub(crate) fn open_plugin_link(app: &AppWindow, id: &str) {
             .find(|e| e.id == id)
             .map(|e| e.name.clone())
     });
-    let n = 12; // Extensions
+    let n = crate::settings::category("Extensions");
     let q: slint::SharedString = name.unwrap_or_default().into();
     app.global::<crate::Overlays>().set_settings_open(true);
     app.global::<crate::Settings>().set_category(n);
@@ -34,9 +34,17 @@ pub(crate) fn open_plugin_link(app: &AppWindow, id: &str) {
     app.global::<crate::Settings>().invoke_refresh(n, q, false);
 }
 
+/// A Settings category from VIVI_SETTINGS: its index or its name ("Mouse").
+pub(crate) fn settings_index(v: &str) -> i32 {
+    v.trim()
+        .parse()
+        .unwrap_or_else(|_| crate::settings::category(v.trim()))
+}
+
 pub(crate) fn debug_ui(app: &AppWindow) {
     let var = |k: &str| std::env::var(k).ok();
-    if let Some(n) = var("VIVI_SETTINGS").and_then(|v| v.parse().ok()) {
+    // VIVI_SETTINGS=<index or category name>, e.g. 5 or Mouse.
+    if let Some(n) = var("VIVI_SETTINGS").map(|v| settings_index(&v)) {
         let adv = var("VIVI_ADVANCED").is_some();
         let q = var("VIVI_SEARCH").unwrap_or_default();
         app.global::<crate::Overlays>().set_settings_open(true);
@@ -56,6 +64,28 @@ pub(crate) fn debug_ui(app: &AppWindow) {
                     .invoke_setting_changed(id.into(), "".into());
             }
         });
+    }
+    // VIVI_MOUSE=<button>,…: report mouse buttons on the video (click, double-click,
+    // middle, back, forward, wheel-up, wheel-down) one every 1.5 s from 4 s, as the window
+    // does, so Settings → Controls → Mouse can be checked without synthesized input.
+    if let Some(list) = var("VIVI_MOUSE") {
+        for (i, b) in list.split(',').map(str::trim).enumerate() {
+            let w = app.as_weak();
+            let b = b.to_string();
+            slint::Timer::single_shot(Duration::from_millis(4000 + 1500 * i as u64), move || {
+                let Some(a) = w.upgrade() else { return };
+                let pb = a.global::<crate::Playback>();
+                let done = match b.as_str() {
+                    "wheel-up" => pb.invoke_wheel(120.0),
+                    "wheel-down" => pb.invoke_wheel(-120.0),
+                    _ => {
+                        pb.invoke_mouse(b.as_str().into());
+                        true
+                    }
+                };
+                eprintln!("vivi: VIVI_MOUSE {b} (handled: {done})");
+            });
+        }
     }
     if let Some(p) = var("VIVI_CUSTOMIZE") {
         app.global::<crate::Customize>()

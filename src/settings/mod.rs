@@ -44,11 +44,17 @@ fn remote_action(installed: bool, enabled: bool) -> Option<&'static str> {
 /// Seconds of inactivity before the controls hide (read by the auto-hide timer).
 pub static AUTOHIDE_SECS: AtomicU32 = AtomicU32::new(2);
 
-const CATEGORIES: [&str; 14] = [
+/// Sidebar order. The groups start at General (App), Skip Amounts (Controls), Playback
+/// (Media) and Network (System); `ui/settings.slint` (`group`, `icons`) and the fixed
+/// indices in `ui/app.slint` / `ui/panel.slint` follow this list.
+const CATEGORIES: [&str; 17] = [
     "General",
     "Interface",
     "Privacy",
-    "Controls",
+    "Skip Amounts",
+    "Keyboard Shortcuts",
+    "Mouse",
+    "Remotes",
     "Playback",
     "Video",
     "Audio",
@@ -65,8 +71,14 @@ const ACCENTS: [&str; 9] = [
     "#8C8C8C",
 ];
 
-/// Index of a Settings category by name (0 = General when unknown).
+/// Index of a Settings category by name (0 = General when unknown). "Controls", the
+/// single page before 0.15, opens its first page (Skip Amounts).
 pub fn category(name: &str) -> i32 {
+    let name = if name == "Controls" {
+        "Skip Amounts"
+    } else {
+        name
+    };
     CATEGORIES.iter().position(|c| *c == name).unwrap_or(0) as i32
 }
 
@@ -558,16 +570,77 @@ mod tests {
         let r = filtered(&c, &[], 0, "language", false);
         assert!(r.len() >= 2 && r.iter().all(|r| r.kind != "header"));
         // Performance: hwdec is basic, video-sync is behind "Advanced Options".
-        let basic = filtered(&c, &[], 10, "", false);
+        let perf = category("Performance");
+        let basic = filtered(&c, &[], perf, "", false);
         assert!(basic.iter().any(|r| r.id.as_str() == "playback.hwdec"));
         assert!(basic.iter().any(|r| r.kind.as_str() == "advanced"));
         assert!(basic
             .iter()
             .all(|r| r.id.as_str() != "performance.video_sync"));
-        let adv = filtered(&c, &[], 10, "", true);
+        let adv = filtered(&c, &[], perf, "", true);
         assert!(adv
             .iter()
             .any(|r| r.id.as_str() == "performance.video_sync"));
+    }
+    #[test]
+    fn controls_group_pages() {
+        // The indices ui/settings.slint (group labels), ui/app.slint (Library) and
+        // ui/panel.slint (Playback … Subtitles) use.
+        let at = |n: &str| category(n);
+        assert_eq!(
+            [
+                at("General"),
+                at("Skip Amounts"),
+                at("Playback"),
+                at("Network")
+            ],
+            [0, 3, 7, 12]
+        );
+        assert_eq!(
+            [
+                at("Video"),
+                at("Audio"),
+                at("Subtitles"),
+                at("Library"),
+                at("Extensions")
+            ],
+            [8, 9, 10, 11, 15]
+        );
+        assert_eq!(at("Controls"), at("Skip Amounts"));
+        let c = Config::default();
+        let ids = |n: &str| -> Vec<String> {
+            filtered(&c, &[], at(n), "", false)
+                .iter()
+                .map(|r| r.id.to_string())
+                .collect()
+        };
+        let skip = ids("Skip Amounts");
+        for id in [
+            "controls.short_skip",
+            "controls.long_skip",
+            "audio.volume_step",
+            "controls.speed_step",
+        ] {
+            assert!(skip.iter().any(|i| i == id), "{id}");
+        }
+        let mouse = ids("Mouse");
+        for (_, id, _) in crate::mouse::BUTTONS {
+            assert!(mouse.iter().any(|i| i == id), "{id}");
+        }
+        assert!(mouse.iter().any(|i| i == "controls.wheel"));
+        let remotes = ids("Remotes");
+        assert!(remotes.iter().any(|i| i == REMOTE_CONTROL_ROW));
+        assert!(remotes.iter().any(|i| i == "general.remote_control"));
+        assert!(!ids("General").iter().any(|i| i == "general.remote_control"));
+        let keys = filtered(&c, &[], at("Keyboard Shortcuts"), "", false);
+        assert!(keys.iter().filter(|r| r.kind.as_str() == "key").count() > 20);
+        // The speed step shows as one of its choices.
+        let row = filtered(&c, &[], at("Skip Amounts"), "", false)
+            .into_iter()
+            .find(|r| r.id.as_str() == "controls.speed_step")
+            .unwrap();
+        assert_eq!(row.value.as_str(), "0.05×");
+        assert!(row.options.iter().any(|o| o.as_str() == "0.25×"));
     }
     #[test]
     fn every_category_has_rows() {
