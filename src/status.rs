@@ -108,19 +108,29 @@ fn remote_extension() -> bool {
     crate::plugins::loaded(crate::settings::REMOTE_CONTROL)
 }
 
+/// Tooltip of the volume leveling chip: ReplayGain (#88) and / or Normalize loudness.
+fn leveling_tip(replaygain: Option<&str>, norm: bool) -> Option<String> {
+    let rg = replaygain.filter(|m| matches!(*m, "track" | "album"));
+    let what = match (rg, norm) {
+        (Some(m), true) => format!("ReplayGain ({m}) and loudness normalization are on"),
+        (Some(m), false) => format!("ReplayGain ({m}) is on"),
+        (None, true) => "Loudness normalization is on".into(),
+        (None, false) => return None,
+    };
+    Some(format!("{what} — open Audio settings"))
+}
+
 /// The chips to show now.
 fn current(p: &Player) -> Vec<Indicator> {
     let mut v = Vec::new();
     if let Some((label, tip)) = crate::sleep::indicator() {
         v.push(chip("sleep", "moon", &tip, &label));
     }
-    if p.get("af").is_some_and(|f| f.contains("vivi-norm")) {
-        v.push(chip(
-            "leveling",
-            "loudness",
-            "Loudness normalization is on — open Audio settings",
-            "",
-        ));
+    if let Some(tip) = leveling_tip(
+        p.get("replaygain").as_deref(),
+        p.get("af").is_some_and(|f| f.contains("vivi-norm")),
+    ) {
+        v.push(chip("leveling", "loudness", &tip, ""));
     }
     let (a, b) = (num(p, "ab-loop-a"), num(p, "ab-loop-b"));
     if a.is_some() || b.is_some() {
@@ -250,6 +260,23 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leveling_chip() {
+        assert_eq!(leveling_tip(Some("no"), false), None);
+        assert_eq!(leveling_tip(None, false), None);
+        assert_eq!(
+            leveling_tip(Some("album"), false).unwrap(),
+            "ReplayGain (album) is on — open Audio settings"
+        );
+        assert_eq!(
+            leveling_tip(Some("no"), true).unwrap(),
+            "Loudness normalization is on — open Audio settings"
+        );
+        assert!(leveling_tip(Some("track"), true)
+            .unwrap()
+            .starts_with("ReplayGain (track) and"));
+    }
 
     #[test]
     fn speed_labels() {

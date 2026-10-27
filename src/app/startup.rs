@@ -48,6 +48,7 @@ pub(crate) fn setup_features(
     ipc::setup(app, player, cfg.borrow().general.remote_control);
     crate::bookmarks::setup(app, player, log);
     crate::sleep::setup(app, player, cfg.clone());
+    crate::transitions::setup(player, cfg.clone(), log);
     crate::status::setup(app, player);
     crate::tray::setup(app, player, cfg.clone());
     if screenshot_mode() {

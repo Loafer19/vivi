@@ -565,6 +565,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     // ---------- Audio ----------
     let mut devs: Vec<&str> = vec!["auto"];
     devs.extend(devices.iter().map(String::as_str).filter(|d| *d != "auto"));
+    let rg_on = c.audio.replaygain != "off";
     r.cat("Audio")
         .header("Output")
         .toggle(
@@ -597,12 +598,59 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             (0.0, 100.0, 5.0),
             &["0%", "50%", "100%"],
         )
-        .header("Loudness")
+        .header("Volume leveling")
+        .choice(
+            "audio.replaygain",
+            "ReplayGain",
+            "Even out the volume between tracks with the ReplayGain tags in the files: per track, or per album so an album keeps its own dynamics (mpv replaygain). Album uses the track value where a file has no album value.",
+            &schema::get(c, "audio.replaygain"),
+            &config::REPLAYGAIN.map(|(_, l)| l),
+        )
+        .slider(
+            "audio.preamp",
+            "Preamp (dB)",
+            "Added to the ReplayGain value (mpv replaygain-preamp).",
+            c.audio.preamp,
+            (-15.0, 15.0, 0.5),
+            &["−15 dB", "0 dB", "+15 dB"],
+        )
+        .enabled(rg_on)
+        .toggle(
+            "audio.prevent_clipping",
+            "Prevent clipping",
+            "Lower the gain where ReplayGain would push the peaks of a track past full scale (mpv replaygain-clip=no).",
+            c.audio.prevent_clipping,
+        )
+        .enabled(rg_on)
+        .slider(
+            "audio.untagged_gain",
+            "Files without tags (dB)",
+            "Gain for files that have no ReplayGain tags while ReplayGain is on (mpv replaygain-fallback).",
+            c.audio.untagged_gain,
+            (-15.0, 15.0, 0.5),
+            &["−15 dB", "0 dB", "+15 dB"],
+        )
+        .enabled(rg_on)
         .toggle(
             "audio.normalize",
             "Normalize loudness",
             "Even out quiet and loud passages (lavfi dynaudnorm filter).",
             c.audio.normalize,
+        )
+        .header("Between tracks")
+        .toggle(
+            "audio.gapless",
+            "Gapless playback",
+            "Play music tracks back to back without a gap: the audio output stays open and the next file is opened early (mpv gapless-audio, prefetch-playlist). Video and streams are not affected.",
+            c.audio.gapless,
+        )
+        .slider(
+            "audio.crossfade_secs",
+            "Crossfade (s)",
+            "Fade the ending track out and the next one in, half of this time each (a short dip, not an overlap). Music only; skipped between tracks of the same album while gapless playback is on. 0 turns it off.",
+            c.audio.crossfade_secs as f64,
+            (0.0, config::CROSSFADE_MAX as f32, 1.0),
+            &["Off", "6 s", "12 s"],
         )
         .header("Tracks")
         .text(

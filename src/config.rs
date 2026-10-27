@@ -110,6 +110,20 @@ pub struct Audio {
     pub normalize: bool,
     /// Default audio delay in seconds.
     pub delay: f64,
+    /// ReplayGain (#88): "off" | "track" | "album" (mpv `replaygain`).
+    pub replaygain: String,
+    /// Gain added to the ReplayGain value, dB (mpv `replaygain-preamp`).
+    pub preamp: f64,
+    /// Lower the gain when ReplayGain would clip (mpv `replaygain-clip=no`).
+    pub prevent_clipping: bool,
+    /// Gain for files without ReplayGain tags while ReplayGain is on, dB
+    /// (mpv `replaygain-fallback`).
+    pub untagged_gain: f64,
+    /// Gapless playback between music tracks (mpv `gapless-audio=yes`,
+    /// `prefetch-playlist=yes`); see `transitions.rs`.
+    pub gapless: bool,
+    /// Crossfade between music tracks in seconds, 0 = off (see `transitions.rs`).
+    pub crossfade_secs: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -409,6 +423,12 @@ impl Default for Audio {
             volume_step: 5,
             normalize: false,
             delay: 0.0,
+            replaygain: "off".into(),
+            preamp: 0.0,
+            prevent_clipping: true,
+            untagged_gain: 0.0,
+            gapless: true,
+            crossfade_secs: 0,
         }
     }
 }
@@ -467,6 +487,7 @@ impl Config {
         let i = &mut self.interface;
         migrate_toolbar(i);
         migrate_controls(&mut self.controls, &mut self.stubs);
+        migrate_audio(&mut self.audio);
         self
     }
 
@@ -685,6 +706,36 @@ pub fn migrate_controls(c: &mut Controls, stubs: &mut BTreeMap<String, String>) 
     }
 }
 
+/// ReplayGain modes (`audio.replaygain`), as (config id, label).
+pub const REPLAYGAIN: [(&str, &str); 3] = [("off", "Off"), ("track", "Track"), ("album", "Album")];
+/// Longest crossfade, seconds.
+pub const CROSSFADE_MAX: i64 = 12;
+
+/// The `audio.replaygain` id for an id or label ("Album" → "album"), if known.
+pub fn replaygain_id(v: &str) -> Option<&'static str> {
+    let v = v.trim();
+    REPLAYGAIN
+        .iter()
+        .find(|(id, l)| id.eq_ignore_ascii_case(v) || l.eq_ignore_ascii_case(v))
+        .map(|(id, _)| *id)
+}
+
+/// Volume leveling and transitions (#88): unknown ReplayGain modes become "off", and
+/// out-of-range gains or crossfade lengths are clamped.
+pub fn migrate_audio(a: &mut Audio) {
+    a.replaygain = replaygain_id(&a.replaygain).unwrap_or("off").into();
+    let db = |v: f64| {
+        if v.is_finite() {
+            v.clamp(-15.0, 15.0)
+        } else {
+            0.0
+        }
+    };
+    a.preamp = db(a.preamp);
+    a.untagged_gain = db(a.untagged_gain);
+    a.crossfade_secs = a.crossfade_secs.clamp(0, CROSSFADE_MAX);
+}
+
 /// The canonical [`BAR_ICONS`] name, ignoring case; unknown values fall back to "Two-tone".
 pub fn bar_icons_name(s: &str) -> &'static str {
     BAR_ICONS
@@ -868,6 +919,41 @@ mod toolbar_tests {
                 ..Default::default()
             }
         );
+    }
+    #[test]
+    fn audio_leveling_defaults_and_old_configs() {
+        // A config from before #88: ReplayGain and crossfade off, gapless on (music only).
+        let c: Config = toml::from_str("[audio]\nnormalize = true\nvolume_step = 10\n").unwrap();
+        let c = c.migrated();
+        assert!(c.audio.normalize);
+        assert_eq!(c.audio.replaygain, "off");
+        assert_eq!((c.audio.preamp, c.audio.untagged_gain), (0.0, 0.0));
+        assert!(c.audio.prevent_clipping && c.audio.gapless);
+        assert_eq!(c.audio.crossfade_secs, 0);
+        assert_eq!(
+            c.audio,
+            Audio {
+                normalize: true,
+                volume_step: 10,
+                ..Default::default()
+            }
+        );
+    }
+    #[test]
+    fn migrates_bad_leveling_values() {
+        let c: Config = toml::from_str(
+            "[audio]\nreplaygain = \"Album\"\npreamp = 40.0\nuntagged_gain = -99.0\n\
+             crossfade_secs = 30\n",
+        )
+        .unwrap();
+        let a = c.migrated().audio;
+        assert_eq!(a.replaygain, "album");
+        assert_eq!((a.preamp, a.untagged_gain), (15.0, -15.0));
+        assert_eq!(a.crossfade_secs, CROSSFADE_MAX);
+        let c: Config =
+            toml::from_str("[audio]\nreplaygain = \"loud\"\ncrossfade_secs = -2\n").unwrap();
+        let a = c.migrated().audio;
+        assert_eq!((a.replaygain.as_str(), a.crossfade_secs), ("off", 0));
     }
     #[test]
     fn migrates_wheel_stubs_and_bad_values() {

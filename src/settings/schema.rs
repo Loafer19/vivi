@@ -3,7 +3,7 @@
 //! `setting-changed` handler writes them through [`set`], so an id is mapped in one place.
 //! Ids that need more than an assignment (file pickers, rescans, presets) stay in `settings.rs`.
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::mouse;
 
 pub(super) struct Field {
@@ -15,6 +15,19 @@ pub(super) struct Field {
 
 fn on(v: &str) -> bool {
     v == "true"
+}
+
+/// A number from a slider value or typed text ("6", "6.0", "-3.5 dB").
+fn num(v: &str) -> Option<f64> {
+    v.split_whitespace()
+        .next()
+        .and_then(|n| n.replace('−', "-").replace('+', "").parse::<f64>().ok())
+        .filter(|n| n.is_finite())
+}
+
+/// A gain in dB: half-dB steps within ±15 dB; unreadable input means 0.
+fn db(v: &str) -> f64 {
+    num(v).map_or(0.0, |n| (n.clamp(-15.0, 15.0) * 2.0).round() / 2.0)
 }
 
 /// "0.1×" for a speed step.
@@ -301,6 +314,49 @@ pub(super) const OTHER: &[Field] = &[
         set: |c, v| c.audio.normalize = v == "true",
     },
     Field {
+        id: "audio.replaygain",
+        get: Some(|c| {
+            config::REPLAYGAIN
+                .iter()
+                .find(|(id, _)| *id == c.audio.replaygain)
+                .map_or("Off", |(_, l)| *l)
+                .into()
+        }),
+        set: |c, v| {
+            if let Some(id) = config::replaygain_id(v) {
+                c.audio.replaygain = id.into();
+            }
+        },
+    },
+    Field {
+        id: "audio.preamp",
+        get: Some(|c| c.audio.preamp.to_string()),
+        set: |c, v| c.audio.preamp = db(v),
+    },
+    Field {
+        id: "audio.prevent_clipping",
+        get: Some(|c| c.audio.prevent_clipping.to_string()),
+        set: |c, v| c.audio.prevent_clipping = on(v),
+    },
+    Field {
+        id: "audio.untagged_gain",
+        get: Some(|c| c.audio.untagged_gain.to_string()),
+        set: |c, v| c.audio.untagged_gain = db(v),
+    },
+    Field {
+        id: "audio.gapless",
+        get: Some(|c| c.audio.gapless.to_string()),
+        set: |c, v| c.audio.gapless = on(v),
+    },
+    Field {
+        id: "audio.crossfade_secs",
+        get: Some(|c| c.audio.crossfade_secs.to_string()),
+        set: |c, v| {
+            let n = num(v).unwrap_or(0.0).round() as i64;
+            c.audio.crossfade_secs = n.clamp(0, config::CROSSFADE_MAX)
+        },
+    },
+    Field {
         id: "audio.delay",
         get: None,
         set: |c, v| {
@@ -503,6 +559,12 @@ mod tests {
             ("controls.mouse_forward", "Next in queue"),
             ("controls.wheel", "Speed"),
             ("controls.wheel_reverse", "true"),
+            ("audio.replaygain", "Album"),
+            ("audio.preamp", "-3.5"),
+            ("audio.prevent_clipping", "false"),
+            ("audio.untagged_gain", "-6"),
+            ("audio.gapless", "false"),
+            ("audio.crossfade_secs", "6"),
         ] {
             assert!(set(&mut c, id, v), "{id}");
             assert_eq!(get(&c, id), v, "{id}");
@@ -529,6 +591,20 @@ mod tests {
             (0.25, "speed")
         );
         assert_eq!(c.controls.mouse_click, "mute");
+        assert_eq!(c.audio.replaygain, "album");
+        set(&mut c, "audio.replaygain", "louder");
+        set(&mut c, "audio.preamp", "40");
+        set(&mut c, "audio.crossfade_secs", "6.4");
+        assert_eq!(
+            (
+                c.audio.replaygain.as_str(),
+                c.audio.preamp,
+                c.audio.crossfade_secs
+            ),
+            ("album", 15.0, 6)
+        );
+        set(&mut c, "audio.crossfade_secs", "99");
+        assert_eq!(c.audio.crossfade_secs, config::CROSSFADE_MAX);
         set(&mut c, "subtitles.language", " en ");
         assert_eq!(c.subtitles.language, "en");
     }

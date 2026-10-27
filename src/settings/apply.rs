@@ -72,6 +72,15 @@ pub(crate) fn ytdl_format(q: &str) -> String {
     }
 }
 
+/// mpv `replaygain` and `replaygain-fallback` for the audio settings.
+pub(crate) fn replaygain(a: &config::Audio) -> (&'static str, f64) {
+    match a.replaygain.as_str() {
+        "track" => ("track", a.untagged_gain),
+        "album" => ("album", a.untagged_gain),
+        _ => ("no", 0.0),
+    }
+}
+
 /// mpv options driven by settings (applied at startup and on change).
 pub fn apply_player(p: &Player, c: &Config) {
     // Playback
@@ -132,6 +141,14 @@ pub fn apply_player(p: &Player, c: &Config) {
     if c.audio.normalize && !has_norm {
         p.cmd("af", &["add", "@vivi-norm:lavfi=[dynaudnorm]"]);
     }
+    // Volume leveling (#88). mpv applies replaygain-fallback even with replaygain=no,
+    // so it is only set while ReplayGain is on.
+    let (rg, fallback) = replaygain(&c.audio);
+    p.set("replaygain", rg);
+    p.set("replaygain-preamp", &c.audio.preamp.to_string());
+    p.set("replaygain-clip", yes(!c.audio.prevent_clipping));
+    p.set("replaygain-fallback", &fallback.to_string());
+    crate::transitions::apply(p, c);
     // Subtitles
     p.set("sub-visibility", yes(c.subtitles.enabled));
     p.set("slang", &c.subtitles.language);
@@ -367,4 +384,23 @@ pub fn sync_panel(a: &AppWindow, p: &Player) {
         .set_pv_saturation(f("saturation", 0.0));
     a.global::<crate::Panel>().set_pv_gamma(f("gamma", 0.0));
     a.global::<crate::Panel>().set_pv_speed(f("speed", 1.0));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replaygain_fallback_only_while_on() {
+        let mut a = config::Audio {
+            untagged_gain: -6.0,
+            ..Default::default()
+        };
+        // mpv applies replaygain-fallback even with replaygain=no.
+        assert_eq!(replaygain(&a), ("no", 0.0));
+        a.replaygain = "album".into();
+        assert_eq!(replaygain(&a), ("album", -6.0));
+        a.replaygain = "track".into();
+        assert_eq!(replaygain(&a), ("track", -6.0));
+    }
 }

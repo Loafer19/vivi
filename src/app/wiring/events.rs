@@ -105,6 +105,7 @@ pub(crate) fn wire(
                         crate::bookmarks::file_loaded(&player);
                         crate::sublocal::file_loaded(&a, &player);
                         crate::sleep::file_loaded(&player);
+                        crate::transitions::file_loaded();
                         a.global::<crate::Panel>().set_preset_name(
                             key.or_else(|| player.get("path").map(|p| config::show_key(&p)))
                                 .unwrap_or_default()
@@ -120,6 +121,7 @@ pub(crate) fn wire(
                         }
                     }
                     PlayerEvent::StartFile => {
+                        crate::transitions::start_file();
                         last_err.clear();
                         let path = player.get("path").unwrap_or_default();
                         load.start(&path);
