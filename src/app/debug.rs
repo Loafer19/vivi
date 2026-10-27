@@ -10,7 +10,9 @@ pub(crate) fn screenshot_mode() -> bool {
 }
 
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
-/// VIVI_SETTINGS=<category index or name> [VIVI_ADVANCED=1] [VIVI_SEARCH=text], VIVI_CUSTOMIZE=<profile>,
+/// VIVI_SETTINGS=<category index or name> [VIVI_ADVANCED=1] [VIVI_SEARCH=text]
+/// [VIVI_SETTINGS_ACTION=<row id>], VIVI_MOUSE=<button>,… (Settings → Controls → Mouse),
+/// VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>,
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY, VIVI_PAGE=<streams hub page>,
 /// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
