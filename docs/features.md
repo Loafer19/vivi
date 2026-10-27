@@ -248,7 +248,7 @@ The machine-readable catalog is [plugins/index.json](https://github.com/Loafer19
 `vivi-mcp` is a small stdio [MCP](https://modelcontextprotocol.io) server, built alongside
 Vivi, that lets Claude Desktop, Cursor and other agents control a running player (play,
 seek, volume, open files/URLs, queue, library search, subtitles, EQ presets, now playing).
-Enable *Settings → General → Remote control* (or run `VIVI_IPC=1 vivi`), then add
+Turn on *Settings → Controls → Remotes → Allow AI agents and scripts* (*General → Remote control* before 0.15) or run `VIVI_IPC=1 vivi`, then add
 `{"mcpServers": {"vivi": {"command": "vivi-mcp"}}}` to your client. See
 [docs/mcp.md](mcp.md).
 
