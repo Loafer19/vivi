@@ -47,8 +47,8 @@
 <tr><th scope="row">Miniplayer / picture-in-picture</th><td class="v y">✓</td><td class="n">–</td><td class="q">?</td><td class="q">?</td><td class="y">✓</td><td class="n">–</td><td class="q">?</td></tr>
 <tr><th scope="row">Video playback</th><td class="v y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">–</td></tr>
 <tr class="sec"><th colspan="8"><span>Footprint (measured, see below)</span></th></tr>
-<tr><th scope="row">Download (Linux)</th><td class="v">18.7 MB tarball</td><td>n/a (distro)</td><td>n/a (distro)</td><td>n/a</td><td>n/a</td><td>n/a (distro)</td><td>n/a</td></tr>
-<tr><th scope="row">Installed size (own files)</th><td class="v">47.9 MB</td><td>6.5 MB</td><td>19.8 MB</td><td>n/a</td><td>n/a</td><td>1.2 MB</td><td>n/a</td></tr>
+<tr><th scope="row">Download (Linux)</th><td class="v">18.8 MB tarball</td><td>n/a (distro)</td><td>n/a (distro)</td><td>n/a</td><td>n/a</td><td>n/a (distro)</td><td>n/a</td></tr>
+<tr><th scope="row">Installed size (own files)</th><td class="v">48.2 MB</td><td>6.5 MB</td><td>19.8 MB</td><td>n/a</td><td>n/a</td><td>1.2 MB</td><td>n/a</td></tr>
 <tr><th scope="row">Time to first window, warm</th><td class="v">~0.33 s</td><td>~0.85 s</td><td>~0.19 s</td><td>n/a</td><td>n/a</td><td>~0.35 s</td><td>n/a</td></tr>
 <tr><th scope="row">Time to first window, cold cache</th><td class="v">~0.77 s</td><td>~1.13 s</td><td>~0.47 s</td><td>n/a</td><td>n/a</td><td>~0.73 s</td><td>n/a</td></tr>
 <tr><th scope="row">Memory, idle (PSS)</th><td class="v">~186 MB</td><td>~153 MB</td><td>~58 MB</td><td>n/a</td><td>n/a</td><td>~298 MB</td><td>n/a</td></tr>
@@ -72,9 +72,9 @@
 </div>
 
 <h2 id="numbers">How we measured</h2>
-<p class="lead">Size was measured on 25 Oct 2026 (v0.14.0); start time, memory and CPU on one desktop under identical conditions on 18 Oct 2026. Numbers appear only where we measured them.</p>
+<p class="lead">Size was measured on 27 Oct 2026 (v0.15.0); start time, memory and CPU on one desktop under identical conditions on 18 Oct 2026. Numbers appear only where we measured them.</p>
 <ul class="src">
-  <li><b>Download</b>: size of <code>vivi-v0.14.0-linux-x86_64.tar.gz</code> on the GitHub release (18,716,965 bytes). mpv and VLC on Linux come from distribution packages, so there is no single download to compare.</li>
+  <li><b>Download</b>: size of <code>vivi-v0.15.0-linux-x86_64.tar.gz</code> on the GitHub release (18,797,256 bytes). mpv and VLC on Linux come from distribution packages, so there is no single download to compare.</li>
   <li><b>Installed size</b>: Vivi = the files the installer copies (<code>vivi</code>, <code>vivi-mcp</code>, desktop file and icons), excluding the system libmpv. mpv and VLC = the <code>Installed-Size</code> of their Debian 13 packages (mpv + libmpv2; vlc, vlc-bin, vlc-plugin-base, vlc-plugin-qt, libvlc5, libvlccore9), excluding shared libraries such as FFmpeg and Qt. Celluloid = the <code>Installed Size</code> of the Arch Linux package <code>celluloid 0.30-2</code> (1,191 KiB, measured 18 Oct 2026), excluding libmpv and GTK.</li>
   <li><b>Start time, memory and CPU</b>: Arch Linux, Hyprland (Wayland), NVIDIA RTX 3060 Ti, 12-core CPU, 16 GB RAM; each player with its normal configuration on that PC. Vivi = the v0.12.0 release (Linux tarball, installed as the Arch <code>vivi-bin</code> package), mpv 0.41 (<code>--idle --force-window=yes</code>), VLC 3.0.23 (Qt interface), Celluloid 0.30 (GTK 4, on the same libmpv 0.41, default settings). Time runs from launch to the first Wayland surface attach (<code>WAYLAND_DEBUG=1</code>, polled every 20 ms); VLC 3 draws through XWayland, so for VLC it is the time until its window is mapped (<code>hyprctl clients</code>). Warm = median of 3 runs; cold = after <code>echo 3 &gt; /proc/sys/vm/drop_caches</code>. Memory is PSS of the main process from <code>/proc/PID/smaps_rollup</code> 3 s after the window appears, idle (nothing opened) or playing a local 1080p H.264 clip (1080×1920, 30 fps); CPU is the average over 10 s of that playback (100% = one core). Vivi and VLC decode on the GPU there; mpv and Celluloid use software decoding unless <code>hwdec</code> is set. Celluloid playing memory is the mean of 2 runs (531 and 604 MB).</li>
   <li>MPC-HC, IINA and foobar2000 do not run natively on Linux, so no numbers are shown for them.</li>
@@ -83,7 +83,7 @@
 <h2 id="sources">Sources</h2>
 <p class="lead">Competitor facts come from the projects' own sites and documentation, checked 17 Oct 2026. Something wrong or out of date? <a href="https://github.com/Loafer19/vivi/issues">Open an issue</a>.</p>
 <ul class="src">
-  <li>Vivi: <a href="https://github.com/Loafer19/vivi/blob/master/docs/features.md">docs/features.md</a>, <a href="https://github.com/Loafer19/vivi/releases/tag/v0.14.0">v0.14.0 release</a></li>
+  <li>Vivi: <a href="https://github.com/Loafer19/vivi/blob/master/docs/features.md">docs/features.md</a>, <a href="https://github.com/Loafer19/vivi/releases/tag/v0.15.0">v0.15.0 release</a></li>
   <li>mpv: <a href="https://mpv.io/">mpv.io</a>, <a href="https://mpv.io/manual/stable/">manual</a> (<code>ab-loop-a/b</code>, <code>--stream-record</code>, <code>sub-delay</code>, <code>ytdl</code>), <a href="https://github.com/mpv-player/mpv/blob/master/Copyright">Copyright</a> (GPLv2+, LGPLv2.1+ when built with <code>-Dgpl=false</code>)</li>
   <li>VLC: <a href="https://www.videolan.org/vlc/">videolan.org/vlc</a>, <a href="https://www.videolan.org/vlc/features.html">features</a>, <a href="https://www.videolan.org/legal.html">legal</a> (GPL v2 / LGPL), <a href="https://addons.videolan.org/">addons.videolan.org</a>; VLC 3.0 source: Qt interface with Record and A→B Loop buttons (<a href="https://code.videolan.org/videolan/vlc/-/blob/3.0.x/modules/gui/qt/components/controller.hpp">controller.hpp</a>), Toolbars Editor (<a href="https://code.videolan.org/videolan/vlc/-/blob/3.0.x/modules/gui/qt/dialogs/toolbar.cpp">toolbar.cpp</a>), bundled OpenSubtitles extension (<a href="https://code.videolan.org/videolan/vlc/-/blob/3.0.x/share/lua/extensions/VLSub.lua">VLSub.lua</a>)</li>
   <li>MPC-HC: <a href="https://github.com/clsid2/mpc-hc">github.com/clsid2/mpc-hc</a> (GPL-3.0 license file; MFC per <a href="https://github.com/clsid2/mpc-hc/blob/develop/src/mpc-hc/stdafx.h">stdafx.h</a>)</li>
