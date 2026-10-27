@@ -241,7 +241,7 @@ section[id]{scroll-margin-top:120px}
 <tr><td><code>set_lyrics_offset</code></td><td><code>seconds</code> / <code>delta</code> / <code>reset</code></td><td>Synced-lyrics timing (±30 s), saved per track</td></tr>
 <tr><td><code>set_karaoke</code></td><td><code>enabled</code></td><td>Open or close the karaoke view</td></tr>
 <tr><td><code>set_visualizer</code></td><td><code>mode</code> (name, <code>next</code>/<code>prev</code>)</td><td>Music Visualizer mode for music and radio without video (Spectrum, Radial, Pitch…); without <code>mode</code> it only reports. Returns the mode, all modes and whether it is showing</td></tr>
-<tr><td><code>screenshot</code></td><td><code>path</code>, <code>mode</code> (<code>subtitles</code>/<code>video</code>/<code>window</code>)</td><td>Saves the current frame and returns its path. also returns the image itself, so the agent can see the frame; <code>save: false</code> keeps no file</td></tr>
+<tr><td><code>screenshot</code></td><td><code>path</code>, <code>mode</code> (<code>subtitles</code>/<code>video</code>/<code>window</code>)</td><td>Saves the current frame and returns its path and the image itself, so the agent can see the frame; <code>save: false</code> keeps no file</td></tr>
 </tbody>
 <tbody><tr class="grp"><th colspan="3">Plugins <span>4</span></th></tr>
 <tr><td><code>list_plugins</code></td><td>–</td><td>Plugins: <code>id</code>, <code>name</code>, <code>version</code>, <code>kind</code>, <code>enabled</code></td></tr>
