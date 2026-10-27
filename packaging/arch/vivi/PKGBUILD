@@ -1,7 +1,7 @@
 # Maintainer: Loafer19 <https://github.com/Loafer19>
 # Build from the tagged source release.
 pkgname=vivi
-pkgver=0.14.0
+pkgver=0.15.0
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64' 'aarch64')

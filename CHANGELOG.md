@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-27
+
+Highlights: **volume leveling** with ReplayGain (track / album, preamp, clipping protection, a gain for untagged files), **gapless playback** for music and an optional soft **crossfade**; a **Controls** settings group with mouse buttons, the scroll wheel and a speed step; **bookmarks become chapters** (in the player or as an FFmpeg chapters file); bookmarks, the A-B loop and the sleep timer for **AI agents and scripts**; subtitles **from your computer** without the Subtitle Search plugin.
+
 ### Added
 - **Load subtitles from your computer without Subtitle Search** (#84): the Subtitle menu's *Load from Computer…* and the side panel's *From computer…* open the Add Subtitles dialog on its From Computer half, now built into the player: *To This File* lists the subtitle files of the video's folder (or one you choose) with the matching one checked, *To This Folder* pairs every video of the folder with its subtitle and attaches it when that video plays. With Subtitle Search on, the same dialog also has *From OpenSubtitles*; with it off, the dialog shows only the local source. The per-file offset (`Alt+Z` / `Alt+X`) is unchanged.
 - **Bookmarks become chapters**: below the side panel's bookmark list, *Use as chapters* adds the file's bookmarks to its chapter list (chapter menu, seek-bar ticks and chapter navigation; until the file closes) and *Save chapters…* writes an FFmpeg metadata chapters file (`<video>.ffmetadata`, the file's own chapters plus the bookmarks) for `mpv --chapters-file=` or `ffmpeg -map_metadata` — Vivi itself needs no ffmpeg. Control socket: `bookmarks_export` (`{"to": "player"}` or `{"to": "file", "path": …}`).
