@@ -53,6 +53,9 @@ impl<'a> Rows<'a> {
                 maximum: 1.0,
                 step: 1.0,
                 enabled: true,
+                card: "".into(),
+                card_end: false,
+                nested: false,
             },
             self.adv,
         ));
@@ -61,8 +64,27 @@ impl<'a> Rows<'a> {
     pub(crate) fn last(&mut self) -> &mut SettingRow {
         &mut self.v.last_mut().expect("row").0
     }
+    /// A section: a card titled `t` holding the rows that follow, until the next
+    /// section or the Advanced Options bar (see [`cards`]).
     pub(crate) fn header(&mut self, t: &str) -> &mut Self {
-        self.push("", t, "", "header", String::new())
+        self.section(t, "", &[])
+    }
+    /// A section with a subtitle and buttons on the right of its title; a button sends
+    /// `(id, "run")` like an action row.
+    pub(crate) fn section(&mut self, t: &str, sub: &str, actions: &[(&str, &str)]) -> &mut Self {
+        self.push("", t, sub, "header", String::new());
+        let r = self.last();
+        r.options = crate::util::strings(actions.iter().map(|(id, _)| *id));
+        r.labels = crate::util::strings(actions.iter().map(|(_, l)| *l));
+        self
+    }
+    /// The last row only matters while `on` (e.g. *Log file* under *Save a log*): it
+    /// is indented under the row it depends on and folded away while `on` is false.
+    pub(crate) fn depends(&mut self, on: bool) -> &mut Self {
+        let r = self.last();
+        r.nested = true;
+        r.enabled = on;
+        self
     }
     pub(crate) fn toggle(&mut self, id: &str, t: &str, info: &str, on: bool) -> &mut Self {
         self.push(id, t, info, "toggle", on.to_string())
@@ -131,7 +153,7 @@ impl<'a> Rows<'a> {
         self.last().enabled = on;
         self
     }
-    /// A not-yet-implemented setting; its value is kept in `[stubs]`.
+    /// A setting kept in `[stubs]` (see [`Config::stub`]).
     pub(crate) fn stub_value(&self, id: &str, default: &str) -> String {
         self.c
             .stubs
@@ -148,10 +170,6 @@ impl<'a> Rows<'a> {
     ) -> &mut Self {
         let v = self.stub_value(id, &default.to_string());
         self.push(id, t, info, "toggle", v)
-    }
-    pub(crate) fn stub_choice(&mut self, id: &str, t: &str, info: &str, o: &[&str]) -> &mut Self {
-        let v = self.stub_value(id, o[0]);
-        self.choice(id, t, info, &v, o)
     }
 }
 
@@ -184,9 +202,6 @@ fn scrobbler_info(c: &Config) -> String {
     }
 }
 
-pub(crate) const SOON: &str = " (Not available yet.)";
-
-/// All rows; the bool marks "advanced" rows hidden behind "Advanced Options".
 /// Settings → Library → Clear image cache: what the cache holds and its size on disk.
 fn image_cache_info() -> String {
     let mb = |b: u64| b as f64 / (1024.0 * 1024.0);
@@ -197,6 +212,36 @@ fn image_cache_info() -> String {
     )
 }
 
+/// Settings → Library: the folder list (one row per folder with its file count) or
+/// its empty state; *Add folder…* and *Rescan* sit in the card's title.
+fn library_folders(r: &mut Rows) {
+    r.cat("Library").section(
+        "Library folders",
+        "Scanned for video and music, sub-folders included. Vivi also rescans on start.",
+        &[("library.add", "Add folder…"), ("library.rescan", "Rescan")],
+    );
+    if r.c.library.folders.is_empty() {
+        r.push(
+            "library.add",
+            "No folders yet. Add the folders that hold your videos and music.",
+            "",
+            "empty",
+            "Add folder".into(),
+        );
+    }
+    for f in &r.c.library.folders {
+        let count = match crate::libview::folder_count(f) {
+            Some(1) => "1 file".to_string(),
+            Some(n) => format!("{n} files"),
+            None => String::new(),
+        };
+        r.push(&format!("library.remove:{f}"), f, "", "folder", count);
+    }
+}
+
+/// All rows; the bool marks "advanced" rows hidden behind "Advanced Options".
+/// Every page is a list of sections (cards, see [`cards`]); placeholders that do
+/// nothing yet are not shown (their `[stubs]` values are kept).
 pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)> {
     let mut r = Rows {
         c,
@@ -204,14 +249,28 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         cat: "General",
         adv: false,
     };
-    let s = |k: &str| format!("Stored only.{SOON} {k}");
     let pct = ["-100", "0", "100"];
+    let wayland = crate::winstate::wayland();
 
     // ---------- General ----------
     r.cat("General")
-        .header("Appearance")
+        .header("Language")
         .choice("general.language", "Interface language", "Language of menus and dialogs. Only English is available for now.", &schema::get(c, "general.language"), &["English"])
-        .seg("interface.theme", "Theme", "Dark or light interface colors. System follows the GTK/desktop color scheme when it can be detected.", &cap(&c.interface.theme), &["Dark", "Light", "System"]);
+        .header("Startup")
+        .action("interface.onboarding", "Welcome tour", "Show the first-run introduction again.", "Show")
+        .toggle("general.check_updates", "Check for updates automatically", "Ask GitHub for a newer Vivi release when Vivi starts. Nothing else is sent. Settings → About can also check now.", c.general.check_updates)
+        .header("Diagnostics")
+        .toggle("general.save_log", "Save a log", "Write a log of the player to a file, for bug reports (mpv log-file).", c.general.save_log)
+        .path("general.log_file", "Log file", "Where the log is written.", &c.general.log_file)
+        .depends(c.general.save_log)
+        .choice("general.log_level", "Log details", "How much the log records.", &schema::get(c, "general.log_level"), &["Errors only", "Warnings", "Everything"])
+        .depends(c.general.save_log);
+
+    // ---------- Interface ----------
+    // Panel transparency (#95) joins Appearance.
+    r.cat("Interface")
+        .header("Appearance")
+        .seg("interface.theme", "Theme", "Dark or light interface colors. System follows the desktop's color scheme when it can be detected.", &cap(&c.interface.theme), &["Dark", "Light", "System"]);
     r.push(
         "interface.accent",
         "Accent color",
@@ -223,79 +282,30 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     r.last().swatches = ModelRc::new(VecModel::from(
         ACCENTS.iter().map(|a| hex(a)).collect::<Vec<_>>(),
     ));
-    r.seg(
-        "interface.bar_icons",
-        "Player bar icons",
-        "Icons on the player's top and bottom bars: two-tone with an accent detail, or single-tone. Other icons stay two-tone; small icons are always single-tone.",
-        &schema::get(c, "interface.bar_icons"),
-        &crate::config::BAR_ICONS,
-    );
-    r.header("Startup")
-        .stub_toggle(
-            "stub.general.dialogs",
-            "Show confirmation and error dialogs",
-            &s(""),
-            false,
+    let (pos, top) = if wayland {
+        (
+            "Open Vivi at the size it had when it was closed. Wayland compositors choose where windows open.",
+            "Wayland does not let apps keep themselves on top: use your compositor's pin or always-on-top rule instead. Works on X11, Windows and macOS.",
         )
-        .stub_toggle(
-            "stub.general.updates",
-            "Check for updates automatically",
-            &s(""),
-            false,
+    } else {
+        (
+            "Open Vivi at the size and place it had when it was closed.",
+            "Stay in front of other windows. The miniplayer always does.",
         )
-        .header("Window")
-        .choice(
-            "general.close_button",
-            "Close button",
-            "Minimize to tray keeps music and radio playing with an icon in the system tray (click it to bring Vivi back). Without a system tray, closing quits.",
-            &schema::get(c, "general.close_button"),
-            &crate::config::CLOSE_BUTTON,
-        )
-        .header("Diagnostics")
-        .toggle(
-            "general.save_log",
-            "Save a log",
-            "Write mpv's log to a file (mpv log-file).",
-            schema::get(c, "general.save_log") == "true",
-        )
-        .path(
-            "general.log_file",
-            "Log file",
-            "Where the log is written.",
-            &c.general.log_file,
-        )
-        .enabled(c.general.save_log)
-        .choice(
-            "general.log_level",
-            "Log details",
-            "How much detail the log file gets (mpv msg-level).",
-            &schema::get(c, "general.log_level"),
-            &["Errors only", "Warnings", "Everything"],
-        )
-        .enabled(c.general.save_log)
-        .advanced()
-        .stub_toggle("stub.general.devmode", "Developer mode", &s(""), false)
-        .action(
-            "interface.onboarding",
-            "Welcome tour",
-            "Show the first-run onboarding again.",
-            "Show",
-        );
-
-    // ---------- Interface ----------
-    r.cat("Interface")
-        .header("Playback Controls")
+    };
+    r.seg("interface.bar_icons", "Player bar icons", "Icons on the player's top and bottom bars: two-tone with an accent detail, or single-tone. Other icons stay two-tone; small icons are always single-tone.", &schema::get(c, "interface.bar_icons"), &crate::config::BAR_ICONS)
+        .header("Toolbar")
         .choice("interface.profile", "Toolbar profile", "Which buttons appear in the bottom bar. Minimal, Default and Power are built in; Custom is your own layout.", &c.interface.profile, &["Minimal", "Default", "Power", "Custom"])
         .action("interface.customize", "Customize player", "Choose, order and remove bottom-bar buttons.", "Customize…")
-        .slider("interface.autohide", "Hide controls after", "Seconds without mouse movement before bars and cursor hide during playback.", c.interface.autohide_secs as f64, (1.0, 10.0, 1.0), &["1 s", "5 s", "10 s"])
-        .toggle("interface.hint_chapter_thumbnails", "Suggest seek-bar frame previews", "Frame previews on the seek bar come from the Chapter Thumbnails extension. Without it, the first hover over the seek bar of a video offers to install it (once per session).", c.interface.hint_chapter_thumbnails)
+        .header("Auto-hide")
+        .slider("interface.autohide", "Hide controls after", "Seconds without mouse movement before the bars and the cursor hide during playback.", c.interface.autohide_secs as f64, (1.0, 10.0, 1.0), &["1 s", "5 s", "10 s"])
         .header("Window")
-        .stub_toggle("stub.interface.remember_window", "Remember window size and position", &s(""), true)
-        .stub_toggle("stub.interface.ontop", "Keep window above other windows", &s(""), false)
-        .stub_choice("stub.interface.fit", "Resize window to fit video", &s(""), &["Never", "Always", "First video only"])
-        .advanced()
-        .header("Skin")
-        .stub_toggle("stub.interface.skin", "Use a custom skin", &s(""), false);
+        .choice("general.close_button", "Close button", "Minimize to tray keeps music and radio playing with an icon in the system tray (click it to bring Vivi back). Without a system tray, closing quits.", &schema::get(c, "general.close_button"), &crate::config::CLOSE_BUTTON)
+        .stub_toggle(config::REMEMBER_WINDOW.0, "Remember window size and position", pos, config::REMEMBER_WINDOW.1)
+        .stub_toggle(config::ON_TOP.0, "Keep window above other windows", top, config::ON_TOP.1)
+        .choice(config::FIT, "Resize window to fit video", "When a video starts, size the window to the video (at most 90 % of the screen). Not while full screen or maximized, and not for windows your window manager tiles.", c.fit(), &config::FIT_CHOICES)
+        .header("Hints")
+        .toggle("interface.hint_chapter_thumbnails", "Suggest seek-bar frame previews", "Frame previews on the seek bar come from the Chapter Thumbnails extension. Without it, the first hover over the seek bar of a video offers to install it (once per session).", c.interface.hint_chapter_thumbnails);
 
     // ---------- Privacy ----------
     r.cat("Privacy")
@@ -303,7 +313,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .toggle(
             "playback.resume",
             "Remember the playback position",
-            "Remember the position of every file and continue from it next time (mpv watch-later).",
+            "Continue every file where you left off.",
             c.playback.resume,
         )
         .action(
@@ -315,7 +325,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .action(
             "privacy.watch_later",
             "Clear resume positions",
-            "Delete every saved playback position (watch-later).",
+            "Forget where you left off in every file.",
             "Clear",
         )
         .action(
@@ -324,13 +334,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             "Delete every saved bookmark and its saved frame (asks first).",
             "Clear",
         )
-        .header("Network")
-        .stub_toggle(
-            "stub.privacy.metadata",
-            "Fetch titles and cover art from the internet",
-            &s(""),
-            false,
-        )
+        .header("Scrobbling")
         .action(
             "privacy.scrobbler",
             "Submit played tracks to Last.fm / ListenBrainz",
@@ -338,43 +342,20 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             scrobbler_action(c),
         );
 
-    // ---------- Controls (#92): Skip Amounts, Keyboard Shortcuts, Mouse, Remotes ----------
+    // ---------- Controls (#92): Seeking & Steps, Keyboard Shortcuts, Mouse, Remotes ----------
     let speed_steps: Vec<String> = crate::config::SPEED_STEPS
         .iter()
         .map(|s| schema::speed_step_label(*s))
         .collect();
     let speed_steps: Vec<&str> = speed_steps.iter().map(String::as_str).collect();
-    r.cat("Skip Amounts")
+    r.cat("Seeking & Steps")
         .header("Seeking")
-        .choice(
-            "controls.short_skip",
-            "Short skip",
-            "Seek step for ← and →.",
-            &format!("{} s", c.controls.short_skip),
-            &["3 s", "5 s", "10 s", "15 s", "30 s"],
-        )
-        .choice(
-            "controls.long_skip",
-            "Long skip",
-            "Seek step for Shift + ← and →.",
-            &format!("{} s", c.controls.long_skip),
-            &["30 s", "60 s", "120 s", "300 s"],
-        )
+        .choice("controls.short_skip", "Short skip", "Seek step for ← and →.", &format!("{} s", c.controls.short_skip), &["3 s", "5 s", "10 s", "15 s", "30 s"])
+        .choice("controls.long_skip", "Long skip", "Seek step for Shift + ← and →.", &format!("{} s", c.controls.long_skip), &["30 s", "60 s", "120 s", "300 s"])
+        .toggle("playback.precise_seek", "Seek precisely", "Land on the exact frame instead of the nearest keyframe. Slower on some files.", c.playback.precise_seek)
         .header("Volume and speed")
-        .choice(
-            "audio.volume_step",
-            "Volume step",
-            "Volume change for ↑ and ↓.",
-            &format!("{} %", c.audio.volume_step),
-            &["1 %", "2 %", "5 %", "10 %"],
-        )
-        .choice(
-            "controls.speed_step",
-            "Speed step",
-            "Speed change of the side panel's speed slider and of the scroll wheel when it is set to Speed (Mouse).",
-            &schema::get(c, "controls.speed_step"),
-            &speed_steps,
-        );
+        .choice("audio.volume_step", "Volume step", "Volume change for ↑ and ↓.", &format!("{} %", c.audio.volume_step), &["1 %", "2 %", "5 %", "10 %"])
+        .choice("controls.speed_step", "Speed step", "Speed change of the side panel's speed slider and of the scroll wheel when it is set to Speed (Mouse).", &schema::get(c, "controls.speed_step"), &speed_steps);
 
     r.cat("Keyboard Shortcuts").header("Player");
     for (t, k) in crate::keymap::rows() {
@@ -395,20 +376,9 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         r.choice(id, title, info, &schema::get(c, id), &actions);
     }
     r.header("Scroll wheel")
-        .choice(
-            "controls.wheel",
-            "Scroll wheel",
-            "What turning the wheel over the video does: volume by the volume step, speed by the speed step, seeking by the short skip (Skip Amounts).",
-            &schema::get(c, "controls.wheel"),
-            &wheel,
-        )
-        .toggle(
-            "controls.wheel_reverse",
-            "Reverse scroll direction",
-            "Scrolling down raises the volume or speed and seeks forward.",
-            c.controls.wheel_reverse,
-        )
-        .enabled(c.controls.wheel != "none")
+        .choice("controls.wheel", "Scroll wheel", "What turning the wheel over the video does: volume by the volume step, speed by the speed step, seeking by the short skip (Seeking & Steps).", &schema::get(c, "controls.wheel"), &wheel)
+        .toggle("controls.wheel_reverse", "Reverse scroll direction", "Scrolling down raises the volume or speed and seeks forward.", c.controls.wheel_reverse)
+        .depends(c.controls.wheel != "none")
         .header("Always");
     for (t, k) in crate::keymap::MOUSE
         .iter()
@@ -428,28 +398,21 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .header("Phone or tablet")
         .action(REMOTE_CONTROL_ROW, "Phone remote control", rc_info, rc_label)
         .header("AI agents and scripts")
-        .toggle(
-            "general.remote_control",
-            "Allow AI agents and scripts",
-            "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.",
-            schema::get(c, "general.remote_control") == "true",
-        );
+        .toggle("general.remote_control", "Allow AI agents and scripts", "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.", schema::get(c, "general.remote_control") == "true");
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
     r.cat("Playback")
         .header("Startup")
-        .slider("playback.speed", "Default playback speed", "Speed applied to every new file (mpv speed).", c.playback.speed, (0.25, 2.0, 0.05), &speed_labels)
-        .stub_toggle("stub.playback.autoplay", "Start playing as soon as a file opens", &s(""), true)
+        .slider("playback.speed", "Default playback speed", "Speed of every file when it opens.", c.playback.speed, (0.25, 2.0, 0.05), &speed_labels)
+        .stub_toggle(config::AUTOPLAY.0, "Start playing as soon as a file opens", "Off: files open paused, ready to play.", config::AUTOPLAY.1)
         .header("Tracks")
-        .choice("playback.quality", "Preferred video quality", "Stream quality picked by yt-dlp for network URLs (mpv ytdl-format).", &c.playback.quality, &["Best available", "2160p", "1080p", "720p", "480p", "Audio only"])
+        .choice("playback.quality", "Preferred video quality", "Quality picked for online videos (links and streams played with yt-dlp).", &c.playback.quality, &["Best available", "2160p", "1080p", "720p", "480p", "Audio only"])
         .header("Order")
-        .seg("playback.repeat", "Repeat", "Off, repeat the current file (mpv loop-file) or the whole queue (loop-playlist).", &c.playback.repeat, &["Off", "One", "All"])
-        .header("Seeking")
-        .toggle("playback.precise_seek", "Seek precisely", "Seek to the exact frame instead of the nearest keyframe (mpv hr-seek). Slower on some files.", c.playback.precise_seek)
+        .seg("playback.repeat", "Repeat", "Off, repeat the current file, or repeat the whole queue.", &c.playback.repeat, &["Off", "One", "All"])
         .header("Sleep timer")
-        .slider("playback.sleep_fade", "Fade out before pausing", "The sleep timer (side panel → Playback) lowers the volume over this many seconds, then pauses and restores it. 0 pauses at once.", c.playback.sleep_fade as f64, (0.0, 120.0, 5.0), &["Off", "60 s", "120 s"])
-        .header("Per-show presets");
+        .slider("playback.sleep_fade", "Fade out before pausing", "The sleep timer (side panel → Playback) lowers the volume over this many seconds, then pauses and restores it. Off pauses at once.", c.playback.sleep_fade as f64, (0.0, 120.0, 5.0), &["Off", "60 s", "120 s"])
+        .section("Per-show presets", "Subtitle and audio adjustments saved for a show from the side panel → Subtitles.", &[]);
     if c.presets.is_empty() {
         r.push(
             "",
@@ -461,7 +424,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     }
     for (k, p) in &c.presets {
         let info = format!(
-            "sub delay {:+.2}s · audio delay {:+.2}s · sub scale {:.1} · sub pos {} · sub lang {} · audio lang {}",
+            "Subtitle delay {:+.2} s · audio delay {:+.2} s · subtitle size {:.1} · subtitle position {} · subtitle language {} · audio language {}",
             p.sub_delay, p.audio_delay, p.sub_scale, p.sub_pos,
             if p.sub_lang.is_empty() { "-" } else { &p.sub_lang },
             if p.audio_lang.is_empty() { "-" } else { &p.audio_lang },
@@ -472,319 +435,145 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     // ---------- Video ----------
     r.cat("Video")
         .header("Output")
-        .toggle(
-            "video.enabled",
-            "Enable video",
-            "Turn off to play only the audio of video files (mpv vid=no).",
-            c.video.enabled,
-        )
-        .toggle(
-            "video.stop_screensaver",
-            "Stop the screensaver during playback",
-            "mpv stop-screensaver.",
-            c.video.stop_screensaver,
-        )
-        .header("Picture")
-        .slider(
-            "video.hue",
-            "Hue",
-            "Default hue (mpv hue).",
-            c.video.hue as f64,
-            (-100.0, 100.0, 1.0),
-            &pct,
-        )
-        .slider(
-            "video.brightness",
-            "Brightness",
-            "Default brightness (mpv brightness).",
-            c.video.brightness as f64,
-            (-100.0, 100.0, 1.0),
-            &pct,
-        )
-        .slider(
-            "video.contrast",
-            "Contrast",
-            "Default contrast (mpv contrast).",
-            c.video.contrast as f64,
-            (-100.0, 100.0, 1.0),
-            &pct,
-        )
-        .slider(
-            "video.saturation",
-            "Saturation",
-            "Default saturation (mpv saturation).",
-            c.video.saturation as f64,
-            (-100.0, 100.0, 1.0),
-            &pct,
-        )
-        .slider(
-            "video.gamma",
-            "Gamma",
-            "Default gamma (mpv gamma).",
-            c.video.gamma as f64,
-            (-100.0, 100.0, 1.0),
-            &pct,
-        )
-        .action(
-            "video.reset_picture",
-            "Reset picture",
-            "Set hue, brightness, contrast, saturation and gamma back to 0.",
-            "Reset",
-        )
-        .header("Deinterlacing")
-        .choice(
-            "video.deinterlace",
-            "Deinterlacing",
-            "mpv deinterlace: auto only deinterlaces interlaced content.",
-            &c.video.deinterlace,
-            &["auto", "yes", "no"],
-        )
+        .toggle("video.enabled", "Enable video", "Off plays only the sound of video files.", c.video.enabled)
+        .toggle("video.stop_screensaver", "Stop the screensaver during playback", "Keep the screen on while a video plays.", c.video.stop_screensaver)
+        .section("Picture", "Starting values for every video. 0 leaves the picture as it is.", &[("video.reset_picture", "Reset picture")])
+        .slider("video.hue", "Hue", "Shifts all colors around the color wheel.", c.video.hue as f64, (-100.0, 100.0, 1.0), &pct)
+        .slider("video.brightness", "Brightness", "", c.video.brightness as f64, (-100.0, 100.0, 1.0), &pct)
+        .slider("video.contrast", "Contrast", "", c.video.contrast as f64, (-100.0, 100.0, 1.0), &pct)
+        .slider("video.saturation", "Saturation", "How strong the colors are; -100 is black and white.", c.video.saturation as f64, (-100.0, 100.0, 1.0), &pct)
+        .slider("video.gamma", "Gamma", "Brightens or darkens the mid-tones.", c.video.gamma as f64, (-100.0, 100.0, 1.0), &pct)
         .header("Framing")
-        .choice(
-            "video.aspect",
-            "Aspect ratio",
-            "Force a display aspect ratio (mpv video-aspect-override).",
-            &aspect_label(&c.video.aspect),
-            &["Automatic", "16:9", "4:3", "21:9", "2.35:1", "1:1"],
-        )
+        .choice("video.aspect", "Aspect ratio", "Show the picture in this shape. Automatic uses the video's own.", &aspect_label(&c.video.aspect), &["Automatic", "16:9", "4:3", "21:9", "2.35:1", "1:1"])
+        .choice("video.deinterlace", "Deinterlacing", "Remove the comb-like lines of interlaced video (TV recordings, DVDs). Automatic only does it for interlaced video.", &schema::get(c, "video.deinterlace"), &schema::labels(schema::AUTO_ALWAYS_OFF))
         .header("Snapshots")
-        .path(
-            "video.screenshot_dir",
-            "Save snapshots to",
-            "Folder for snapshots (mpv screenshot-directory).",
-            &c.video.screenshot_dir,
-        )
-        .seg(
-            "video.screenshot_format",
-            "Format",
-            "mpv screenshot-format.",
-            &c.video.screenshot_format,
-            &["png", "jpg", "webp"],
-        );
+        .path("video.screenshot_dir", "Save snapshots to", "Folder for snapshots of the video.", &c.video.screenshot_dir)
+        .seg("video.screenshot_format", "Format", "PNG keeps every pixel; JPG and WebP files are smaller.", &c.video.screenshot_format, &["png", "jpg", "webp"]);
 
     // ---------- Audio ----------
-    let mut devs: Vec<&str> = vec!["auto"];
+    let mut devs: Vec<&str> = vec![schema::AUDIO_DEVICE[0].1];
     devs.extend(devices.iter().map(String::as_str).filter(|d| *d != "auto"));
     let rg_on = c.audio.replaygain != "off";
     r.cat("Audio")
         .header("Output")
-        .toggle(
-            "audio.enabled",
-            "Enable audio",
-            "Turn off to play video without sound (mpv aid=no).",
-            c.audio.enabled,
-        )
-        .choice(
-            "audio.device",
-            "Output device",
-            "mpv audio-device; auto uses the system default.",
-            &c.audio.device,
-            &devs,
-        )
+        .toggle("audio.enabled", "Enable audio", "Off plays video without sound.", c.audio.enabled)
+        .choice("audio.device", "Output device", "Where the sound plays. System default follows your desktop's choice.", &schema::get(c, "audio.device"), &devs)
         .header("Volume")
-        .slider(
-            "audio.volume_max",
-            "Maximum volume",
-            "Maximum volume (mpv volume-max); above 100% amplifies and may distort.",
-            c.audio.volume_max as f64,
-            (100.0, 300.0, 10.0),
-            &["100%", "200%", "300%"],
-        )
-        .slider(
-            "audio.startup_volume",
-            "Startup volume",
-            "Volume when Vivi starts.",
-            c.audio.startup_volume as f64,
-            (0.0, 100.0, 5.0),
-            &["0%", "50%", "100%"],
-        )
+        .slider("audio.volume_max", "Maximum volume", "How far the volume goes. Above 100% makes quiet files louder but may distort.", c.audio.volume_max as f64, (100.0, 300.0, 10.0), &["100%", "200%", "300%"])
+        .slider("audio.startup_volume", "Startup volume", "Volume when Vivi starts.", c.audio.startup_volume as f64, (0.0, 100.0, 5.0), &["0%", "50%", "100%"])
         .header("Volume leveling")
-        .choice(
-            "audio.replaygain",
-            "ReplayGain",
-            "Even out the volume between tracks with the ReplayGain tags in the files: per track, or per album so an album keeps its own dynamics (mpv replaygain). Album uses the track value where a file has no album value.",
-            &schema::get(c, "audio.replaygain"),
-            &config::REPLAYGAIN.map(|(_, l)| l),
-        )
-        .slider(
-            "audio.preamp",
-            "Preamp (dB)",
-            "Added to the ReplayGain value (mpv replaygain-preamp).",
-            c.audio.preamp,
-            (-15.0, 15.0, 0.5),
-            &["−15 dB", "0 dB", "+15 dB"],
-        )
-        .enabled(rg_on)
-        .toggle(
-            "audio.prevent_clipping",
-            "Prevent clipping",
-            "Lower the gain where ReplayGain would push the peaks of a track past full scale (mpv replaygain-clip=no).",
-            c.audio.prevent_clipping,
-        )
-        .enabled(rg_on)
-        .slider(
-            "audio.untagged_gain",
-            "Files without tags (dB)",
-            "Gain for files that have no ReplayGain tags while ReplayGain is on (mpv replaygain-fallback).",
-            c.audio.untagged_gain,
-            (-15.0, 15.0, 0.5),
-            &["−15 dB", "0 dB", "+15 dB"],
-        )
-        .enabled(rg_on)
-        .toggle(
-            "audio.normalize",
-            "Normalize loudness",
-            "Even out quiet and loud passages (lavfi dynaudnorm filter).",
-            c.audio.normalize,
-        )
+        .choice("audio.replaygain", "ReplayGain", "Even out the volume between tracks with the ReplayGain tags in the files: per track, or per album so an album keeps its own dynamics. Album uses the track value where a file has no album value.", &schema::get(c, "audio.replaygain"), &config::REPLAYGAIN.map(|(_, l)| l))
+        .slider("audio.preamp", "Preamp (dB)", "Added to the ReplayGain value.", c.audio.preamp, (-15.0, 15.0, 0.5), &["−15 dB", "0 dB", "+15 dB"])
+        .depends(rg_on)
+        .toggle("audio.prevent_clipping", "Prevent clipping", "Lower the gain where ReplayGain would push the peaks of a track past full scale.", c.audio.prevent_clipping)
+        .depends(rg_on)
+        .slider("audio.untagged_gain", "Files without tags (dB)", "Gain for files that have no ReplayGain tags.", c.audio.untagged_gain, (-15.0, 15.0, 0.5), &["−15 dB", "0 dB", "+15 dB"])
+        .depends(rg_on)
+        .toggle("audio.normalize", "Normalize loudness", "Make quiet and loud passages more even while playing (dynamic range compression).", c.audio.normalize)
         .header("Between tracks")
-        .toggle(
-            "audio.gapless",
-            "Gapless playback",
-            "Play music tracks back to back without a gap: the audio output stays open and the next file is opened early (mpv gapless-audio, prefetch-playlist). Video and streams are not affected.",
-            c.audio.gapless,
-        )
-        .slider(
-            "audio.crossfade_secs",
-            "Crossfade (s)",
-            "Fade the ending track out and the next one in, half of this time each (a short dip, not an overlap). Music only; skipped between tracks of the same album while gapless playback is on. 0 turns it off.",
-            c.audio.crossfade_secs as f64,
-            (0.0, config::CROSSFADE_MAX as f32, 1.0),
-            &["Off", "6 s", "12 s"],
-        )
+        .toggle("audio.gapless", "Gapless playback", "Play music tracks back to back without a gap. Video and streams are not affected.", c.audio.gapless)
+        .slider("audio.crossfade_secs", "Crossfade (s)", "Fade the ending track out and the next one in, half of this time each (a short dip, not an overlap). Music only; skipped between tracks of the same album while gapless playback is on.", c.audio.crossfade_secs as f64, (0.0, config::CROSSFADE_MAX as f32, 1.0), &["Off", "6 s", "12 s"])
         .header("Tracks")
-        .text(
-            "audio.language",
-            "Preferred audio language",
-            "Comma-separated language codes in priority order (mpv alang).",
-            &c.audio.language,
-            "e.g. uk,en",
-        )
+        .text("audio.language", "Preferred audio language", "Language codes in order of preference, separated by commas, e.g. uk,en.", &c.audio.language, "e.g. uk,en")
         .advanced()
-        .slider(
-            "audio.delay",
-            "Default audio delay (s)",
-            "mpv audio-delay applied to every file; presets can override it.",
-            c.audio.delay,
-            (-2.0, 2.0, 0.05),
-            &[],
-        )
-        .stub_toggle("stub.audio.spatial", "Spatial audio", &s(""), false);
+        .slider("audio.delay", "Default audio delay (s)", "Shift the sound of every file by this much; per-show presets can override it.", c.audio.delay, (-2.0, 2.0, 0.05), &[]);
 
     // ---------- Subtitles ----------
     let sub_on = c.subtitles.enabled;
     r.cat("Subtitles")
-        .header("Tracks & Languages")
-        .toggle("subtitles.enabled", "Enable subtitles", "Show subtitles (mpv sub-visibility).", sub_on)
-        .text("subtitles.language", "Preferred language", "Comma-separated language codes in priority order (mpv slang).", &c.subtitles.language, "e.g. uk,en")
-        .choice("subtitles.encoding", "Text encoding", "Character set of text subtitles (mpv sub-codepage).", &c.subtitles.encoding, &["auto", "utf8", "cp1251", "cp1252", "latin1", "koi8-u", "shift_jis", "gb18030"])
-        .header("Loading Subtitles")
-        .choice("subtitles.auto_load", "Load subtitle files automatically", "Load .srt/.ass files next to the video: exact name, fuzzy match or every file in the folder (mpv sub-auto).", &c.subtitles.auto_load, &["no", "exact", "fuzzy", "all"])
-        .header("Appearance")
-        .text("subtitles.font", "Font", "mpv sub-font (text subtitles only).", &c.subtitles.font, "sans-serif")
-        .slider("subtitles.scale", "Font size", "Subtitle scale factor (mpv sub-scale, 1.0 = default).", c.subtitles.scale, (0.5, 3.0, 0.1), &[])
-        .toggle("subtitles.bold", "Bold", "mpv sub-bold.", c.subtitles.bold)
-        .text("subtitles.color", "Text color", "#RRGGBB (mpv sub-color).", &c.subtitles.color, "#FFFFFF")
+        .header("Tracks and languages")
+        .toggle("subtitles.enabled", "Enable subtitles", "Show subtitles when a file has them.", sub_on)
+        .text("subtitles.language", "Preferred language", "Language codes in order of preference, separated by commas, e.g. uk,en.", &c.subtitles.language, "e.g. uk,en")
+        .choice("subtitles.encoding", "Text encoding", "Character set of text subtitles; auto detects it. Change it when letters show up garbled.", &c.subtitles.encoding, &["auto", "utf8", "cp1251", "cp1252", "latin1", "koi8-u", "shift_jis", "gb18030"])
+        .header("Loading subtitles")
+        .choice("subtitles.auto_load", "Load subtitle files automatically", "Load subtitle files (.srt, .ass, …) found next to the video.", &schema::get(c, "subtitles.auto_load"), &schema::labels(schema::SUB_AUTO))
+        .section("Appearance", "Text subtitles only; styled (ASS) subtitles keep their own look.", &[])
+        .text("subtitles.font", "Font", "Font family name, e.g. Noto Sans.", &c.subtitles.font, "sans-serif")
+        .slider("subtitles.scale", "Font size", "1.0 is the normal size.", c.subtitles.scale, (0.5, 3.0, 0.1), &[])
+        .toggle("subtitles.bold", "Bold", "", c.subtitles.bold)
+        .text("subtitles.color", "Text color", "A hex color, #RRGGBB.", &c.subtitles.color, "#FFFFFF")
         .slider("subtitles.opacity", "Text opacity", "Opacity of the text color.", c.subtitles.opacity as f64, (0.0, 100.0, 5.0), &["0%", "50%", "100%"])
-        .choice("subtitles.outline", "Outline thickness", "mpv sub-border-size.", outline_label(c.subtitles.outline), &["None", "Thin", "Normal", "Thick"])
-        .text("subtitles.outline_color", "Outline color", "#RRGGBB (mpv sub-border-color).", &c.subtitles.outline_color, "#000000")
-        .toggle("subtitles.shadow", "Shadow", "Drop shadow under the text (mpv sub-shadow-offset).", c.subtitles.shadow)
+        .choice("subtitles.outline", "Outline thickness", "Border around the letters.", outline_label(c.subtitles.outline), &["None", "Thin", "Normal", "Thick"])
+        .text("subtitles.outline_color", "Outline color", "A hex color, #RRGGBB.", &c.subtitles.outline_color, "#000000")
+        .toggle("subtitles.shadow", "Shadow", "Drop shadow under the text.", c.subtitles.shadow)
         .advanced()
-        .slider("subtitles.position", "Vertical position", "mpv sub-pos: 100 is the bottom edge.", c.subtitles.position as f64, (50.0, 150.0, 1.0), &[]);
+        .slider("subtitles.position", "Vertical position", "100 is the bottom edge of the picture; lower values move subtitles up.", c.subtitles.position as f64, (50.0, 150.0, 1.0), &[]);
 
     // ---------- Library ----------
-    r.cat("Library").header("Library folders");
-    if c.library.folders.is_empty() {
-        r.push("", "No folders yet.", "", "info", String::new());
-    }
-    for f in &c.library.folders {
-        r.action(
-            &format!("library.remove:{f}"),
-            f,
-            "Scanned for video and music (sub-folders included).",
-            "Remove",
-        );
-    }
-    r.action("library.add", "Add a folder", "Pick a folder to include in the library.", "Add folder…")
-        .action("library.rescan", "Rescan library", "Look for new, changed and deleted files now. Vivi also rescans on start.", "Rescan")
-        .header("Metadata & Artwork")
-        .toggle("library.thumbnails", "Thumbnails", "Generate video thumbnails and album covers with ffmpeg (if installed), cached in ~/.cache/vivi/thumbs.", c.library.thumbnails)
+    library_folders(&mut r);
+    r.header("Metadata and artwork")
+        .toggle("library.thumbnails", "Thumbnails", "Make video thumbnails and album covers with ffmpeg (if installed), cached in ~/.cache/vivi/thumbs.", c.library.thumbnails)
         .advanced()
         .action("library.clear_thumbs", "Clear image cache", &image_cache_info(), "Clear")
-        .stub_toggle("stub.library.hidden", "Show hidden files", &s(""), false);
+        .stub_toggle(config::HIDDEN_FILES.0, "Include hidden files", "Also add files whose names start with a dot.", config::HIDDEN_FILES.1);
 
     // ---------- Network ----------
     r.cat("Network")
         .header("Buffering")
-        .choice("network.buffering", "Buffering", "Size of the read-ahead cache: Low 32 MiB, Normal 150 MiB, High 512 MiB (mpv demuxer-max-bytes).", &c.network.buffering, &["Low", "Normal", "High"])
-        .choice("network.cache", "Cache", "mpv cache: auto enables it for network streams only.", &c.network.cache, &["auto", "yes", "no"])
-        .slider("network.cache_secs", "Read ahead (s)", "mpv cache-secs.", c.network.cache_secs as f64, (5.0, 600.0, 5.0), &[])
+        .choice(
+            "network.buffering",
+            "Buffering",
+            "How much of a stream is loaded ahead: Low 32 MiB, Normal 150 MiB, High 512 MiB.",
+            &c.network.buffering,
+            &["Low", "Normal", "High"],
+        )
+        .choice(
+            "network.cache",
+            "Cache",
+            "Keep a read-ahead cache. Automatic uses it for network streams only.",
+            &schema::get(c, "network.cache"),
+            &schema::labels(schema::AUTO_ALWAYS_OFF),
+        )
+        .slider(
+            "network.cache_secs",
+            "Read ahead (s)",
+            "Seconds of a stream to load ahead.",
+            c.network.cache_secs as f64,
+            (5.0, 600.0, 5.0),
+            &[],
+        )
         .header("Proxy")
-        .text("network.http_proxy", "HTTP proxy", "mpv http-proxy, e.g. http://host:3128. Empty uses no proxy.", &c.network.http_proxy, "System proxy")
+        .text(
+            "network.http_proxy",
+            "HTTP proxy",
+            "e.g. http://host:3128. Empty uses no proxy.",
+            &c.network.http_proxy,
+            "System proxy",
+        )
         .header("Security")
-        .toggle("network.tls_verify", "Verify certificates against the system trust store", "mpv tls-verify.", c.network.tls_verify)
+        .toggle(
+            "network.tls_verify",
+            "Verify certificates against the system trust store",
+            "Refuse HTTPS streams whose certificate the system does not trust.",
+            c.network.tls_verify,
+        )
         .advanced()
-        .text("network.user_agent", "User agent", "mpv user-agent for HTTP requests. Empty uses mpv's default.", &c.network.user_agent, "");
+        .text(
+            "network.user_agent",
+            "User agent",
+            "How Vivi introduces itself to web servers. Empty uses mpv's default.",
+            &c.network.user_agent,
+            "",
+        );
 
     // ---------- Performance ----------
     r.cat("Performance")
         .header("Decoding")
         .choice("playback.hwdec", "Hardware-accelerated decoding", "auto-safe uses the GPU when it is known to work; no forces software decoding (mpv hwdec).", &c.playback.hwdec, &["auto-safe", "auto", "vaapi", "nvdec", "vulkan", "videotoolbox", "d3d11va", "no"])
-        .choice("performance.skip_loop_filter", "Skip the H.264 loop filter", "Faster decoding at some quality cost (mpv vd-lavc-skiploopfilter).", &c.performance.skip_loop_filter, &["default", "nonref", "bidir", "nonkey", "all"])
-        .slider("performance.threads", "Decoding threads", "mpv vd-lavc-threads; 0 = automatic.", c.performance.threads as f64, (0.0, 16.0, 1.0), &[])
-        .header("Smooth Playback")
-        .toggle("performance.framedrop", "Drop frames when the system can't keep up", "mpv framedrop=vo.", c.performance.framedrop)
+        .choice("performance.skip_loop_filter", "Skip the H.264 loop filter", "Faster decoding of H.264 video at some quality cost (mpv vd-lavc-skiploopfilter).", &c.performance.skip_loop_filter, &["default", "nonref", "bidir", "nonkey", "all"])
+        .slider("performance.threads", "Decoding threads", "0 picks the number automatically.", c.performance.threads as f64, (0.0, 16.0, 1.0), &[])
+        .header("Smooth playback")
+        .toggle("performance.framedrop", "Drop frames when the system can't keep up", "Keeps the picture in time with the sound on slow systems.", c.performance.framedrop)
         .advanced()
-        .choice("performance.video_sync", "Clock synchronisation", "mpv video-sync.", &c.performance.video_sync, &["audio", "display-resample", "display-vdrop", "desync"]);
+        .choice("performance.video_sync", "Clock synchronisation", "What the video timing follows (mpv video-sync).", &c.performance.video_sync, &["audio", "display-resample", "display-vdrop", "desync"]);
 
     // ---------- Recording ----------
-    r.cat("Recording")
-        .header("Recording")
-        .path(
-            "recording.dir",
-            "Save recordings to",
-            &s(""),
-            &c.recording.dir,
-        )
-        .stub_toggle(
-            "stub.recording.remux",
-            "Record without re-encoding when possible",
-            &s(""),
-            true,
-        )
-        .header("Casting")
-        .stub_toggle(
-            "stub.casting.discover",
-            "Discover cast devices",
-            &s(""),
-            false,
-        )
-        .stub_choice(
-            "stub.casting.quality",
-            "Cast quality",
-            &s(""),
-            &["Automatic", "High", "Medium", "Low"],
-        )
-        .header("Streaming")
-        .stub_toggle(
-            "stub.streaming.local",
-            "Play locally while streaming",
-            &s(""),
-            true,
-        )
-        .stub_choice(
-            "stub.streaming.preset",
-            "Encoding preset",
-            &s(""),
-            &["Medium", "Fast", "Slow"],
-        )
-        .advanced()
-        .stub_choice(
-            "stub.streaming.tuning",
-            "Tuning",
-            &s(""),
-            &["None", "Film", "Animation"],
-        );
+    r.cat("Recording").header("Recording").path(
+        "recording.dir",
+        "Save recordings to",
+        "Where recordings of live streams (R) are saved. Empty: your Videos folder.",
+        &c.recording.dir,
+    );
 
     // ---------- Extensions ----------
     extensions_page(&mut r);
@@ -835,20 +624,33 @@ pub(crate) fn filtered(
     let catname = CATEGORIES.get(cat as usize).copied().unwrap_or("General");
     let all = all_rows(c, devices);
     if !q.is_empty() {
-        return all
-            .into_iter()
-            .map(|(r, _)| r)
-            .filter(|r| {
-                !matches!(r.kind.as_str(), "header" | "info")
-                    && (r.title.to_lowercase().contains(&q)
-                        || r.info.to_lowercase().contains(&q)
-                        || r.category.to_lowercase().contains(&q))
-            })
-            .collect();
+        // Matches grouped by page, one card each (the page name is the card's title).
+        let mut out: Vec<SettingRow> = Vec::new();
+        for (r, _) in all {
+            let hit = !matches!(r.kind.as_str(), "header" | "info" | "empty")
+                && (r.title.to_lowercase().contains(&q)
+                    || r.info.to_lowercase().contains(&q)
+                    || r.category.to_lowercase().contains(&q));
+            if !hit {
+                continue;
+            }
+            if out.last().is_none_or(|l| l.category != r.category) {
+                let mut h = r.clone();
+                (h.id, h.title, h.info, h.kind) =
+                    ("".into(), r.category.clone(), "".into(), "header".into());
+                h.options = ModelRc::default();
+                h.labels = ModelRc::default();
+                out.push(h);
+            }
+            let mut r = r;
+            r.nested = false; // shown on its own, not under its parent
+            out.push(r);
+        }
+        return cards(out);
     }
     let rows: Vec<_> = all
         .into_iter()
-        .filter(|(r, _)| r.category == catname)
+        .filter(|(r, _)| r.category == catname && !(r.nested && !r.enabled))
         .collect();
     let mut out: Vec<SettingRow> = rows
         .iter()
@@ -861,10 +663,41 @@ pub(crate) fn filtered(
         bar.title = "Advanced Options".into();
         bar.info = "".into();
         bar.kind = "advanced".into();
+        bar.options = ModelRc::default();
+        bar.labels = ModelRc::default();
         out.push(bar);
         if advanced {
             out.extend(rows.iter().filter(|(_, a)| *a).map(|(r, _)| r.clone()));
         }
     }
-    out
+    cards(out)
+}
+
+/// Group rows into cards: a header opens one ("head"), the rows after it are its body
+/// ("row"; a body without a header starts with "first"), and the last row before the
+/// next header, the Advanced Options bar or the end closes it (`card_end`).
+/// `ui/settings.slint` (`Row`) draws the card from these.
+pub(crate) fn cards(mut rows: Vec<SettingRow>) -> Vec<SettingRow> {
+    let mut open = false;
+    for i in 0..rows.len() {
+        let kind = rows[i].kind.clone();
+        let (card, closes) = match kind.as_str() {
+            "header" => ("head", true),
+            "advanced" | "plugin" | "package" => ("", true),
+            _ if open => ("row", false),
+            _ => ("first", false),
+        };
+        if closes && open && i > 0 {
+            rows[i - 1].card_end = true;
+        }
+        rows[i].card = card.into();
+        rows[i].card_end = false;
+        open = !card.is_empty();
+    }
+    if open {
+        if let Some(l) = rows.last_mut() {
+            l.card_end = true;
+        }
+    }
+    rows
 }

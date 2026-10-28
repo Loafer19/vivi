@@ -9,6 +9,7 @@ use std::rc::Rc;
 pub(crate) fn wire(
     app: &AppWindow,
     player: &Rc<Player>,
+    cfg: &Rc<std::cell::RefCell<config::Config>>,
 ) -> (impl Fn() + Clone + 'static, impl Fn() + Clone + 'static) {
     let p = player.clone();
     app.global::<crate::Playback>()
@@ -76,16 +77,25 @@ pub(crate) fn wire(
         });
         let p = player.clone();
         let weak = app.as_weak();
+        let cfg = cfg.clone();
         app.global::<crate::Playback>().on_toggle_record(move || {
-            // mpv stream-record: dump the stream to a file next to the user's videos.
+            // mpv stream-record: dump the stream to a file in Settings → Recording's
+            // folder, else next to the user's videos.
             let rec = p.get("stream-record").unwrap_or_default();
             let key = keymap::shown(keymap::Action::Record);
             let msg = if !rec.is_empty() {
                 p.set("stream-record", "");
                 format!("Recording stopped · saved to {rec}")
             } else {
-                let dir = store::home().join("Videos");
-                let dir = if dir.is_dir() { dir } else { store::home() };
+                let set = std::path::PathBuf::from(cfg.borrow().recording.dir.trim());
+                let videos = store::home().join("Videos");
+                let dir = if !set.as_os_str().is_empty() && set.is_dir() {
+                    set
+                } else if videos.is_dir() {
+                    videos
+                } else {
+                    store::home()
+                };
                 let mut n = 1;
                 let out = loop {
                     let f = dir.join(format!("vivi-recording-{n}.mkv"));

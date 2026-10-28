@@ -44,14 +44,14 @@ fn remote_action(installed: bool, enabled: bool) -> Option<&'static str> {
 /// Seconds of inactivity before the controls hide (read by the auto-hide timer).
 pub static AUTOHIDE_SECS: AtomicU32 = AtomicU32::new(2);
 
-/// Sidebar order. The groups start at General (App), Skip Amounts (Controls), Playback
+/// Sidebar order. The groups start at General (App), Seeking & Steps (Controls), Playback
 /// (Media) and Network (System); `ui/settings.slint` (`group`, `icons`) and the fixed
 /// indices in `ui/app.slint` / `ui/panel.slint` follow this list.
 const CATEGORIES: [&str; 17] = [
     "General",
     "Interface",
     "Privacy",
-    "Skip Amounts",
+    "Seeking & Steps",
     "Keyboard Shortcuts",
     "Mouse",
     "Remotes",
@@ -71,13 +71,13 @@ const ACCENTS: [&str; 9] = [
     "#8C8C8C",
 ];
 
-/// Index of a Settings category by name (0 = General when unknown). "Controls", the
-/// single page before 0.15, opens its first page (Skip Amounts).
+/// Index of a Settings category by name (0 = General when unknown). Old names still
+/// work: "Controls" (the single page before 0.15) and "Skip Amounts" (0.15) open
+/// Seeking & Steps.
 pub fn category(name: &str) -> i32 {
-    let name = if name == "Controls" {
-        "Skip Amounts"
-    } else {
-        name
+    let name = match name {
+        "Controls" | "Skip Amounts" => "Seeking & Steps",
+        n => n,
     };
     CATEGORIES.iter().position(|c| *c == name).unwrap_or(0) as i32
 }
@@ -175,10 +175,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     .all(|(a, b)| a.id == b.id && a.title == b.title && a.kind == b.kind);
             if same {
                 for (i, r) in new.into_iter().enumerate() {
-                    if rows
-                        .row_data(i)
-                        .is_some_and(|o| o.value != r.value || o.info != r.info)
-                    {
+                    if rows.row_data(i).is_some_and(|o| {
+                        o.value != r.value
+                            || o.info != r.info
+                            || o.enabled != r.enabled
+                            || o.card != r.card
+                            || o.card_end != r.card_end
+                    }) {
                         rows.set_row_data(i, r);
                     }
                 }
@@ -328,6 +331,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         "interface.theme" => c.interface.theme = v.to_lowercase(),
                         id if schema::has(id) => {
                             schema::set(&mut c, id, v);
+                            if id == "general.check_updates" {
+                                // The same switch is on Settings → About.
+                                a.global::<crate::About>()
+                                    .set_auto_check(c.general.check_updates);
+                            }
                         }
                         "general.log_file" | "video.screenshot_dir" | "recording.dir" => {
                             let mut val = v.to_string();
@@ -394,6 +402,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         }
                         k if k.starts_with("stub.") => {
                             c.stubs.insert(k.into(), v.into());
+                            match k {
+                                // The miniplayer stays on top either way.
+                                k if k == config::ON_TOP.0 && !a.get_mini() => {
+                                    crate::winstate::apply_on_top(&a, c.stub(config::ON_TOP))
+                                }
+                                k if k == config::HIDDEN_FILES.0 => rescan = true,
+                                _ => {}
+                            }
                         }
                         "privacy.recent" => {
                             a.global::<crate::Library>().invoke_clear_recent();
@@ -568,7 +584,21 @@ mod tests {
     fn search_spans_categories() {
         let c = Config::default();
         let r = filtered(&c, &[], 0, "language", false);
-        assert!(r.len() >= 2 && r.iter().all(|r| r.kind != "header"));
+        let hits: Vec<_> = r.iter().filter(|r| r.kind != "header").collect();
+        assert!(hits.len() >= 2);
+        // Grouped by page: each page's matches follow a card title with its name.
+        let heads: Vec<&str> = r
+            .iter()
+            .filter(|r| r.kind == "header")
+            .map(|r| r.title.as_str())
+            .collect();
+        assert!(
+            heads.contains(&"General") && heads.contains(&"Audio"),
+            "{heads:?}"
+        );
+        assert!(hits.iter().all(|h| r
+            .iter()
+            .any(|x| x.kind == "header" && x.title == h.category)));
         // Performance: hwdec is basic, video-sync is behind "Advanced Options".
         let perf = category("Performance");
         let basic = filtered(&c, &[], perf, "", false);
@@ -590,7 +620,7 @@ mod tests {
         assert_eq!(
             [
                 at("General"),
-                at("Skip Amounts"),
+                at("Seeking & Steps"),
                 at("Playback"),
                 at("Network")
             ],
@@ -606,7 +636,9 @@ mod tests {
             ],
             [8, 9, 10, 11, 15]
         );
-        assert_eq!(at("Controls"), at("Skip Amounts"));
+        // Older names open the renamed page.
+        assert_eq!(at("Controls"), 3);
+        assert_eq!(at("Skip Amounts"), 3);
         let c = Config::default();
         let ids = |n: &str| -> Vec<String> {
             filtered(&c, &[], at(n), "", false)
@@ -614,8 +646,9 @@ mod tests {
                 .map(|r| r.id.to_string())
                 .collect()
         };
-        let skip = ids("Skip Amounts");
+        let skip = ids("Seeking & Steps");
         for id in [
+            "playback.precise_seek",
             "controls.short_skip",
             "controls.long_skip",
             "audio.volume_step",
@@ -635,7 +668,8 @@ mod tests {
         let keys = filtered(&c, &[], at("Keyboard Shortcuts"), "", false);
         assert!(keys.iter().filter(|r| r.kind.as_str() == "key").count() > 20);
         // The speed step shows as one of its choices.
-        let row = filtered(&c, &[], at("Skip Amounts"), "", false)
+        assert!(!ids("Playback").iter().any(|i| i == "playback.precise_seek"));
+        let row = filtered(&c, &[], at("Seeking & Steps"), "", false)
             .into_iter()
             .find(|r| r.id.as_str() == "controls.speed_step")
             .unwrap();
@@ -651,5 +685,71 @@ mod tests {
         }
         assert_eq!(mpv_color("#FF0000", 50), "#7FFF0000");
         assert_eq!(lead_num("10 s"), 10);
+    }
+    #[test]
+    fn pages_are_cards() {
+        let c = Config::default();
+        for i in 0..CATEGORIES.len() - 1 {
+            for adv in [false, true] {
+                let r = filtered(&c, &[], i as i32, "", adv);
+                for (j, row) in r.iter().enumerate() {
+                    let prev = j.checked_sub(1).map(|p| &r[p]);
+                    match row.card.as_str() {
+                        // A card body follows its header or another body row.
+                        "row" => assert!(
+                            prev.is_some_and(|p| !p.card.is_empty() && !p.card_end),
+                            "{i} {}",
+                            row.title
+                        ),
+                        "" => assert!(matches!(row.kind.as_str(), "advanced")),
+                        _ => assert!(prev.is_none_or(|p| p.card.is_empty() || p.card_end)),
+                    }
+                }
+                // Every card is closed.
+                let open = r
+                    .iter()
+                    .filter(|r| matches!(r.card.as_str(), "head" | "first"))
+                    .count();
+                assert_eq!(open, r.iter().filter(|r| r.card_end).count(), "{i}");
+            }
+        }
+        // Placeholders that do nothing are hidden; the window ones work.
+        let all = all_rows(&c, &[]);
+        let stubs: Vec<&str> = all
+            .iter()
+            .map(|(r, _)| r.id.as_str())
+            .filter(|id| id.starts_with("stub."))
+            .collect();
+        assert_eq!(
+            stubs,
+            [
+                config::REMEMBER_WINDOW.0,
+                config::ON_TOP.0,
+                config::FIT,
+                config::AUTOPLAY.0,
+                config::HIDDEN_FILES.0
+            ]
+        );
+        assert!(all
+            .iter()
+            .all(|(r, _)| !r.info.contains("Not available yet")));
+    }
+    #[test]
+    fn dependent_rows_fold_away() {
+        let mut c = Config::default();
+        let ids = |c: &Config| -> Vec<String> {
+            filtered(c, &[], 0, "", false)
+                .iter()
+                .map(|r| r.id.to_string())
+                .collect()
+        };
+        assert!(!ids(&c).iter().any(|i| i == "general.log_file"));
+        c.general.save_log = true;
+        assert!(ids(&c).iter().any(|i| i == "general.log_file"));
+        // Search still finds them.
+        c.general.save_log = false;
+        assert!(filtered(&c, &[], 0, "log file", false)
+            .iter()
+            .any(|r| r.id.as_str() == "general.log_file"));
     }
 }

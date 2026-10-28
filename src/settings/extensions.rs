@@ -45,21 +45,11 @@ pub(crate) fn extensions(r: &mut Rows) {
 /// Settings → Extensions: plugins live in the Extensions window now; this page links
 /// to it and keeps the global options.
 pub(crate) fn extensions_page(r: &mut Rows) {
-    r.cat("Extensions");
-    r.push(
-        "",
-        "Plugins have their own window: one tab per plugin with its actions and a gear for its settings, plus All / Marketplace to install, update, enable and disable them.",
-        "",
-        "info",
-        String::new(),
+    r.cat("Extensions").section(
+        "Plugins",
+        "Plugins have their own window (Ctrl+E, or the bottom of the sidebar): a tab per plugin, and All / Marketplace to install, update and turn them on or off.",
+        &[("ext.window", "Open Extensions")],
     );
-    r.action(
-        "ext.window",
-        "Extensions window",
-        "Also in the sidebar (bottom of the icon rail) and with Ctrl+E.",
-        "Open Extensions",
-    );
-    r.header("Options");
     let auto =
         r.c.plugins
             .get(plugins::packages::GLOBAL_ID)
@@ -84,17 +74,13 @@ pub(crate) fn extensions_page(r: &mut Rows) {
         "Load enabled mpv scripts and downloaded plugins when Vivi starts.",
         startup,
     )
-    .action(
-        "scripts.folder",
-        "Scripts folder",
+    .section(
+        "mpv scripts",
         &config::scripts_dir().display().to_string(),
-        "Open",
-    )
-    .action(
-        "scripts.rescan",
-        "Rescan scripts",
-        "Pick up scripts added since Vivi started.",
-        "Rescan",
+        &[
+            ("scripts.folder", "Open folder"),
+            ("scripts.rescan", "Rescan"),
+        ],
     );
 }
 

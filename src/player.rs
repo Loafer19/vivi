@@ -37,6 +37,9 @@ pub enum PlayerEvent {
     Log(String, String),
 }
 
+/// Settings → Playback → *Start playing as soon as a file opens* (set by `apply_player`).
+pub static AUTOPLAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
 pub struct Player {
     pub mpv: Arc<Mpv>,
 }
@@ -237,10 +240,13 @@ impl Player {
             let _ = self.mpv.command("write-watch-later-config", &[]);
         }
     }
+    /// Open `path` in place of the current file; it starts playing unless *Start playing
+    /// as soon as a file opens* is off ([`AUTOPLAY`]), then it opens paused.
     pub fn open(&self, path: &str) {
         self.save_position();
         let _ = self.mpv.command("loadfile", &[&quote(path)]);
-        let _ = self.mpv.set_property("pause", false);
+        let play = AUTOPLAY.load(std::sync::atomic::Ordering::Relaxed);
+        let _ = self.mpv.set_property("pause", !play);
     }
     pub fn toggle_pause(&self) {
         let _ = self.mpv.command("cycle", &["pause"]);

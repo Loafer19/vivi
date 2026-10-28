@@ -735,6 +735,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     let media = library::open_db(&db)
         .map(|c| library::all(&c))
         .unwrap_or_default();
+    count_dirs(&media);
     let lib = Rc::new(RefCell::new(Lib {
         media,
         nav: "home".into(),
@@ -800,6 +801,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         Rc::new(move |quiet| {
             let roots = cfg.borrow().library.folders.clone();
+            let hidden = cfg.borrow().stub(crate::config::HIDDEN_FILES);
             if let Some(a) = w.upgrade().filter(|_| !quiet) {
                 a.global::<crate::Library>().set_scanning(true);
             }
@@ -808,7 +810,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             std::thread::spawn(move || {
                 let t = std::time::Instant::now();
                 let res = library::open_db(&db).and_then(|mut c| {
-                    library::scan_changes(&mut c, &roots).map(|(n, changed)| {
+                    library::scan_changes(&mut c, &roots, hidden).map(|(n, changed)| {
                         (
                             n,
                             changed,
@@ -848,7 +850,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let render = render.clone();
         app.global::<crate::Library>().on_refresh(move || {
             if let Some(m) = LOADED.with(|l| l.borrow_mut().take()) {
+                count_dirs(&m);
                 lib.borrow_mut().media = m;
+                crate::settings::refresh_ui();
             }
             render();
         });
@@ -1435,6 +1439,35 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
 
 thread_local! {
     static LOADED: RefCell<Option<Vec<Media>>> = const { RefCell::new(None) };
+    /// Indexed files per directory (`None` until the index is read), for the folder
+    /// list on Settings → Library.
+    static DIRS: RefCell<Option<std::collections::BTreeMap<String, usize>>> =
+        const { RefCell::new(None) };
+}
+
+fn count_dirs(media: &[Media]) {
+    let mut d = std::collections::BTreeMap::new();
+    for m in media {
+        if let Some((dir, _)) = m.path.rsplit_once(['/', '\\']) {
+            *d.entry(dir.to_string()).or_insert(0) += 1;
+        }
+    }
+    DIRS.with(|x| *x.borrow_mut() = Some(d));
+}
+
+/// Indexed files in library folder `folder` and its sub-folders (`None` before the
+/// index is read).
+pub fn folder_count(folder: &str) -> Option<usize> {
+    let f = folder.trim_end_matches(['/', '\\']);
+    DIRS.with(|d| {
+        d.borrow().as_ref().map(|d| {
+            d.range(f.to_string()..)
+                .take_while(|(k, _)| k.starts_with(f))
+                .filter(|(k, _)| k.len() == f.len() || k[f.len()..].starts_with(['/', '\\']))
+                .map(|(_, n)| n)
+                .sum()
+        })
+    })
 }
 
 /// Show `img` on every library row whose `thumb_key` is `key`.
@@ -1457,4 +1490,27 @@ fn set_thumb(key: &str, img: &slint::Image) {
 fn picture(path: &str) -> Option<slint::Image> {
     let key = path.to_string();
     images::get(Path::new(path), images::TILE, move |i| set_thumb(&key, &i))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn folder_counts_include_sub_folders() {
+        assert_eq!(folder_count("/m"), None);
+        let m = |p: &str| Media {
+            path: p.into(),
+            ..Default::default()
+        };
+        count_dirs(&[
+            m("/m/a.mp3"),
+            m("/m/x/b.mp3"),
+            m("/m2/c.mp3"),
+            m("/mx/d.mp3"),
+        ]);
+        assert_eq!(folder_count("/m"), Some(2));
+        assert_eq!(folder_count("/m/"), Some(2));
+        assert_eq!(folder_count("/m2"), Some(1));
+        assert_eq!(folder_count("/none"), Some(0));
+    }
 }

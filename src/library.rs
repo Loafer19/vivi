@@ -88,12 +88,18 @@ fn read_tags(path: &Path, m: &mut Media) {
 /// Scan `roots`, updating changed files and removing vanished ones. Returns the media count.
 #[cfg(test)]
 pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> {
-    scan_changes(conn, roots).map(|(n, _)| n)
+    scan_changes(conn, roots, false).map(|(n, _)| n)
 }
 
 /// [`scan`] that also returns how many entries were added, updated or removed. Unchanged
-/// files (same mtime as in the index) are only stat'ed, not re-read.
-pub fn scan_changes(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<(usize, usize)> {
+/// files (same mtime as in the index) are only stat'ed, not re-read. Files whose names
+/// start with a dot are skipped unless `hidden` (Settings → Library → *Include hidden
+/// files*).
+pub fn scan_changes(
+    conn: &mut Connection,
+    roots: &[String],
+    hidden: bool,
+) -> rusqlite::Result<(usize, usize)> {
     let known: BTreeMap<String, i64> = {
         let mut st = conn.prepare("SELECT path, mtime FROM media")?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
@@ -112,9 +118,10 @@ pub fn scan_changes(conn: &mut Connection, roots: &[String]) -> rusqlite::Result
                 continue;
             }
             let p = e.path();
-            if p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with('.'))
+            if !hidden
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with('.'))
             {
                 continue;
             }
@@ -454,7 +461,13 @@ mod tests {
         let mut c = open_db(&dir.join("t.db")).unwrap();
         let roots = vec![dir.to_string_lossy().into_owned()];
         assert_eq!(scan(&mut c, &roots).unwrap(), 2);
-        assert_eq!(scan_changes(&mut c, &roots).unwrap(), (2, 0));
+        assert_eq!(scan_changes(&mut c, &roots, false).unwrap(), (2, 0));
+        // Hidden files only with *Include hidden files*; off again, they leave the index.
+        std::fs::write(dir.join(".clip.mkv"), b"x").unwrap();
+        assert_eq!(scan(&mut c, &roots).unwrap(), 2);
+        assert_eq!(scan_changes(&mut c, &roots, true).unwrap(), (3, 1));
+        assert_eq!(scan(&mut c, &roots).unwrap(), 2);
+        std::fs::remove_file(dir.join(".clip.mkv")).unwrap();
         std::fs::remove_file(dir.join("song.mp3")).unwrap();
         scan(&mut c, &roots).unwrap();
         let a = all(&c);

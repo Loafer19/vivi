@@ -18,8 +18,9 @@ pub struct Config {
     pub network: Network,
     pub performance: Performance,
     pub recording: Recording,
-    /// Values of settings that are shown in the UI but not implemented yet
-    /// (casting, streaming, extensions, …), keyed by setting id.
+    /// Values of settings that started as placeholders, keyed by their `stub.…` setting
+    /// id. Some work now (window, autoplay, hidden files; read with [`Config::stub`]),
+    /// the others are hidden in Settings; the ids stay so old configs keep their values.
     pub stubs: BTreeMap<String, String>,
     /// Per-show presets keyed by normalized show name (see [`show_key`]).
     pub presets: BTreeMap<String, Preset>,
@@ -52,6 +53,9 @@ pub struct Interface {
     pub onboarded: bool,
     /// Miniplayer geometry `[x, y, width, height]` (height without the queue view).
     pub mini_window: Option<[i32; 4]>,
+    /// Main window geometry `[x, y, width, height]` in logical pixels, saved on exit
+    /// while *Remember window size and position* is on (see `src/winstate.rs`).
+    pub window: Option<[i32; 4]>,
     /// Progress bar style: "Compact" | "Classic" | "Waveform" | "Plain" (see `BAR_STYLES`).
     pub bar_style: String,
     /// Volume control style: "Cone" | "Bar" | "Popup" | "Percent" (see `VOLUME_STYLES`).
@@ -386,6 +390,7 @@ impl Default for Interface {
             toolbar: profile_toolbar("Default").unwrap_or_default(),
             onboarded: false,
             mini_window: None,
+            window: None,
             bar_style: "Compact".into(),
             volume_style: "Cone".into(),
             bar_icons: "Two-tone".into(),
@@ -466,7 +471,30 @@ pub fn path() -> PathBuf {
         .join("config.toml")
 }
 
+/// The `[stubs]` settings that work, with their defaults (shown in Settings).
+pub const REMEMBER_WINDOW: (&str, bool) = ("stub.interface.remember_window", true);
+pub const ON_TOP: (&str, bool) = ("stub.interface.ontop", false);
+pub const AUTOPLAY: (&str, bool) = ("stub.playback.autoplay", true);
+pub const HIDDEN_FILES: (&str, bool) = ("stub.library.hidden", false);
+/// `stub.interface.fit`: resize the window to the video (first choice is the default).
+pub const FIT: &str = "stub.interface.fit";
+pub const FIT_CHOICES: [&str; 3] = ["Never", "Always", "First video only"];
+
 impl Config {
+    /// A toggle kept in `[stubs]` ([`REMEMBER_WINDOW`], [`ON_TOP`], …).
+    pub fn stub(&self, (id, default): (&str, bool)) -> bool {
+        self.stubs.get(id).map_or(default, |v| v == "true")
+    }
+
+    /// *Resize window to fit video*: one of [`FIT_CHOICES`].
+    pub fn fit(&self) -> &str {
+        self.stubs
+            .get(FIT)
+            .map(String::as_str)
+            .filter(|v| FIT_CHOICES.contains(v))
+            .unwrap_or(FIT_CHOICES[0])
+    }
+
     /// Load the config; a missing file gives defaults, a broken one is kept as `.bak`.
     pub fn load() -> Self {
         let p = path();
@@ -954,6 +982,22 @@ mod toolbar_tests {
             toml::from_str("[audio]\nreplaygain = \"loud\"\ncrossfade_secs = -2\n").unwrap();
         let a = c.migrated().audio;
         assert_eq!((a.replaygain.as_str(), a.crossfade_secs), ("off", 0));
+    }
+    #[test]
+    fn stub_settings_keep_their_ids() {
+        // Configs written while these rows were placeholders keep their values.
+        let c: Config = toml::from_str(
+            "[stubs]\n\"stub.interface.ontop\" = \"true\"\n\"stub.playback.autoplay\" = \"false\"\n\
+             \"stub.interface.fit\" = \"First video only\"\n",
+        )
+        .unwrap();
+        assert!(c.stub(ON_TOP) && !c.stub(AUTOPLAY));
+        assert!(c.stub(REMEMBER_WINDOW) && !c.stub(HIDDEN_FILES)); // defaults
+        assert_eq!(c.fit(), "First video only");
+        let mut d = Config::default();
+        assert_eq!(d.fit(), "Never");
+        d.stubs.insert(FIT.into(), "Sometimes".into());
+        assert_eq!(d.fit(), "Never");
     }
     #[test]
     fn migrates_wheel_stubs_and_bad_values() {

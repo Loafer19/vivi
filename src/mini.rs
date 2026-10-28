@@ -5,7 +5,6 @@
 
 use crate::config::Config;
 use crate::AppWindow;
-use slint::winit_030::{winit::window::WindowLevel, WinitWindowAccessor};
 use slint::{ComponentHandle, LogicalPosition, LogicalSize};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -21,16 +20,6 @@ fn geometry(a: &AppWindow) -> Geometry {
     let w = a.window();
     let sf = w.scale_factor();
     (w.position().to_logical(sf), w.size().to_logical(sf))
-}
-
-fn set_on_top(a: &AppWindow, on: bool) {
-    a.window().with_winit_window(|w| {
-        w.set_window_level(if on {
-            WindowLevel::AlwaysOnTop
-        } else {
-            WindowLevel::Normal
-        });
-    });
 }
 
 pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
@@ -81,11 +70,12 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
             if let Some(g) = saved {
                 w.set_position(LogicalPosition::new(g[0] as f32, g[1] as f32));
             }
-            set_on_top(&a, true);
+            crate::winstate::apply_on_top(&a, true);
         } else {
             r(&a);
             a.set_mini(false);
-            set_on_top(&a, false);
+            // Back to the normal window: on top only if Settings asks for it.
+            crate::winstate::apply_on_top(&a, cfg.borrow().stub(crate::config::ON_TOP));
             if let Some((pos, size)) = full.take() {
                 w.set_size(size);
                 w.set_position(pos);

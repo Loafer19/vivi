@@ -35,6 +35,40 @@ pub(super) fn speed_step_label(s: f64) -> String {
     format!("{s}×")
 }
 
+/// Stored value ↔ label of choices whose mpv values are not words people use.
+pub(super) type Labels = [(&'static str, &'static str)];
+pub(super) const AUTO_ALWAYS_OFF: &Labels =
+    &[("auto", "Automatic"), ("yes", "Always"), ("no", "Off")];
+pub(super) const SUB_AUTO: &Labels = &[
+    ("no", "Off"),
+    ("exact", "Same name as the video"),
+    ("fuzzy", "Names containing the video's name"),
+    ("all", "Every subtitle file in the folder"),
+];
+
+/// mpv's `auto` audio device; the others are shown by their mpv names.
+pub(super) const AUDIO_DEVICE: &Labels = &[("auto", "System default")];
+
+/// The labels of a choice, in order.
+pub(super) fn labels(t: &Labels) -> Vec<&'static str> {
+    t.iter().map(|(_, l)| *l).collect()
+}
+
+/// Label of a stored value (unknown values are shown as they are).
+fn label(t: &Labels, v: &str) -> String {
+    t.iter()
+        .find(|(id, _)| *id == v)
+        .map_or(v, |(_, l)| *l)
+        .into()
+}
+
+/// Store a label or a stored value; anything else leaves the setting unchanged.
+fn set_labeled(t: &Labels, slot: &mut String, v: &str) {
+    if let Some((id, _)) = t.iter().find(|(id, l)| *l == v || *id == v) {
+        *slot = (*id).into();
+    }
+}
+
 fn action_label(id: &str) -> String {
     mouse::label_of(&mouse::ACTIONS, id).into()
 }
@@ -67,6 +101,11 @@ pub(super) const GENERAL: &[Field] = &[
         id: "general.save_log",
         get: Some(|c| c.general.save_log.to_string()),
         set: |c, v| c.general.save_log = on(v),
+    },
+    Field {
+        id: "general.check_updates",
+        get: Some(|c| c.general.check_updates.to_string()),
+        set: |c, v| c.general.check_updates = on(v),
     },
     Field {
         id: "general.log_level",
@@ -141,8 +180,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "subtitles.auto_load",
-        get: None,
-        set: |c, v| c.subtitles.auto_load = v.into(),
+        get: Some(|c| label(SUB_AUTO, &c.subtitles.auto_load)),
+        set: |c, v| set_labeled(SUB_AUTO, &mut c.subtitles.auto_load, v),
     },
     Field {
         id: "subtitles.enabled",
@@ -297,8 +336,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "audio.device",
-        get: None,
-        set: |c, v| c.audio.device = v.into(),
+        get: Some(|c| label(AUDIO_DEVICE, &c.audio.device)),
+        set: |c, v| c.audio.device = if v == AUDIO_DEVICE[0].1 { "auto" } else { v }.into(),
     },
     Field {
         id: "audio.startup_volume",
@@ -416,8 +455,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "video.deinterlace",
-        get: None,
-        set: |c, v| c.video.deinterlace = v.into(),
+        get: Some(|c| label(AUTO_ALWAYS_OFF, &c.video.deinterlace)),
+        set: |c, v| set_labeled(AUTO_ALWAYS_OFF, &mut c.video.deinterlace, v),
     },
     Field {
         id: "video.screenshot_format",
@@ -431,8 +470,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "network.cache",
-        get: None,
-        set: |c, v| c.network.cache = v.into(),
+        get: Some(|c| label(AUTO_ALWAYS_OFF, &c.network.cache)),
+        set: |c, v| set_labeled(AUTO_ALWAYS_OFF, &mut c.network.cache, v),
     },
     Field {
         id: "network.cache_secs",
@@ -526,11 +565,12 @@ mod tests {
             ("general.remote_control", "true"),
             ("general.save_log", "true"),
             ("general.log_level", "Everything"),
+            ("general.check_updates", "true"),
         ] {
             assert!(set(&mut c, id, v), "{id}");
             assert_eq!(get(&c, id), v, "{id}");
         }
-        assert!(c.general.remote_control && c.general.save_log);
+        assert!(c.general.remote_control && c.general.save_log && c.general.check_updates);
         assert!(!set(&mut c, "general.nope", "x"));
         assert!(GENERAL.iter().all(|f| has(f.id)));
     }
@@ -607,5 +647,33 @@ mod tests {
         assert_eq!(c.audio.crossfade_secs, config::CROSSFADE_MAX);
         set(&mut c, "subtitles.language", " en ");
         assert_eq!(c.subtitles.language, "en");
+        // Choices shown with words store mpv's values; old stored values still work.
+        for (id, label, stored) in [
+            ("video.deinterlace", "Always", "yes"),
+            ("network.cache", "Off", "no"),
+            (
+                "subtitles.auto_load",
+                "Names containing the video's name",
+                "fuzzy",
+            ),
+        ] {
+            assert!(set(&mut c, id, label), "{id}");
+            assert_eq!(get(&c, id), label, "{id}");
+            set(&mut c, id, "bogus");
+            assert_eq!(get(&c, id), label, "{id}");
+            set(&mut c, id, stored);
+            assert_eq!(get(&c, id), label, "{id}");
+        }
+        assert_eq!(
+            (c.video.deinterlace.as_str(), c.network.cache.as_str()),
+            ("yes", "no")
+        );
+        set(&mut c, "audio.device", "pulse/hdmi");
+        assert_eq!(get(&c, "audio.device"), "pulse/hdmi");
+        set(&mut c, "audio.device", "System default");
+        assert_eq!(
+            (c.audio.device.as_str(), get(&c, "audio.device").as_str()),
+            ("auto", "System default")
+        );
     }
 }

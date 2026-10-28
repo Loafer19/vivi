@@ -49,6 +49,8 @@ pub(crate) fn wire(
     let timer = Box::leak(Box::new(slint::Timer::default()));
     let mut load = loading::Loading::default();
     let mut last_err = String::new();
+    // A file loaded and its video size is not known yet: fit the window at the restart.
+    let mut fit = false;
     timer.start(
         slint::TimerMode::Repeated,
         std::time::Duration::from_millis(30),
@@ -73,6 +75,7 @@ pub(crate) fn wire(
                         a.global::<crate::Playback>().set_media_title(t.into())
                     }
                     PlayerEvent::FileLoaded => {
+                        fit = true;
                         a.global::<crate::Playback>().set_has_media(true);
                         refresh_lists(&a, &player, log);
                         on_file_loaded(&a, &player, log);
@@ -132,7 +135,12 @@ pub(crate) fn wire(
                                 .set_loading_name(loading::name_for(&path, &t).into());
                         }
                     }
-                    PlayerEvent::PlaybackRestart => load.restart(),
+                    PlayerEvent::PlaybackRestart => {
+                        load.restart();
+                        if std::mem::take(&mut fit) {
+                            crate::winstate::fit_video(&a, &player, &cfg.borrow());
+                        }
+                    }
                     PlayerEvent::Buffering(b) => load.cache(b),
                     PlayerEvent::EndFile(err) => {
                         let name = a.global::<crate::Notices>().get_loading_name().to_string();

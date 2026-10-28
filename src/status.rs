@@ -65,12 +65,12 @@ pub enum Click {
     None,
 }
 
-pub fn click_target(id: &str, remote_extension: bool) -> Click {
+pub fn click_target(id: &str) -> Click {
     match id {
         "sleep" | "ab-loop" | "speed" => Click::Panel(PanelTab::Playback),
         "leveling" => Click::Settings("Audio"),
-        "remote" if remote_extension => Click::Settings("Remotes"),
-        "remote" => Click::Settings("General"),
+        // The agent socket and the phone remote are both on Controls → Remotes.
+        "remote" => Click::Settings("Remotes"),
         _ => match id.strip_prefix("plugin:").and_then(|r| r.split_once(':')) {
             Some((p, k)) => Click::Plugin {
                 id: p.to_string(),
@@ -224,7 +224,7 @@ pub fn plugin_clear(id: &str, key: &str) {
 }
 
 fn clicked(a: &AppWindow, id: &str) {
-    match click_target(id, remote_extension()) {
+    match click_target(id) {
         Click::Panel(tab) => {
             a.global::<crate::Overlays>().set_settings_open(false);
             a.global::<crate::Panel>().set_tab(tab);
@@ -306,25 +306,18 @@ mod tests {
 
     #[test]
     fn clicks() {
+        assert_eq!(click_target("sleep"), Click::Panel(PanelTab::Playback));
+        assert_eq!(click_target("speed"), Click::Panel(PanelTab::Playback));
+        assert_eq!(click_target("leveling"), Click::Settings("Audio"));
+        assert_eq!(click_target("remote"), Click::Settings("Remotes"));
         assert_eq!(
-            click_target("sleep", false),
-            Click::Panel(PanelTab::Playback)
-        );
-        assert_eq!(
-            click_target("speed", false),
-            Click::Panel(PanelTab::Playback)
-        );
-        assert_eq!(click_target("leveling", false), Click::Settings("Audio"));
-        assert_eq!(click_target("remote", false), Click::Settings("General"));
-        assert_eq!(click_target("remote", true), Click::Settings("Remotes"));
-        assert_eq!(
-            click_target("plugin:cast:tv", false),
+            click_target("plugin:cast:tv"),
             Click::Plugin {
                 id: "cast".into(),
                 key: "tv".into()
             }
         );
-        assert_eq!(click_target("plugin:bad", false), Click::None);
-        assert_eq!(click_target("other", false), Click::None);
+        assert_eq!(click_target("plugin:bad"), Click::None);
+        assert_eq!(click_target("other"), Click::None);
     }
 }

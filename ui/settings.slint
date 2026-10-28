@@ -7,7 +7,7 @@ import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Dropdown, Toggle, Slider, Segmented, TextField, PathField, AdvancedBar } from "core/controls.slint";
 import { Icons } from "core/icons.slint";
 import { Modal } from "core/modal.slint";
-import { FlatButton } from "core/buttons.slint";
+import { FlatButton, SecondaryButton, ButtonBase, ButtonKind, IconButton } from "core/buttons.slint";
 import { Badge, BadgeTone } from "core/rows.slint";
 
 export struct SettingRow {
@@ -20,6 +20,10 @@ export struct SettingRow {
     // | "plugin" (Extensions card: title = name, info = description, value = enabled,
     //   options = [version, author, icon key, source]) | "secret" (hidden text)
     // | "buttons" (title/info + one button per label; clicked label is the value)
+    // | "folder" (Library folder: title = path, value = file count text; × sends (id, "run"))
+    // | "empty" (empty state of a card: title = text, value = button label sending (id, "run"))
+    // A "header" with labels shows them as buttons on the right of its title; button i
+    // sends (options[i], "run"). On Settings pages its info is a subtitle, not a tooltip.
     // | "package" (catalog card: title = name, info = description, value = "confirm"
     //   while the permission prompt is open, options = [version, author, icon key,
     //   permissions, state, size, badge ("Recommended" or "")], labels = buttons)
@@ -32,6 +36,14 @@ export struct SettingRow {
     maximum: float,
     step: float,
     enabled: bool,
+    // Settings pages group rows into cards (src/settings/rows.rs `cards`): "head" (a
+    // header opening a card), "first" (first row of a card without a header), "row"
+    // (a later row: divider above), "" (no card: Advanced Options bar, Extensions window).
+    card: string,
+    // Last row of its card (rounded bottom).
+    card-end: bool,
+    // Depends on the row above it (indented; hidden while that one is off).
+    nested: bool,
 }
 
 // Plugin manifest icon key → icon (see src/plugins Manifest::icon).
@@ -168,15 +180,53 @@ component Swatch inherits Rectangle {
 }
 
 // One settings row; also used by the Extensions window (ui/extensions.slint).
+// Rows with a `card` draw their slice of a card like About's (ui/about.slint `Card`):
+// rounded corners at the card's top and bottom, a divider between rows.
 export component Row inherits Rectangle {
     in property <SettingRow> setting;
     in-out property <bool> advanced;
     callback changed(string, string);
     callback advanced-toggled(bool);
-    property <length> ctl-w: min(300px, root.width * 0.45);
-    height: setting.kind == "plugin" ? 76px : setting.kind == "package" ? 104px : setting.kind == "header" ? 48px : setting.kind == "advanced" ? 56px : setting.kind == "slider" && setting.labels.length > 0 ? 58px : 42px;
-    if setting.kind == "header": Text {
+    property <bool> in-card: setting.card != "";
+    property <bool> head: setting.card == "head";
+    property <bool> top: root.head || setting.card == "first";
+    property <length> pad: 16px;                                   // inside the card
+    property <length> gap: root.top ? 16px : 0px;                    // above a card
+    property <length> tail: setting.card-end ? 8px : 0px;            // below its last row
+    property <length> inset-l: root.in-card ? root.pad + (setting.nested ? 24px : 0px) : 0px;
+    property <length> inset-r: root.in-card ? root.pad : 0px;
+    property <length> ctl-w: min(300px, (root.width - root.inset-l - root.inset-r) * 0.45);
+    property <length> body: setting.kind == "plugin" ? 76px : setting.kind == "package" ? 104px
+        : setting.kind == "header" ? (!root.in-card ? 48px : setting.info != "" ? 66px : 52px)
+        : setting.kind == "advanced" ? 56px : setting.kind == "folder" ? 52px : setting.kind == "empty" ? 92px
+        : setting.kind == "slider" && setting.labels.length > 0 ? (root.in-card ? 62px : 58px)
+        : root.in-card ? 48px : 42px;
+    height: root.gap + root.body + root.tail;
+    if root.in-card: Rectangle {
+        y: root.gap; width: parent.width; height: root.body + root.tail; clip: true;
+        // The card outline, cut at the row's edges unless the card starts / ends here.
+        Rectangle {
+            y: root.top ? 0px : -16px; width: parent.width;
+            height: parent.height + (root.top ? 0px : 16px) + (setting.card-end ? 0px : 16px);
+            background: Theme.bg-a3; border-radius: Metrics.radius-lg;
+            border-width: 1px; border-color: Theme.bg-a1;
+        }
+        if setting.card == "row": Rectangle {
+            x: root.inset-l; width: parent.width - root.inset-l - root.pad; height: 1px;
+            background: Theme.divider.with-alpha(0.5);
+        }
+    }
+    if setting.kind == "header" && !root.in-card: Text {
         x: 0; y: 20px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-lg;
+    }
+    if setting.kind == "header" && root.in-card: HorizontalLayout {
+        y: root.gap; width: parent.width; height: root.body; padding-left: root.pad; padding-right: 12px; spacing: 8px;
+        VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 3px;
+            Text { text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-lg; overflow: elide; }
+            if setting.info != "": Text { text: setting.info; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; }
+        }
+        for l[i] in setting.labels: VerticalLayout { alignment: center;
+            SecondaryButton { text: l; clicked => { root.changed(setting.options[i], "run"); } } }
     }
     if setting.kind == "advanced": AdvancedBar {
         y: 8px; width: parent.width; expanded <=> root.advanced;
@@ -192,8 +242,37 @@ export component Row inherits Rectangle {
         setting: root.setting;
         changed(id, v) => { root.changed(id, v); }
     }
-    if setting.kind != "header" && setting.kind != "advanced" && setting.kind != "plugin" && setting.kind != "package": HorizontalLayout {
-        spacing: 10px; padding-top: 5px; padding-bottom: 5px;
+    // Library folder: icon, path and file count, remove button (brighter on hover).
+    if setting.kind == "folder": Rectangle {
+        y: root.gap; width: parent.width; height: root.body;
+        fta := TouchArea { width: parent.width; height: parent.height; }
+        HorizontalLayout {
+            padding-left: root.inset-l; padding-right: root.inset-r - 6px; spacing: 12px;
+            VerticalLayout { alignment: center; TriIcon { name: "folder"; width: 22px; height: 22px; } }
+            VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 2px;
+                Text { text: setting.title; color: Theme.fg-1; font-size: Metrics.font-md; overflow: elide; }
+                if setting.value != "": Text { text: setting.value; color: Theme.fg-a3; font-size: Metrics.font-sm; }
+            }
+            VerticalLayout { alignment: center;
+                IconButton {
+                    icon: @image-url("../assets/icons/close.svg"); tip: "Remove from the library";
+                    opacity: fta.has-hover ? 1 : 0.55;
+                    clicked => { root.changed(setting.id, "run"); }
+                } }
+        }
+    }
+    // Empty card: a line of text and the button that fills it.
+    if setting.kind == "empty": VerticalLayout {
+        y: root.gap; width: parent.width; height: root.body; padding-left: root.inset-l; padding-right: root.inset-r;
+        alignment: center; spacing: 12px;
+        Text { text: setting.title; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-alignment: center; wrap: word-wrap; }
+        HorizontalLayout { alignment: center;
+            SecondaryButton { text: setting.value; clicked => { root.changed(setting.id, "run"); } } }
+    }
+    if setting.kind != "header" && setting.kind != "advanced" && setting.kind != "plugin" && setting.kind != "package"
+        && setting.kind != "folder" && setting.kind != "empty": HorizontalLayout {
+        y: root.gap; width: parent.width; height: root.body;
+        spacing: 10px; padding-top: 5px; padding-bottom: 5px; padding-left: root.inset-l; padding-right: root.inset-r;
         HorizontalLayout {
             spacing: 6px; horizontal-stretch: 1; alignment: start;
             Text { text: setting.title; color: setting.enabled ? Theme.fg-a1 : Theme.fg-a3.with-alpha(0.6); font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
@@ -241,9 +320,9 @@ export component Row inherits Rectangle {
         }
         if setting.kind == "buttons": HorizontalLayout { alignment: end; spacing: 4px;
             for l in setting.labels: VerticalLayout { alignment: center;
-                FlatButton { text: l; enabled: setting.enabled; clicked => { root.changed(setting.id, l); } } } }
+                ButtonBase { kind: root.in-card ? ButtonKind.secondary : ButtonKind.flat; text: l; enabled: setting.enabled; clicked => { root.changed(setting.id, l); } } } }
         if setting.kind == "action": VerticalLayout { alignment: center;
-            FlatButton { text: setting.value; enabled: setting.enabled; clicked => { root.changed(setting.id, "run"); } } }
+            ButtonBase { kind: root.in-card ? ButtonKind.secondary : ButtonKind.flat; text: setting.value; enabled: setting.enabled; clicked => { root.changed(setting.id, "run"); } } }
         if setting.kind == "key": HorizontalLayout { spacing: 4px; alignment: end; padding-top: 4px; padding-bottom: 4px;
             Rectangle {
                 width: kt.preferred-width + 16px; border-radius: Metrics.radius-sm; background: Theme.field;

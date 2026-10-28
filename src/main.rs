@@ -43,6 +43,7 @@ mod transitions;
 mod tray;
 mod util;
 mod viz;
+mod winstate;
 
 use app::debug::{debug_ui, open_plugin_link, panel_tab, screenshot_mode};
 use app::keys::{forward_key, key_debug, LAST_PHYSICAL};
@@ -127,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     })?;
 
-    let (toggle_fs, open_file) = app::wiring::transport::wire(&app, &player);
+    let (toggle_fs, open_file) = app::wiring::transport::wire(&app, &player, &cfg);
     mouse::wire(&app, &player);
 
     app::wiring::keys::wire(&app, &player, toggle_fs, open_file);
@@ -142,8 +143,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The loop runs until Quit (not until the last window closes), so closing can hide
     // the window to the tray while playback continues (src/tray.rs).
+    winstate::restore(&app, &cfg.borrow());
     app.show()?;
+    winstate::shown(&app, &cfg.borrow());
     slint::run_event_loop_until_quit()?;
+    if winstate::save(&app, &mut cfg.borrow_mut()) {
+        if let Err(e) = cfg.borrow().save() {
+            eprintln!("vivi: save config: {e}");
+        }
+    }
     let _ = app.hide();
     player.save_position();
     // Scripts get their shutdown event and their download tools are stopped.

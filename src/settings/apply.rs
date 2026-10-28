@@ -84,6 +84,10 @@ pub(crate) fn replaygain(a: &config::Audio) -> (&'static str, f64) {
 /// mpv options driven by settings (applied at startup and on change).
 pub fn apply_player(p: &Player, c: &Config) {
     // Playback
+    crate::player::AUTOPLAY.store(
+        c.stub(config::AUTOPLAY),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     p.set("hwdec", &c.playback.hwdec);
     p.set("speed", &c.playback.speed.to_string());
     p.set("resume-playback", yes(c.playback.resume));

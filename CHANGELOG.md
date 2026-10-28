@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- **Window options** (#97), Settings → Interface → Window: *Remember window size and position* (on by default; saved on quit as `interface.window`; on Wayland only the size, since compositors place windows), *Keep window above other windows* (X11, Windows and macOS; Wayland compositors ignore it, use a window rule) and *Resize window to fit video* (Never / Always / First video only: the window takes the video's size, at most 90% of the screen, when a video starts; not in fullscreen, maximized, miniplayer or for audio). These were placeholders until now and keep their `stub.interface.*` keys.
+- **Start playing as soon as a file opens** (#97), Settings → Playback → Startup: off opens files paused (`stub.playback.autoplay`, on by default).
+- **Include hidden files** (#97), Settings → Library → Advanced Options: the library scan also adds files whose names start with a dot (`stub.library.hidden`).
+- **Settings → Recording → Save recordings to** now picks where stream recordings go (`recording.dir`; empty keeps `~/Videos`).
+
+### Changed
+- **Settings pages are cards** (#97): each section is a card with a title, an optional subtitle and its buttons, like About; rows that only matter while another option is on (log file and level, scroll direction, ReplayGain details) fold away while it is off, and search lists its matches by page.
+- **Settings regrouped** (#97): General keeps Language, Startup (welcome tour, check for updates) and Diagnostics; Appearance, Toolbar, Auto-hide, Window and Hints move to **Interface**; Privacy has History and Scrobbling; **Skip Amounts is now Seeking & Steps** with *Seek precisely* moved there from Playback; Playback is Startup, Tracks, Order, Sleep timer and Presets; Recording keeps recording only. The old names *Skip Amounts* and *Controls* still work in `VIVI_PAGE` / `VIVI_SETTINGS_ACTION` and the control socket. No config key changed.
+- **Library folders** (#97): one item per folder with its file count and a remove button, *Add folder…* and *Rescan* in the card's title bar, and an empty state with *Add folder*.
+- **Clearer settings text** (#97): plain-language descriptions instead of mpv option names, readable choices (*Automatic / Always / Off*, *System default* audio device, subtitle auto-load *Same name as the video* …), Deinterlacing joins Framing, *Reset picture* sits on the Picture card, and the Extensions page groups Plugins and mpv scripts with their buttons.
+- **Placeholders are hidden** (#97): settings that did nothing (*Not available yet*) no longer show; their saved values are kept. *Check for updates automatically* on General is the real update check setting (the same as About's).
+
+### Fixed
+- **The top bar's remote chip always opens Settings → Controls → Remotes**; without the Remote Control extension it opened General.
+- Settings rows that turn on or off with another option (for example *Log file* with *Save a log*) now update at once instead of after reopening the page.
+
 ## [0.15.0] - 2026-10-27
 
 Highlights: **volume leveling** with ReplayGain (track / album, preamp, clipping protection, a gain for untagged files), **gapless playback** for music and an optional soft **crossfade**; a **Controls** settings group with mouse buttons, the scroll wheel and a speed step; **bookmarks become chapters** (in the player or as an FFmpeg chapters file); bookmarks, the A-B loop and the sleep timer for **AI agents and scripts**; subtitles **from your computer** without the Subtitle Search plugin.
