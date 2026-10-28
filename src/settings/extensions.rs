@@ -47,7 +47,7 @@ pub(crate) fn extensions(r: &mut Rows) {
 pub(crate) fn extensions_page(r: &mut Rows) {
     r.cat("Extensions").section(
         "Plugins",
-        "Plugins have their own window (Ctrl+E, or the bottom of the sidebar): a tab per plugin, and All / Marketplace to install, update and turn them on or off.",
+        "Each plugin has a tab in the Extensions window (Ctrl+E) with its actions and settings.",
         &[("ext.window", "Open Extensions")],
     );
     let auto =
