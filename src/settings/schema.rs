@@ -46,6 +46,41 @@ pub(super) const SUB_AUTO: &Labels = &[
     ("all", "Every subtitle file in the folder"),
 ];
 
+pub(super) const HWDEC: &Labels = &[
+    ("auto-safe", "Automatic (safe)"),
+    ("auto", "Automatic (any method)"),
+    ("vaapi", "VA-API (Linux)"),
+    ("nvdec", "NVDEC (NVIDIA)"),
+    ("vulkan", "Vulkan"),
+    ("videotoolbox", "VideoToolbox (macOS)"),
+    ("d3d11va", "Direct3D 11 (Windows)"),
+    ("no", "Off (decode on the processor)"),
+];
+pub(super) const LOOP_FILTER: &Labels = &[
+    ("default", "Off"),
+    ("nonref", "Light (non-reference frames)"),
+    ("bidir", "Medium (B-frames)"),
+    ("nonkey", "Strong (all but keyframes)"),
+    ("all", "Always (fastest, lowest quality)"),
+];
+pub(super) const VIDEO_SYNC: &Labels = &[
+    ("audio", "Follow the audio"),
+    ("display-resample", "Follow the display, adjust the audio"),
+    ("display-vdrop", "Follow the display, drop frames"),
+    ("desync", "Don't synchronise"),
+];
+pub(super) const SUB_ENCODING: &Labels = &[
+    ("auto", "Detect automatically"),
+    ("utf8", "Unicode (UTF-8)"),
+    ("cp1251", "Cyrillic (Windows-1251)"),
+    ("cp1252", "Western (Windows-1252)"),
+    ("latin1", "Western (ISO-8859-1)"),
+    ("koi8-u", "Ukrainian (KOI8-U)"),
+    ("shift_jis", "Japanese (Shift JIS)"),
+    ("gb18030", "Chinese (GB18030)"),
+];
+pub(super) const SNAPSHOT_FORMAT: &Labels = &[("png", "PNG"), ("jpg", "JPG"), ("webp", "WebP")];
+
 /// mpv's `auto` audio device; the others are shown by their mpv names.
 pub(super) const AUDIO_DEVICE: &Labels = &[("auto", "System default")];
 
@@ -149,8 +184,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "playback.hwdec",
-        get: None,
-        set: |c, v| c.playback.hwdec = v.into(),
+        get: Some(|c| label(HWDEC, &c.playback.hwdec)),
+        set: |c, v| set_labeled(HWDEC, &mut c.playback.hwdec, v),
     },
     Field {
         id: "audio.language",
@@ -190,8 +225,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "subtitles.encoding",
-        get: None,
-        set: |c, v| c.subtitles.encoding = v.into(),
+        get: Some(|c| label(SUB_ENCODING, &c.subtitles.encoding)),
+        set: |c, v| set_labeled(SUB_ENCODING, &mut c.subtitles.encoding, v),
     },
     Field {
         id: "subtitles.font",
@@ -460,8 +495,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "video.screenshot_format",
-        get: None,
-        set: |c, v| c.video.screenshot_format = v.into(),
+        get: Some(|c| label(SNAPSHOT_FORMAT, &c.video.screenshot_format)),
+        set: |c, v| set_labeled(SNAPSHOT_FORMAT, &mut c.video.screenshot_format, v),
     },
     Field {
         id: "network.buffering",
@@ -498,8 +533,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "performance.skip_loop_filter",
-        get: None,
-        set: |c, v| c.performance.skip_loop_filter = v.into(),
+        get: Some(|c| label(LOOP_FILTER, &c.performance.skip_loop_filter)),
+        set: |c, v| set_labeled(LOOP_FILTER, &mut c.performance.skip_loop_filter, v),
     },
     Field {
         id: "performance.threads",
@@ -516,8 +551,8 @@ pub(super) const OTHER: &[Field] = &[
     },
     Field {
         id: "performance.video_sync",
-        get: None,
-        set: |c, v| c.performance.video_sync = v.into(),
+        get: Some(|c| label(VIDEO_SYNC, &c.performance.video_sync)),
+        set: |c, v| set_labeled(VIDEO_SYNC, &mut c.performance.video_sync, v),
     },
     Field {
         id: "interface.hint_chapter_thumbnails",
@@ -656,6 +691,15 @@ mod tests {
                 "Names containing the video's name",
                 "fuzzy",
             ),
+            ("playback.hwdec", "Off (decode on the processor)", "no"),
+            ("performance.skip_loop_filter", "Medium (B-frames)", "bidir"),
+            (
+                "performance.video_sync",
+                "Follow the display, drop frames",
+                "display-vdrop",
+            ),
+            ("subtitles.encoding", "Cyrillic (Windows-1251)", "cp1251"),
+            ("video.screenshot_format", "WebP", "webp"),
         ] {
             assert!(set(&mut c, id, label), "{id}");
             assert_eq!(get(&c, id), label, "{id}");
@@ -667,6 +711,16 @@ mod tests {
         assert_eq!(
             (c.video.deinterlace.as_str(), c.network.cache.as_str()),
             ("yes", "no")
+        );
+        assert_eq!(
+            [
+                c.playback.hwdec.as_str(),
+                c.performance.skip_loop_filter.as_str(),
+                c.performance.video_sync.as_str(),
+                c.subtitles.encoding.as_str(),
+                c.video.screenshot_format.as_str(),
+            ],
+            ["no", "bidir", "display-vdrop", "cp1251", "webp"]
         );
         set(&mut c, "audio.device", "pulse/hdmi");
         assert_eq!(get(&c, "audio.device"), "pulse/hdmi");

@@ -192,8 +192,8 @@ Settings (#97) groups every page into cards, one per section, with the section's
   - *Keep window above other windows* (`stub.interface.ontop`): works on X11, Windows and macOS; Wayland compositors ignore it (use a window rule such as Hyprland's `pin`). The miniplayer is always on top regardless.
   - *Resize window to fit video* (`stub.interface.fit`: Never (default), Always, First video only): resizes the window to the video's size (at most 90% of the screen) when a video starts, not in fullscreen, maximized, miniplayer or for audio. Tiling window managers may keep their own size.
 - **Privacy**: *History*, *Scrobbling*.
-- **Playback**: *Startup* (default speed, *Start playing as soon as a file opens*: `stub.playback.autoplay`, on by default; off opens files paused), *Tracks*, *Order*, *Sleep timer*, *Presets*.
-- **Library**: *Library folders* lists each folder with its file count and a remove button, with *Add folder…* and *Rescan* in the card's title bar (an empty card offers *Add folder*). *Include hidden files* (Advanced Options, `stub.library.hidden`) also scans files whose names start with a dot.
+- **Playback**: *Startup* (default speed, *Start playing as soon as a file opens*: `stub.playback.autoplay`, on by default; off opens files paused), *Online video* (preferred quality of online videos), *Order*, *Sleep timer*, *Presets*.
+- **Library**: *Library folders* lists each folder with its file count and a remove button, with *Add folder…* and *Rescan* in the card's title bar (an empty card offers *Add folder*). *Include hidden files* (Advanced Options, `stub.library.hidden`) also scans files and folders whose names start with a dot; while it is off, dot-named folders are skipped with everything in them.
 - **Recording**: the recording folder for live streams (`recording.dir`; empty records to `~/Videos`). Snapshots are under Video.
 
 Config keys did not change, so older `config.toml` files keep working; `stub.*` options that are not implemented yet are hidden instead of showing *Not available yet*. The old page names *Controls* and *Skip Amounts* still open Seeking & Steps from the `VIVI_PAGE` / `VIVI_SETTINGS_ACTION` hooks.

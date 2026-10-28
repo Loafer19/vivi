@@ -7,6 +7,15 @@ pub(crate) fn hex(s: &str) -> Color {
     Color::from_rgb_u8((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }
 
+/// Swatches for the subtitle text: white, yellow, light gray, light blue, light green, orange.
+const SUB_TEXT_COLORS: [&str; 6] = [
+    "#FFFFFF", "#FFE94D", "#C8C8C8", "#8FD3FF", "#A6E38A", "#FFB070",
+];
+/// Swatches for the subtitle outline: black, dark gray, gray, white, navy, dark red.
+const SUB_OUTLINE_COLORS: [&str; 6] = [
+    "#000000", "#333333", "#666666", "#FFFFFF", "#1A2A6C", "#7A1C1C",
+];
+
 pub(crate) fn strs(o: &[&str]) -> ModelRc<SharedString> {
     crate::util::strings(o.iter().copied())
 }
@@ -99,6 +108,23 @@ impl<'a> Rows<'a> {
     ) -> &mut Self {
         self.push(id, t, info, "choice", val.into());
         self.last().options = strs(o);
+        self
+    }
+    /// A row of color swatches; `palette` holds #RRGGBB values. A stored color
+    /// outside the palette still applies; no swatch is selected then.
+    pub(crate) fn color(
+        &mut self,
+        id: &str,
+        t: &str,
+        info: &str,
+        val: &str,
+        palette: &[&str],
+    ) -> &mut Self {
+        self.push(id, t, info, "color", val.trim().to_uppercase());
+        self.last().options = strs(palette);
+        self.last().swatches = ModelRc::new(VecModel::from(
+            palette.iter().map(|a| hex(a)).collect::<Vec<_>>(),
+        ));
         self
     }
     pub(crate) fn seg(
@@ -386,7 +412,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .choice("controls.wheel", "Scroll wheel", "What turning the wheel over the video does: volume by the volume step, speed by the speed step, seeking by the short skip (Seeking & Steps).", &schema::get(c, "controls.wheel"), &wheel)
         .toggle("controls.wheel_reverse", "Reverse scroll direction", "Scrolling down raises the volume or speed and seeks forward.", c.controls.wheel_reverse)
         .depends(c.controls.wheel != "none")
-        .header("Always");
+        .header("Fixed actions");
     for (t, k) in crate::keymap::MOUSE
         .iter()
         .filter(|(_, k)| !matches!(*k, "Click" | "Double-click"))
@@ -413,7 +439,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .header("Startup")
         .slider("playback.speed", "Default playback speed", "Speed of every file when it opens.", c.playback.speed, (0.25, 2.0, 0.05), &speed_labels)
         .stub_toggle(config::AUTOPLAY.0, "Start playing as soon as a file opens", "Off: files open paused, ready to play.", config::AUTOPLAY.1)
-        .header("Tracks")
+        .header("Online video")
         .choice("playback.quality", "Preferred video quality", "Quality picked for online videos (links and streams played with yt-dlp).", &c.playback.quality, &["Best available", "2160p", "1080p", "720p", "480p", "Audio only"])
         .header("Order")
         .seg("playback.repeat", "Repeat", "Off, repeat the current file, or repeat the whole queue.", &c.playback.repeat, &["Off", "One", "All"])
@@ -455,7 +481,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .choice("video.deinterlace", "Deinterlacing", "Remove the comb-like lines of interlaced video (TV recordings, DVDs). Automatic only does it for interlaced video.", &schema::get(c, "video.deinterlace"), &schema::labels(schema::AUTO_ALWAYS_OFF))
         .header("Snapshots")
         .path("video.screenshot_dir", "Save snapshots to", "Folder for snapshots of the video.", &c.video.screenshot_dir)
-        .seg("video.screenshot_format", "Format", "PNG keeps every pixel; JPG and WebP files are smaller.", &c.video.screenshot_format, &["png", "jpg", "webp"]);
+        .seg("video.screenshot_format", "Format", "PNG keeps every pixel; JPG and WebP files are smaller.", &schema::get(c, "video.screenshot_format"), &schema::labels(schema::SNAPSHOT_FORMAT));
 
     // ---------- Audio ----------
     let mut devs: Vec<&str> = vec![schema::AUDIO_DEVICE[0].1];
@@ -491,17 +517,17 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .header("Tracks and languages")
         .toggle("subtitles.enabled", "Enable subtitles", "Show subtitles when a file has them.", sub_on)
         .text("subtitles.language", "Preferred language", "Language codes in order of preference, separated by commas, e.g. uk,en.", &c.subtitles.language, "e.g. uk,en")
-        .choice("subtitles.encoding", "Text encoding", "Character set of text subtitles; auto detects it. Change it when letters show up garbled.", &c.subtitles.encoding, &["auto", "utf8", "cp1251", "cp1252", "latin1", "koi8-u", "shift_jis", "gb18030"])
+        .choice("subtitles.encoding", "Text encoding", "Character set of text subtitles; Detect automatically suits most files. Change it when letters show up garbled.", &schema::get(c, "subtitles.encoding"), &schema::labels(schema::SUB_ENCODING))
         .header("Loading subtitles")
         .choice("subtitles.auto_load", "Load subtitle files automatically", "Load subtitle files (.srt, .ass, …) found next to the video.", &schema::get(c, "subtitles.auto_load"), &schema::labels(schema::SUB_AUTO))
         .section("Appearance", "Text subtitles only; styled (ASS) subtitles keep their own look.", &[])
         .text("subtitles.font", "Font", "Font family name, e.g. Noto Sans.", &c.subtitles.font, "sans-serif")
         .slider("subtitles.scale", "Font size", "1.0 is the normal size.", c.subtitles.scale, (0.5, 3.0, 0.1), &[])
         .toggle("subtitles.bold", "Bold", "", c.subtitles.bold)
-        .text("subtitles.color", "Text color", "A hex color, #RRGGBB.", &c.subtitles.color, "#FFFFFF")
+        .color("subtitles.color", "Text color", "Other colors can be set as #RRGGBB in config.toml.", &c.subtitles.color, &SUB_TEXT_COLORS)
         .slider("subtitles.opacity", "Text opacity", "Opacity of the text color.", c.subtitles.opacity as f64, (0.0, 100.0, 5.0), &["0%", "50%", "100%"])
         .choice("subtitles.outline", "Outline thickness", "Border around the letters.", outline_label(c.subtitles.outline), &["None", "Thin", "Normal", "Thick"])
-        .text("subtitles.outline_color", "Outline color", "A hex color, #RRGGBB.", &c.subtitles.outline_color, "#000000")
+        .color("subtitles.outline_color", "Outline color", "Other colors can be set as #RRGGBB in config.toml.", &c.subtitles.outline_color, &SUB_OUTLINE_COLORS)
         .toggle("subtitles.shadow", "Shadow", "Drop shadow under the text.", c.subtitles.shadow)
         .advanced()
         .slider("subtitles.position", "Vertical position", "100 is the bottom edge of the picture; lower values move subtitles up.", c.subtitles.position as f64, (50.0, 150.0, 1.0), &[]);
@@ -566,13 +592,13 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     // ---------- Performance ----------
     r.cat("Performance")
         .header("Decoding")
-        .choice("playback.hwdec", "Hardware-accelerated decoding", "auto-safe uses the GPU when it is known to work; no forces software decoding (mpv hwdec).", &c.playback.hwdec, &["auto-safe", "auto", "vaapi", "nvdec", "vulkan", "videotoolbox", "d3d11va", "no"])
-        .choice("performance.skip_loop_filter", "Skip the H.264 loop filter", "Faster decoding of H.264 video at some quality cost (mpv vd-lavc-skiploopfilter).", &c.performance.skip_loop_filter, &["default", "nonref", "bidir", "nonkey", "all"])
+        .choice("playback.hwdec", "Hardware-accelerated decoding", "Decode video on the graphics card. Automatic (safe) uses it where it is known to work; Off decodes on the processor.", &schema::get(c, "playback.hwdec"), &schema::labels(schema::HWDEC))
+        .choice("performance.skip_loop_filter", "Skip the H.264 loop filter", "Faster decoding of H.264 video on slow systems, at some cost in picture quality.", &schema::get(c, "performance.skip_loop_filter"), &schema::labels(schema::LOOP_FILTER))
         .slider("performance.threads", "Decoding threads", "0 picks the number automatically.", c.performance.threads as f64, (0.0, 16.0, 1.0), &[])
         .header("Smooth playback")
         .toggle("performance.framedrop", "Drop frames when the system can't keep up", "Keeps the picture in time with the sound on slow systems.", c.performance.framedrop)
         .advanced()
-        .choice("performance.video_sync", "Clock synchronisation", "What the video timing follows (mpv video-sync).", &c.performance.video_sync, &["audio", "display-resample", "display-vdrop", "desync"]);
+        .choice("performance.video_sync", "Clock synchronisation", "What keeps the video in time: the sound, or the display's refresh rate.", &schema::get(c, "performance.video_sync"), &schema::labels(schema::VIDEO_SYNC));
 
     // ---------- Recording ----------
     r.cat("Recording").header("Recording").path(
