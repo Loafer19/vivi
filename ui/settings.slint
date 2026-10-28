@@ -212,7 +212,7 @@ export component Row inherits Rectangle {
             border-width: 1px; border-color: Theme.bg-a1;
         }
         if setting.card == "row": Rectangle {
-            x: root.inset-l; width: parent.width - root.inset-l - root.pad; height: 1px;
+            x: root.inset-l; y: 0px; width: parent.width - root.inset-l - root.pad; height: 1px;
             background: Theme.divider.with-alpha(0.5);
         }
     }
@@ -220,7 +220,7 @@ export component Row inherits Rectangle {
         x: 0; y: 20px; text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-lg;
     }
     if setting.kind == "header" && root.in-card: HorizontalLayout {
-        y: root.gap; width: parent.width; height: root.body; padding-left: root.pad; padding-right: 12px; spacing: 8px;
+        y: root.gap; width: parent.width; height: root.body; padding-left: root.pad; padding-right: root.pad; spacing: 8px;
         VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 3px;
             Text { text: setting.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-lg; overflow: elide; }
             if setting.info != "": Text { text: setting.info; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; }

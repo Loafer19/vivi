@@ -215,12 +215,19 @@ fn image_cache_info() -> String {
 /// Settings → Library: the folder list (one row per folder with its file count) or
 /// its empty state; *Add folder…* and *Rescan* sit in the card's title.
 fn library_folders(r: &mut Rows) {
+    let empty = r.c.library.folders.is_empty();
+    // The empty state has its own Add folder button.
+    let actions: &[(&str, &str)] = if empty {
+        &[]
+    } else {
+        &[("library.add", "Add folder…"), ("library.rescan", "Rescan")]
+    };
     r.cat("Library").section(
         "Library folders",
         "Scanned for video and music, sub-folders included. Vivi also rescans on start.",
-        &[("library.add", "Add folder…"), ("library.rescan", "Rescan")],
+        actions,
     );
-    if r.c.library.folders.is_empty() {
+    if empty {
         r.push(
             "library.add",
             "No folders yet. Add the folders that hold your videos and music.",
