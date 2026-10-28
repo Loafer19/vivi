@@ -91,9 +91,14 @@ pub fn scan(conn: &mut Connection, roots: &[String]) -> rusqlite::Result<usize> 
     scan_changes(conn, roots, false).map(|(n, _)| n)
 }
 
+/// A dot-named file or folder (hidden on Unix).
+fn is_hidden(name: &std::ffi::OsStr) -> bool {
+    name.to_str().is_some_and(|n| n.starts_with('.'))
+}
+
 /// [`scan`] that also returns how many entries were added, updated or removed. Unchanged
-/// files (same mtime as in the index) are only stat'ed, not re-read. Files whose names
-/// start with a dot are skipped unless `hidden` (Settings → Library → *Include hidden
+/// files (same mtime as in the index) are only stat'ed, not re-read. Files and folders
+/// whose names start with a dot are skipped unless `hidden` (Settings → Library → *Include hidden
 /// files*).
 pub fn scan_changes(
     conn: &mut Connection,
@@ -112,19 +117,15 @@ pub fn scan_changes(
         for e in walkdir::WalkDir::new(root)
             .follow_links(true)
             .into_iter()
+            // Dot-named files and folders (with everything in them) only with
+            // *Include hidden files*; the root itself is always scanned.
+            .filter_entry(|e| hidden || e.depth() == 0 || !is_hidden(e.file_name()))
             .filter_map(Result::ok)
         {
             if !e.file_type().is_file() {
                 continue;
             }
             let p = e.path();
-            if !hidden
-                && p.file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with('.'))
-            {
-                continue;
-            }
             let Some(kind) = kind_of(p) else { continue };
             let Ok(md) = e.metadata() else { continue };
             let mtime = md
@@ -467,6 +468,13 @@ mod tests {
         assert_eq!(scan(&mut c, &roots).unwrap(), 2);
         assert_eq!(scan_changes(&mut c, &roots, true).unwrap(), (3, 1));
         assert_eq!(scan(&mut c, &roots).unwrap(), 2);
+        // The same goes for everything inside dot-named folders.
+        std::fs::create_dir_all(dir.join(".stash")).unwrap();
+        std::fs::write(dir.join(".stash/e02.mkv"), b"x").unwrap();
+        assert_eq!(scan_changes(&mut c, &roots, false).unwrap(), (2, 0));
+        assert_eq!(scan_changes(&mut c, &roots, true).unwrap(), (4, 2));
+        assert_eq!(scan_changes(&mut c, &roots, false).unwrap(), (2, 2));
+        std::fs::remove_dir_all(dir.join(".stash")).unwrap();
         std::fs::remove_file(dir.join(".clip.mkv")).unwrap();
         std::fs::remove_file(dir.join("song.mp3")).unwrap();
         scan(&mut c, &roots).unwrap();
