@@ -11,7 +11,7 @@ pub(crate) fn screenshot_mode() -> bool {
 
 /// Debug builds (or `VIVI_SCREENSHOT=1`): open dialogs from env vars for screenshots/tests.
 /// VIVI_SETTINGS=<category index or name> [VIVI_ADVANCED=1] [VIVI_SEARCH=text]
-/// [VIVI_SETTINGS_ACTION=<row id>], VIVI_MOUSE=<button>,… (Settings → Controls → Mouse),
+/// [VIVI_SETTINGS_ACTION=<row id>[=<value>]], VIVI_MOUSE=<button>,… (Settings → Controls → Mouse),
 /// VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>,
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY, VIVI_PAGE=<streams hub page>,
@@ -56,14 +56,15 @@ pub(crate) fn debug_ui(app: &AppWindow) {
         app.global::<crate::Settings>()
             .invoke_refresh(n, q.into(), adv);
     }
-    // VIVI_SETTINGS_ACTION=<row id>: press a Settings action button after 3 s, e.g.
-    // privacy.bookmarks (its confirmation dialog).
+    // VIVI_SETTINGS_ACTION=<row id>[=<value>]: press a Settings action button after 3 s,
+    // e.g. privacy.bookmarks (its confirmation dialog) or pkg.<id>=Uninstall.
     if let Some(id) = var("VIVI_SETTINGS_ACTION") {
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(3000), move || {
             if let Some(a) = w.upgrade() {
+                let (id, v) = id.split_once('=').unwrap_or((id.as_str(), ""));
                 a.global::<crate::Settings>()
-                    .invoke_setting_changed(id.into(), "".into());
+                    .invoke_setting_changed(id.into(), v.into());
             }
         });
     }
