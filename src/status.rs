@@ -281,12 +281,16 @@ mod tests {
         use crate::plugins::Running::{No, UntilRestart, Yes};
         assert_eq!(remote_tip(false, No), None);
         assert!(remote_tip(true, No).unwrap().contains("agent socket"));
-        assert!(remote_tip(false, Yes).unwrap().contains("phone remote is on"));
+        assert!(remote_tip(false, Yes)
+            .unwrap()
+            .contains("phone remote is on"));
         assert!(remote_tip(true, Yes).unwrap().contains("and phone remote"));
         // Turned off this session: its server still runs until restart, so the chip stays.
         let t = remote_tip(false, UntilRestart).unwrap();
         assert!(t.contains("stops after restart"), "{t}");
-        assert!(remote_tip(true, UntilRestart).unwrap().contains("agent socket is on"));
+        assert!(remote_tip(true, UntilRestart)
+            .unwrap()
+            .contains("agent socket is on"));
     }
 
     #[test]

@@ -1355,7 +1355,10 @@ mod tests {
         let t = discard_targets("/tmp/a b.mp3");
         assert_eq!(t[0], std::path::PathBuf::from("/tmp/a b.mp3"));
         assert_eq!(t[1], std::path::PathBuf::from("/tmp/a b.mp3.part"));
-        assert_eq!(discard_targets("file:///x/y.mp3")[0], std::path::PathBuf::from("/x/y.mp3"));
+        assert_eq!(
+            discard_targets("file:///x/y.mp3")[0],
+            std::path::PathBuf::from("/x/y.mp3")
+        );
     }
 
     #[test]
@@ -1388,7 +1391,10 @@ mod tests {
                 s.news.iter().any(|n| n.0 == "Radio"),
             )
         });
-        assert!(gone && toast && !news, "row removed, a toast, no finished notification");
+        assert!(
+            gone && toast && !news,
+            "row removed, a toast, no finished notification"
+        );
         // A late report (its length probe) does not bring the row back ...
         report("t-plugin", "j1", rep("done"));
         assert!(ST.with(|s| !s.borrow().jobs.iter().any(|j| j.job == "j1")));
