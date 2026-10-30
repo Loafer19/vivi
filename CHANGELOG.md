@@ -22,6 +22,7 @@
 - **The Streams page fits the docked library** (#95): over a video the tab rows show icons with only the selected tab named, and long breadcrumbs give way sooner, so the URL bar, tabs, cards and now-playing card stay inside the panel.
 - **The library, a plugin drawer or a menu keeps the bars shown** while *Keep shown while a panel or menu is open* is on (the default), like the side panel already did; before, the docked library and the drawer hid with the bars during playback, and the bars could hide under a menu opened from them.
 - The Streams URL bar's placeholder is shorter in the docked library (*Paste a URL or search*) instead of being cut off.
+- **The top bar's remote chip only shows while something can control Vivi** (#94): the phone remote counts only while the Remote Control extension is installed, enabled and loaded (an installed but disabled one lit the chip), and the agent socket only while *Allow AI agents and scripts* is on. That switch now applies at once: off refuses agents and scripts without a restart, on opens the socket.
 - **The top bar's remote chip always opens Settings → Controls → Remotes**; without the Remote Control extension it opened General.
 - Settings rows that turn on or off with another option (for example *Log file* with *Save a log*) now update at once instead of after reopening the page.
 

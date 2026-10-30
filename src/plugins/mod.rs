@@ -272,13 +272,24 @@ pub fn active(id: &str) -> bool {
     with(|r| r.entries.iter().any(|e| e.active && e.manifest.id == id)).unwrap_or(false)
 }
 
-/// Whether plugin `id` is running: an active built-in or a loaded package script.
+/// Whether plugin `id` is on and running: an active built-in, or a script mpv has loaded
+/// that is still enabled (#94: an installed but disabled script is not; a script turned
+/// off keeps running in mpv until restart, but counts as off).
 pub fn loaded(id: &str) -> bool {
     with(|r| {
+        let c = r.cfg.borrow();
         r.entries.iter().any(|e| e.active && e.manifest.id == id)
-            || r.scripts.iter().any(|s| s.manifest.id == id)
+            || r.scripts.iter().any(|s| {
+                s.manifest.id == id
+                    && script_running(r.loaded.contains(id), is_enabled(&c, &s.manifest))
+            })
     })
     .unwrap_or(false)
+}
+
+/// A script counts as running when mpv loaded it and it is still enabled.
+fn script_running(in_mpv: bool, enabled: bool) -> bool {
+    in_mpv && enabled
 }
 
 /// Whether a plugin is enabled in the config.
@@ -1506,6 +1517,16 @@ fn save(cfg: &Rc<RefCell<Config>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installed_or_disabled_scripts_are_not_running() {
+        // #94: an installed script that is disabled (or never loaded) is not "on".
+        assert!(!script_running(false, false));
+        assert!(!script_running(false, true));
+        // Turned off at runtime: still in mpv until restart, but counted as off.
+        assert!(!script_running(true, false));
+        assert!(script_running(true, true));
+    }
 
     #[test]
     fn script_opts_do_not_leak_into_prefix_ids() {

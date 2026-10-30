@@ -326,12 +326,16 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     return;
                 }
                 let mut rescan = false;
+                let mut remote = None;
                 {
                     let mut c = cfg.borrow_mut();
                     match id.as_str() {
                         "interface.theme" => c.interface.theme = v.to_lowercase(),
                         id if schema::has(id) => {
                             schema::set(&mut c, id, v);
+                            if id == "general.remote_control" {
+                                remote = Some(c.general.remote_control);
+                            }
                             if id == "general.check_updates" {
                                 // The same switch is on Settings → About.
                                 a.global::<crate::About>()
@@ -527,6 +531,15 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 refresh();
                 if rescan {
                     a.global::<crate::Library>().invoke_rescan();
+                }
+                // "Allow AI agents and scripts" opens or closes the control socket now
+                // (#94), and the top-bar remote chip follows.
+                if let Some(on) = remote {
+                    crate::ipc::set_allowed(on);
+                    if on {
+                        crate::ipc::setup(&a, &p, true);
+                    }
+                    crate::status::refresh();
                 }
             });
     }

@@ -454,7 +454,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .header("Phone or tablet")
         .action(REMOTE_CONTROL_ROW, "Phone remote control", rc_info, rc_label)
         .header("AI agents and scripts")
-        .toggle("general.remote_control", "Allow AI agents and scripts", "Open a local control socket for vivi-mcp (MCP server for AI agents). Takes effect after restart.", schema::get(c, "general.remote_control") == "true");
+        .toggle("general.remote_control", "Allow AI agents and scripts", "Open a local control socket for vivi-mcp (MCP server for AI agents). Off: agents and scripts are refused at once.", schema::get(c, "general.remote_control") == "true");
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];

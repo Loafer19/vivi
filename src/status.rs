@@ -108,6 +108,18 @@ fn remote_extension() -> bool {
     crate::plugins::loaded(crate::settings::REMOTE_CONTROL)
 }
 
+/// Tooltip of the top-bar remote chip, or none when nothing can control Vivi (#94):
+/// `agents` = "Allow AI agents and scripts" is on and this instance owns the control
+/// socket; `phone` = the Remote Control extension is installed, enabled and loaded.
+fn remote_tip(agents: bool, phone: bool) -> Option<&'static str> {
+    Some(match (agents, phone) {
+        (true, true) => "Remote control: agent socket and phone remote are on",
+        (true, false) => "Remote control: the agent socket (vivi-mcp) is on",
+        (false, true) => "Remote control: the phone remote is on",
+        (false, false) => return None,
+    })
+}
+
 /// Tooltip of the volume leveling chip: ReplayGain (#88) and / or Normalize loudness.
 fn leveling_tip(replaygain: Option<&str>, norm: bool) -> Option<String> {
     let rg = replaygain.filter(|m| matches!(*m, "track" | "album"));
@@ -145,13 +157,7 @@ fn current(p: &Player) -> Vec<Indicator> {
         let l = speed_label(s);
         v.push(chip("speed", "speed", &format!("Playing at {l}"), &l));
     }
-    let ext = remote_extension();
-    if crate::ipc::bound() || ext {
-        let tip = match (crate::ipc::bound(), ext) {
-            (true, true) => "Remote control: agent socket and phone remote are on",
-            (true, false) => "Remote control: the agent socket (vivi-mcp) is on",
-            _ => "Remote control: the phone remote is on",
-        };
+    if let Some(tip) = remote_tip(crate::ipc::listening(), remote_extension()) {
         v.push(chip("remote", "remote", tip, ""));
     }
     PLUGINS.with(|m| {
@@ -260,6 +266,15 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_chip_only_when_something_listens() {
+        // #94: both off (socket not allowed, extension missing / disabled) → no chip.
+        assert_eq!(remote_tip(false, false), None);
+        assert!(remote_tip(true, false).unwrap().contains("agent socket"));
+        assert!(remote_tip(false, true).unwrap().contains("phone remote"));
+        assert!(remote_tip(true, true).unwrap().contains("and phone remote"));
+    }
 
     #[test]
     fn leveling_chip() {

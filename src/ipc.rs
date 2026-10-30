@@ -215,7 +215,10 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
     use std::os::unix::net::{UnixListener, UnixStream};
     use std::sync::mpsc;
 
-    if !(enabled || std::env::var_os("VIVI_IPC").is_some_and(|v| v != "0")) {
+    let allowed = enabled || std::env::var_os("VIVI_IPC").is_some_and(|v| v != "0");
+    ALLOWED.store(allowed, std::sync::atomic::Ordering::Relaxed);
+    // Off, or already listening (turned on again in Settings).
+    if !allowed || bound() {
         return;
     }
     let path = socket_path();
@@ -244,6 +247,12 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
     let (tx, rx) = mpsc::channel::<Req>();
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
+            // Turned off in Settings: the socket stays (it is removed on exit) but
+            // nobody gets in (#94).
+            if !allowed_now() {
+                drop(stream);
+                continue;
+            }
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let Ok(mut out) = stream.try_clone() else {
@@ -251,6 +260,14 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                 };
                 for line in BufReader::new(stream).lines() {
                     let Ok(line) = line else { break };
+                    if !allowed_now() {
+                        let _ = writeln!(
+                            out,
+                            "{}",
+                            json!({ "ok": false, "error": "remote control is off in Vivi's settings" })
+                        );
+                        break;
+                    }
                     if line.trim().is_empty() {
                         continue;
                     }
@@ -333,7 +350,26 @@ pub fn setup(_: &crate::AppWindow, _: &std::rc::Rc<crate::player::Player>, _: bo
 /// This instance owns the control socket (removed again on exit).
 static BOUND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Whether this instance owns the control socket (top-bar remote indicator).
+/// "Allow AI agents and scripts" (or `VIVI_IPC=1`) is on: the socket answers.
+static ALLOWED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Settings → Controls → Remotes → *Allow AI agents and scripts* changed while running.
+/// Off refuses new connections and requests at once; mpv-independent, so no restart.
+pub fn set_allowed(on: bool) {
+    ALLOWED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn allowed_now() -> bool {
+    ALLOWED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Whether agents and scripts can reach this instance now: allowed and the socket is
+/// ours (the top-bar remote chip, #94).
+pub fn listening() -> bool {
+    allowed_now() && bound()
+}
+
+/// Whether this instance owns the control socket.
 pub fn bound() -> bool {
     #[cfg(unix)]
     {
