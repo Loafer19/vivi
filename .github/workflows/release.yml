@@ -40,7 +40,7 @@ jobs:
           shared-key: release-linux
           save-if: ${{ github.ref == 'refs/heads/master' }}
       # Slim libmpv (decoders only FFmpeg, no mpv CLI) for the AppImage; cached by script hash.
-      - uses: actions/cache/restore@v5
+      - uses: actions/cache/restore@v6
         id: deps
         with:
           path: deps
@@ -50,7 +50,7 @@ jobs:
         run: PREFIX=$PWD/deps SRC=$RUNNER_TEMP/deps-src packaging/appimage/build-libmpv.sh
       - name: Save slim libmpv (master only)
         if: github.ref == 'refs/heads/master' && steps.deps.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: deps
           key: ${{ steps.deps.outputs.cache-primary-key }}
@@ -127,7 +127,7 @@ jobs:
         with: { name: windows, path: dist/* }
 
   macos:
-    runs-on: macos-14
+    runs-on: macos-15
     continue-on-error: true # best effort
     steps:
       - uses: actions/checkout@v7
@@ -188,7 +188,7 @@ jobs:
       # before the next step edits the manifest, so the key hashes the committed manifest.
       - name: Restore flatpak-builder state
         id: fb-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: .flatpak-builder
           key: flatpak-builder-${{ runner.os }}-${{ runner.arch }}-x86_64-${{ hashFiles('packaging/flatpak/io.github.loafer19.vivi.yml') }}
@@ -215,7 +215,7 @@ jobs:
             sed -i "s|^\( *\)CARGO_HOME: /run/build/vivi/cargo$|&\n\1$k: '$v'|" "$M"
             grep -c "$k" "$M"
           done
-      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: vivi.flatpak
           manifest-path: packaging/flatpak/io.github.loafer19.vivi.yml
@@ -226,7 +226,7 @@ jobs:
           upload-artifact: false
       - name: Save flatpak-builder state (master only)
         if: github.ref == 'refs/heads/master' && steps.fb-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: .flatpak-builder
           key: ${{ steps.fb-cache.outputs.cache-primary-key }}
