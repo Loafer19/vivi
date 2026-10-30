@@ -721,7 +721,8 @@ export component AppWindow inherits Window {
     // (Ctrl+\, the miniplayer) cannot keep the controls up.
     property <bool> bar-hover: !root.mini && (root.top-hover || root.bottom-hover);
     property <bool> show-ui: (!Playback.has-media || root.controls-visible || Overlays.settings-open || Overlays.customize-open
-        || (AutoHide.keep-panel && (Overlays.panel-open || Menus.menu-kind != "")) || (AutoHide.keep-hover && root.bar-hover))
+        || (AutoHide.keep-panel && (Overlays.panel-open || Overlays.library-open || Overlays.drawer-open || Menus.menu-kind != ""))
+        || (AutoHide.keep-hover && root.bar-hover))
         && !(root.ui-hidden && Playback.has-media);
     // Settings → Interface → Auto-hide (#98): which bars hide, and how they animate. The
     // `-k` values animate from 0 (hidden) to 1 (shown); `-v` is what the bars draw with
@@ -874,7 +875,8 @@ export component AppWindow inherits Window {
     if root.top-v > 0: Rectangle {
         y: AutoHide.anim == 2 ? -(1 - root.top-v) * self.height : 0; height: 40px;
         opacity: AutoHide.anim == 1 ? root.top-v : 1;
-        background: Playback.has-media ? Theme.bar : Theme.bg-a4;
+        // Theme.bar's opacity, or what Panel transparency says (#95).
+        background: Playback.has-media ? Theme.panel(Theme.bar-solid, Theme.dark ? 0.93 : 0.94) : Theme.bg-a4;
         // Holds the buttons, so it stays hovered while the pointer is on one of them.
         TouchArea {
         init => { root.top-hover = false; }
@@ -1043,7 +1045,8 @@ export component AppWindow inherits Window {
         y: root.height - self.height + (AutoHide.anim == 2 ? (1 - root.bottom-v) * self.height : 0);
         height: root.bar-h;
         opacity: AutoHide.anim == 1 ? root.bottom-v : 1;
-        background: Theme.bar-dark;
+        // Theme.bar-dark's opacity, or what Panel transparency says (#95).
+        background: Theme.dark ? Theme.panel(#181818, 0.95) : Theme.panel(Theme.bar-solid, 0.94);
         // Swallows clicks so they don't toggle play, and holds the bar's controls so it
         // stays hovered while the pointer is on one of them.
         TouchArea {

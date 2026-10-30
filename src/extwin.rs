@@ -83,18 +83,37 @@ fn source_command(id: &str) -> String {
         .unwrap_or_default()
 }
 
-/// "Uninstall…" on a package's page: ask (with "Keep its data"), uninstall the way
-/// Extensions → Installed does, then go back to the plugin list. Sidebar icons, chips and
-/// menus follow through [`refresh`].
+/// "Uninstall…" on a package's page: ask (with "Keep its data"), uninstall, then go back
+/// to the plugin list.
 pub(crate) fn uninstall(a: &AppWindow) {
     let id = a.global::<crate::Extensions>().get_tab().to_string();
-    let Some(m) = plugins::manifests()
+    if plugins::manifests()
+        .iter()
+        .any(|m| m.id == id && m.origin == Origin::Package)
+    {
+        confirm_uninstall(a, &id, true);
+    }
+}
+
+/// Ask before uninstalling downloaded plugin `id` (#96), from its page or from Settings →
+/// Extensions: "Keep its data" (unchecked) leaves its settings and data folder. Sidebar
+/// icons, chips and menus follow through [`refresh`]; `back` returns the Extensions window
+/// to the plugin list.
+pub(crate) fn confirm_uninstall(a: &AppWindow, id: &str, back: bool) {
+    let name = plugins::manifests()
         .into_iter()
-        .find(|m| m.id == id && m.origin == Origin::Package)
-    else {
-        return;
-    };
-    let name = m.name;
+        .find(|m| m.id == id)
+        .map(|m| m.name)
+        .or_else(|| {
+            plugins::packages::with_state(|s| {
+                s.catalog
+                    .iter()
+                    .find(|e| e.id == id)
+                    .map(|e| e.name.clone())
+            })
+        })
+        .unwrap_or_else(|| id.to_string());
+    let id = id.to_string();
     let w = a.as_weak();
     crate::dialogs::confirm_core_check(
         a,
@@ -110,9 +129,11 @@ pub(crate) fn uninstall(a: &AppWindow) {
         move |keep| {
             let res = plugins::packages::remove(&id, keep);
             let Some(a) = w.upgrade() else { return };
-            let g = a.global::<crate::Extensions>();
-            g.set_tab("".into());
-            g.set_gear(false);
+            if back {
+                let g = a.global::<crate::Extensions>();
+                g.set_tab("".into());
+                g.set_gear(false);
+            }
             settings::refresh_ui();
             plugins::packages::toast(&match res {
                 Ok(()) => {

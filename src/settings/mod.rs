@@ -249,6 +249,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     return;
                 }
                 if let Some(pid) = id.strip_prefix("pkg.") {
+                    if v == "Uninstall" {
+                        crate::extwin::confirm_uninstall(&a, pid, false);
+                        return;
+                    }
                     plugins::packages::action(pid, v);
                     refresh();
                     return;

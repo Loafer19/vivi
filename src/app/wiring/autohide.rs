@@ -191,9 +191,15 @@ pub(crate) fn wire(app: &AppWindow, player: &Rc<Player>) -> slint::Timer {
                     a.set_controls_visible(want);
                 }
                 // Lift subtitles above the bottom bar while it is shown.
-                let bar = want
-                    || !a.global::<crate::AutoHide>().get_bottom()
-                    || a.global::<crate::Overlays>().get_panel_open();
+                // Same as `show-ui` in ui/app.slint: an open panel, library, drawer or
+                // menu keeps the bars up while "Keep shown while a panel or menu is open".
+                let ah = a.global::<crate::AutoHide>();
+                let ov = a.global::<crate::Overlays>();
+                let held = ah.get_keep_panel()
+                    && (ov.get_library_open()
+                        || ov.get_drawer_open()
+                        || !a.global::<crate::Menus>().get_menu_kind().is_empty());
+                let bar = want || !ah.get_bottom() || ov.get_panel_open() || held;
                 let h = a
                     .window()
                     .size()

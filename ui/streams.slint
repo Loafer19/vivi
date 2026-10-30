@@ -185,7 +185,8 @@ component UrlBar inherits Rectangle {
             tf := TextField {
                 x: 32px; width: parent.width - 34px; height: parent.height; background: transparent;
                 label: "Stream URL or search";
-                placeholder: "Paste a stream or video URL, or type to search";
+                // Shorter in the docked library, where the long one is cut off.
+                placeholder: root.width < 520px ? "Paste a URL or search" : "Paste a stream or video URL, or type to search";
                 text <=> Streams.url;
                 edited(t) => { Streams.edited(t); }
                 accepted(t) => { Streams.submit(t); }
