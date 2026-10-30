@@ -234,12 +234,30 @@ export component QrDialog inherits Rectangle {
 
 // Confirmation a plugin asks for (e.g. the YouTube Music download warning): a warning
 // icon, a title, the text, Cancel and the confirm button. Enter confirms, Esc cancels.
+// A checkbox with its text; the whole row toggles it.
+component DialogCheck inherits Rectangle {
+    in property <string> text;
+    in-out property <bool> checked;
+    height: 24px;
+    HorizontalLayout { spacing: 8px; alignment: start;
+        Rectangle { y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: Metrics.radius-sm;
+            background: root.checked ? Theme.accent : Theme.field; border-width: 1px; border-color: root.checked ? Theme.accent : Theme.divider;
+            if root.checked: Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/check-selected.svg"); tint: Theme.bg-b2; } }
+        Text { text: root.text; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; }
+    }
+    TouchArea { accessible-role: checkbox; accessible-label: root.text; accessible-checked: root.checked; mouse-cursor: pointer; clicked => { root.checked = !root.checked; } }
+}
+
 export component ConfirmDialog inherits Rectangle {
     in property <string> title;
     in property <string> heading;
     in property <string> text;
     in property <string> ok-label: "OK";
     in property <bool> warning;
+    // Optional checkbox (empty = none) and the text shown instead while it is checked.
+    in property <string> check-label;
+    in-out property <bool> checked;
+    in property <string> checked-text;
     callback answer(bool);
     DialogFrame {
         title: root.title; dialog-width: 480px;
@@ -258,7 +276,8 @@ export component ConfirmDialog inherits Rectangle {
                             Text { text: "!"; color: Theme.warn; font-size: Metrics.font-base; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; accessible-role: none; } } }
                     VerticalLayout { spacing: 8px; horizontal-stretch: 1;
                         Text { text: root.heading; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; wrap: word-wrap; }
-                        Text { text: root.text; color: Theme.fg-a2; font-size: Metrics.font-sm; wrap: word-wrap; }
+                        Text { text: root.checked && root.checked-text != "" ? root.checked-text : root.text; color: Theme.fg-a2; font-size: Metrics.font-sm; wrap: word-wrap; }
+                        if root.check-label != "": DialogCheck { text: root.check-label; checked <=> root.checked; }
                     }
                 }
                 HorizontalLayout { alignment: end; spacing: 8px;

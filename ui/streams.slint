@@ -152,16 +152,21 @@ component Tab inherits Rectangle {
     // The <icon>-active art (solid accent) drawn while selected, like the Library rail.
     in property <string> active-icon;
     in property <bool> active;
+    // Narrow places (the docked library): only the selected tab shows its name; the
+    // others are round icons with the name as a tooltip.
+    in property <bool> compact;
+    property <bool> named: !root.compact || root.active;
     callback clicked();
-    height: 34px; width: row.preferred-width + 24px; border-radius: self.height / 2;
+    height: 34px; width: root.named ? row.preferred-width + 24px : self.height; border-radius: self.height / 2;
     background: root.active ? Theme.accent.with-alpha(0.28) : ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
     border-width: 1px; border-color: root.active ? Theme.accent : transparent;
     row := HorizontalLayout {
-        x: 12px; spacing: 8px;
+        x: root.named ? 12px : (root.width - 16px) / 2; spacing: 8px;
         VerticalLayout { alignment: center; TriIcon { width: 16px; height: 16px; name: root.active && root.active-icon != "" ? root.active-icon : root.icon; tint: root.active ? Theme.accent-bright : Theme.fg-a2; } }
-        Text { text: root.text; color: root.active ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; }
+        if root.named: Text { text: root.text; color: root.active ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; }
     }
     ta := TouchArea { accessible-role: tab; accessible-label: root.text; accessible-item-selected: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    if !root.named: Tooltip { text: @markdown("\{root.text}"); }
 }
 
 // The URL bar: paste a link (Enter opens it) or type to search; the clock opens the
@@ -224,15 +229,18 @@ component UrlBar inherits Rectangle {
 // The Streams section of the Library.
 export component StreamsHub inherits VerticalLayout {
     callback command(string, string, string);
+    // Set by the Library while docked over the video (or in a small window): the tab
+    // rows shrink to icons so the page stays inside the panel (#95).
+    in property <bool> narrow;
     spacing: 14px;
     UrlBar { }
     HorizontalLayout {
         spacing: 8px; alignment: start;
-        Tab { text: "Recent"; icon: "recent"; active-icon: "recent-active"; active: Streams.tab == "recent"; clicked => { Streams.select-tab("recent"); } }
-        Tab { text: "Favorites"; icon: "favorite"; active-icon: "favorite-active"; active: Streams.tab == "favorites"; clicked => { Streams.select-tab("favorites"); } }
-        if Streams.directory: Tab { text: "Radio"; icon: "streaming"; active-icon: "streaming-active"; active: Streams.tab == "radio"; clicked => { Streams.select-tab("radio"); } }
-        if Streams.directory: Tab { text: "TV"; icon: "tv"; active-icon: "tv-active"; active: Streams.tab == "tv"; clicked => { Streams.select-tab("tv"); } }
-        Tab { text: "Music"; icon: "songs"; active-icon: "songs-active"; active: Streams.tab == "music"; clicked => { Streams.select-tab("music"); } }
+        Tab { compact: root.narrow; text: "Recent"; icon: "recent"; active-icon: "recent-active"; active: Streams.tab == "recent"; clicked => { Streams.select-tab("recent"); } }
+        Tab { compact: root.narrow; text: "Favorites"; icon: "favorite"; active-icon: "favorite-active"; active: Streams.tab == "favorites"; clicked => { Streams.select-tab("favorites"); } }
+        if Streams.directory: Tab { compact: root.narrow; text: "Radio"; icon: "streaming"; active-icon: "streaming-active"; active: Streams.tab == "radio"; clicked => { Streams.select-tab("radio"); } }
+        if Streams.directory: Tab { compact: root.narrow; text: "TV"; icon: "tv"; active-icon: "tv-active"; active: Streams.tab == "tv"; clicked => { Streams.select-tab("tv"); } }
+        Tab { compact: root.narrow; text: "Music"; icon: "songs"; active-icon: "songs-active"; active: Streams.tab == "music"; clicked => { Streams.select-tab("music"); } }
         Rectangle { horizontal-stretch: 1; }
         if Streams.tab == "recent" && Streams.recent.length > 0: VerticalLayout { alignment: center;
             Text { text: "Clear"; color: cl.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base;
@@ -241,7 +249,7 @@ export component StreamsHub inherits VerticalLayout {
     // Music: the service switcher (each service keeps its own chips, filters, actions).
     if Streams.tab == "music" && Streams.services.length > 0: HorizontalLayout {
         spacing: 8px; alignment: start;
-        for s in Streams.services: Tab { text: s.name; icon: Icons.plugin-duo(s.icon); active: Streams.service == s.id; clicked => { Streams.pick-service(s.id); } }
+        for s in Streams.services: Tab { compact: root.narrow; text: s.name; icon: Icons.plugin-duo(s.icon); active: Streams.service == s.id; clicked => { Streams.pick-service(s.id); } }
     }
     if Streams.tab == "recent": StreamGrid {
         vertical-stretch: 1; cards: Streams.recent; removable: true;

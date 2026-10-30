@@ -41,9 +41,6 @@ fn remote_action(installed: bool, enabled: bool) -> Option<&'static str> {
     }
 }
 
-/// Seconds of inactivity before the controls hide (read by the auto-hide timer).
-pub static AUTOHIDE_SECS: AtomicU32 = AtomicU32::new(2);
-
 /// Sidebar order. The groups start at General (App), Seeking & Steps (Controls), Playback
 /// (Media) and Network (System); `ui/settings.slint` (`group`, `icons`) and the fixed
 /// indices in `ui/app.slint` / `ui/panel.slint` follow this list.
@@ -743,6 +740,20 @@ mod tests {
                 .map(|r| r.id.to_string())
                 .collect()
         };
+        // Auto-hide's rows fold away while controls never hide (#98).
+        let iface = |c: &Config| -> Vec<String> {
+            filtered(c, &[], 1, "", false)
+                .iter()
+                .map(|r| r.id.to_string())
+                .collect()
+        };
+        assert!(iface(&c).iter().any(|i| i == "interface.autohide"));
+        c.interface.autohide_mode = "never".into();
+        let never = iface(&c);
+        assert!(never.iter().any(|i| i == "interface.autohide_mode"));
+        assert!(!never.iter().any(|i| i.starts_with("interface.autohide_k")));
+        assert!(!never.iter().any(|i| i == "interface.autohide"));
+        c.interface.autohide_mode = "delay".into();
         assert!(!ids(&c).iter().any(|i| i == "general.log_file"));
         c.general.save_log = true;
         assert!(ids(&c).iter().any(|i| i == "general.log_file"));

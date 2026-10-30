@@ -699,7 +699,9 @@ Dokploy redeploys plugins.viviplayer.app from the same push; the vivi-plugins Pa
   shows its permissions on the card with *Allow & install* / *Cancel*.
 * **Rollback**: the previous version is kept; *Roll back* switches `current` to it. Older
   versions are pruned.
-* **Uninstall**: removes `<id>/`. Settings stay in `config.toml` for a reinstall.
+* **Uninstall**: removes `<id>/`. From Extensions → Installed, settings and data stay for a
+  reinstall; the plugin's own page (Extensions window, *Uninstall…*) also removes its
+  `config.toml` settings and `plugin-data/<id>/` unless *Keep its data* is checked.
 * **Enable/disable**: the same ON/OFF toggle as other plugins. A fresh install is loaded
   right away; mpv cannot unload scripts, so disable, update, rollback and uninstall take
   effect after a restart (the UI says so).

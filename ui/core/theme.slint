@@ -7,6 +7,14 @@ export global Theme {
     // Player top and bottom bar icons: two-tone (default) or single-tone
     // (Settings → General → Appearance → Player bar icons, `interface.bar_icons`).
     in-out property <bool> bar-duo: true;
+    // Side panels over the video (Settings → Interface → Appearance → Panel transparency,
+    // `interface.panel_glass`, #95): 0 solid, 1 slightly transparent (default), 2 transparent.
+    in-out property <int> panel-glass: 1;
+    // A panel background: `c` at the panel's usual opacity `slight`, fully opaque when
+    // solid, and at most 75 % when transparent.
+    pure public function panel(c: color, slight: float) -> color {
+        c.with-alpha(root.panel-glass == 0 ? 1 : root.panel-glass == 2 ? min(slight, 0.75) : slight)
+    }
     // Keyboard focus ring (2px, inside the control).
     out property <color> focus-ring: accent-bright;
     out property <color> accent-bright: dark ? accent.brighter(25%) : accent.darker(10%);

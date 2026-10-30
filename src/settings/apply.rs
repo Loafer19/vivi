@@ -36,7 +36,12 @@ pub fn apply_theme(a: &AppWindow, c: &Config) {
     t.set_bar_duo(config::bar_icons_name(&c.interface.bar_icons) == "Two-tone");
     a.global::<crate::Settings>()
         .set_accent_name(c.interface.accent.clone().into());
-    AUTOHIDE_SECS.store(c.interface.autohide_secs.max(1), Ordering::Relaxed);
+    crate::app::wiring::autohide::configure(a, &c.interface);
+    t.set_panel_glass(match c.interface.panel_glass.as_str() {
+        "solid" => 0,
+        "clear" => 2,
+        _ => 1,
+    });
     SHORT_SKIP.store(c.controls.short_skip.max(1), Ordering::Relaxed);
     LONG_SKIP.store(c.controls.long_skip.max(1), Ordering::Relaxed);
     VOLUME_STEP.store(c.audio.volume_step.clamp(1, 50) as u32, Ordering::Relaxed);

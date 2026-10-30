@@ -46,6 +46,31 @@ pub(super) const SUB_AUTO: &Labels = &[
     ("all", "Every subtitle file in the folder"),
 ];
 
+/// Settings → Interface → Appearance → Panel transparency (#95).
+pub(super) const PANEL_GLASS: &Labels = &[
+    ("solid", "Solid"),
+    ("slight", "Slightly transparent"),
+    ("clear", "Transparent"),
+];
+/// Settings → Interface → Auto-hide (#98).
+pub(super) const AUTOHIDE_MODE: &Labels = &[
+    ("delay", "After a delay"),
+    ("fullscreen", "Only in fullscreen"),
+    ("never", "Never"),
+];
+pub(super) const AUTOHIDE_WAKE: &Labels = &[
+    ("move", "Any mouse movement"),
+    ("nudge", "Mouse movement, ignoring small bumps"),
+    ("edge", "Mouse near the top or bottom edge"),
+];
+pub(super) const AUTOHIDE_KEYS: &Labels = &[
+    ("any", "Any key"),
+    ("seek", "Seek and volume keys, briefly"),
+    ("none", "No keys"),
+];
+pub(super) const AUTOHIDE_ANIM: &Labels =
+    &[("instant", "Instant"), ("fade", "Fade"), ("slide", "Slide")];
+
 pub(super) const HWDEC: &Labels = &[
     ("auto-safe", "Automatic (safe)"),
     ("auto", "Automatic (any method)"),
@@ -162,12 +187,75 @@ pub(super) const OTHER: &[Field] = &[
         set: |c, v| c.interface.bar_icons = crate::config::bar_icons_name(v).into(),
     },
     Field {
+        id: "interface.panel_glass",
+        get: Some(|c| label(PANEL_GLASS, &c.interface.panel_glass)),
+        set: |c, v| set_labeled(PANEL_GLASS, &mut c.interface.panel_glass, v),
+    },
+    Field {
         id: "interface.autohide",
-        get: None,
+        get: Some(|c| {
+            crate::app::wiring::autohide::delay_secs(c.interface.autohide_secs).to_string()
+        }),
         set: |c, v| {
-            let num = v.parse::<f64>().unwrap_or(0.0);
-            c.interface.autohide_secs = num as u32
+            if let Some(n) = num(v) {
+                c.interface.autohide_secs = crate::app::wiring::autohide::delay_secs(n)
+            }
         },
+    },
+    Field {
+        id: "interface.autohide_mode",
+        get: Some(|c| label(AUTOHIDE_MODE, &c.interface.autohide_mode)),
+        set: |c, v| set_labeled(AUTOHIDE_MODE, &mut c.interface.autohide_mode, v),
+    },
+    Field {
+        id: "interface.autohide_top",
+        get: Some(|c| c.interface.autohide_top.to_string()),
+        set: |c, v| c.interface.autohide_top = on(v),
+    },
+    Field {
+        id: "interface.autohide_bottom",
+        get: Some(|c| c.interface.autohide_bottom.to_string()),
+        set: |c, v| c.interface.autohide_bottom = on(v),
+    },
+    Field {
+        id: "interface.autohide_cursor",
+        get: Some(|c| c.interface.autohide_cursor.to_string()),
+        set: |c, v| c.interface.autohide_cursor = on(v),
+    },
+    Field {
+        id: "interface.autohide_keep_paused",
+        get: Some(|c| c.interface.autohide_keep_paused.to_string()),
+        set: |c, v| c.interface.autohide_keep_paused = on(v),
+    },
+    Field {
+        id: "interface.autohide_keep_panel",
+        get: Some(|c| c.interface.autohide_keep_panel.to_string()),
+        set: |c, v| c.interface.autohide_keep_panel = on(v),
+    },
+    Field {
+        id: "interface.autohide_keep_hover",
+        get: Some(|c| c.interface.autohide_keep_hover.to_string()),
+        set: |c, v| c.interface.autohide_keep_hover = on(v),
+    },
+    Field {
+        id: "interface.autohide_keep_audio",
+        get: Some(|c| c.interface.autohide_keep_audio.to_string()),
+        set: |c, v| c.interface.autohide_keep_audio = on(v),
+    },
+    Field {
+        id: "interface.autohide_wake",
+        get: Some(|c| label(AUTOHIDE_WAKE, &c.interface.autohide_wake)),
+        set: |c, v| set_labeled(AUTOHIDE_WAKE, &mut c.interface.autohide_wake, v),
+    },
+    Field {
+        id: "interface.autohide_keys",
+        get: Some(|c| label(AUTOHIDE_KEYS, &c.interface.autohide_keys)),
+        set: |c, v| set_labeled(AUTOHIDE_KEYS, &mut c.interface.autohide_keys, v),
+    },
+    Field {
+        id: "interface.autohide_anim",
+        get: Some(|c| label(AUTOHIDE_ANIM, &c.interface.autohide_anim)),
+        set: |c, v| set_labeled(AUTOHIDE_ANIM, &mut c.interface.autohide_anim, v),
     },
     Field {
         id: "playback.resume",
@@ -640,6 +728,18 @@ mod tests {
             ("audio.untagged_gain", "-6"),
             ("audio.gapless", "false"),
             ("audio.crossfade_secs", "6"),
+            ("interface.panel_glass", "Solid"),
+            ("interface.autohide", "0.5"),
+            ("interface.autohide_mode", "Only in fullscreen"),
+            ("interface.autohide_top", "false"),
+            ("interface.autohide_keep_paused", "false"),
+            ("interface.autohide_keep_hover", "true"),
+            (
+                "interface.autohide_wake",
+                "Mouse near the top or bottom edge",
+            ),
+            ("interface.autohide_keys", "Seek and volume keys, briefly"),
+            ("interface.autohide_anim", "Fade"),
         ] {
             assert!(set(&mut c, id, v), "{id}");
             assert_eq!(get(&c, id), v, "{id}");

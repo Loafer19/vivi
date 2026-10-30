@@ -57,6 +57,12 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
         }
     });
     let w = app.as_weak();
+    g.on_uninstall(move || {
+        if let Some(a) = w.upgrade() {
+            uninstall(&a);
+        }
+    });
+    let w = app.as_weak();
     g.on_open_browser(move || {
         let Some(a) = w.upgrade() else { return };
         let id = a.global::<crate::Extensions>().get_tab().to_string();
@@ -75,6 +81,47 @@ fn source_command(id: &str) -> String {
         .find(|e| e.id == id)
         .map(|e| e.command)
         .unwrap_or_default()
+}
+
+/// "Uninstall…" on a package's page: ask (with "Keep its data"), uninstall the way
+/// Extensions → Installed does, then go back to the plugin list. Sidebar icons, chips and
+/// menus follow through [`refresh`].
+fn uninstall(a: &AppWindow) {
+    let id = a.global::<crate::Extensions>().get_tab().to_string();
+    let Some(m) = plugins::manifests()
+        .into_iter()
+        .find(|m| m.id == id && m.origin == Origin::Package)
+    else {
+        return;
+    };
+    let name = m.name;
+    let w = a.as_weak();
+    crate::dialogs::confirm_core_check(
+        a,
+        "uninstall-plugin",
+        "Uninstall",
+        &format!("Uninstall {name}?"),
+        "Its settings and downloaded data are removed.",
+        "Uninstall",
+        (
+            "Keep its data",
+            "Its settings and downloaded data stay, ready if you install it again.",
+        ),
+        move |keep| {
+            let res = plugins::packages::remove(&id, keep);
+            let Some(a) = w.upgrade() else { return };
+            let g = a.global::<crate::Extensions>();
+            g.set_tab("".into());
+            g.set_gear(false);
+            settings::refresh_ui();
+            plugins::packages::toast(&match res {
+                Ok(()) => {
+                    format!("Uninstalled {name}. If it is running, it stops when Vivi restarts")
+                }
+                Err(e) => format!("Could not uninstall {name}: {e}"),
+            });
+        },
+    );
 }
 
 /// Open the window on `tab` (a plugin id, "" = All / Marketplace), on its settings
@@ -344,6 +391,7 @@ pub fn refresh() {
             g.set_meta(meta.join("  ·  ").into());
             g.set_icon(m.icon.as_str().into());
             g.set_on(plugins::is_enabled(&c, m));
+            g.set_removable(m.origin == Origin::Package);
             g.set_source(m.role == contrib::Role::Source && !source_command(&m.id).is_empty());
             // Packages report through script messages; built-ins answer a "status" query
             // (e.g. who is signed in).

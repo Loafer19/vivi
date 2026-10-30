@@ -24,7 +24,7 @@ component DrawerTab inherits Rectangle {
 
 export component SideDrawer inherits Rectangle {
     callback close();
-    background: Theme.bg-a4.with-alpha(0.97);
+    background: Theme.panel(Theme.bg-a4, 0.97);
     border-width: 1px; border-color: Theme.bg-a1;
     TouchArea { }
     VerticalLayout {

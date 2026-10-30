@@ -1,0 +1,11 @@
+// Settings → Interface → Auto-hide (#98), set by src/app/wiring/autohide.rs. Rust decides
+// when the controls are awake (AppWindow.controls-visible); these say what hides when
+// they are not, what keeps them shown, and how the bars animate.
+export global AutoHide {
+    in-out property <bool> top: true; // the top bar hides
+    in-out property <bool> bottom: true; // the bottom bar hides
+    in-out property <bool> cursor: true; // the mouse pointer hides over the video
+    in-out property <bool> keep-panel: true; // an open panel, drawer or menu keeps them shown
+    in-out property <bool> keep-hover: false; // the pointer over a bar keeps them shown
+    in-out property <int> anim: 0; // 0 instant, 1 fade, 2 slide
+}

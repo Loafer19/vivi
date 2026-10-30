@@ -1487,6 +1487,16 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
     .flatten()
 }
 
+/// Forget plugin `id`'s on / off choice and settings (uninstalling it without keeping
+/// its data).
+pub fn forget(id: &str) {
+    with(|r| {
+        if r.cfg.borrow_mut().plugins.remove(id).is_some() {
+            save(&r.cfg);
+        }
+    });
+}
+
 fn save(cfg: &Rc<RefCell<Config>>) {
     if let Err(e) = cfg.borrow().save() {
         eprintln!("vivi: save config: {e}");

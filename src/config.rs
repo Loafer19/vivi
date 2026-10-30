@@ -43,8 +43,30 @@ pub struct Interface {
     pub theme: String,
     /// Accent color as `#RRGGBB`.
     pub accent: String,
-    /// Seconds of mouse inactivity before controls hide.
-    pub autohide_secs: u32,
+    /// Seconds of mouse inactivity before controls hide (0.5–30; older configs hold a
+    /// whole number, which still reads as the delay).
+    pub autohide_secs: f64,
+    /// When controls hide (#98): "delay" | "fullscreen" | "never".
+    pub autohide_mode: String,
+    /// What hides: the top bar, the bottom bar, the mouse pointer.
+    pub autohide_top: bool,
+    pub autohide_bottom: bool,
+    pub autohide_cursor: bool,
+    /// Keep the controls shown while paused / while a panel or menu is open / while the
+    /// pointer is over a bar / while playing audio only.
+    pub autohide_keep_paused: bool,
+    pub autohide_keep_panel: bool,
+    pub autohide_keep_hover: bool,
+    pub autohide_keep_audio: bool,
+    /// What brings hidden controls back with the mouse: "move" (any movement) |
+    /// "nudge" (ignores small bumps) | "edge" (only near the top or bottom edge).
+    pub autohide_wake: String,
+    /// Keys that show hidden controls: "any" | "seek" (seek and volume keys, briefly) | "none".
+    pub autohide_keys: String,
+    /// How bars hide and show: "instant" | "fade" | "slide".
+    pub autohide_anim: String,
+    /// Side panels over the video (#95): "solid" | "slight" | "clear".
+    pub panel_glass: String,
     /// Toolbar profile: "Minimal" | "Default" | "Power" | "Custom".
     pub profile: String,
     /// Bottom-bar items; `|` marks the play controls (left of it = left group).
@@ -385,7 +407,19 @@ impl Default for Interface {
         Self {
             theme: "dark".into(),
             accent: "#D37918".into(),
-            autohide_secs: 2,
+            autohide_secs: 2.0,
+            autohide_mode: "delay".into(),
+            autohide_top: true,
+            autohide_bottom: true,
+            autohide_cursor: true,
+            autohide_keep_paused: true,
+            autohide_keep_panel: true,
+            autohide_keep_hover: false,
+            autohide_keep_audio: false,
+            autohide_wake: "move".into(),
+            autohide_keys: "any".into(),
+            autohide_anim: "instant".into(),
+            panel_glass: "slight".into(),
             profile: "Default".into(),
             toolbar: profile_toolbar("Default").unwrap_or_default(),
             onboarded: false,
@@ -919,6 +953,15 @@ mod toolbar_tests {
             sanitize_toolbar(&plug),
             vec!["plug:lyrics|karaoke".to_string()]
         );
+    }
+    #[test]
+    fn old_autohide_seconds_still_read() {
+        // Before #98 the delay was whole seconds; it is now a float (0.5 s steps).
+        let c: Config = toml::from_str("[interface]\nautohide_secs = 5\n").unwrap();
+        assert_eq!(c.interface.autohide_secs, 5.0);
+        assert_eq!(c.interface.autohide_mode, "delay");
+        assert!(c.interface.autohide_keep_paused && c.interface.autohide_cursor);
+        assert_eq!(c.interface.panel_glass, "slight");
     }
     #[test]
     fn controls_defaults_and_old_configs() {

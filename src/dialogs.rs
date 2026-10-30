@@ -333,7 +333,8 @@ pub fn show_qr(a: &AppWindow, title: &str, text: &str, caption: &str) {
 pub const CORE: &str = "vivi:core";
 
 /// A core confirmation waiting for an answer: its key and what to do on "yes".
-type Pending = (String, Box<dyn FnOnce()>);
+/// A core question waiting for its answer; the flag is the dialog's checkbox.
+type Pending = (String, Box<dyn FnOnce(bool)>);
 
 thread_local! {
     static PENDING: RefCell<Vec<Pending>> = const { RefCell::new(Vec::new()) };
@@ -350,15 +351,40 @@ pub fn confirm_core(
     ok: &str,
     yes: impl FnOnce() + 'static,
 ) {
-    PENDING.with(|p| {
-        let mut p = p.borrow_mut();
-        p.retain(|(k, _)| k != key);
-        p.push((key.to_string(), Box::new(yes)));
-    });
+    pend(key, move |_| yes());
     confirm(a, CORE, key, title, heading, text, ok);
 }
 
-/// The answer to a [`confirm_core`] question: `[key, "yes" | "no"]`.
+/// Like [`confirm_core`] with a checkbox under the text (`check`, e.g. "Keep its data");
+/// while it is checked the dialog shows `checked_text` instead of `text`. `yes` gets
+/// whether it was checked.
+#[allow(clippy::too_many_arguments)]
+pub fn confirm_core_check(
+    a: &AppWindow,
+    key: &str,
+    title: &str,
+    heading: &str,
+    text: &str,
+    ok: &str,
+    (check, checked_text): (&str, &str),
+    yes: impl FnOnce(bool) + 'static,
+) {
+    pend(key, yes);
+    confirm(a, CORE, key, title, heading, text, ok);
+    let d = a.global::<crate::Dialogs>();
+    d.set_confirm_check(check.into());
+    d.set_confirm_checked_text(checked_text.into());
+}
+
+fn pend(key: &str, f: impl FnOnce(bool) + 'static) {
+    PENDING.with(|p| {
+        let mut p = p.borrow_mut();
+        p.retain(|(k, _)| k != key);
+        p.push((key.to_string(), Box::new(f)));
+    });
+}
+
+/// The answer to a [`confirm_core`] question: `[key, "yes" | "checked" | "no"]`.
 pub fn core_answer(args: &[String]) {
     let (Some(key), Some(answer)) = (args.first(), args.get(1)) else {
         return;
@@ -368,8 +394,8 @@ pub fn core_answer(args: &[String]) {
         let i = p.iter().position(|(k, _)| k == key)?;
         Some(p.remove(i).1)
     });
-    if let Some(f) = f.filter(|_| answer == "yes") {
-        f();
+    if let Some(f) = f.filter(|_| answer == "yes" || answer == "checked") {
+        f(answer == "checked");
     }
 }
 
@@ -392,6 +418,9 @@ pub fn confirm(
     d.set_confirm_text(text.into());
     d.set_confirm_ok(ok.into());
     d.set_confirm_warning(true);
+    d.set_confirm_check("".into());
+    d.set_confirm_checked(false);
+    d.set_confirm_checked_text("".into());
     a.global::<crate::Overlays>().set_confirm_open(true);
 }
 

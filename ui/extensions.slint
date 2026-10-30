@@ -161,8 +161,11 @@ export component ExtensionsDialog inherits Modal {
                             SecondaryButton { text: a.label; clicked => { root.changed(a.id, "run"); } }
                         }
                     }
-                    if Extensions.has-settings: HorizontalLayout { alignment: start; padding-top: 6px;
-                        SecondaryButton { text: "Settings"; icon: @image-url("../assets/icons/settings.svg"); clicked => { Extensions.select(Extensions.tab, true); } } }
+                    // Downloaded plugins can be uninstalled here (asks first); built-ins only
+                    // turn on and off.
+                    if Extensions.has-settings || Extensions.removable: HorizontalLayout { alignment: start; padding-top: 6px; spacing: 8px;
+                        if Extensions.has-settings: SecondaryButton { text: "Settings"; icon: @image-url("../assets/icons/settings.svg"); clicked => { Extensions.select(Extensions.tab, true); } }
+                        if Extensions.removable: SecondaryButton { text: "Uninstall…"; clicked => { Extensions.uninstall(); } } }
                 }
             }
             // Gear view (plugin settings) or All / Marketplace

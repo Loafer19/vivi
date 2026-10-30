@@ -377,7 +377,8 @@ export component SidePanel inherits Rectangle {
     property <bool> narrow: root.width < 360px;
 
     width: 400px;
-    background: Theme.bar;
+    // Theme.bar's opacity, or what Panel transparency says.
+    background: Theme.panel(Theme.bar-solid, Theme.dark ? 0.93 : 0.94);
     TouchArea { } // keep clicks inside the panel
 
     VerticalLayout {

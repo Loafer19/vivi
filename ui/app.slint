@@ -47,10 +47,11 @@ import { Status, Indicator } from "state/status.slint";
 import { Duo } from "core/duo.slint";
 import { Bookmarks, BookmarkRow } from "state/bookmarks.slint";
 import { SideDrawer } from "drawer.slint";
+import { AutoHide } from "state/autohide.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
 export { LiveRow } from "core/rows.slint";
-export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Streams, StreamCard, StreamService, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads, Status, Indicator, Bookmarks, BookmarkRow }
+export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Streams, StreamCard, StreamService, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads, Status, Indicator, Bookmarks, BookmarkRow, AutoHide }
 
 // Top-bar status chip (src/status.rs): accent icon (+ short label) for a feature that is
 // on; clicking opens its panel or setting. Two-tone bars draw the icon's solid
@@ -574,6 +575,11 @@ export component AppWindow inherits Window {
     in property <bool> controls-visible: true;
 
     callback activity();
+    // The pointer moved over the video (src/app/wiring/autohide.rs decides if that wakes
+    // hidden controls: any movement, more than a nudge, or near an edge).
+    callback pointer-moved(length, length);
+    // A key was pressed; whether it shows hidden controls depends on Settings → Auto-hide.
+    callback key-activity(string, bool, bool, bool);
     // text, shift, ctrl, alt; unhandled keys are forwarded to mpv scripts.
     callback key(string, bool, bool, bool) -> bool;
     // Music visualizer (src/viz): shown for audio-only media; mode 0 = Disabled.
@@ -708,7 +714,27 @@ export component AppWindow inherits Window {
         let s = floor(mod(t, 60));
         (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    property <bool> show-ui: (!Playback.has-media || root.controls-visible || Overlays.panel-open || Overlays.settings-open || Overlays.customize-open) && !(root.ui-hidden && Playback.has-media);
+    // The pointer is over the top or bottom bar (keeps them shown when Auto-hide says so).
+    property <bool> top-hover;
+    property <bool> bottom-hover;
+    // A bar resets its flag when it is created again, so one removed while hovered
+    // (Ctrl+\, the miniplayer) cannot keep the controls up.
+    property <bool> bar-hover: !root.mini && (root.top-hover || root.bottom-hover);
+    property <bool> show-ui: (!Playback.has-media || root.controls-visible || Overlays.settings-open || Overlays.customize-open
+        || (AutoHide.keep-panel && (Overlays.panel-open || Menus.menu-kind != "")) || (AutoHide.keep-hover && root.bar-hover))
+        && !(root.ui-hidden && Playback.has-media);
+    // Settings → Interface → Auto-hide (#98): which bars hide, and how they animate. The
+    // `-k` values animate from 0 (hidden) to 1 (shown); `-v` is what the bars draw with
+    // (the plain 0 / 1 while Animation is Instant, as before).
+    property <bool> chrome-off: root.ui-hidden && Playback.has-media;
+    property <bool> top-on: !root.mini && (root.show-ui || top-ta.has-hover || (!AutoHide.top && !root.chrome-off));
+    property <bool> bottom-on: !root.mini && Playback.has-media && (root.show-ui || (!AutoHide.bottom && !root.chrome-off));
+    property <float> top-k: root.top-on ? 1 : 0;
+    animate top-k { duration: 180ms; easing: ease-out; }
+    property <float> bottom-k: root.bottom-on ? 1 : 0;
+    animate bottom-k { duration: 180ms; easing: ease-out; }
+    property <float> top-v: AutoHide.anim == 0 ? (root.top-on ? 1 : 0) : root.top-k;
+    property <float> bottom-v: AutoHide.anim == 0 ? (root.bottom-on ? 1 : 0) : root.bottom-k;
 
     // Rust moves focus back to the player after Esc closed an overlay.
     public function focus-main() { fs.focus(); }
@@ -724,7 +750,7 @@ export component AppWindow inherits Window {
     focus-on-click: false; focus-on-tab-navigation: false;
     capture-key-pressed(e) => {
         if (e.text == Key.Escape) {
-            root.activity();
+            root.key-activity(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt);
             if (root.key(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt)) { return accept; }
         }
         reject
@@ -732,7 +758,7 @@ export component AppWindow inherits Window {
 
     fs := FocusScope {
         key-pressed(e) => {
-            root.activity();
+            root.key-activity(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt);
             if (root.key(e.text, e.modifiers.shift, e.modifiers.control, e.modifiers.alt)) { return accept; }
             // Tab moves focus only inside an open dialog, or to the lines of live-stream
             // lyrics (to sync them with Enter).
@@ -744,9 +770,9 @@ export component AppWindow inherits Window {
 
     // Whole-window activity tracker (mouse moves reset the auto-hide timer).
     main-ta := TouchArea {
-        mouse-cursor: root.show-ui ? MouseCursor.default : MouseCursor.none;
-        changed mouse-x => { root.activity(); }
-        changed mouse-y => { root.activity(); }
+        mouse-cursor: root.show-ui || !AutoHide.cursor ? MouseCursor.default : MouseCursor.none;
+        changed mouse-x => { root.pointer-moved(self.mouse-x, self.mouse-y); }
+        changed mouse-y => { root.pointer-moved(self.mouse-x, self.mouse-y); }
         // Buttons and the wheel do what Settings → Controls → Mouse says (mouse.rs); by
         // default click plays / pauses and double-click toggles fullscreen.
         clicked => { fs.focus(); Playback.mouse("click"); }
@@ -845,9 +871,14 @@ export component AppWindow inherits Window {
     // Hover strip that reveals the bar. It must sit *below* the bar in z-order (declared
     // first); declared after it, it swallowed every click on the top-bar buttons.
     top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
-    if !root.mini && (root.show-ui || top-ta.has-hover): Rectangle {
-        y: 0; height: 40px;
+    if root.top-v > 0: Rectangle {
+        y: AutoHide.anim == 2 ? -(1 - root.top-v) * self.height : 0; height: 40px;
+        opacity: AutoHide.anim == 1 ? root.top-v : 1;
         background: Playback.has-media ? Theme.bar : Theme.bg-a4;
+        // Holds the buttons, so it stays hovered while the pointer is on one of them.
+        TouchArea {
+        init => { root.top-hover = false; }
+        changed has-hover => { root.top-hover = self.has-hover; root.activity(); }
         HorizontalLayout {
             padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
             IconButton { tab-focus: false; bar: true; duo: "open"; tip: "Open file"; clicked => { Playback.open-file(); } }
@@ -865,6 +896,7 @@ export component AppWindow inherits Window {
             IconButton { tab-focus: false; bar: true; duo: "fullscreen"; tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
             // Same as the window's close button (General → Window → Close button: tray or quit).
             IconButton { tab-focus: false; bar: true; duo: "close-window"; tip: "Close"; clicked => { root.close-window(); } }
+        }
         }
     }
 
@@ -1007,11 +1039,16 @@ export component AppWindow inherits Window {
     // ---------- Bottom bar: every element is a movable item (Customize Player) ----------
     // Compact / Waveform / Plain: one row with the seekbar inline where "seek" sits.
     // Classic: the seekbar spans a row on top and "seek" becomes a flexible gap.
-    if !root.mini && Playback.has-media && root.show-ui: Rectangle {
-        y: root.height - self.height;
+    if root.bottom-v > 0: Rectangle {
+        y: root.height - self.height + (AutoHide.anim == 2 ? (1 - root.bottom-v) * self.height : 0);
         height: root.bar-h;
+        opacity: AutoHide.anim == 1 ? root.bottom-v : 1;
         background: Theme.bar-dark;
-        TouchArea { } // swallow clicks so they don't toggle play
+        // Swallows clicks so they don't toggle play, and holds the bar's controls so it
+        // stays hovered while the pointer is on one of them.
+        TouchArea {
+        init => { root.bottom-hover = false; }
+        changed has-hover => { root.bottom-hover = self.has-hover; root.activity(); }
         Rectangle { y: 0; height: 1px; background: Theme.bar-line; }
         VerticalLayout {
             padding-left: root.bar.pad-x-left; padding-right: root.bar.pad-x-right;
@@ -1093,6 +1130,7 @@ export component AppWindow inherits Window {
                     clicked => { overflow.show(); }
                 }
             }
+        }
         }
     }
 
@@ -1350,9 +1388,10 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         title: Dialogs.confirm-title; heading: Dialogs.confirm-heading; text: Dialogs.confirm-text;
         ok-label: Dialogs.confirm-ok; warning: Dialogs.confirm-warning;
+        check-label: Dialogs.confirm-check; checked <=> Dialogs.confirm-checked; checked-text: Dialogs.confirm-checked-text;
         answer(yes) => {
             Overlays.confirm-open = false;
-            root.plugin-command(Dialogs.confirm-owner, "confirm", Dialogs.confirm-key + "\u{1f}" + (yes ? "yes" : "no"));
+            root.plugin-command(Dialogs.confirm-owner, "confirm", Dialogs.confirm-key + "\u{1f}" + (yes ? (Dialogs.confirm-check != "" && Dialogs.confirm-checked ? "checked" : "yes") : "no"));
         }
     }
 

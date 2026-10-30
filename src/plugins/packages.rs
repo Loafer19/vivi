@@ -733,6 +733,25 @@ pub fn uninstall(root: &Path, id: &str) -> Result<(), String> {
     fs::remove_dir_all(root.join(id)).map_err(|e| e.to_string())
 }
 
+/// Uninstall package `id` (Extensions → Installed, and the plugin's own page in the
+/// Extensions window): remove its files and, unless `keep_data`, its settings and its
+/// data folder. A running script keeps running until Vivi restarts.
+pub fn remove(id: &str, keep_data: bool) -> Result<(), String> {
+    let res = uninstall(&root(), id).and_then(|()| {
+        if keep_data {
+            return Ok(());
+        }
+        super::forget(id);
+        let d = super::host::data_dir(id);
+        if d.exists() {
+            fs::remove_dir_all(&d).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    });
+    super::rescan();
+    res
+}
+
 /// Download with a size cap.
 pub fn download(url: &str) -> Result<Vec<u8>, String> {
     let resp = ureq::get(url)
@@ -1200,8 +1219,7 @@ pub fn action(id: &str, label: &str) {
             })
         }
         "Uninstall" => {
-            let res = uninstall(&r, id);
-            super::rescan();
+            let res = remove(id, true);
             status(match res {
                 Ok(()) => "Uninstalled. A running script stops when Vivi restarts".into(),
                 Err(e) => format!("Could not uninstall: {e}"),

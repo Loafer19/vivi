@@ -32,6 +32,8 @@ export global Extensions {
     in-out property <bool> on;
     in-out property <bool> source;
     in-out property <bool> has-settings;
+    // The selected plugin is a downloaded package (built-ins only turn on and off).
+    in-out property <bool> removable;
     // "Where it shows up" lines of the overview.
     in-out property <[string]> places;
     in-out property <[ExtAction]> actions;
@@ -51,4 +53,6 @@ export global Extensions {
     // Overview "Open" button of a source.
     callback open-browser();
     callback open-replacement(string);
+    // "Uninstall…" on the selected plugin's page (asks first; src/extwin.rs).
+    callback uninstall();
 }

@@ -13,6 +13,12 @@ export global Dialogs {
     in-out property <string> confirm-text;
     in-out property <string> confirm-ok;
     in-out property <bool> confirm-warning;
+    // An optional checkbox under the text (core questions only, e.g. Uninstall's "Keep its
+    // data"): checked, the answer is "checked" instead of "yes" and `confirm-checked-text`
+    // replaces `confirm-text`.
+    in-out property <string> confirm-check;
+    in-out property <bool> confirm-checked;
+    in-out property <string> confirm-checked-text;
     in-out property <[string]> net-history;
     in-out property <string> net-error;
     in-out property <string> net-urls;

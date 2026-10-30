@@ -419,7 +419,7 @@ export component LibraryView inherits Rectangle {
     }
     function go(it: LibItem) { root.open(it.key, it.kind); }
 
-    background: root.sidebar ? Theme.bg-b1.with-alpha(0.95) : Theme.bg-b1;
+    background: root.sidebar ? Theme.panel(Theme.bg-b1, 0.95) : Theme.bg-b1;
     TouchArea { }
 
     HorizontalLayout {
@@ -477,7 +477,8 @@ export component LibraryView inherits Rectangle {
                         if i > 0: Text { text: "▸"; color: Theme.fg-a2; font-size: Metrics.font-micro; vertical-alignment: center; }
                         Text {
                             text: root.crumb-labels[i]; font-size: Metrics.font-lg; overflow: elide; vertical-alignment: center;
-                            min-width: min(self.preferred-width, 140px);
+                            // Docked, long names give way sooner so the row fits the panel.
+                            min-width: min(self.preferred-width, root.sidebar ? 56px : 140px);
                             color: cta.has-hover ? Theme.fg-1 : Theme.fg-a2;
                             cta := TouchArea { accessible-role: button; accessible-label: root.crumb-labels[i]; mouse-cursor: pointer; clicked => { root.navigate(k); } }
                         }
@@ -523,7 +524,7 @@ export component LibraryView inherits Rectangle {
             }
             Rectangle { height: 1px; background: Theme.bg-a1; }
             if Streams.view == "hub": StreamsHub {
-                vertical-stretch: 1; padding-bottom: 16px;
+                vertical-stretch: 1; padding-bottom: 16px; narrow: root.sidebar || root.width < 640px;
                 command(o, n, a) => { root.plugin-command(o, n, a); }
             }
             if Streams.view == "service": ServicePage {
