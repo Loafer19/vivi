@@ -15,7 +15,7 @@ pub(crate) fn screenshot_mode() -> bool {
 /// VIVI_CUSTOMIZE=<profile>,
 /// VIVI_ONBOARDING=<step>, VIVI_LIB=<nav>, VIVI_LIBQ=<search>,
 /// VIVI_NEW_PLAYLIST=<name>, VIVI_URL=<url>, VIVI_LIBRARY, VIVI_PAGE=<streams hub page>,
-/// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
+/// VIVI_MENU, VIVI_SUB, VIVI_DRAWER=<plugin id> (player side drawer; also the `drawer` socket command), VIVI_EXT=<plugin id>[:gear|:uninstall] (Extensions window), VIVI_SUBS[=folder|search] (Add Subtitles dialog), VIVI_MUSIC=<plugin id>
 /// [VIVI_MUSICQ=query] [VIVI_MUSICSRC=source] [VIVI_MUSICPLAY=row] (a plugin dialog,
 /// searched when a query or source is given, then a result row played).
 /// Show plugin `id` in Settings → Extensions → Browse (search filtered to its name).
@@ -195,15 +195,17 @@ pub(crate) fn debug_ui(app: &AppWindow) {
             }
         });
     }
-    // VIVI_EXT=<plugin id>[:gear] (or "" for All / Marketplace): the Extensions window.
+    // VIVI_EXT=<plugin id>[:gear|:uninstall] (or "" for All / Marketplace): the Extensions
+    // window; `:uninstall` also asks to uninstall that downloaded plugin (#96).
     if let Some(t) = var("VIVI_EXT") {
         let w = app.as_weak();
         slint::Timer::single_shot(Duration::from_millis(2500), move || {
             if let Some(a) = w.upgrade() {
-                let (id, gear) = t
-                    .split_once(':')
-                    .map_or((t.as_str(), false), |(i, g)| (i, g == "gear"));
-                crate::extwin::open(&a, id, gear);
+                let (id, then) = t.split_once(':').unwrap_or((t.as_str(), ""));
+                crate::extwin::open(&a, id, then == "gear");
+                if then == "uninstall" {
+                    crate::extwin::uninstall(&a);
+                }
             }
         });
     }

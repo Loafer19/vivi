@@ -86,7 +86,7 @@ fn source_command(id: &str) -> String {
 /// "Uninstall…" on a package's page: ask (with "Keep its data"), uninstall the way
 /// Extensions → Installed does, then go back to the plugin list. Sidebar icons, chips and
 /// menus follow through [`refresh`].
-fn uninstall(a: &AppWindow) {
+pub(crate) fn uninstall(a: &AppWindow) {
     let id = a.global::<crate::Extensions>().get_tab().to_string();
     let Some(m) = plugins::manifests()
         .into_iter()
