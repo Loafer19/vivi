@@ -292,6 +292,42 @@ fn script_running(in_mpv: bool, enabled: bool) -> bool {
     in_mpv && enabled
 }
 
+/// Whether plugin `id` actually runs right now, as far as the user can tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Running {
+    No,
+    Yes,
+    /// Turned off this session, but mpv cannot unload a script: it keeps running (a
+    /// server stays up) until Vivi restarts.
+    UntilRestart,
+}
+
+/// [`Running`] of plugin `id`: an active built-in or an enabled script mpv loaded is
+/// `Yes`; a loaded script that was turned off since is `UntilRestart`.
+pub fn running(id: &str) -> Running {
+    with(|r| {
+        if r.entries.iter().any(|e| e.active && e.manifest.id == id) {
+            return Running::Yes;
+        }
+        let c = r.cfg.borrow();
+        r.scripts
+            .iter()
+            .find(|s| s.manifest.id == id)
+            .map_or(Running::No, |s| {
+                script_state(r.loaded.contains(id), is_enabled(&c, &s.manifest))
+            })
+    })
+    .unwrap_or(Running::No)
+}
+
+fn script_state(in_mpv: bool, enabled: bool) -> Running {
+    match (in_mpv, enabled) {
+        (false, _) => Running::No,
+        (true, true) => Running::Yes,
+        (true, false) => Running::UntilRestart,
+    }
+}
+
 /// Whether a plugin is enabled in the config.
 pub fn is_enabled(c: &Config, m: &Manifest) -> bool {
     c.plugins
@@ -1526,6 +1562,16 @@ mod tests {
         // Turned off at runtime: still in mpv until restart, but counted as off.
         assert!(!script_running(true, false));
         assert!(script_running(true, true));
+    }
+
+    #[test]
+    fn a_script_turned_off_runs_until_restart() {
+        // Never loaded (installed, or enabled this session): not running.
+        assert_eq!(script_state(false, false), Running::No);
+        assert_eq!(script_state(false, true), Running::No);
+        assert_eq!(script_state(true, true), Running::Yes);
+        // Turned off this session: mpv keeps the script (and e.g. its server) running.
+        assert_eq!(script_state(true, false), Running::UntilRestart);
     }
 
     #[test]

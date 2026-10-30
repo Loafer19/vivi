@@ -55,6 +55,7 @@ component JobRow inherits Rectangle {
             if root.job.kids > 0: VerticalLayout { alignment: center; Act { tip: root.job.expanded ? "Hide items" : "Show all " + root.job.kids + " items"; icon: root.job.expanded ? @image-url("../assets/icons/chevron-up.svg") : @image-url("../assets/icons/chevron-down.svg"); clicked => { Downloads.act(root.job.id, "expand"); } } }
             if root.job.state == "active" && root.job.can-pause: VerticalLayout { alignment: center; Act { tip: "Pause"; duo: "pause"; clicked => { Downloads.act(root.job.id, "pause"); } } }
             if root.job.state == "paused": VerticalLayout { alignment: center; Act { tip: "Resume"; duo: "play"; clicked => { Downloads.act(root.job.id, "resume"); } } }
+            if root.job.can-discard: VerticalLayout { alignment: center; Act { tip: "Discard (stop and delete what was saved)"; icon: @image-url("../assets/icons/trash.svg"); clicked => { Downloads.act(root.job.id, "discard"); } } }
             if root.running: VerticalLayout { alignment: center; Act { tip: "Cancel"; icon: @image-url("../assets/icons/close.svg"); clicked => { Downloads.act(root.job.id, "cancel"); } } }
             if root.job.state == "failed" || root.job.state == "cancelled": VerticalLayout { alignment: center; Act { tip: "Retry"; duo: "refresh"; clicked => { Downloads.act(root.job.id, "retry"); } } }
             if root.job.has-file: VerticalLayout { alignment: center; Act { tip: "Play now"; duo: "play"; clicked => { Downloads.act(root.job.id, "play"); } } }

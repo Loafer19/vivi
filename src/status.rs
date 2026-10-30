@@ -104,19 +104,27 @@ fn num(p: &Player, name: &str) -> Option<f64> {
         .filter(|v| v.is_finite())
 }
 
-fn remote_extension() -> bool {
-    crate::plugins::loaded(crate::settings::REMOTE_CONTROL)
+fn remote_extension() -> crate::plugins::Running {
+    crate::plugins::running(crate::settings::REMOTE_CONTROL)
 }
 
 /// Tooltip of the top-bar remote chip, or none when nothing can control Vivi (#94):
 /// `agents` = "Allow AI agents and scripts" is on and this instance owns the control
-/// socket; `phone` = the Remote Control extension is installed, enabled and loaded.
-fn remote_tip(agents: bool, phone: bool) -> Option<&'static str> {
+/// socket; `phone` = whether the Remote Control extension runs. One turned off this
+/// session still runs (its phone server is up) until restart, so the chip stays and says so.
+fn remote_tip(agents: bool, phone: crate::plugins::Running) -> Option<&'static str> {
+    use crate::plugins::Running::{No, UntilRestart, Yes};
     Some(match (agents, phone) {
-        (true, true) => "Remote control: agent socket and phone remote are on",
-        (true, false) => "Remote control: the agent socket (vivi-mcp) is on",
-        (false, true) => "Remote control: the phone remote is on",
-        (false, false) => return None,
+        (true, Yes) => "Remote control: agent socket and phone remote are on",
+        (true, UntilRestart) => {
+            "Remote control: the agent socket is on; the phone remote is turned off and stops after restart"
+        }
+        (true, No) => "Remote control: the agent socket (vivi-mcp) is on",
+        (false, Yes) => "Remote control: the phone remote is on",
+        (false, UntilRestart) => {
+            "Remote control: the phone remote is turned off and stops after restart"
+        }
+        (false, No) => return None,
     })
 }
 
@@ -270,10 +278,15 @@ mod tests {
     #[test]
     fn remote_chip_only_when_something_listens() {
         // #94: both off (socket not allowed, extension missing / disabled) → no chip.
-        assert_eq!(remote_tip(false, false), None);
-        assert!(remote_tip(true, false).unwrap().contains("agent socket"));
-        assert!(remote_tip(false, true).unwrap().contains("phone remote"));
-        assert!(remote_tip(true, true).unwrap().contains("and phone remote"));
+        use crate::plugins::Running::{No, UntilRestart, Yes};
+        assert_eq!(remote_tip(false, No), None);
+        assert!(remote_tip(true, No).unwrap().contains("agent socket"));
+        assert!(remote_tip(false, Yes).unwrap().contains("phone remote is on"));
+        assert!(remote_tip(true, Yes).unwrap().contains("and phone remote"));
+        // Turned off this session: its server still runs until restart, so the chip stays.
+        let t = remote_tip(false, UntilRestart).unwrap();
+        assert!(t.contains("stops after restart"), "{t}");
+        assert!(remote_tip(true, UntilRestart).unwrap().contains("agent socket is on"));
     }
 
     #[test]

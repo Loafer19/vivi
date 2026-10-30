@@ -11,7 +11,9 @@
 //!   [`Report`], all optional, merged into the job) and `vivi-download-remove <plugin id>
 //!   <job id>`.
 //! * The host sends `download-pause|download-resume|download-cancel|download-retry
-//!   <job id>` back (a built-in's `command`, a package's `script-message-to`).
+//!   <job id>` back (a built-in's `command`, a package's `script-message-to`), and
+//!   `download-discard <job id>` to a job that reported `can_discard`. Discard on any
+//!   other job is a Cancel after which the host deletes the reported file itself.
 //!
 //! See docs/plugins-architecture.md, "Downloads".
 
@@ -93,6 +95,9 @@ pub struct Job {
     /// Free text under the title instead of size / ETA (e.g. "Recording · 12:30").
     pub detail: String,
     pub can_pause: bool,
+    /// The plugin handles `download-discard` itself (else the host's Discard is a Cancel
+    /// and deletes the file when the job ends).
+    pub can_discard: bool,
     /// Unix seconds it was added.
     pub added: u64,
     /// Job id of the group row this one belongs to (same plugin), e.g. a playlist.
@@ -134,6 +139,7 @@ pub struct Report {
     pub error: Option<String>,
     pub detail: Option<String>,
     pub can_pause: Option<bool>,
+    pub can_discard: Option<bool>,
     pub parent: Option<String>,
     #[serde(deserialize_with = "num::whole")]
     pub items_done: Option<u32>,
@@ -248,6 +254,9 @@ impl Report {
         if let Some(v) = self.can_pause {
             j.can_pause = v;
         }
+        if let Some(v) = self.can_discard {
+            j.can_discard = v;
+        }
         if j.state == State::Done && j.total > 0 {
             j.done = j.total;
         }
@@ -275,6 +284,14 @@ struct Store {
     expanded: std::collections::HashSet<String>,
     /// Running groups: items_done when the run started, and whether an item finished since.
     runs: std::collections::HashMap<String, (u32, bool)>,
+    /// Jobs discarded by the host (a Cancel was sent): their file is deleted and the row
+    /// removed when the plugin reports that they ended.
+    discarding: std::collections::HashSet<String>,
+    /// Jobs the host discarded: late reports of them (a length probe after the end) are
+    /// ignored until the job id starts again.
+    discarded: std::collections::HashSet<String>,
+    /// Toasts to show on the next refresh ("Discarded: …").
+    toasts: Vec<String>,
 }
 
 thread_local! {
@@ -340,6 +357,17 @@ pub fn report(plugin: &str, job: &str, r: Report) {
     ST.with(|s| {
         let mut s = s.borrow_mut();
         let k = key(plugin, job);
+        if s.discarded.contains(&k) {
+            let again = r
+                .state
+                .as_deref()
+                .and_then(State::parse)
+                .is_some_and(State::running);
+            if !again {
+                return;
+            }
+            s.discarded.remove(&k);
+        }
         let i = match s
             .jobs
             .iter()
@@ -363,6 +391,16 @@ pub fn report(plugin: &str, job: &str, r: Report) {
         };
         let reported_speed = r.speed.is_some();
         let changed = r.apply(&mut s.jobs[i]);
+        if !s.jobs[i].state.running() && s.discarding.remove(&k) {
+            let j = s.jobs.remove(i);
+            discard_files(&j.path);
+            s.discarded.insert(k.clone());
+            s.toasts.push(format!("Discarded: {}", j.title));
+            s.rate.retain(|(x, _, _)| *x != k);
+            s.dirty = true;
+            s.save = true;
+            return;
+        }
         let (done, state) = (s.jobs[i].done, s.jobs[i].state);
         // Speed from the byte count (over at least a second).
         if !reported_speed {
@@ -420,6 +458,28 @@ pub fn report(plugin: &str, job: &str, r: Report) {
         }
         s.dirty = true;
     });
+}
+
+/// What the host's Discard deletes once the job ended: the reported file and its `.part`
+/// (yt-dlp, curl), only when they are regular files.
+fn discard_targets(path: &str) -> Vec<std::path::PathBuf> {
+    if path.trim().is_empty() {
+        return Vec::new();
+    }
+    let p = std::path::PathBuf::from(path.strip_prefix("file://").unwrap_or(path));
+    let mut part = p.clone().into_os_string();
+    part.push(".part");
+    vec![p, part.into()]
+}
+
+fn discard_files(path: &str) {
+    for f in discard_targets(path) {
+        if f.is_file() {
+            if let Err(e) = std::fs::remove_file(&f) {
+                eprintln!("vivi: discard {}: {e}", f.display());
+            }
+        }
+    }
 }
 
 /// Drop a job from the list (a group with its items).
@@ -518,6 +578,8 @@ pub fn detail(j: &Job) -> String {
         State::Cancelled if j.error.is_empty() || j.error.eq_ignore_ascii_case("cancelled") => {
             "Cancelled".into()
         }
+        // Discarded (download-discard): what was written is gone.
+        State::Cancelled if j.error.eq_ignore_ascii_case("discarded") => "Discarded".into(),
         State::Cancelled => format!("Cancelled · {}", j.error),
         State::Active => {
             let mut v = Vec::new();
@@ -726,6 +788,29 @@ fn act(id: &str, action: &str) {
                 );
             }
         }
+        "discard" => {
+            let k = key(plugin, job);
+            let ok = if j.can_discard {
+                crate::plugins::run(plugin, "download-discard", &[job.to_string()])
+            } else {
+                let ok = crate::plugins::run(plugin, "download-cancel", &[job.to_string()]);
+                if ok && j.state == State::Queued {
+                    // Nothing was written yet: gone at once.
+                    remove(plugin, job);
+                    if let Some((a, _)) = &ui {
+                        crate::plugins::toast(a, &format!("Discarded: {}", j.title));
+                    }
+                } else if ok {
+                    ST.with(|s| s.borrow_mut().discarding.insert(k));
+                }
+                ok
+            };
+            if !ok {
+                if let Some((a, _)) = &ui {
+                    crate::plugins::toast(a, "The extension that made this download is off");
+                }
+            }
+        }
         "play" => {
             if let Some((a, p)) = ui {
                 if std::path::Path::new(&j.path).is_file() {
@@ -783,6 +868,8 @@ fn to_row(
         progress: share(j),
         detail: detail.into(),
         can_pause: j.can_pause,
+        // Not on a group (its items are discarded one by one) or one of its items.
+        can_discard: j.state.running() && *kids == 0 && *depth == 0 && j.parent.is_empty(),
         has_file: !j.path.is_empty() && j.state == State::Done && *kids == 0,
         child: *depth > 0,
         kids: *kids as i32,
@@ -799,10 +886,10 @@ pub fn open(a: &AppWindow) {
 
 /// Push the list to the UI, save, notify and update the tray line.
 pub fn refresh() {
-    let (jobs, save, news, expanded) = ST.with(|s| {
+    let (jobs, save, news, expanded, toasts) = ST.with(|s| {
         let mut s = s.borrow_mut();
         if !s.dirty {
-            return (None, false, Vec::new(), Default::default());
+            return (None, false, Vec::new(), Default::default(), Vec::new());
         }
         s.dirty = false;
         let save = std::mem::take(&mut s.save);
@@ -811,6 +898,7 @@ pub fn refresh() {
             save,
             std::mem::take(&mut s.news),
             s.expanded.clone(),
+            std::mem::take(&mut s.toasts),
         )
     });
     let Some(jobs) = jobs else { return };
@@ -872,6 +960,9 @@ pub fn refresh() {
             .map_or("".into(), |e| e.command.as_str().into()),
     );
     g.set_url_label(url.map_or("".into(), |e| e.label.into()));
+    for t in toasts {
+        crate::plugins::toast(&a, &t);
+    }
     for (title, ok, text) in news {
         let (t, b) = if ok {
             (done_heading(&text), title)
@@ -1256,5 +1347,64 @@ mod tests {
         let g = &visible(&jobs, &Default::default())[0].0;
         assert_eq!(g.state, State::Cancelled);
         assert_eq!(detail(g), "Cancelled · 0 / 1");
+    }
+
+    #[test]
+    fn discard_deletes_the_file_and_its_part() {
+        assert!(discard_targets("").is_empty());
+        let t = discard_targets("/tmp/a b.mp3");
+        assert_eq!(t[0], std::path::PathBuf::from("/tmp/a b.mp3"));
+        assert_eq!(t[1], std::path::PathBuf::from("/tmp/a b.mp3.part"));
+        assert_eq!(discard_targets("file:///x/y.mp3")[0], std::path::PathBuf::from("/x/y.mp3"));
+    }
+
+    #[test]
+    fn host_discard_removes_the_row_and_file_when_the_job_ends() {
+        // A plugin without download-discard (Offline Downloads 1.1.4): the host sent a
+        // Cancel; the recording then reports done with its file (Cancel keeps it).
+        let dir = std::env::temp_dir().join(format!("vivi-discard-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("rec.mp3");
+        std::fs::write(&f, b"abc").unwrap();
+        std::fs::write(dir.join("rec.mp3.part"), b"x").unwrap();
+        let path = f.to_string_lossy().to_string();
+        let rep = |state: &str| Report {
+            state: Some(state.into()),
+            title: Some("Radio".into()),
+            path: Some(path.clone()),
+            ..Report::default()
+        };
+        report("t-plugin", "j1", rep("active"));
+        ST.with(|s| s.borrow_mut().discarding.insert(key("t-plugin", "j1")));
+        report("t-plugin", "j1", rep("active")); // still running: kept
+        assert!(f.is_file());
+        report("t-plugin", "j1", rep("done"));
+        assert!(!f.is_file() && !dir.join("rec.mp3.part").exists());
+        let (gone, toast, news) = ST.with(|s| {
+            let s = s.borrow();
+            (
+                !s.jobs.iter().any(|j| j.job == "j1"),
+                s.toasts.iter().any(|t| t == "Discarded: Radio"),
+                s.news.iter().any(|n| n.0 == "Radio"),
+            )
+        });
+        assert!(gone && toast && !news, "row removed, a toast, no finished notification");
+        // A late report (its length probe) does not bring the row back ...
+        report("t-plugin", "j1", rep("done"));
+        assert!(ST.with(|s| !s.borrow().jobs.iter().any(|j| j.job == "j1")));
+        // ... but the same job starting again does.
+        report("t-plugin", "j1", rep("queued"));
+        assert!(ST.with(|s| s.borrow().jobs.iter().any(|j| j.job == "j1")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_discarded_job_reads_discarded() {
+        let j = Job {
+            state: State::Cancelled,
+            error: "Discarded".into(),
+            ..Job::default()
+        };
+        assert_eq!(detail(&j), "Discarded");
     }
 }

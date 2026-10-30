@@ -196,7 +196,7 @@ settings."ui.hidden" = "true"` hides a source, `[plugins.vivi-sources] settings.
 Library → **Downloads** (icon rail, with a badge counting queued / running / paused jobs)
 lists every plugin's downloads: artwork (or the plugin glyph), title, plugin, progress
 bar, size / speed / ETA (or the error), and the actions that fit the state: Pause /
-Resume (only when the job says `can_pause`), Cancel, Retry, Play now, Open file, Show in
+Resume (only when the job says `can_pause`), Discard, Cancel, Retry, Play now, Open file, Show in
 folder, Remove from list, plus *Clear finished*. `src/downloads.rs` owns the list,
 saves it to `downloads.json` in the data folder (jobs still running when Vivi quits come
 back as failed, "Interrupted when Vivi closed", so Retry works), measures the speed from
@@ -222,6 +222,7 @@ a track id …). Report fields (all optional; omitted ones keep their value):
 | `error` | Shown when failed |
 | `detail` | Free text instead of size / ETA (e.g. "Recording · 12:30") |
 | `can_pause` | Show Pause / Resume |
+| `can_discard` | The plugin handles `download-discard` itself (see *Callbacks*); Vivi 0.15 and older ignore it |
 | `parent` | Job id of a group row of the same plugin (e.g. the playlist this track belongs to) |
 | `items_done`, `items_total` | A group row's counts ("12 / 40"); without them Vivi counts the group's rows |
 | `done_title` | Heading of the notification when the job finishes, instead of "Download finished" (e.g. `"Export finished"` → "Export finished: clip.mp4"); failures still say "Download failed". Vivi 0.13.1 and older ignore it |
@@ -251,7 +252,13 @@ items and group as separate rows.
   `download-pause`, `download-resume`, `download-cancel`, `download-retry` (a built-in's
   `command(name, [job])`, a package's `script-message-to <script> download-cancel <job>`).
   The plugin then reports the new state (`cancelled` after a Cancel). Cancel on a queued
-  job is marked cancelled by the host as well. Play / Open / Show in folder / Remove / Clear finished
+  job is marked cancelled by the host as well. **Discard** (trash button on a running,
+  top-level job) sends `download-discard <job>` when the job reported `can_discard`: the
+  plugin stops it, deletes what it wrote and reports `cancelled` with error `Discarded`
+  (shown as "Discarded"). Without `can_discard` Vivi sends `download-cancel` and, when the
+  job reports an end state, deletes the reported `path` (and `path.part`), removes the row
+  and toasts "Discarded: <title>"; later reports of that job are ignored until it is
+  queued or active again. Play / Open / Show in folder / Remove / Clear finished
   are handled by Vivi.
 
 Older Vivi versions ignore the `vivi-download` messages, so a package can send them
