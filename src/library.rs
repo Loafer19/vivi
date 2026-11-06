@@ -208,10 +208,13 @@ pub fn scan_changes(
             )?;
         }
     }
+    // Index paths use forward slashes, so the roots must too: a `C:\Videos` root kept
+    // nothing and every scan dropped and re-read the whole library on Windows.
     let in_roots = |p: &str| {
-        roots
-            .iter()
-            .any(|r| p.starts_with(&format!("{}/", r.trim_end_matches('/'))))
+        roots.iter().any(|r| {
+            let r = r.replace('\\', "/");
+            p.starts_with(&format!("{}/", r.trim_end_matches('/')))
+        })
     };
     for p in known.keys() {
         if !seen.contains(p) || !in_roots(p) {

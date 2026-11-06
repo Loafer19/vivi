@@ -474,7 +474,8 @@ mod tests {
 
     #[test]
     fn docs_match_keymap() {
-        let docs = include_str!("../docs/features.md");
+        // A Windows checkout may have CRLF line ends.
+        let docs = include_str!("../docs/features.md").replace("\r\n", "\n");
         let table = markdown_table();
         assert!(
             docs.contains(&table),
