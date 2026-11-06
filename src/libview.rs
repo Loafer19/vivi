@@ -13,13 +13,26 @@ use std::rc::Rc;
 thread_local! {
     /// Models that may show thumbnails; updated when the worker finishes one.
     static MODELS: RefCell<Vec<ThumbModel>> = const { RefCell::new(Vec::new()) };
+    /// While the browsed list is built: only take thumbnails already in memory; the rest
+    /// are decoded when their rows scroll into view ([`thumb_window`]).
+    static LAZY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The rows the browsed list last reported as visible.
+    static SEEN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 48)) };
+    /// The image file behind each thumbnail key (a library file's thumbnail, a cover).
+    static SRCS: RefCell<std::collections::HashMap<slint::SharedString, std::path::PathBuf>> =
+        RefCell::new(Default::default());
 }
+
+/// Rows kept around the visible ones (decoded ahead, not dropped while scrolling back).
+const WINDOW_MARGIN: usize = 24;
 
 /// A model that shows thumbnails plus the rows of each `thumb_key`, so a finished
 /// thumbnail touches only its own rows instead of scanning every row of every model.
 struct ThumbModel {
     model: Rc<VecModel<LibItem>>,
     rows: std::collections::HashMap<slint::SharedString, Vec<usize>>,
+    /// Rows near the viewport (the browsed list only; `None` = every row).
+    window: Option<(usize, usize)>,
 }
 
 impl ThumbModel {
@@ -27,11 +40,15 @@ impl ThumbModel {
         Self {
             model,
             rows: Default::default(),
+            window: None,
         }
     }
 
     fn set_thumb(&self, key: &str, img: &slint::Image) {
         for &i in self.rows.get(key).map(Vec::as_slice).unwrap_or_default() {
+            if self.window.is_some_and(|(lo, hi)| i < lo || i >= hi) {
+                continue;
+            }
             if let Some(mut r) = self
                 .model
                 .row_data(i)
@@ -156,8 +173,7 @@ impl Lib {
             let tp = library::thumb_path(&m.path);
             if tp.exists() {
                 // Decoded on the image worker; the row is filled when it is ready.
-                let key = m.path.clone();
-                if let Some(img) = images::get(&tp, images::TILE, move |i| set_thumb(&key, &i)) {
+                if let Some(img) = thumb(&m.path, &tp) {
                     it.thumb = img;
                     it.has_thumb = true;
                 }
@@ -284,7 +300,7 @@ impl Lib {
         if let Some(c) = store::playlist_cover(playlist) {
             let key = c.to_string_lossy().into_owned();
             it.thumb_key = key.as_str().into();
-            if let Some(img) = images::get(&c, images::TILE, move |i| set_thumb(&key, &i)) {
+            if let Some(img) = thumb(&key, &c) {
                 it.thumb = img;
                 it.has_thumb = true;
             }
@@ -794,6 +810,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     let thumbs = (cfg.borrow().library.thumbnails && library::ffmpeg_available()).then(|| {
         library::thumb_worker(move |path, file| {
             let _ = slint::invoke_from_event_loop(move || {
+                // Decode only when a row near the view shows it; the rest load on scroll.
+                SRCS.with(|m| m.borrow_mut().insert(path.as_str().into(), file.clone()));
+                if !wanted(&path) {
+                    return;
+                }
                 let key = path.clone();
                 if let Some(img) = images::get(&file, images::TILE, move |i| set_thumb(&key, &i)) {
                     set_thumb(&path, &img);
@@ -845,7 +866,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             let Some(a) = w.upgrade() else { return };
             let c = cfg.borrow();
             let mut l = lib.borrow_mut();
+            LAZY.set(true);
             let (v, mut crumbs) = l.build(&c);
+            LAZY.set(false);
             // Figma breadcrumb: long paths keep the last two levels behind "...".
             if crumbs.len() > 3 {
                 let keep = crumbs.split_off(crumbs.len() - 2);
@@ -855,6 +878,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     .collect();
             }
             show(&l.items, v);
+            let (lo, hi) = SEEN.get();
+            thumb_window(lo, hi);
             l.home(&c);
             a.global::<crate::Library>().set_nav(l.nav.clone().into());
             a.global::<crate::Library>()
@@ -995,6 +1020,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     {
         let cfg = cfg.clone();
         let render = render.clone();
+        app.global::<crate::Library>()
+            .on_thumb_window(|lo, hi| thumb_window(lo.max(0) as usize, hi.max(0) as usize));
         app.global::<crate::Library>().on_set_grid(move |g| {
             cfg.borrow_mut().library.view = if g { "grid" } else { "list" }.into();
             let _ = cfg.borrow().save();
@@ -1568,8 +1595,72 @@ fn set_thumb(key: &str, img: &slint::Image) {
 /// The picture for `path` if it is in the image cache; otherwise it is decoded on the
 /// image worker and the rows keyed by `path` are filled when it is ready.
 fn picture(path: &str) -> Option<slint::Image> {
-    let key = path.to_string();
-    images::get(Path::new(path), images::TILE, move |i| set_thumb(&key, &i))
+    thumb(path, Path::new(path))
+}
+
+/// The thumbnail of the rows keyed `key`, from the image file `src`: from memory when
+/// it is there, else decoded on the worker (the rows are filled when it is ready). While
+/// the browsed list is built ([`LAZY`]) nothing is queued: rows get their picture once
+/// they scroll into view.
+fn thumb(key: &str, src: &Path) -> Option<slint::Image> {
+    SRCS.with(|m| m.borrow_mut().insert(key.into(), src.to_path_buf()));
+    if LAZY.get() {
+        return images::peek(src, images::TILE);
+    }
+    let k = key.to_string();
+    images::get(src, images::TILE, move |i| set_thumb(&k, &i))
+}
+
+/// Whether a row near the view (or on Home) shows thumbnail `key`.
+fn wanted(key: &str) -> bool {
+    MODELS.with(|ms| {
+        ms.borrow().iter().any(|t| {
+            t.rows.get(key).is_some_and(|rows| {
+                rows.iter()
+                    .any(|&i| t.window.is_none_or(|(lo, hi)| i >= lo && i < hi))
+            })
+        })
+    })
+}
+
+/// The browsed list shows rows `lo..hi`: decode their thumbnails and drop the pictures
+/// of rows far from the view, so memory follows what is on screen, not the folder size.
+pub fn thumb_window(lo: usize, hi: usize) {
+    SEEN.set((lo, hi));
+    let model = MODELS.with(|ms| {
+        let mut ms = ms.borrow_mut();
+        let t = ms.first_mut()?;
+        let n = t.model.row_count();
+        let w = (
+            lo.saturating_sub(WINDOW_MARGIN),
+            (hi + WINDOW_MARGIN).min(n),
+        );
+        t.window = Some(w);
+        Some((t.model.clone(), w))
+    });
+    let Some((model, (lo, hi))) = model else {
+        return;
+    };
+    for i in 0..model.row_count() {
+        let Some(mut r) = model.row_data(i) else {
+            continue;
+        };
+        let inside = i >= lo && i < hi;
+        if inside && !r.has_thumb && !r.thumb_key.is_empty() {
+            let src = SRCS.with(|m| m.borrow().get(&r.thumb_key).cloned());
+            if let Some(src) = src.filter(|p| p.is_file()) {
+                if let Some(img) = thumb(r.thumb_key.as_str(), &src) {
+                    r.thumb = img;
+                    r.has_thumb = true;
+                    model.set_row_data(i, r);
+                }
+            }
+        } else if !inside && r.has_thumb {
+            r.thumb = slint::Image::default();
+            r.has_thumb = false;
+            model.set_row_data(i, r);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1608,6 +1699,7 @@ mod tests {
         let t = ThumbModel {
             model: Rc::new(VecModel::from(rows(10))),
             rows: thumb_rows(&rows(10)),
+            window: None,
         };
         t.set_thumb("/m/3.mkv", &slint::Image::default());
         let lit: Vec<usize> = (0..t.model.row_count())
@@ -1642,6 +1734,7 @@ mod tests {
         let t = ThumbModel {
             model: Rc::new(VecModel::from(rows(N))),
             rows: thumb_rows(&rows(N)),
+            window: None,
         };
         let index = t0.elapsed();
         let t0 = std::time::Instant::now();

@@ -115,6 +115,10 @@ component Grid inherits Rectangle {
     in property <[LibItem]> items;
     in property <bool> grid: true;
     in property <int> max-rows: 0; // 0 = unlimited
+    // The scroll view's offset and height; view-h 0 = no virtualization (all tiles).
+    in property <length> scroll-y;
+    in property <length> view-h: 0px;
+    callback window(int, int); // items near the view (thumbnails follow it)
     callback open(LibItem);
     callback menu(LibItem, length, length);
     callback forget(LibItem);
@@ -124,15 +128,25 @@ component Grid inherits Rectangle {
     property <length> cw: self.width / cols;
     property <length> ch: g ? (cw - 12px) * 9 / 16 + 62px : 66px;
     property <int> shown: max-rows > 0 ? min(items.length, max-rows * cols) : items.length;
+    // Virtualized: only tiles near the viewport exist (large folders).
+    property <int> first: view-h > 0 ? max(0, floor((scroll-y - self.y) / ch)) * cols : 0;
+    property <int> lo: view-h > 0 ? first - 2 * cols : 0;
+    property <int> hi: view-h > 0 ? first + (ceil(view-h / ch) + 3) * cols : items.length;
+    changed lo => { root.window(max(0, lo), hi); }
+    changed hi => { root.window(max(0, lo), hi); }
+    init => { root.window(max(0, lo), hi); }
     height: ceil(shown / cols) * ch;
-    for it[i] in root.items: Tile {
+    for it[i] in root.items: Rectangle {
         visible: i < root.shown;
         x: mod(i, root.cols) * root.cw; y: floor(i / root.cols) * root.ch;
         width: root.cw - 6px; height: root.ch - 6px;
-        it: it; grid: root.g;
-        open => { root.open(it); }
-        menu(x, y) => { root.menu(it, x, y); }
-        forget => { root.forget(it); }
+        if i >= root.lo && i < root.hi: Tile {
+            width: parent.width; height: parent.height;
+            it: it; grid: root.g;
+            open => { root.open(it); }
+            menu(x, y) => { root.menu(it, x, y); }
+            forget => { root.forget(it); }
+        }
     }
 }
 
@@ -212,15 +226,29 @@ component Rows inherits VerticalLayout {
     callback open(LibItem);
     callback menu(LibItem, length, length);
     callback forget(LibItem);
+    // The scroll view's offset and height; view-h 0 = no virtualization (Home shelves).
+    in property <length> scroll-y;
+    in property <length> view-h: 0px;
+    callback window(int, int); // rows near the view (thumbnails follow it)
     spacing: 10px;
-    for it[i] in root.items: LibRow {
-        dim: root.dim;
+    // Virtualized: only rows near the viewport exist (42 px = row + spacing).
+    property <int> first: view-h > 0 && scroll-y > self.y ? floor((scroll-y - self.y) / 42px) : 0;
+    property <int> lo: view-h > 0 ? first - 10 : 0;
+    property <int> hi: view-h > 0 ? first + ceil(view-h / 42px) + 10 : items.length;
+    changed lo => { if view-h > 0 { root.window(lo < 0 ? 0 : lo, hi); } }
+    changed hi => { if view-h > 0 { root.window(lo < 0 ? 0 : lo, hi); } }
+    init => { if view-h > 0 { root.window(lo < 0 ? 0 : lo, hi); } }
+    for it[i] in root.items: Rectangle {
         visible: root.max == 0 || i < root.max;
         height: self.visible ? 32px : 0px;
-        it: it;
-        open => { root.open(it); }
-        menu(x, y) => { root.menu(it, x, y); }
-        forget => { root.forget(it); }
+        if i >= root.lo && i < root.hi: LibRow {
+            width: parent.width; height: parent.height;
+            dim: root.dim;
+            it: it;
+            open => { root.open(it); }
+            menu(x, y) => { root.menu(it, x, y); }
+            forget => { root.forget(it); }
+        }
     }
 }
 
@@ -398,6 +426,7 @@ export component LibraryView inherits Rectangle {
     callback open-network();
     callback add-folders();
     callback clear-recent();
+    callback thumb-window(int, int);
     // Remove one Recent entry (hover ×).
     callback forget-recent(LibItem);
     callback popout();
@@ -531,7 +560,7 @@ export component LibraryView inherits Rectangle {
                 vertical-stretch: 1; padding-bottom: 16px;
                 command(o, n, a) => { root.plugin-command(o, n, a); }
             }
-            if !root.hub: ScrollView {
+            if !root.hub: lsv := ScrollView {
                 vertical-stretch: 1;
                 VerticalLayout {
                     alignment: start; padding-top: 3px; padding-bottom: 20px; padding-right: 8px; spacing: 30px;
@@ -608,10 +637,12 @@ export component LibraryView inherits Rectangle {
                     if root.nav == "downloads": DownloadsView { narrow: root.sidebar; }
                     if (root.nav != "home" || root.query != "") && root.nav != "downloads" && !root.show-grid: Rows {
                         items: root.items; forget(it) => { root.forget-recent(it); }
+                        scroll-y: -lsv.content-y; view-h: lsv.visible-height; window(lo, hi) => { root.thumb-window(lo, hi); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
                     if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.show-grid: Grid {
                         items: root.items; grid: true; forget(it) => { root.forget-recent(it); }
+                        scroll-y: -lsv.content-y; view-h: lsv.visible-height; window(lo, hi) => { root.thumb-window(lo, hi); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
                     if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0: Text {
