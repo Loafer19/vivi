@@ -3,6 +3,11 @@ on:
   push:
     branches: [master]
   pull_request:
+  # Manual runs on any branch (e.g. a feature branch before its pull request).
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -26,6 +31,58 @@ jobs:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
       - run: cargo test --profile ci
+  # Advisories (RUSTSEC), licenses, banned/duplicate crates and sources; see deny.toml.
+  deny:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+  # Unit tests on the other desktop platforms (Linux runs them in `build`). No clippy
+  # -D warnings here: the Windows/macOS builds have known dead_code warnings.
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-windows
+          cache-on-failure: true
+      - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R shinchiro/mpv-winbuild-cmake -p 'mpv-dev-x86_64-2*' -O mpv-dev.7z
+          7z x mpv-dev.7z -ompv | Out-Null
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $bin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64" | Select-Object -Last 1).FullName
+          $dll = (Get-ChildItem mpv\libmpv-2.dll).FullName
+          if (-not (Test-Path mpv\mpv.def)) {
+            $names = & "$bin\dumpbin.exe" /exports $dll | ForEach-Object { if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] } }
+            (@('EXPORTS') + $names) | Set-Content mpv\mpv.def
+          }
+          & "$bin\lib.exe" /def:mpv\mpv.def /name:libmpv-2.dll /machine:x64 /out:mpv\mpv.lib
+          "RUSTFLAGS=-L native=$((Resolve-Path mpv).Path)" | Out-File -Append $env:GITHUB_ENV
+          # The test binaries load libmpv-2.dll at start-up.
+          (Resolve-Path mpv).Path | Out-File -Append $env:GITHUB_PATH
+      - run: cargo test
+  test-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-macos
+          cache-on-failure: true
+      - run: brew install mpv
+      - run: cargo test
+        env:
+          LIBRARY_PATH: /opt/homebrew/lib
   flatpak-sources:
     # Fails when packaging/flatpak/cargo-sources.json no longer matches Cargo.lock.
     runs-on: ubuntu-24.04
