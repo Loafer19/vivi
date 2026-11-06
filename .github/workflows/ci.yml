@@ -11,6 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: System deps
@@ -44,6 +45,7 @@ jobs:
   # -D warnings here: the Windows/macOS builds have known dead_code warnings.
   test-windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -72,6 +74,8 @@ jobs:
       - run: cargo test
   test-macos:
     runs-on: macos-15
+    # A cold build of the test binary takes over 20 minutes here; no hang.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -83,6 +87,8 @@ jobs:
       - run: cargo test
         env:
           LIBRARY_PATH: /opt/homebrew/lib
+          # No debug info: a much faster compile and link on the macOS runner.
+          CARGO_PROFILE_DEV_DEBUG: "0"
   flatpak-sources:
     # Fails when packaging/flatpak/cargo-sources.json no longer matches Cargo.lock.
     runs-on: ubuntu-24.04
