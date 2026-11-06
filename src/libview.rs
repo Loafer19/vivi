@@ -12,7 +12,64 @@ use std::rc::Rc;
 
 thread_local! {
     /// Models that may show thumbnails; updated when the worker finishes one.
-    static MODELS: RefCell<Vec<Rc<VecModel<LibItem>>>> = const { RefCell::new(Vec::new()) };
+    static MODELS: RefCell<Vec<ThumbModel>> = const { RefCell::new(Vec::new()) };
+}
+
+/// A model that shows thumbnails plus the rows of each `thumb_key`, so a finished
+/// thumbnail touches only its own rows instead of scanning every row of every model.
+struct ThumbModel {
+    model: Rc<VecModel<LibItem>>,
+    rows: std::collections::HashMap<slint::SharedString, Vec<usize>>,
+}
+
+impl ThumbModel {
+    fn new(model: Rc<VecModel<LibItem>>) -> Self {
+        Self {
+            model,
+            rows: Default::default(),
+        }
+    }
+
+    fn set_thumb(&self, key: &str, img: &slint::Image) {
+        for &i in self.rows.get(key).map(Vec::as_slice).unwrap_or_default() {
+            if let Some(mut r) = self
+                .model
+                .row_data(i)
+                .filter(|r| r.thumb_key.as_str() == key)
+            {
+                r.thumb = img.clone();
+                r.has_thumb = true;
+                self.model.set_row_data(i, r);
+            }
+        }
+    }
+}
+
+/// The rows of each non-empty `thumb_key` in `v`.
+fn thumb_rows(v: &[LibItem]) -> std::collections::HashMap<slint::SharedString, Vec<usize>> {
+    let mut rows: std::collections::HashMap<_, Vec<usize>> = Default::default();
+    for (i, r) in v.iter().enumerate() {
+        if !r.thumb_key.is_empty() {
+            rows.entry(r.thumb_key.clone()).or_default().push(i);
+        }
+    }
+    rows
+}
+
+/// Fill `model` with `v`, keeping the thumbnail index in step when it is one of
+/// the thumbnail models. The model is set outside the `MODELS` borrow.
+fn show(model: &Rc<VecModel<LibItem>>, v: Vec<LibItem>) {
+    let rows = thumb_rows(&v);
+    MODELS.with(|ms| {
+        if let Some(t) = ms
+            .borrow_mut()
+            .iter_mut()
+            .find(|t| Rc::ptr_eq(&t.model, model))
+        {
+            t.rows = rows;
+        }
+    });
+    model.set_vec(v);
 }
 
 pub struct Lib {
@@ -655,13 +712,13 @@ impl Lib {
                 it
             })
             .collect();
-        self.listen.set_vec(listen);
+        show(&self.listen, listen);
         self.folders.set_vec(folders);
         self.lists.set_vec(lists);
         self.artists.set_vec(artists);
-        self.cont.set_vec(cont);
-        self.recent.set_vec(recent);
-        self.pinned.set_vec(pinned);
+        show(&self.cont, cont);
+        show(&self.recent, recent);
+        show(&self.pinned, pinned);
     }
 }
 
@@ -681,13 +738,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         Rc::new(VecModel::default()),
     );
     MODELS.with(|m| {
-        m.borrow_mut().extend([
-            items.clone(),
-            cont.clone(),
-            recent.clone(),
-            pinned.clone(),
-            listen.clone(),
-        ])
+        m.borrow_mut()
+            .extend([&items, &cont, &recent, &pinned, &listen].map(|m| ThumbModel::new(m.clone())))
     });
     app.global::<crate::Library>()
         .set_listen(ModelRc::from(listen.clone()));
@@ -771,7 +823,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     .chain(keep)
                     .collect();
             }
-            l.items.set_vec(v);
+            show(&l.items, v);
             l.home(&c);
             a.global::<crate::Library>().set_nav(l.nav.clone().into());
             a.global::<crate::Library>()
@@ -1474,13 +1526,7 @@ pub fn folder_count(folder: &str) -> Option<usize> {
 fn set_thumb(key: &str, img: &slint::Image) {
     MODELS.with(|ms| {
         for m in ms.borrow().iter() {
-            for i in 0..m.row_count() {
-                if let Some(mut r) = m.row_data(i).filter(|r| r.thumb_key.as_str() == key) {
-                    r.thumb = img.clone();
-                    r.has_thumb = true;
-                    m.set_row_data(i, r);
-                }
-            }
+            m.set_thumb(key, img);
         }
     });
 }
@@ -1512,5 +1558,65 @@ mod tests {
         assert_eq!(folder_count("/m/"), Some(2));
         assert_eq!(folder_count("/m2"), Some(1));
         assert_eq!(folder_count("/none"), Some(0));
+    }
+
+    fn rows(n: usize) -> Vec<LibItem> {
+        (0..n)
+            .map(|i| LibItem {
+                thumb_key: format!("/m/{}.mkv", i % (n / 2).max(1)).into(),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn thumb_index_fills_every_row_of_its_key() {
+        let t = ThumbModel {
+            model: Rc::new(VecModel::from(rows(10))),
+            rows: thumb_rows(&rows(10)),
+        };
+        t.set_thumb("/m/3.mkv", &slint::Image::default());
+        let lit: Vec<usize> = (0..t.model.row_count())
+            .filter(|&i| t.model.row_data(i).is_some_and(|r| r.has_thumb))
+            .collect();
+        assert_eq!(lit, vec![3, 8]);
+    }
+
+    /// `cargo test --release thumb_index_perf -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn thumb_index_perf() {
+        const N: usize = 20_000;
+        const K: usize = 2_000;
+        let img = slint::Image::default();
+        let keys: Vec<String> = (0..K).map(|i| format!("/m/{}.mkv", i * 5)).collect();
+        // Before: scan every row for every finished thumbnail.
+        let m = VecModel::from(rows(N));
+        let t0 = std::time::Instant::now();
+        for k in &keys {
+            for i in 0..m.row_count() {
+                if let Some(mut r) = m.row_data(i).filter(|r| r.thumb_key.as_str() == k) {
+                    r.has_thumb = true;
+                    r.thumb = img.clone();
+                    m.set_row_data(i, r);
+                }
+            }
+        }
+        let scan = t0.elapsed();
+        // After: index once per model fill, then touch only the key's rows.
+        let t0 = std::time::Instant::now();
+        let t = ThumbModel {
+            model: Rc::new(VecModel::from(rows(N))),
+            rows: thumb_rows(&rows(N)),
+        };
+        let index = t0.elapsed();
+        let t0 = std::time::Instant::now();
+        for k in &keys {
+            t.set_thumb(k, &img);
+        }
+        let indexed = t0.elapsed();
+        println!(
+            "{K} thumbnails over {N} rows: scan {scan:?}, index build {index:?} + lookups {indexed:?}"
+        );
     }
 }
