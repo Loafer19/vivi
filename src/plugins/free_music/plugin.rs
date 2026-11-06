@@ -80,7 +80,11 @@ impl Plugin for FreeMusic {
                         .set_title("Free Music download folder")
                         .pick_folder()
                     {
-                        super::command(ID, "set-folder", &[d.to_string_lossy().into_owned()]);
+                        crate::plugins::command(
+                            ID,
+                            "set-folder",
+                            &[d.to_string_lossy().into_owned()],
+                        );
                     }
                 });
             }

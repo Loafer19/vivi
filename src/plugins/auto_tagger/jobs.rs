@@ -78,7 +78,7 @@ pub(crate) fn toast_with_action(
     n.set_toast_action(label.into());
     n.set_toast_action_id(id.into());
     n.set_toast_action_text(msg.into());
-    super::toast_for(app, msg, secs);
+    crate::plugins::toast_for(app, msg, secs);
 }
 
 /// Run the calling thread (and the `fpcalc` it starts) at a lower CPU priority, so the

@@ -211,7 +211,7 @@ impl Plugin for NetworkStreams {
                         d += &format!("\nGuide id: {}", s.tvg_id);
                     }
                     if let Some(v) = self.guide_for(s) {
-                        let l = super::epg::describe(v, super::epg::now());
+                        let l = crate::plugins::epg::describe(v, crate::plugins::epg::now());
                         if !l.is_empty() {
                             d += &format!("\n\n— Program guide —\n{}", l.join("\n"));
                         }

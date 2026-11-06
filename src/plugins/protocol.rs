@@ -273,25 +273,29 @@ mod tests {
     #[test]
     fn menu_show_hide() {
         use ScriptMessage as M;
-        let m = |a: &[&str]| ScriptMessage::parse(&v(a));
+        let one = v(&["vivi-menu", "sponsorblock", "undo", "show"]);
         assert_eq!(
-            m(&["vivi-menu", "sponsorblock", "undo", "show"]),
+            ScriptMessage::parse(&one),
             Some(M::Menu {
                 id: "sponsorblock",
                 command: "undo",
                 shown: true
             })
         );
+        let all = v(&["vivi-menu", "youtube-music", "hide"]);
         assert_eq!(
-            m(&["vivi-menu", "youtube-music", "hide"]),
+            ScriptMessage::parse(&all),
             Some(M::Menu {
                 id: "youtube-music",
                 command: "",
                 shown: false
             })
         );
-        assert_eq!(m(&["vivi-menu", "x", "undo", "maybe"]), None);
-        assert_eq!(m(&["vivi-menu", "x"]), None);
+        assert_eq!(
+            ScriptMessage::parse(&v(&["vivi-menu", "x", "undo", "maybe"])),
+            None
+        );
+        assert_eq!(ScriptMessage::parse(&v(&["vivi-menu", "x"])), None);
     }
 
     fn v(a: &[&str]) -> Vec<String> {
