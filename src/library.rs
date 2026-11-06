@@ -25,7 +25,7 @@ pub const THUMB_H: u32 = 180;
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Media {
     pub path: String,
-    pub kind: String, // "video" | "audio"
+    pub kind: MediaKind,
     pub title: String,
     pub artist: String,
     pub album: String,
@@ -36,12 +36,52 @@ pub struct Media {
     pub mtime: i64,
 }
 
-pub fn kind_of(path: &Path) -> Option<&'static str> {
+/// A library file is a video or a song (by extension, see [`kind_of`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum MediaKind {
+    #[default]
+    Video,
+    Audio,
+}
+
+impl MediaKind {
+    /// The name in the library database, the control socket and the UI.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Video => "video",
+            Self::Audio => "audio",
+        }
+    }
+    /// From [`MediaKind::as_str`]; anything else is `None`.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "video" => Some(Self::Video),
+            "audio" => Some(Self::Audio),
+            _ => None,
+        }
+    }
+}
+
+impl rusqlite::types::ToSql for MediaKind {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(self.as_str().into())
+    }
+}
+
+impl rusqlite::types::FromSql for MediaKind {
+    /// Rows always hold "video" or "audio"; anything else reads as a video (as the
+    /// library treats files it does not know).
+    fn column_result(v: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        Ok(Self::parse(v.as_str()?).unwrap_or_default())
+    }
+}
+
+pub fn kind_of(path: &Path) -> Option<MediaKind> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     if VIDEO_EXT.contains(&ext.as_str()) {
-        Some("video")
+        Some(MediaKind::Video)
     } else if AUDIO_EXT.contains(&ext.as_str()) {
-        Some("audio")
+        Some(MediaKind::Audio)
     } else {
         None
     }
@@ -152,7 +192,7 @@ pub fn scan_changes(
                     .to_string_lossy()
                     .into_owned(),
                 path,
-                kind: kind.into(),
+                kind,
                 size: md.len() as i64,
                 mtime,
                 ..Default::default()
@@ -216,7 +256,7 @@ pub fn by_path(conn: &Connection, path: &str) -> Option<Media> {
         |r| {
             Ok(Media {
                 path: r.get(0)?,
-                kind: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                kind: r.get::<_, Option<MediaKind>>(1)?.unwrap_or_default(),
                 title: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
                 artist: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
@@ -315,9 +355,9 @@ pub fn make_thumb(m: &Media) -> Option<PathBuf> {
         return Some(out);
     }
     std::fs::create_dir_all(out.parent()?).ok()?;
-    let seek = if m.kind == "video" && m.duration > 0.0 {
+    let seek = if m.kind == MediaKind::Video && m.duration > 0.0 {
         m.duration * 0.1
-    } else if m.kind == "video" {
+    } else if m.kind == MediaKind::Video {
         5.0
     } else {
         0.0
@@ -357,7 +397,7 @@ pub fn make_art(path: &str, out: &Path) {
         let _ = std::fs::create_dir_all(d);
     }
     let tmp = out.with_extension("tmp.png");
-    let audio = kind_of(Path::new(path)) == Some("audio");
+    let audio = kind_of(Path::new(path)) == Some(MediaKind::Audio);
     let mut cmd = std::process::Command::new("ffmpeg");
     cmd.args(["-v", "error", "-nostdin", "-y"]);
     if !audio {
@@ -480,7 +520,7 @@ mod tests {
         scan(&mut c, &roots).unwrap();
         let a = all(&c);
         assert_eq!(a.len(), 1);
-        assert_eq!(a[0].kind, "video");
+        assert_eq!(a[0].kind, MediaKind::Video);
         assert_eq!(a[0].title, "e01");
         assert_eq!(by_path(&c, &a[0].path), Some(a[0].clone()));
         assert_eq!(by_path(&c, "/nope.mp3"), None);

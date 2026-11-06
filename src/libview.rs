@@ -1,7 +1,7 @@
 //! Library UI controller: navigation, search, sorting, home sections, context menu, thumbnails.
 
 use crate::config::Config;
-use crate::library::{self, Media};
+use crate::library::{self, Media, MediaKind};
 use crate::player::Player;
 use crate::{images, store, AppWindow, Item, LibItem};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
@@ -72,6 +72,40 @@ fn show(model: &Rc<VecModel<LibItem>>, v: Vec<LibItem>) {
     model.set_vec(v);
 }
 
+/// The section of a library navigation key (`"<section>"` or `"<section>:<arg>"`, as
+/// the UI sends it, e.g. `"video:/media/Films"` or `"music:artists:Name"`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Nav {
+    Home,
+    Video,
+    Music,
+    Streams,
+    Service,
+    Recent,
+    Downloads,
+    Bookmarks,
+    Playlists,
+}
+
+impl Nav {
+    /// The section of `key` and the rest after the first `:`. Unknown sections are Home.
+    fn parse(key: &str) -> (Self, &str) {
+        let (section, arg) = key.split_once(':').unwrap_or((key, ""));
+        let s = match section {
+            "video" => Self::Video,
+            "music" => Self::Music,
+            "streams" => Self::Streams,
+            "service" => Self::Service,
+            "recent" => Self::Recent,
+            "downloads" => Self::Downloads,
+            "bookmarks" => Self::Bookmarks,
+            "playlists" => Self::Playlists,
+            _ => Self::Home,
+        };
+        (s, arg)
+    }
+}
+
 pub struct Lib {
     media: Vec<Media>,
     nav: String,
@@ -100,7 +134,7 @@ impl Lib {
     fn item(&mut self, m: &Media, cfg: &Config) -> LibItem {
         let pr = library::progress(m);
         let mut sub = Vec::new();
-        if m.kind == "audio" && !m.artist.is_empty() {
+        if m.kind == MediaKind::Audio && !m.artist.is_empty() {
             sub.push(m.artist.clone());
         }
         if m.duration > 0.0 {
@@ -112,7 +146,7 @@ impl Lib {
             thumb_key: m.path.clone().into(),
             title: m.title.clone().into(),
             subtitle: sub.join(" · ").into(),
-            kind: m.kind.clone().into(),
+            kind: m.kind.as_str().into(),
             progress: pr,
             pinned: cfg.library.pinned.contains(&m.path),
             watched: pr >= 0.95 || cfg.library.watched.contains(&m.path),
@@ -268,19 +302,19 @@ impl Lib {
     /// Rebuild the current view. Returns breadcrumb (key, label) pairs.
     fn build(&mut self, cfg: &Config) -> (Vec<LibItem>, Vec<(String, String)>) {
         let nav = self.nav.clone();
-        let (section, arg) = nav.split_once(':').unwrap_or((nav.as_str(), ""));
+        let (section, arg) = Nav::parse(&nav);
         let sort = cfg.library.sort.as_str();
         let watched =
             |m: &Media| library::progress(m) >= 0.95 || cfg.library.watched.contains(&m.path);
         let mut out = Vec::new();
         let mut crumbs = Vec::new();
         match section {
-            "video" => {
+            Nav::Video => {
                 crumbs.push(("video".into(), "Videos".into()));
                 let mut files: Vec<Media> = self
                     .media
                     .iter()
-                    .filter(|m| m.kind == "video")
+                    .filter(|m| m.kind == MediaKind::Video)
                     .cloned()
                     .collect();
                 if !self.search.is_empty() {
@@ -350,7 +384,7 @@ impl Lib {
                     out.push(self.item(m, cfg));
                 }
             }
-            "music" if arg.is_empty() && self.search.is_empty() => {
+            Nav::Music if arg.is_empty() && self.search.is_empty() => {
                 crumbs.push(("music".into(), "Music".into()));
                 out.push(Self::action("action:add-folder", "Add", "add"));
                 out.push(Self::action("music:songs", "Songs", "songs"));
@@ -359,23 +393,23 @@ impl Lib {
                 out.push(Self::action("music:genres", "Genres", "genre"));
             }
             // The Streams hub and service pages (src/streams): drawn by the hub, no items.
-            "streams" => crumbs.push(("streams".into(), "Streams".into())),
-            "service" => {
+            Nav::Streams => crumbs.push(("streams".into(), "Streams".into())),
+            Nav::Service => {
                 crumbs.push(("streams".into(), "Streams".into()));
                 crumbs.push((nav.clone(), crate::streams::service_name(arg)));
             }
-            "recent" => {
+            Nav::Recent => {
                 crumbs.push(("recent".into(), "Recent".into()));
                 for e in store::recent_entries() {
                     out.push(self.recent_item(&e, cfg));
                 }
             }
-            "music" => {
+            Nav::Music => {
                 crumbs.push(("music".into(), "Music".into()));
                 let mut songs: Vec<Media> = self
                     .media
                     .iter()
-                    .filter(|m| m.kind == "audio" && self.matches(m))
+                    .filter(|m| m.kind == MediaKind::Audio && self.matches(m))
                     .cloned()
                     .collect();
                 let (tab, val) = arg.split_once(':').unwrap_or((arg, ""));
@@ -437,11 +471,11 @@ impl Lib {
                 }
             }
             // The shared Downloads panel (ui/downloads.slint) draws its own list.
-            "downloads" => {
+            Nav::Downloads => {
                 crumbs.push(("downloads".into(), "Downloads".into()));
             }
             // Every saved bookmark (src/bookmarks.rs), by file then time.
-            "bookmarks" => {
+            Nav::Bookmarks => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
                 crumbs.push(("bookmarks".into(), "Bookmarks".into()));
                 let dir = crate::bookmarks::thumbs_dir();
@@ -476,7 +510,7 @@ impl Lib {
                     out.push(it);
                 }
             }
-            "playlists" => {
+            Nav::Playlists => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
                 out.push(Self::action(
                     "action:create-playlist",
@@ -559,12 +593,7 @@ impl Lib {
                 title: Path::new(path)
                     .file_stem()
                     .map_or(path.into(), |s| s.to_string_lossy().into_owned()),
-                kind: if library::kind_of(Path::new(path)) == Some("audio") {
-                    "audio"
-                } else {
-                    "video"
-                }
-                .into(),
+                kind: library::kind_of(Path::new(path)).unwrap_or_default(),
                 size: std::fs::metadata(path).map_or(0, |m| m.len() as i64),
                 path: path.into(),
                 ..Default::default()
@@ -575,7 +604,7 @@ impl Lib {
         let mut cont: Vec<Media> = self
             .media
             .iter()
-            .filter(|m| m.kind == "video")
+            .filter(|m| m.kind == MediaKind::Video)
             .filter(|m| {
                 let p = library::progress(m);
                 p > 0.0 && p < 0.95 && !cfg.library.watched.contains(&m.path)
@@ -585,7 +614,7 @@ impl Lib {
         // Files outside the library that were played recently also count.
         for p in store::recent() {
             if !cont.iter().any(|m| m.path == p)
-                && library::kind_of(Path::new(&p)) != Some("audio")
+                && library::kind_of(Path::new(&p)) != Some(MediaKind::Audio)
                 && !cfg.library.watched.contains(&p)
                 && store::resume_position(&p).is_some()
                 && Path::new(&p).exists()
@@ -626,7 +655,9 @@ impl Lib {
         // "Listen Again": recently played songs.
         let listen: Vec<LibItem> = store::recent()
             .iter()
-            .filter(|p| library::kind_of(Path::new(p)) == Some("audio") && Path::new(p).exists())
+            .filter(|p| {
+                library::kind_of(Path::new(p)) == Some(MediaKind::Audio) && Path::new(p).exists()
+            })
             .take(12)
             .map(|p| {
                 let m = self.find(p);
@@ -682,7 +713,7 @@ impl Lib {
         for m in self
             .media
             .iter()
-            .filter(|m| m.kind == "audio" && !m.artist.is_empty())
+            .filter(|m| m.kind == MediaKind::Audio && !m.artist.is_empty())
         {
             *count.entry(m.artist.clone()).or_default() += 1;
         }
@@ -1449,7 +1480,7 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
                 .media
                 .iter()
                 .filter(|m| {
-                    m.kind == "audio"
+                    m.kind == MediaKind::Audio
                         && match tab {
                             "albums" => m.album == val,
                             "artists" => m.artist == val,
@@ -1461,7 +1492,10 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
         }
         _ => {
             let m = l.find(path);
-            let mut v = vec![("Location", m.path.clone()), ("Type", m.kind.clone())];
+            let mut v = vec![
+                ("Location", m.path.clone()),
+                ("Type", m.kind.as_str().to_string()),
+            ];
             if m.duration > 0.0 {
                 v.push(("Length", library::human_time(m.duration)));
             }
@@ -1618,5 +1652,14 @@ mod tests {
         println!(
             "{K} thumbnails over {N} rows: scan {scan:?}, index build {index:?} + lookups {indexed:?}"
         );
+    }
+
+    #[test]
+    fn nav_sections() {
+        assert_eq!(Nav::parse("home"), (Nav::Home, ""));
+        assert_eq!(Nav::parse("video:/m/Films"), (Nav::Video, "/m/Films"));
+        assert_eq!(Nav::parse("music:artists:A:B"), (Nav::Music, "artists:A:B"));
+        assert_eq!(Nav::parse("service:radio"), (Nav::Service, "radio"));
+        assert_eq!(Nav::parse("whatever"), (Nav::Home, ""));
     }
 }

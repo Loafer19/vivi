@@ -1,39 +1,40 @@
 //! Control-socket commands: playback.
 
 use super::*;
+use crate::error::Error;
 use crate::player::Player;
 use crate::AppWindow;
 
-pub(super) fn ping(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn ping(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     Ok(json!("pong"))
 }
 
-pub(super) fn status_cmd(a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn status_cmd(a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     Ok(status(a, p))
 }
 
-pub(super) fn play(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn play(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     p.set("pause", "no");
     ok()
 }
 
-pub(super) fn pause(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn pause(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     p.set("pause", "yes");
     ok()
 }
 
-pub(super) fn toggle(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn toggle(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     p.toggle_pause();
     ok()
 }
 
-pub(super) fn stop(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn stop(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     p.set("pause", "yes");
     p.seek_abs(0.0);
     ok()
 }
 
-pub(super) fn seek(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn seek(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     if let Some(t) = args["position"].as_f64() {
         p.seek_abs(t.max(0.0));
     } else if let Some(d) = args["offset"].as_f64() {
@@ -44,7 +45,7 @@ pub(super) fn seek(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, St
     ok()
 }
 
-pub(super) fn volume(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn volume(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     if let Some(v) = args["level"].as_f64() {
         p.set_volume(v);
     }
@@ -57,23 +58,23 @@ pub(super) fn volume(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, 
     }))
 }
 
-pub(super) fn open_cmd(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn open_cmd(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let t = target(args)?;
     p.open(&t);
     ok()
 }
 
-pub(super) fn next(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn next(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     p.playlist_step(true);
     ok()
 }
 
-pub(super) fn prev(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn prev(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     p.playlist_step(false);
     ok()
 }
 
-pub(super) fn subtitles(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn subtitles(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let on = args["enabled"].as_bool().ok_or("missing \"enabled\"")?;
     p.set("sub-visibility", if on { "yes" } else { "no" });
     if on && p.get("sid").as_deref() == Some("no") {
@@ -82,7 +83,7 @@ pub(super) fn subtitles(_a: &AppWindow, p: &Player, args: &Value) -> Result<Valu
     ok()
 }
 
-pub(super) fn eq_presets(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn eq_presets(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     let fx = a.global::<crate::FxState>();
     let names = |m: slint::ModelRc<slint::SharedString>| {
         m.iter().map(|s| s.to_string()).collect::<Vec<_>>()
@@ -95,7 +96,7 @@ pub(super) fn eq_presets(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Va
     }))
 }
 
-pub(super) fn eq_preset(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn eq_preset(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     let name = args["name"].as_str().ok_or("missing \"name\"")?;
     let fx = a.global::<crate::FxState>();
     if name.eq_ignore_ascii_case("off") {
@@ -108,13 +109,13 @@ pub(super) fn eq_preset(a: &AppWindow, _p: &Player, args: &Value) -> Result<Valu
         .chain(fx.get_custom().iter())
         .any(|s| s == name);
     if !known {
-        return Err(format!("unknown preset {name:?}; see eq_presets"));
+        return Err(format!("unknown preset {name:?}; see eq_presets").into());
     }
     fx.invoke_preset_action("select".into(), name.into(), "".into());
     ok()
 }
 
-pub(super) fn tracks(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn tracks(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let kind = match args["type"].as_str().unwrap_or("audio") {
         "sub" | "subtitle" | "subtitles" => "sub",
         "video" => "video",
@@ -127,7 +128,7 @@ pub(super) fn tracks(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, 
         .collect::<Vec<_>>()))
 }
 
-pub(super) fn set_track(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn set_track(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let (prop, kind) = match args["type"].as_str().unwrap_or("audio") {
         "sub" | "subtitle" | "subtitles" => ("sid", "sub"),
         _ => ("aid", "audio"),
@@ -136,7 +137,7 @@ pub(super) fn set_track(_a: &AppWindow, p: &Player, args: &Value) -> Result<Valu
         Value::Number(n) => {
             let id = n.as_i64().ok_or("\"id\" must be an integer")?;
             if !p.tracks(kind).iter().any(|t| t.0 == id) {
-                return Err(format!("no {kind} track {id}; see the track list"));
+                return Err(format!("no {kind} track {id}; see the track list").into());
             }
             id.to_string()
         }
@@ -151,7 +152,7 @@ pub(super) fn set_track(_a: &AppWindow, p: &Player, args: &Value) -> Result<Valu
     ok()
 }
 
-pub(super) fn chapters(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn chapters(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     let cur = p
         .get("chapter")
         .and_then(|c| c.parse::<i64>().ok())
@@ -163,14 +164,14 @@ pub(super) fn chapters(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Valu
     )
 }
 
-pub(super) fn seek_chapter(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn seek_chapter(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let n = p.chapters().len() as i64;
     if n == 0 {
         return Err("this item has no chapters".into());
     }
     if let Some(i) = args["index"].as_i64() {
         if !(0..n).contains(&i) {
-            return Err(format!("chapter index out of range (0..{n})"));
+            return Err(format!("chapter index out of range (0..{n})").into());
         }
         p.set("chapter", &i.to_string());
     } else if let Some(d) = args["offset"].as_i64() {
@@ -181,7 +182,7 @@ pub(super) fn seek_chapter(_a: &AppWindow, p: &Player, args: &Value) -> Result<V
     ok()
 }
 
-pub(super) fn speed(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn speed(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let s = args["speed"].as_f64().ok_or("missing \"speed\"")?;
     if !(0.1..=4.0).contains(&s) {
         return Err("speed must be between 0.1 and 4".into());
@@ -190,7 +191,7 @@ pub(super) fn speed(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, S
     Ok(json!({ "speed": s }))
 }
 
-pub(super) fn screenshot(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn screenshot(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     if p.get("path").unwrap_or_default().is_empty() {
         return Err("nothing is playing".into());
     }
@@ -230,7 +231,7 @@ pub(super) fn screenshot(_a: &AppWindow, p: &Player, args: &Value) -> Result<Val
     Ok(json!({ "path": ps }))
 }
 
-pub(super) fn open_stream(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn open_stream(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let t = target(args)?;
     if !t.contains("://") {
         return Err("\"target\" must be a stream URL (http(s)://, rtmp://, udp://, …)".into());
@@ -246,7 +247,7 @@ pub(super) fn open_stream(_a: &AppWindow, p: &Player, args: &Value) -> Result<Va
     ok()
 }
 
-pub(super) fn now_playing(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn now_playing(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     let t = crate::nowplaying::current();
     Ok(
         json!({ "id": crate::nowplaying::current_id(), "title": t.title,
@@ -257,7 +258,7 @@ pub(super) fn now_playing(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<
     )
 }
 
-pub(super) fn sleep(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn sleep(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     // Sleep timer: {"timer": "off" | "min:<n>" | "eof" | "chapter" | "items:<n>"}
     // or {"minutes": n}; no arguments returns the state.
     let spec = match (&args["timer"], &args["minutes"]) {
@@ -275,7 +276,7 @@ pub(super) fn sleep(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, 
     Ok(crate::sleep::state_json())
 }
 
-pub(super) fn ab_loop(a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn ab_loop(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     // No arguments: the state. {"set": "a" | "b"} at the playhead,
     // {"a": n, "b": n} (null clears that point), {"clear": true}.
     if args["clear"].as_bool() == Some(true) {
@@ -307,7 +308,7 @@ pub(super) fn ab_loop(a: &AppWindow, p: &Player, _args: &Value) -> Result<Value,
     Ok(crate::abloop::state_json(p))
 }
 
-pub(super) fn url_history(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn url_history(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     // Show the Streams hub's URL bar with its history list open (scripts,
     // screenshots).
     crate::streams::open_page(a, "streams:url");
@@ -316,7 +317,7 @@ pub(super) fn url_history(a: &AppWindow, _p: &Player, _args: &Value) -> Result<V
     Ok(json!({ "urls": st.get_history().row_count() }))
 }
 
-pub(super) fn sub_offset(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn sub_offset(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let arg = if args["reset"].as_bool() == Some(true) {
         "reset".to_string()
     } else if let Some(v) = args["seconds"].as_f64() {
@@ -333,7 +334,7 @@ pub(super) fn sub_offset(a: &AppWindow, p: &Player, args: &Value) -> Result<Valu
     )
 }
 
-pub(super) fn sub_sync(a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn sub_sync(a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     if crate::plugins::package_script(crate::suboffset::SYNC_PACKAGE).is_none() {
         return Err("install and enable the Subtitle Auto-Sync plugin (subtitle-sync) to align subtitles to the audio".into());
     }

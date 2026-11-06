@@ -1,16 +1,17 @@
 //! Control-socket commands: queue.
 
 use super::*;
+use crate::error::Error;
 use crate::player::Player;
 use crate::AppWindow;
 
-pub(super) fn playlist_add(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn playlist_add(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let t = target(args)?;
     p.enqueue(&t);
     ok()
 }
 
-pub(super) fn playlist_list(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn playlist_list(_a: &AppWindow, p: &Player, _args: &Value) -> Result<Value, Error> {
     Ok(json!(p
         .queue()
         .into_iter()
@@ -22,25 +23,23 @@ pub(super) fn playlist_list(_a: &AppWindow, p: &Player, _args: &Value) -> Result
         .collect::<Vec<_>>()))
 }
 
-pub(super) fn playlist_play(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn playlist_play(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let i = args["index"].as_i64().ok_or("missing \"index\"")?;
     p.play_index(i as i32);
     ok()
 }
 
-pub(super) fn playlist_remove(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn playlist_remove(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let n = p.queue().len() as i64;
     let i = args["index"].as_i64().ok_or("missing \"index\"")?;
     if !(0..n).contains(&i) {
-        return Err(format!(
-            "index out of range (queue has {n} entries, 0-based)"
-        ));
+        return Err(format!("index out of range (queue has {n} entries, 0-based)").into());
     }
     p.remove_index(i as i32);
     Ok(json!({ "removed": i, "count": n - 1 }))
 }
 
-pub(super) fn playlist_move(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn playlist_move(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let n = p.queue().len() as i64;
     let from = args["from"].as_i64().ok_or("missing \"from\"")?;
     let to = args["to"].as_i64().ok_or("missing \"to\"")?;
@@ -51,7 +50,7 @@ pub(super) fn playlist_move(_a: &AppWindow, p: &Player, args: &Value) -> Result<
     ok()
 }
 
-pub(super) fn playlist_clear(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn playlist_clear(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let n = p.queue().len();
     if args["keep_current"].as_bool() == Some(false) {
         p.run("stop");
@@ -61,7 +60,7 @@ pub(super) fn playlist_clear(_a: &AppWindow, p: &Player, args: &Value) -> Result
     Ok(json!({ "removed": n.saturating_sub(p.queue().len()) }))
 }
 
-pub(super) fn repeat(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn repeat(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let m = args["mode"]
         .as_str()
         .ok_or("missing \"mode\" (off, one, all)")?;
@@ -77,7 +76,7 @@ pub(super) fn repeat(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, S
     Ok(json!({ "repeat": m }))
 }
 
-pub(super) fn shuffle(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn shuffle(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let on = args["enabled"].as_bool().ok_or("missing \"enabled\"")?;
     crate::loopsync::set_shuffle(a, p, on);
     Ok(json!({ "shuffle": on }))
@@ -87,7 +86,7 @@ pub(super) fn open_saved_playlist(
     _a: &AppWindow,
     p: &Player,
     args: &Value,
-) -> Result<Value, String> {
+) -> Result<Value, Error> {
     let name = args["name"].as_str().ok_or("missing \"name\"")?;
     let (_, path) = crate::store::playlists()
         .into_iter()
@@ -102,7 +101,7 @@ pub(super) fn open_saved_playlist(
     ok()
 }
 
-pub(super) fn save_queue(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn save_queue(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let name = args["name"]
         .as_str()
         .map(str::trim)
@@ -114,9 +113,9 @@ pub(super) fn save_queue(_a: &AppWindow, p: &Player, args: &Value) -> Result<Val
     }
     let exists = crate::store::playlists().iter().any(|(n, _)| n == name);
     if exists && args["overwrite"].as_bool() != Some(true) {
-        return Err(format!(
-            "playlist {name:?} exists; pass \"overwrite\": true to replace it"
-        ));
+        return Err(
+            format!("playlist {name:?} exists; pass \"overwrite\": true to replace it").into(),
+        );
     }
     let path = crate::store::save_playlist(name, &files).map_err(|e| e.to_string())?;
     Ok(json!({ "path": path.to_string_lossy(), "entries": files.len() }))

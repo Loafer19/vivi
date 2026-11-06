@@ -43,7 +43,7 @@ fn search(args: &Value) -> Result<Value, String> {
     let words: Vec<&str> = q.split_whitespace().collect();
     let hits: Vec<Value> = crate::library::all(&conn)
         .into_iter()
-        .filter(|m| kind.is_empty() || m.kind == kind)
+        .filter(|m| kind.is_empty() || m.kind.as_str() == kind)
         .filter(|m| {
             let hay = format!(
                 "{} {} {} {} {}",
@@ -55,7 +55,7 @@ fn search(args: &Value) -> Result<Value, String> {
         .take(limit)
         .map(|m| {
             json!({
-                "path": m.path, "kind": m.kind, "title": m.title, "artist": m.artist,
+                "path": m.path, "kind": m.kind.as_str(), "title": m.title, "artist": m.artist,
                 "album": m.album, "genre": m.genre, "duration": m.duration,
             })
         })
@@ -510,7 +510,7 @@ use slint::{ComponentHandle, Model};
 
 #[cfg(unix)]
 /// A control-socket command, run on the UI thread.
-type Handler = fn(&crate::AppWindow, &crate::player::Player, &Value) -> Result<Value, String>;
+type Handler = fn(&crate::AppWindow, &crate::player::Player, &Value) -> crate::error::Result<Value>;
 
 /// Every command the UI thread answers, by wire name (commands answered on the
 /// connection thread, such as `search`, are in [`setup`]). Names starting with `__`
@@ -580,7 +580,7 @@ const COMMANDS: &[(&str, Handler)] = &[
 ];
 
 #[cfg(unix)]
-fn ok() -> Result<Value, String> {
+fn ok() -> crate::error::Result<Value> {
     Ok(json!("ok"))
 }
 
@@ -595,7 +595,7 @@ fn handle(
         return Err("missing \"cmd\"".into());
     }
     match COMMANDS.iter().find(|(n, _)| *n == cmd) {
-        Some((_, h)) => h(a, p, args),
+        Some((_, h)) => h(a, p, args).map_err(String::from),
         None => Err(format!("unknown command {cmd:?}")),
     }
 }

@@ -34,7 +34,9 @@ fn plugin_root() -> std::path::PathBuf {
 
 fn is_local_video(path: &str, duration: f64) -> bool {
     let p = Path::new(path);
-    duration > 1.0 && p.is_file() && crate::library::kind_of(p) == Some("video")
+    duration > 1.0
+        && p.is_file()
+        && crate::library::kind_of(p) == Some(crate::library::MediaKind::Video)
 }
 
 /// Show the Chapter Thumbnails package's cached frames for `path`; false when it has none.

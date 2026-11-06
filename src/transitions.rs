@@ -206,7 +206,8 @@ fn now(p: &Player, st: &mut State, path: &str) -> Now {
         .and_then(|i| p.get(&format!("playlist/{i}/filename")))
         .map(|n| {
             let local = !is_url(&n);
-            let music = local && crate::library::kind_of(Path::new(&n)) == Some("audio");
+            let music = local
+                && crate::library::kind_of(Path::new(&n)) == Some(crate::library::MediaKind::Audio);
             let album = if music {
                 library_album(st, &n)
             } else {

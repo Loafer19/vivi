@@ -1,10 +1,11 @@
 //! Control-socket commands: plugins.
 
 use super::*;
+use crate::error::Error;
 use crate::player::Player;
 use crate::AppWindow;
 
-pub(super) fn plugins(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn plugins(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     Ok(json!(crate::plugins::states()
         .into_iter()
         .map(
@@ -14,7 +15,7 @@ pub(super) fn plugins(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Valu
         .collect::<Vec<_>>()))
 }
 
-pub(super) fn plugin_info(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn plugin_info(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     let id = args["id"].as_str().ok_or("missing \"id\"")?;
     let (m, on) = crate::plugins::states()
         .into_iter()
@@ -29,7 +30,7 @@ pub(super) fn plugin_info(_a: &AppWindow, _p: &Player, args: &Value) -> Result<V
     )
 }
 
-pub(super) fn lyrics(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn lyrics(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     let lines: Vec<String> = a
         .global::<crate::Lyrics>()
         .get_lines()
@@ -44,7 +45,7 @@ pub(super) fn lyrics(a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value,
     )
 }
 
-pub(super) fn streams_on(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn streams_on(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     if crate::plugins::active(crate::plugins::network_streams::ID) {
         ok()
     } else {
@@ -52,12 +53,12 @@ pub(super) fn streams_on(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<V
     }
 }
 
-pub(super) fn subs_ctx(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, String> {
+pub(super) fn subs_ctx(_a: &AppWindow, _p: &Player, _args: &Value) -> Result<Value, Error> {
     crate::plugins::query::<Value>(crate::plugins::subtitle_search::ID, "mcp-context")
-        .ok_or_else(|| "the Subtitle Search plugin is turned off".to_string())
+        .ok_or_else(|| "the Subtitle Search plugin is turned off".into())
 }
 
-pub(super) fn subs_load(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn subs_load(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
     let id = args["file_id"].as_i64().unwrap_or(0).to_string();
     crate::plugins::command(
@@ -72,7 +73,7 @@ pub(super) fn plugin_commands_cmd(
     _a: &AppWindow,
     _p: &Player,
     _args: &Value,
-) -> Result<Value, String> {
+) -> Result<Value, Error> {
     let by: Vec<(&str, Vec<crate::plugins::Contributed>)> = AGENT_POINTS
         .iter()
         .map(|pt| (*pt, crate::plugins::contributions(pt)))
@@ -80,11 +81,7 @@ pub(super) fn plugin_commands_cmd(
     Ok(json!(plugin_commands(&by)))
 }
 
-pub(super) fn run_plugin_command(
-    _a: &AppWindow,
-    p: &Player,
-    args: &Value,
-) -> Result<Value, String> {
+pub(super) fn run_plugin_command(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let pid = args["plugin"].as_str().ok_or("missing \"plugin\"")?;
     let c = args["command"].as_str().unwrap_or("");
     let by: Vec<(&str, Vec<crate::plugins::Contributed>)> = AGENT_POINTS
@@ -109,12 +106,12 @@ pub(super) fn run_plugin_command(
         }
     }
     if !crate::plugins::run(pid, c, &extra) {
-        return Err(format!("plugin {pid:?} is off"));
+        return Err(format!("plugin {pid:?} is off").into());
     }
     Ok(json!({ "ran": e["label"] }))
 }
 
-pub(super) fn lyrics_offset(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn lyrics_offset(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     let l = a.global::<crate::Lyrics>();
     if l.get_lines().row_count() == 0 {
         return Err("no lyrics are loaded for this track".into());
@@ -133,7 +130,7 @@ pub(super) fn lyrics_offset(a: &AppWindow, _p: &Player, args: &Value) -> Result<
     Ok(json!({ "offset_seconds": l.get_offset() }))
 }
 
-pub(super) fn karaoke(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn karaoke(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     let on = args["enabled"].as_bool().ok_or("missing \"enabled\"")?;
     if on && a.global::<crate::Lyrics>().get_lines().row_count() == 0 {
         return Err("no lyrics are loaded for this track".into());
@@ -146,7 +143,7 @@ pub(super) fn karaoke(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value,
     Ok(json!({ "karaoke": a.global::<crate::Overlays>().get_karaoke_open() }))
 }
 
-pub(super) fn visualizer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn visualizer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     match args["mode"].as_str().map(str::trim) {
         None | Some("") => {}
         Some(m) if m.eq_ignore_ascii_case("next") || m.eq_ignore_ascii_case("prev") => {

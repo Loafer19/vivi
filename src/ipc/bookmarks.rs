@@ -1,10 +1,11 @@
 //! Control-socket commands: bookmarks.
 
 use super::*;
+use crate::error::Error;
 use crate::player::Player;
 use crate::AppWindow;
 
-pub(super) fn bookmarks(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn bookmarks(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     // Bookmarks of the playing file; {"add": true} bookmarks the position first.
     if args["add"].as_bool() == Some(true) {
         crate::bookmarks::add_current(p, false);
@@ -12,7 +13,7 @@ pub(super) fn bookmarks(_a: &AppWindow, p: &Player, args: &Value) -> Result<Valu
     Ok(json!(crate::bookmarks::current_marks()))
 }
 
-pub(super) fn bookmark_add(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn bookmark_add(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     // Bookmark the playing position: {"label"?, "note"?}.
     let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
     match crate::bookmarks::add_here(p, &s("label"), &s("note"), false) {
@@ -27,30 +28,30 @@ pub(super) fn bookmark_add(_a: &AppWindow, p: &Player, args: &Value) -> Result<V
 }
 
 /// `{"index": n}` of the playing file's bookmarks (see "bookmarks").
-fn mark_index(args: &Value) -> Result<usize, String> {
+fn mark_index(args: &Value) -> Result<usize, Error> {
     let i = args["index"]
         .as_u64()
         .ok_or("missing \"index\" (0-based, see list_bookmarks)")? as usize;
     let n = crate::bookmarks::current_marks().len();
     if i >= n {
-        return Err(format!("no bookmark {i}: this file has {n}"));
+        return Err(format!("no bookmark {i}: this file has {n}").into());
     }
     Ok(i)
 }
 
-pub(super) fn bookmark_remove(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn bookmark_remove(_a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     crate::bookmarks::remove_current(mark_index(args)?);
     Ok(json!(crate::bookmarks::current_marks()))
 }
 
-pub(super) fn bookmark_jump(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn bookmark_jump(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     let i = mark_index(args)?;
     crate::bookmarks::jump(p, i);
     let t = crate::bookmarks::current_marks()[i].time;
     Ok(json!({ "time": t }))
 }
 
-pub(super) fn bookmarks_export(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn bookmarks_export(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     // {"to": "player"} merges the bookmarks into the chapter list (until the file
     // closes); {"to": "file", "path": "/x.ffmetadata"} writes an FFmpeg metadata
     // chapters file (default: <video>.ffmetadata next to a local video).
@@ -73,6 +74,6 @@ pub(super) fn bookmarks_export(a: &AppWindow, p: &Player, args: &Value) -> Resul
             let f = crate::bookmarks::to_chapters_file(p, Some(path))?;
             Ok(json!({ "path": f.to_string_lossy() }))
         }
-        t => Err(format!("unknown \"to\" {t:?} (player or file)")),
+        t => Err(format!("unknown \"to\" {t:?} (player or file)").into()),
     }
 }

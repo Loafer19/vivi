@@ -160,7 +160,9 @@ impl RecentKind {
             .to_ascii_lowercase();
         match ext.as_str() {
             "m3u" | "m3u8" | "pls" | "xspf" | "cue" => Self::Playlist,
-            _ if crate::library::kind_of(p) == Some("audio") => Self::Audio,
+            _ if crate::library::kind_of(p) == Some(crate::library::MediaKind::Audio) => {
+                Self::Audio
+            }
             _ => Self::Video,
         }
     }

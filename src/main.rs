@@ -8,6 +8,7 @@ mod desktop;
 mod dialogs;
 mod downloads;
 mod drawer;
+mod error;
 mod extwin;
 mod fx;
 mod images;

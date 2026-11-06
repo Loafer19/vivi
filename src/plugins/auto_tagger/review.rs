@@ -572,7 +572,7 @@ pub fn audio_files(dir: &Path) -> Vec<PathBuf> {
         .flatten()
         .filter(|e| e.file_type().is_file())
         .map(|e| e.into_path())
-        .filter(|p| crate::library::kind_of(p) == Some("audio"))
+        .filter(|p| crate::library::kind_of(p) == Some(crate::library::MediaKind::Audio))
         .collect();
     v.sort();
     v

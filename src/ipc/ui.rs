@@ -1,10 +1,11 @@
 //! Control-socket commands: ui.
 
 use super::*;
+use crate::error::Error;
 use crate::player::Player;
 use crate::AppWindow;
 
-pub(super) fn drawer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn drawer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     // Open / close / toggle the plugin side drawer (screenshots, scripts); it
     // shows while media plays.
     let open_it = drawer_open_arg(&args["open"])?;
@@ -19,9 +20,7 @@ pub(super) fn drawer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, 
             .iter()
             .any(|e| e.id == id)
     {
-        return Err(format!(
-            "plugin {id:?} has no drawer panel (or is turned off)"
-        ));
+        return Err(format!("plugin {id:?} has no drawer panel (or is turned off)").into());
     }
     let open = crate::drawer::request(a, &id, open_it);
     let tabs: Vec<String> = g.get_tabs().iter().map(|t| t.id.to_string()).collect();
@@ -31,12 +30,12 @@ pub(super) fn drawer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, 
     )
 }
 
-pub(super) fn page(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, String> {
+pub(super) fn page(a: &AppWindow, _p: &Player, args: &Value) -> Result<Value, Error> {
     // Open a Streams hub place (#86): {"page": "streams:radio"} etc. (scripts,
     // screenshots; see src/streams/route.rs).
     let page = args["page"].as_str().unwrap_or("streams");
     if crate::streams::route::parse(page).is_none() {
-        return Err(format!("unknown page {page:?}"));
+        return Err(format!("unknown page {page:?}").into());
     }
     crate::streams::open_page(a, page);
     Ok(json!({ "page": page }))
