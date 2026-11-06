@@ -54,8 +54,9 @@ pub fn frames(every: Duration, f: impl FnMut() + 'static) -> Task {
 }
 
 /// End `task`; it does not run again (also when stopped from inside another task's run).
-/// Every current task lives as long as the app, so only the tests stop one so far.
-#[cfg_attr(not(test), allow(dead_code))]
+/// Every current task lives as long as the app, so nothing stops one yet; kept for
+/// one-off tasks.
+#[allow(dead_code)]
 pub fn stop(task: Task) {
     SCHED.with(|s| {
         let mut s = s.borrow_mut();
