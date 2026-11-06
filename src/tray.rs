@@ -234,12 +234,7 @@ fn attach(bus: linux::Bus) {
             u.bus = Some(bus);
         }
     });
-    let t = Box::leak(Box::new(slint::Timer::default()));
-    t.start(
-        slint::TimerMode::Repeated,
-        std::time::Duration::from_millis(700),
-        update,
-    );
+    crate::ticker::every(std::time::Duration::from_millis(700), update);
     update();
 }
 

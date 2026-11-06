@@ -69,6 +69,10 @@ thread_local! {
 pub struct VizPlugin;
 
 impl crate::plugins::Plugin for VizPlugin {
+    /// The visualizer draws from its own frame task (see `setup`).
+    fn wants_tick(&self) -> bool {
+        false
+    }
     fn manifest(&self) -> crate::plugins::Manifest {
         crate::plugins::Manifest::builtin(
             "visualizer",
@@ -226,8 +230,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     });
 
     let (w, p) = (app.as_weak(), player.clone());
-    let timer = Box::leak(Box::new(slint::Timer::default()));
-    timer.start(slint::TimerMode::Repeated, FRAME, move || {
+    crate::ticker::frames(FRAME, move || {
         if let Some(a) = w.upgrade() {
             viz.borrow_mut().tick(&a, &p);
         }

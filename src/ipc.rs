@@ -330,17 +330,12 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
 
     let w = app.as_weak();
     let p = player.clone();
-    let timer = Box::leak(Box::new(slint::Timer::default()));
-    timer.start(
-        slint::TimerMode::Repeated,
-        std::time::Duration::from_millis(40),
-        move || {
-            let Some(a) = w.upgrade() else { return };
-            while let Ok((cmd, args, reply)) = rx.try_recv() {
-                let _ = reply.send(handle(&a, &p, &cmd, &args));
-            }
-        },
-    );
+    crate::ticker::every(std::time::Duration::from_millis(40), move || {
+        let Some(a) = w.upgrade() else { return };
+        while let Ok((cmd, args, reply)) = rx.try_recv() {
+            let _ = reply.send(handle(&a, &p, &cmd, &args));
+        }
+    });
 }
 
 #[cfg(not(unix))]

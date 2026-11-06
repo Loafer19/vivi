@@ -742,12 +742,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         };
         crate::plugins::run(&plugin, &cmd, &args);
     });
-    let t = Box::leak(Box::new(slint::Timer::default()));
-    t.start(
-        slint::TimerMode::Repeated,
-        std::time::Duration::from_millis(500),
-        refresh,
-    );
+    crate::ticker::every(std::time::Duration::from_millis(500), refresh);
     refresh();
 }
 

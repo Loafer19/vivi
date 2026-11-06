@@ -39,6 +39,7 @@ mod store;
 mod streams;
 mod sublocal;
 mod suboffset;
+mod ticker;
 mod transitions;
 mod tray;
 mod util;

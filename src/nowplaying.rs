@@ -426,12 +426,7 @@ pub fn setup(player: &Rc<Player>) {
     }
     ST.with(|s| s.borrow_mut().player = Some(player.clone()));
     refresh();
-    let timer = Box::leak(Box::new(slint::Timer::default()));
-    timer.start(
-        slint::TimerMode::Repeated,
-        Duration::from_millis(500),
-        refresh,
-    );
+    crate::ticker::every(Duration::from_millis(500), refresh);
 }
 
 /// One string / int / double value of the node map.

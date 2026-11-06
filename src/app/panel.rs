@@ -256,42 +256,37 @@ pub(crate) fn side_panel(app: &AppWindow, player: &Rc<Player>, log: bool) {
     // Scripted self-test, debug builds only.
     if cfg!(debug_assertions) && std::env::var_os("VIVI_SELFTEST").is_some() {
         let weak = app.as_weak();
-        let t = Box::leak(Box::new(slint::Timer::default()));
         let step = Cell::new(0);
-        t.start(
-            slint::TimerMode::Repeated,
-            Duration::from_millis(700),
-            move || {
-                let Some(a) = weak.upgrade() else { return };
-                let n = step.get();
-                step.set(n + 1);
-                let ops: &[(&str, &str)] = &[
-                    ("aid", "2"),
-                    ("sid", "2"),
-                    ("sub-delay", "0.5"),
-                    ("audio-delay", "-0.25"),
-                    ("af", "lavfi=[bass=g=8]"),
-                    ("video-aspect-override", "4:3"),
-                    ("video-rotate", "90"),
-                    ("video-rotate", "0"),
-                    ("brightness", "20"),
-                    ("speed", "1.5"),
-                    ("sid", "1"),
-                    ("aid", "1"),
-                ];
-                if let Some((k, v)) = ops.get(n) {
-                    a.global::<crate::Panel>()
-                        .invoke_set_prop((*k).into(), (*v).into());
-                } else if n == ops.len() {
-                    a.global::<crate::Bookmarks>().invoke_add();
-                    a.global::<crate::Panel>()
-                        .invoke_playlist_save("Selftest".into());
-                    a.global::<crate::Panel>().invoke_save_preset();
-                    a.global::<crate::Panel>().invoke_run("ab-loop".into());
-                    a.global::<crate::Panel>().invoke_run("ab-loop".into());
-                }
-            },
-        );
+        crate::ticker::every(Duration::from_millis(700), move || {
+            let Some(a) = weak.upgrade() else { return };
+            let n = step.get();
+            step.set(n + 1);
+            let ops: &[(&str, &str)] = &[
+                ("aid", "2"),
+                ("sid", "2"),
+                ("sub-delay", "0.5"),
+                ("audio-delay", "-0.25"),
+                ("af", "lavfi=[bass=g=8]"),
+                ("video-aspect-override", "4:3"),
+                ("video-rotate", "90"),
+                ("video-rotate", "0"),
+                ("brightness", "20"),
+                ("speed", "1.5"),
+                ("sid", "1"),
+                ("aid", "1"),
+            ];
+            if let Some((k, v)) = ops.get(n) {
+                a.global::<crate::Panel>()
+                    .invoke_set_prop((*k).into(), (*v).into());
+            } else if n == ops.len() {
+                a.global::<crate::Bookmarks>().invoke_add();
+                a.global::<crate::Panel>()
+                    .invoke_playlist_save("Selftest".into());
+                a.global::<crate::Panel>().invoke_save_preset();
+                a.global::<crate::Panel>().invoke_run("ab-loop".into());
+                a.global::<crate::Panel>().invoke_run("ab-loop".into());
+            }
+        });
     }
 }
 

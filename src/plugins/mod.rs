@@ -343,6 +343,11 @@ pub trait Plugin {
     fn disable(&mut self, _cx: &Ctx) {}
     fn file_loaded(&mut self, _cx: &Ctx) {}
     fn tick(&mut self, _cx: &Ctx) {}
+    /// Whether [`Plugin::tick`] has anything to do right now; the host skips the call
+    /// otherwise. Plugins without a `tick` override it with `false`.
+    fn wants_tick(&self) -> bool {
+        true
+    }
     fn setting_changed(&mut self, _cx: &Ctx, _key: &str) {}
     /// A UI callback or an [`SettingKind::Action`] button addressed to this plugin.
     fn command(&mut self, _cx: &Ctx, _name: &str, _args: &[String]) {}
@@ -532,11 +537,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     })
     .unwrap_or(true);
     packages::setup(app, auto);
-    let timer = Box::leak(Box::new(slint::Timer::default()));
-    timer.start(slint::TimerMode::Repeated, TICK, || {
+    crate::ticker::every(TICK, || {
         with(|r| {
             let Some(a) = r.app.upgrade() else { return };
-            for e in r.entries.iter_mut().filter(|e| e.active) {
+            for e in r
+                .entries
+                .iter_mut()
+                .filter(|e| e.active && e.plugin.wants_tick())
+            {
                 e.plugin.tick(&ctx!(r, a, e));
             }
         });

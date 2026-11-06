@@ -254,16 +254,11 @@ pub(crate) fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) 
     });
     // Save the resume position periodically so a crash or kill keeps it.
     let p = player.clone();
-    let t = Box::leak(Box::new(slint::Timer::default()));
-    t.start(
-        slint::TimerMode::Repeated,
-        Duration::from_secs(5),
-        move || {
-            if p.get("pause").as_deref() == Some("no") {
-                p.save_position();
-            }
-        },
-    );
+    crate::ticker::every(Duration::from_secs(5), move || {
+        if p.get("pause").as_deref() == Some("no") {
+            p.save_position();
+        }
+    });
 }
 
 /// Media files under a folder (recursive), for "Open Folder".

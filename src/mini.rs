@@ -97,23 +97,18 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
 
     // Save geometry after the user moves/resizes the miniplayer (debounced).
     let weak = app.as_weak();
-    let t = Box::leak(Box::new(slint::Timer::default()));
     let last = Cell::new(None::<(i32, i32, i32, i32)>);
-    t.start(
-        slint::TimerMode::Repeated,
-        std::time::Duration::from_secs(2),
-        move || {
-            let Some(a) = weak.upgrade() else { return };
-            if !a.get_mini() {
-                return;
-            }
-            let (p, s) = geometry(&a);
-            let g = (p.x as i32, p.y as i32, s.width as i32, s.height as i32);
-            if last.replace(Some(g)) == Some(g) {
-                remember(&a);
-            }
-        },
-    );
+    crate::ticker::every(std::time::Duration::from_secs(2), move || {
+        let Some(a) = weak.upgrade() else { return };
+        if !a.get_mini() {
+            return;
+        }
+        let (p, s) = geometry(&a);
+        let g = (p.x as i32, p.y as i32, s.width as i32, s.height as i32);
+        if last.replace(Some(g)) == Some(g) {
+            remember(&a);
+        }
+    });
 }
 
 thread_local! {

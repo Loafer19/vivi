@@ -801,8 +801,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         with(|h| h.np = np);
     });
     learn_plugins();
-    let timer = Box::leak(Box::new(slint::Timer::default()));
-    timer.start(slint::TimerMode::Repeated, Duration::from_millis(250), tick);
+    crate::ticker::every(Duration::from_millis(250), tick);
 }
 
 fn tick() {
