@@ -237,14 +237,19 @@ impl Player {
     }
     pub fn save_position(&self) {
         if self.get("path").is_some() {
-            let _ = self.mpv.command("write-watch-later-config", &[]);
+            // A failed write loses the resume position: worth a line in the log.
+            if let Err(e) = self.mpv.command("write-watch-later-config", &[]) {
+                eprintln!("vivi: save position: {e:?}");
+            }
         }
     }
     /// Open `path` in place of the current file; it starts playing unless *Start playing
     /// as soon as a file opens* is off ([`AUTOPLAY`]), then it opens paused.
     pub fn open(&self, path: &str) {
         self.save_position();
-        let _ = self.mpv.command("loadfile", &[&quote(path)]);
+        if let Err(e) = self.mpv.command("loadfile", &[&quote(path)]) {
+            eprintln!("vivi: open {path}: {e:?}");
+        }
         let play = AUTOPLAY.load(std::sync::atomic::Ordering::Relaxed);
         let _ = self.mpv.set_property("pause", !play);
     }
@@ -373,7 +378,9 @@ impl Player {
 
     /// Append to the queue (mpv playlist); starts playing if idle.
     pub fn enqueue(&self, path: &str) {
-        let _ = self.mpv.command("loadfile", &[&quote(path), "append-play"]);
+        if let Err(e) = self.mpv.command("loadfile", &[&quote(path), "append-play"]) {
+            eprintln!("vivi: enqueue {path}: {e:?}");
+        }
     }
     /// Queue entries: (filename, is_current).
     pub fn queue(&self) -> Vec<(String, bool)> {

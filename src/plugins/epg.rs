@@ -213,7 +213,9 @@ pub fn load(url: &str) -> Result<Guide, String> {
     })();
     match fetched {
         Ok(guide) => {
-            let _ = std::fs::create_dir_all(p.parent().unwrap());
+            if let Some(d) = p.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
             if let Ok(j) = serde_json::to_string(&Cached {
                 fetched: t,
                 guide: guide.clone(),

@@ -14,6 +14,22 @@ pub fn clock(s: i64) -> String {
 }
 
 /// Seconds → "HH:MM:SS", always zero-padded (side-panel chapter list).
+/// File size for display, in binary units (KB = 1024 bytes, as the plugin catalog
+/// shows them): "512 KB", "1.5 MB", "734 MB", "4.2 GB". Below 10 MB one decimal.
+pub fn human_size(n: u64) -> String {
+    const K: f64 = 1024.0;
+    let n = n as f64;
+    if n >= K * K * K {
+        format!("{:.1} GB", n / (K * K * K))
+    } else if n >= 10.0 * K * K {
+        format!("{:.0} MB", n / (K * K))
+    } else if n >= K * K {
+        format!("{:.1} MB", n / (K * K))
+    } else {
+        format!("{:.0} KB", (n / K).ceil())
+    }
+}
+
 pub fn hms(s: f64) -> String {
     let s = s.max(0.0) as u64;
     format!("{:02}:{:02}:{:02}", s / 3600, s % 3600 / 60, s % 60)
@@ -89,6 +105,15 @@ impl<T> Task<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn human_sizes() {
+        assert_eq!(human_size(0), "0 KB");
+        assert_eq!(human_size(1000), "1 KB");
+        assert_eq!(human_size(1536 * 1024), "1.5 MB");
+        assert_eq!(human_size(734 << 20), "734 MB");
+        assert_eq!(human_size(4_509_715_660), "4.2 GB");
+    }
 
     #[cfg(unix)]
     #[test]

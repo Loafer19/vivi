@@ -422,7 +422,9 @@ pub(crate) fn cached(name: &str, url: &str) -> Result<String, String> {
     match web::get_bytes(url, 64 * 1024 * 1024) {
         Ok(Some(b)) => {
             let t = String::from_utf8_lossy(&b).into_owned();
-            let _ = std::fs::create_dir_all(p.parent().unwrap());
+            if let Some(d) = p.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
             let _ = std::fs::write(&p, &t);
             Ok(t)
         }

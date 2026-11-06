@@ -178,7 +178,9 @@ pub fn fetch_playlist(src: &str, ttl: u64, force: bool) -> Result<Vec<Stream>, S
     let now = now_secs();
     match got {
         Ok((t, v)) => {
-            let _ = std::fs::create_dir_all(c.parent().unwrap());
+            if let Some(d) = c.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
             let _ = std::fs::write(&c, t);
             update_playlist(src, |p| {
                 p.updated = now;

@@ -305,13 +305,7 @@ impl Entry {
 }
 
 /// "12 KB" / "1.4 MB".
-pub fn human_size(n: u64) -> String {
-    if n >= 1 << 20 {
-        format!("{:.1} MB", n as f64 / (1 << 20) as f64)
-    } else {
-        format!("{:.0} KB", (n as f64 / 1024.0).ceil())
-    }
-}
+pub use crate::util::human_size;
 
 #[derive(Deserialize)]
 struct Index {

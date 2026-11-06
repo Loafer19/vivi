@@ -285,6 +285,13 @@ pub fn recent_entries() -> Vec<RecentEntry> {
     v
 }
 
+/// [`write_recent`], logging a failure (the Recent list would silently stop updating).
+fn save_recent(v: &[RecentEntry]) {
+    if let Err(e) = write_recent(v) {
+        eprintln!("vivi: save recent list: {e}");
+    }
+}
+
 fn write_recent(v: &[RecentEntry]) -> std::io::Result<()> {
     let s = serde_json::to_string_pretty(v).unwrap_or_else(|_| "[]".into());
     write_atomic(&recent_json(), &s)
@@ -337,7 +344,7 @@ pub fn take_recent_hint(target: &str) -> Option<RecentEntry> {
 pub fn push_recent_entry(e: RecentEntry) {
     let mut list = recent_entries();
     push_into(&mut list, e);
-    let _ = write_recent(&list);
+    save_recent(&list);
 }
 
 /// Set the picture of an existing entry (e.g. a web video thumbnail fetched later).
@@ -345,7 +352,7 @@ pub fn set_recent_image(target: &str, image: &str) {
     let mut list = recent_entries();
     if let Some(e) = list.iter_mut().find(|e| e.target == target) {
         e.image = image.to_string();
-        let _ = write_recent(&list);
+        save_recent(&list);
     }
 }
 
@@ -380,7 +387,7 @@ pub fn youtube_id(url: &str) -> Option<String> {
 pub fn remove_recent(target: &str) {
     let mut list = recent_entries();
     list.retain(|e| e.target != target);
-    let _ = write_recent(&list);
+    save_recent(&list);
 }
 
 pub fn clear_recent() {

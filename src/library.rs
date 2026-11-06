@@ -286,15 +286,9 @@ fn natural(s: &str) -> String {
     out
 }
 
+/// [`crate::util::human_size`] for the library's signed sizes.
 pub fn human_size(n: i64) -> String {
-    let n = n as f64;
-    if n >= 1e9 {
-        format!("{:.1} GB", n / 1e9)
-    } else if n >= 1e6 {
-        format!("{:.0} MB", n / 1e6)
-    } else {
-        format!("{:.0} KB", n / 1e3)
-    }
+    crate::util::human_size(n.max(0) as u64)
 }
 
 pub fn human_time(t: f64) -> String {

@@ -165,9 +165,11 @@ impl Tool {
     /// List result with `offset` / `limit`.
     fn paged(mut self, what: &str) -> Self {
         self.shape = Shape::Paged;
-        let p = self.input["properties"].as_object_mut().unwrap();
-        p.insert("offset".into(), json!({ "type": "integer", "minimum": 0, "default": 0, "description": "Skip this many entries (pagination)" }));
-        p.insert("limit".into(), json!({ "type": "integer", "minimum": 1, "maximum": 500, "default": 50, "description": "Entries per page" }));
+        // Every tool's input schema is built with an object "properties".
+        if let Some(p) = self.input["properties"].as_object_mut() {
+            p.insert("offset".into(), json!({ "type": "integer", "minimum": 0, "default": 0, "description": "Skip this many entries (pagination)" }));
+            p.insert("limit".into(), json!({ "type": "integer", "minimum": 1, "maximum": 500, "default": 50, "description": "Entries per page" }));
+        }
         self.output = Some(
             json!({ "type": "object", "required": ["total", "offset", "items"], "properties": {
             "total": { "type": "integer", "description": format!("All matching {what}") },

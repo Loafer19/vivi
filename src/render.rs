@@ -14,7 +14,10 @@ fn get_proc_address(ctx: &usize, name: &str) -> *mut c_void {
     // SAFETY: ctx points at a `ProcFn` that is alive for the duration of
     // `RenderContext::new` (mpv resolves all GL symbols during creation).
     let f: &ProcFn = unsafe { &*(*ctx as *const ProcFn) };
-    let name = CString::new(name).unwrap();
+    // GL symbol names never contain NUL; a name that did is simply "not found".
+    let Ok(name) = CString::new(name) else {
+        return std::ptr::null_mut();
+    };
     f(&name) as *mut c_void
 }
 
