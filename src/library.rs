@@ -56,11 +56,17 @@ pub fn open_db(path: &Path) -> rusqlite::Result<Connection> {
         let _ = std::fs::create_dir_all(d);
     }
     let c = Connection::open(path)?;
+    // WAL + synchronous=NORMAL: commits no longer fsync every time (still crash-safe
+    // in WAL mode; at worst the last transaction is rolled back after a power loss).
+    // The indexes are created on existing databases too (IF NOT EXISTS).
     c.execute_batch(
         "PRAGMA journal_mode=WAL;
+         PRAGMA synchronous=NORMAL;
          CREATE TABLE IF NOT EXISTS media(
             path TEXT PRIMARY KEY, kind TEXT, title TEXT, artist TEXT, album TEXT,
-            genre TEXT, track INTEGER, duration REAL, size INTEGER, mtime INTEGER);",
+            genre TEXT, track INTEGER, duration REAL, size INTEGER, mtime INTEGER);
+         CREATE INDEX IF NOT EXISTS media_kind ON media(kind);
+         CREATE INDEX IF NOT EXISTS media_artist_album ON media(artist, album);",
     )?;
     Ok(c)
 }
@@ -484,6 +490,41 @@ mod tests {
         assert_eq!(a[0].title, "e01");
         assert_eq!(by_path(&c, &a[0].path), Some(a[0].clone()));
         assert_eq!(by_path(&c, "/nope.mp3"), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn old_databases_get_the_indexes() {
+        let dir = std::env::temp_dir().join(format!("vivi-db-mig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = dir.join("old.db");
+        // A database written by an older version: the table only.
+        Connection::open(&db)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE media(
+                    path TEXT PRIMARY KEY, kind TEXT, title TEXT, artist TEXT, album TEXT,
+                    genre TEXT, track INTEGER, duration REAL, size INTEGER, mtime INTEGER);
+                 INSERT INTO media VALUES('/m/a.mp3','audio','a','x','y','',1,1.0,1,1);",
+            )
+            .unwrap();
+        let c = open_db(&db).unwrap();
+        let q = "SELECT name FROM sqlite_master \
+                 WHERE type='index' AND sql IS NOT NULL ORDER BY name";
+        let idx: Vec<String> = c
+            .prepare(q)
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(Result::ok)
+            .collect();
+        assert_eq!(idx, ["media_artist_album", "media_kind"]);
+        let sync: i64 = c.query_row("PRAGMA synchronous", [], |r| r.get(0)).unwrap();
+        assert_eq!(sync, 1, "NORMAL");
+        assert_eq!(all(&c).len(), 1);
+        drop(c);
+        // Opening again is a no-op.
+        assert_eq!(all(&open_db(&db).unwrap()).len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
