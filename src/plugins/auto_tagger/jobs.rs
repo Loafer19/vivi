@@ -193,7 +193,7 @@ pub(crate) fn proposal(cand: &Candidate, pattern: &str, path: &Path) -> Option<S
         .flatten()
 }
 
-pub(crate) fn batch(dir: &Path, key: &str, pattern: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
+pub(super) fn batch(dir: &Path, key: &str, pattern: &str, cancel: &AtomicBool, tx: &Sender<Msg>) {
     let files = audio_files(dir);
     let total = files.len();
     let (mut found, mut skipped) = (0, 0);

@@ -51,7 +51,7 @@ pub(super) fn bookmark_jump(_a: &AppWindow, p: &Player, args: &Value) -> Result<
     Ok(json!({ "time": t }))
 }
 
-pub(super) fn bookmarks_export(a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
+pub(super) fn bookmarks_export(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
     // {"to": "player"} merges the bookmarks into the chapter list (until the file
     // closes); {"to": "file", "path": "/x.ffmetadata"} writes an FFmpeg metadata
     // chapters file (default: <video>.ffmetadata next to a local video).

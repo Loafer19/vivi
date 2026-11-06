@@ -81,7 +81,11 @@ pub(super) fn plugin_commands_cmd(
     Ok(json!(plugin_commands(&by)))
 }
 
-pub(super) fn run_plugin_command(_a: &AppWindow, p: &Player, args: &Value) -> Result<Value, Error> {
+pub(super) fn run_plugin_command(
+    _a: &AppWindow,
+    _p: &Player,
+    args: &Value,
+) -> Result<Value, Error> {
     let pid = args["plugin"].as_str().ok_or("missing \"plugin\"")?;
     let c = args["command"].as_str().unwrap_or("");
     let by: Vec<(&str, Vec<crate::plugins::Contributed>)> = AGENT_POINTS
