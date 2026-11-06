@@ -19,7 +19,6 @@
 - **Library folders** (#97): one item per folder with its file count and a remove button, *Add folder…* and *Rescan* in the card's title bar, and an empty state with *Add folder*.
 - **Clearer settings text** (#97): plain-language descriptions instead of mpv option names, readable choices (*Automatic / Always / Off*, *System default* audio device, subtitle auto-load *Same name as the video*, subtitle encodings such as *Cyrillic (Windows-1251)*, hardware decoding, H.264 loop filter and clock synchronisation in words, snapshot formats *PNG / JPG / WebP* …; saved values are unchanged and old ones still work), subtitle text and outline colors are swatches like the accent color (any #RRGGBB in `config.toml` still applies), Deinterlacing joins Framing, *Reset picture* sits on the Picture card, and the Extensions page groups Plugins and mpv scripts with their buttons.
 - **Placeholders are hidden** (#97): settings that did nothing (*Not available yet*) no longer show; their saved values are kept. *Check for updates automatically* on General is the real update check setting (the same as About's).
-
 - **Faster library thumbnails on large libraries**: a finished thumbnail now updates only its own rows instead of scanning every row of every library view.
 - **Library database**: indexes on the media kind and on artist + album (added to existing databases on the next start) and `synchronous=NORMAL` with the WAL journal, so scans commit without an fsync per transaction.
 - **Less idle work on the UI thread**: the player's repeating jobs (player events, the control socket, plugin ticks, tray, MPRIS and Downloads updates, …) share one scheduler instead of a dozen separate timers, so jobs with nearby intervals share a wake-up; plugins with nothing to do are no longer ticked.
@@ -29,6 +28,7 @@
 - **Code layout**: the control socket's commands are split by topic under `src/ipc/` behind one command table (the protocol is unchanged), the large built-in plugins keep their `Plugin` impl and tests in their own files, and the library uses typed media kinds and sections and a crate `Error` type.
 
 ### Fixed
+- **Windows: library scans no longer drop and re-read every file**: folders added with backslashes (`C:\Videos`) did not match the indexed paths, so each scan removed the whole library and read it again.
 - **The Streams page fits the docked library** (#95): over a video the tab rows show icons with only the selected tab named, and long breadcrumbs give way sooner, so the URL bar, tabs, cards and now-playing card stay inside the panel.
 - **The library, a plugin drawer or a menu keeps the bars shown** while *Keep shown while a panel or menu is open* is on (the default), like the side panel already did; before, the docked library and the drawer hid with the bars during playback, and the bars could hide under a menu opened from them.
 - The Streams URL bar's placeholder is shorter in the docked library (*Paste a URL or search*) instead of being cut off.
