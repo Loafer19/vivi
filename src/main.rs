@@ -120,15 +120,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let c = cfg.borrow();
         (c.playback.hwdec_interop.clone(), c.playback.hwdec.clone())
     };
-    render::attach(&app, player.mpv.clone(), interop, move || {
-        let mut it = cli.iter();
-        if let Some(first) = it.next() {
-            p.open(first);
-        }
-        for f in it {
-            p.enqueue(f);
-        }
-    })?;
+    render::attach(&app, player.mpv.clone(), interop)?;
+    // Opening goes through render::when_ready, so these load once the render context exists.
+    let mut it = cli.iter();
+    if let Some(first) = it.next() {
+        p.open(first);
+    }
+    for f in it {
+        p.enqueue(f);
+    }
 
     let (toggle_fs, open_file) = app::wiring::transport::wire(&app, &player, &cfg);
     mouse::wire(&app, &player);
