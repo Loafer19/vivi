@@ -7,7 +7,10 @@ distribution and the package format are in [plugins-architecture.md](plugins-arc
 ## Process and threads
 
 * The **UI thread** owns the Slint `AppWindow` and every `Rc` model. All Slint calls
-  happen here; timers poll background work.
+  happen here; repeating work (player events, the control socket, plugin ticks, tray and
+  MPRIS updates, …) runs as tasks of one shared scheduler, `ticker.rs`
+  (`ticker::every(interval, f)`, `ticker::frames` for animation, `ticker::stop`): one
+  timer armed for the next due task, so tasks with nearby intervals share wake-ups.
 * The **player event thread** (`player.rs`) forwards libmpv events over a channel; the
   UI drains them in `app/wiring/events.rs`.
 * **Background jobs** (network lookups, scans, downloads) run on plain threads and hand
@@ -26,12 +29,14 @@ distribution and the package format are in [plugins-architecture.md](plugins-arc
 | `viz/` | Music visualizer: audio tap, FFT analysis, modes, software canvas. |
 | `config.rs`, `store.rs` | Settings file and small XDG state files. |
 | `player.rs`, `render.rs` | libmpv wrapper and the OpenGL render underlay. |
-| `library.rs`, `libview.rs` | Media library (SQLite cache, scans, thumbnails) and its UI controller. |
+| `library.rs`, `libview.rs` | Media library (SQLite cache in WAL mode with `synchronous=NORMAL`, indexes on `kind` and `(artist, album)`; `MediaKind`; scans, thumbnails) and its UI controller (`Nav` sections; finished thumbnails find their rows through a per-model key index). |
 | `menus.rs`, `dialogs.rs`, `overlays.rs`, `mini.rs`, `loading.rs`, `preview.rs` | Menus, small dialogs, Esc handling, miniplayer, stream loading overlay, seekbar preview (shows the Chapter Thumbnails cache, offers the package). |
 | `fx.rs`, `peaks.rs`, `scenes.rs` | Equalizer / filters, seekbar waveform, package thumbnails. |
-| `ipc.rs`, `mpris.rs`, `desktop.rs`, `about.rs` | Control socket (for `vivi-mcp`), MPRIS2, desktop glue, About and update check. |
+| `ipc/`, `mpris.rs`, `desktop.rs`, `about.rs` | Control socket (for `vivi-mcp`): `ipc/mod.rs` socket, connection threads and the `COMMANDS` table, one file per command family (`playback.rs`, `queue.rs`, `bookmarks.rs`, `ui.rs`, `plugins.rs`); MPRIS2, desktop glue, About and update check. |
+| `error.rs` | `Error` (message, I/O, database, JSON) and `error::Result`, replacing `Result<_, String>` step by step (the control-socket commands use it). |
+| `ticker.rs` | The UI thread's shared scheduler for repeating tasks. |
 | `keymap.rs` | Every shortcut, in match order. |
-| `util.rs` | `clock` / `hms` formatting, Slint string models, `Task<T>`. |
+| `util.rs` | `clock` / `hms` / `human_size` formatting, Slint string models, `Task<T>`. |
 
 ## `ui/`
 

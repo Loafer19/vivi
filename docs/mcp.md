@@ -3,7 +3,7 @@
 `vivi-mcp` is a small separate binary that speaks the
 [Model Context Protocol](https://modelcontextprotocol.io) over **stdio** and forwards tool
 calls to a running Vivi through a local control socket. The player itself only gains a
-tiny socket listener (`src/ipc.rs`); the MCP server links nothing but `std` and
+tiny socket listener (`src/ipc/`); the MCP server links nothing but `std` and
 `serde_json`.
 
 ```

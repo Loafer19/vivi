@@ -185,10 +185,17 @@ pub fn places(m: &Manifest) -> Vec<String> {
         .filter(|c| !moved_away(&m.id, c))
         .map(|c| {
             let at = contrib::describe(&c.point);
-            if c.label.is_empty() || c.label == m.name {
+            let line = if c.label.is_empty() || c.label == m.name {
                 at.to_string()
             } else {
                 format!("{at}: {}", c.label)
+            };
+            // Player-menu conditions (#93): "… (streams, YouTube)".
+            let when = c.conditions();
+            if when.is_empty() {
+                line
+            } else {
+                format!("{line} ({})", when.describe())
             }
         })
         .collect();

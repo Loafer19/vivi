@@ -35,17 +35,20 @@ WASM step below. They stay built in until that exists.
 ### Source layout of the built-in plugins
 
 Each built-in plugin is `src/plugins/<module>/` (or one file when small) whose module,
-struct and manifest ID agree. `mod.rs` holds the plugin itself (state, UI updates,
-`Plugin` impl, tests); the rest is plain logic with no Slint:
+struct and manifest ID agree. `mod.rs` holds the plugin's state and UI updates; the
+large ones (Auto-tagger, Free Music, Lyrics, Network Streams, Skip Intro) keep their
+`Plugin` impl (manifest, settings, hooks, commands) in `plugin.rs` and their tests in
+`tests.rs`. The rest is plain logic with no Slint:
 
 | Module (ID) | Files |
 | --- | --- |
-| `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply · `cache.rs` per-file AcoustID answers (path + size + mtime, 300 files, 0600) · `mod.rs` also identifies untagged songs while playing (`auto-identify`) |
+| `auto_tagger` (`auto-tagger`) | `files.rs` tag model, renaming, reading, fingerprints · `providers.rs` ranking, MusicBrainz / AcoustID / Cover Art · `review.rs` backups, tag + SYLT writing, review model, apply · `cache.rs` per-file AcoustID answers (path + size + mtime, 300 files, 0600) · `jobs.rs` background work: identifying untagged songs while playing (`auto-identify`), applying reviews, folder batches |
 | `free_music` (`free-music`) | `catalog.rs` track / licence / query model · `api.rs` Internet Archive + Jamendo clients, downloader |
-| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded lyrics, cache locations, offsets · `radio.rs` stream-title lookups (titles split by `nowplaying::split_icy_loose`) · `mod.rs` songs from the shared now-playing track (music services, Auto-tagger) |
-| `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists |
+| `lyrics` (`lyrics`) | `lrc.rs` LRC parsing · `sources.rs` embedded lyrics, cache locations, offsets · `radio.rs` stream-title lookups (titles split by `nowplaying::split_icy_loose`) · `radio_view.rs` radio mode (polling the stream title, showing the result) · `mod.rs` songs from the shared now-playing track (music services, Auto-tagger) |
+| `network_streams` (`network-streams`) | `sources.rs` radio-browser, SomaFM, iptv-org, M3U · `library.rs` saved, recent, My playlists · `logos.rs` station logo cache · `hub.rs` the Streams hub's Radio and TV tabs |
 | `subtitle_search` (`subtitle-search`) | `api.rs` OpenSubtitles hash, search, download · `files.rs` picks, folder pairing |
-| `skip_intro`, `epg`, `tagsources` | single files |
+| `skip_intro` (`skip-intro`) | `ranges.rs` chapter names, submitted and per-show ranges, modes, merging |
+| `epg`, `tagsources` | single files |
 | `lrclib` (no plugin) | LRCLIB client for Lyrics and the Auto-tagger (`tagsources`): `/api/get` + `/api/search` with one User-Agent and 12 s timeout, 503 / 429 retried (1 s, 2 s), ranking and `pick` (synced → plain → instrumental), answer cache files (`.lrc` / `.txt` / `.instrumental` 30 days / `.missing` 7 days) |
 
 Wire formats live in `plugins/protocol.rs`: `PluginCommand` for the UI's
@@ -53,7 +56,7 @@ Wire formats live in `plugins/protocol.rs`: `PluginCommand` for the UI's
 / `join`) and `ScriptMessage`, the one enum of every `script-message vivi-*` a package can
 send (`vivi-toast`, `vivi-setting`, `vivi-pick-folder`, `vivi-range`, `vivi-fullscreen`,
 `vivi-qr`, `vivi-sub-offset`, `vivi-sub-offset-import`, `vivi-tagger-acoustid`, `vivi-preview-frames`,
-`vivi-chapter-thumbs`, `vivi-eq-preset`, `vivi-eq-import`). A new message is a variant plus a `parse` arm and a test.
+`vivi-chapter-thumbs`, `vivi-eq-preset`, `vivi-eq-import`, `vivi-menu`, …). A new message is a variant plus a `parse` arm and a test.
 Background lookups return through `util::Task<T>`.
 
 Built-in plugins hand the UI typed state rather than display strings: the tag review
@@ -119,6 +122,51 @@ its point and runs the chosen one.
 
 Unknown points are ignored with a log line, so a manifest written for a newer Vivi still
 loads. The Extensions window lists each plugin's points under *Where it shows up*.
+
+**Only when it applies (#93, host feature `menu-when`).** An entry in the player menus
+(`context.player`, `menu.video`, `menu.audio`, `menu.subtitles`) can say when it makes
+sense, so the *Plugins* submenu lists only what fits the item playing now. Entries
+without these fields show as before; other points ignore them.
+
+* `when`: a tag or a list of tags, all of which must hold: `local` (a file) or `stream`
+  (a URL), `video` or `audio` (no video track; album art does not count). With nothing
+  playing, an entry with conditions is hidden. Unknown tags are ignored, so a manifest
+  written for a newer Vivi still shows its entry.
+* `when_source`: a source or a list (any one must match the playing URL): `youtube`
+  (youtube.com, youtu.be, music.youtube.com, …), `youtube-music` (music.youtube.com),
+  `soundcloud`, `bandcamp`, `twitch`, `vimeo`, `dailymotion`, `jamendo`, `archive`
+  (archive.org), or a host name such as `example.com` (sub-domains match too). Local
+  files never match.
+* `hidden = true`: hidden until the plugin shows it, for state only the plugin knows.
+  `script-message vivi-menu <id> <command> show|hide` shows or hides one entry of
+  plugin `<id>`, `vivi-menu <id> show|hide` all of them. These switches last until the
+  next file loads (then `hidden` applies again), and the static conditions above still
+  have to hold.
+
+```toml
+[[contributes]]
+point = "context.player"
+label = "Download this song"
+command = "download-song"
+when = ["stream", "audio"]
+when_source = "youtube-music"
+
+[[contributes]]
+point = "context.player"
+label = "Undo SponsorBlock skip"
+command = "undo"
+when_source = "youtube"
+hidden = true            # the script sends `vivi-menu sponsorblock undo show` after a skip
+```
+
+The Extensions window adds the conditions to *Where it shows up* ("Right-click on the
+player: Download this song (streams, audio, YouTube Music)"). When no plugin action
+applies, the *Plugins* submenu still has *Side drawer* (with a drawer panel) and
+*Extensions…*. Built-in plugins use `.when(&["stream"])` after `.contribute(…)`; Find
+lyrics… is `audio`, Stream info `stream`, Auto-tag this file… `local` + `audio`. Catalog
+packages that predate `[[contributes]]` get conditions with their defaults
+(`contrib::known_defaults`: Download for offline `stream`, Identify with AcoustID
+`local` + `audio`, Undo SponsorBlock skip `youtube`).
 
 Built-in plugins use the manifest builder:
 
@@ -285,6 +333,7 @@ still load. Packages that never send these messages are unaffected.
 | `vivi-drawer <id> [open\|close\|toggle]` | (Feature `drawer`.) Open (default), close or toggle the player side drawer on the package's own `drawer.panel` tab. Ignored for a package without one. The drawer shows while media plays (it stays flagged open otherwise). |
 | `vivi-indicator <id> <key> <json>` | (Feature `indicators`.) Show or update a top-bar status chip `{icon, tip, label}`: `icon` is a Vivi icon name (drawn in the accent colour; unknown names fall back to `extension`), `tip` the tooltip, `label` up to 12 characters after the icon (e.g. "TV"). Up to 3 per package, shown while the package is loaded. A click sends `{"event":"indicator","args":[key]}` on `vivi-ui`. Code: `src/status.rs`. |
 | `vivi-indicator-clear <id> [key]` | Remove that chip, or every chip of the package. |
+| `vivi-menu <id> [command] show\|hide` | (Feature `menu-when`.) Show or hide the package's player-menu entry with `command` (all of its entries without one) until the next file loads; an entry declared `hidden = true` stays hidden until shown. See *Only when it applies* above. |
 | `vivi-sleep <spec>` | (Feature `sleep`.) Start or cancel the shared sleep timer: `off`, `min:<n>`, `eof`, `chapter`, `items:<n>`. It fades the volume out over `playback.sleep_fade` seconds, pauses and restores the volume. The state is in `user-data/vivi/sleep` (JSON `{mode, active, remaining, items_left, fade}`). Code: `src/sleep.rs`. |
 | `vivi-confirm <id> <key> <json>` | Warning / confirm dialog `{title, heading, text, ok}` (Enter confirms, Esc cancels). |
 | `vivi-media-meta <id> <json>` | `{url, title, artist, album, cover, info}` or `{"items": [...]}` for URLs the package queued: Vivi shows them on the now-playing card (cover, title, artist · album, `info` · codec · bitrate) while one of them plays as audio, uses the cover in Recent and merges them into `user-data/vivi/now-playing` (below). Optional for that: `album_artist`, `mbid` (MusicBrainz recording id), `duration` (s), `kind` (`music` / `video` / `podcast` / `stream`; e.g. `music` for a music video of a music service) and `service` (else `info`). At most 5000 URLs are kept. |
@@ -293,7 +342,7 @@ still load. Packages that never send these messages are unaffected.
 
 **Host capabilities.** Vivi sets `user-data/vivi/host-api` to the integer `1` and
 `user-data/vivi/host-features` to a space-separated word list of the host API it
-understands: `dialog confirm media-meta contributions content drawer bars info-dialog indicators sleep`
+understands: `dialog confirm media-meta contributions content drawer bars info-dialog indicators sleep menu-when`
 (`src/plugins/host.rs`, `FEATURES`). Older Vivi leaves both unset, so a package checks a
 word and keeps its old UI otherwise:
 
@@ -375,7 +424,7 @@ needs it at startup. Contribution points (`sidebar.source`, `palette.command`,
 
 ### Skip ranges (one Skip button)
 
-Skip Intro & Credits (`src/plugins/skip_intro.rs`) owns the player's only Skip button. Besides
+Skip Intro & Credits (`src/plugins/skip_intro/`) owns the player's only Skip button. Besides
 chapter names and the user's per-show ranges it takes ranges that packages find for the current
 file, so a package such as SponsorBlock supplies segments and leaves the prompt, auto-skip, undo
 and mute to the core:

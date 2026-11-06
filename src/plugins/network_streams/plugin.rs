@@ -13,6 +13,7 @@ impl Plugin for NetworkStreams {
         // Its browser is the Streams hub's Radio and TV tabs now (#86): no sidebar
         // source, palette entry or Home widget of its own.
         .contribute(contrib::CONTEXT_PLAYER, "Stream info", "info")
+        .when(&["stream"])
         .contribute(contrib::DRAWER_PANEL, "Network Streams", "drawer")
         .setting(SettingSpec::action(
             "info",

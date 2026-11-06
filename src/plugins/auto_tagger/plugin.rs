@@ -12,6 +12,7 @@ impl Plugin for AutoTagger {
         )
         .contribute(contrib::CONTEXT_ITEM, "Auto-tag…", "open-path")
         .contribute(contrib::CONTEXT_PLAYER, "Auto-tag this file…", "open")
+        .when(&["local", "audio"])
         .contribute(contrib::PALETTE_COMMAND, "Auto-tag the playing file", "open")
         .setting(SettingSpec::secret(
             "acoustid-key",

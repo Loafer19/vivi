@@ -14,6 +14,7 @@ impl Plugin for Lyrics {
         .contribute(contrib::PALETTE_COMMAND, "Karaoke lyrics view", "karaoke")
         .contribute(contrib::CONTROLBAR_BUTTON, "Karaoke lyrics view", "karaoke")
         .contribute(contrib::CONTEXT_PLAYER, "Find lyrics…", "search-open")
+        .when(&["audio"])
         .contribute(contrib::DRAWER_PANEL, "Lyrics", "")
         .setting(SettingSpec::toggle(
             "online",

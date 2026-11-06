@@ -164,6 +164,14 @@ impl Manifest {
             .push(contrib::Contribution::new(point, label, command));
         self
     }
+    /// Show the entry added last only while the playing item matches `tags` (#93, see
+    /// [`contrib::Contribution::when`]).
+    pub fn when(mut self, tags: &[&str]) -> Self {
+        if let Some(c) = self.contributes.pop() {
+            self.contributes.push(c.when(tags));
+        }
+        self
+    }
     pub fn setting(mut self, s: SettingSpec) -> Self {
         self.settings.push(s);
         self
@@ -894,6 +902,7 @@ pub fn client_message(args: &[String]) {
         }
         Some(M::Indicator { id, key, json }) => crate::status::plugin_set(id, key, json),
         Some(M::IndicatorClear { id, key }) => crate::status::plugin_clear(id, key),
+        Some(M::Menu { id, command, shown }) => set_menu_shown(id, command, shown),
         _ => {}
     }
 }
@@ -1058,6 +1067,8 @@ fn toast_after_resume(text: String, secs: f64, tries: u32) {
 /// mpv loaded a new file.
 pub fn file_loaded() {
     packages::deprecation_notice();
+    // `vivi-menu` shows / hides last for one file.
+    MENU_SHOWN.with(|m| m.borrow_mut().clear());
     with(|r| {
         let Some(a) = r.app.upgrade() else { return };
         for e in r.entries.iter_mut().filter(|e| e.active) {
@@ -1105,6 +1116,56 @@ pub struct Contributed {
     pub icon: String,
     pub label: String,
     pub command: String,
+    /// When it shows in the player menus (#93); empty = always.
+    pub when: contrib::When,
+}
+
+impl Contributed {
+    /// Whether the entry belongs in a player menu while `now` plays: its conditions hold
+    /// and the plugin has not hidden it (`vivi-menu`), or has shown a `hidden` entry.
+    pub fn applies(&self, now: &contrib::Playing) -> bool {
+        menu_shown(&self.id, &self.command, self.when.hidden) && self.when.applies(now)
+    }
+}
+
+thread_local! {
+    /// `vivi-menu` overrides for the current file: (plugin id, command or "" for all of
+    /// the plugin's entries) → shown. Cleared when a file loads.
+    static MENU_SHOWN: RefCell<std::collections::HashMap<(String, String), bool>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
+/// `script-message vivi-menu <id> [command] show|hide`: show or hide a menu entry of
+/// plugin `id` (all of its entries without a command) until the next file loads.
+pub fn set_menu_shown(id: &str, command: &str, shown: bool) {
+    MENU_SHOWN.with(|m| {
+        let mut m = m.borrow_mut();
+        if command.is_empty() {
+            // A plugin-wide switch replaces the per-entry ones.
+            m.retain(|(i, _), _| i != id);
+        }
+        m.insert((id.to_string(), command.to_string()), shown);
+    });
+}
+
+/// Whether entry `command` of plugin `id` is shown (`hidden`: it starts hidden).
+fn menu_shown(id: &str, command: &str, hidden: bool) -> bool {
+    MENU_SHOWN.with(|m| {
+        let m = m.borrow();
+        m.get(&(id.to_string(), command.to_string()))
+            .or_else(|| m.get(&(id.to_string(), String::new())))
+            .copied()
+            .unwrap_or(!hidden)
+    })
+}
+
+/// What is playing now, for [`Contributed::applies`].
+pub fn playing_now(a: &AppWindow, p: &Player) -> contrib::Playing {
+    if !a.global::<crate::Playback>().get_has_media() {
+        return contrib::Playing::default();
+    }
+    let path = p.get("path").unwrap_or_default();
+    contrib::Playing::of(&path, crate::viz::audio_only(p))
 }
 
 /// Config entry holding the order of the sidebar's Sources (`order = "a,b"`).
@@ -1239,6 +1300,7 @@ pub fn contributions_all(point: &str) -> Vec<Contributed> {
                             x.label.clone()
                         },
                         command: x.command.clone(),
+                        when: x.conditions(),
                     })
             })
             .collect();
@@ -1643,6 +1705,7 @@ mod tests {
                 icon: String::new(),
                 label: String::new(),
                 command: String::new(),
+                when: Default::default(),
             })
             .collect();
         order_by(&["c".into(), "a".into()], &mut v);

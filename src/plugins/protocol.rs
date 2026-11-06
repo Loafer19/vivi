@@ -158,6 +158,13 @@ pub enum ScriptMessage<'a> {
     },
     /// `vivi-indicator-clear <id> [key]`: remove one chip, or all of the package's.
     IndicatorClear { id: &'a str, key: &'a str },
+    /// `vivi-menu <id> [command] show|hide`: show or hide the package's player-menu entry
+    /// with `command` (all of its entries without one) until the next file loads (#93).
+    Menu {
+        id: &'a str,
+        command: &'a str,
+        shown: bool,
+    },
 }
 
 impl<'a> ScriptMessage<'a> {
@@ -244,6 +251,16 @@ impl<'a> ScriptMessage<'a> {
                 id,
                 key: rest.first().map(|k| k.trim()).unwrap_or(""),
             },
+            ["vivi-menu", id, command, state] if matches!(*state, "show" | "hide") => M::Menu {
+                id,
+                command: command.trim(),
+                shown: *state == "show",
+            },
+            ["vivi-menu", id, state] if matches!(*state, "show" | "hide") => M::Menu {
+                id,
+                command: "",
+                shown: *state == "show",
+            },
             _ => return None,
         })
     }
@@ -252,6 +269,30 @@ impl<'a> ScriptMessage<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_show_hide() {
+        use ScriptMessage as M;
+        let m = |a: &[&str]| ScriptMessage::parse(&v(a));
+        assert_eq!(
+            m(&["vivi-menu", "sponsorblock", "undo", "show"]),
+            Some(M::Menu {
+                id: "sponsorblock",
+                command: "undo",
+                shown: true
+            })
+        );
+        assert_eq!(
+            m(&["vivi-menu", "youtube-music", "hide"]),
+            Some(M::Menu {
+                id: "youtube-music",
+                command: "",
+                shown: false
+            })
+        );
+        assert_eq!(m(&["vivi-menu", "x", "undo", "maybe"]), None);
+        assert_eq!(m(&["vivi-menu", "x"]), None);
+    }
 
     fn v(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()

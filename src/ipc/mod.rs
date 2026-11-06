@@ -683,6 +683,7 @@ mod tests {
             icon: String::new(),
             label: label.into(),
             command: cmd.into(),
+            when: Default::default(),
         };
         let v = plugin_commands(&[
             (

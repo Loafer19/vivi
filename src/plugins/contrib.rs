@@ -13,6 +13,11 @@
 //! the defaults from [`known_defaults`], everything else is a feature with no entries
 //! (Extensions window only), so old manifests keep working. Unknown points are ignored.
 //! See `docs/plugins-architecture.md` ("Contribution points").
+//!
+//! Entries in the player menus can carry conditions (#93): `when` (what is playing:
+//! `local` / `stream`, `video` / `audio`), `when_source` (where a stream is from:
+//! `youtube`, `youtube-music`, … or a host name) and `hidden` (shown only after the
+//! plugin sends `vivi-menu <id> <command> show`). See [`When`].
 
 /// Sidebar → Sources: a content browser (`command` opens it).
 pub const SIDEBAR_SOURCE: &str = "sidebar.source";
@@ -101,6 +106,18 @@ pub struct Contribution {
     /// Icon key (`ui/core/icons.slint` `Icons.plugin`); "" = the plugin's icon.
     #[serde(default)]
     pub icon: String,
+    /// Shown only while the playing item is all of these (`local` or `stream`, `video`
+    /// or `audio`); a string or a list. Empty = always (player menus, see [`When`]).
+    #[serde(default, deserialize_with = "one_or_many")]
+    pub when: Vec<String>,
+    /// Shown only while the playing stream is from one of these sources (a string or a
+    /// list): a name of [`source_hosts`] or a host name (`example.com`, sub-domains too).
+    #[serde(default, deserialize_with = "one_or_many")]
+    pub when_source: Vec<String>,
+    /// Hidden until the plugin shows it with `vivi-menu <id> <command> show` (state that
+    /// only the plugin knows, e.g. "Undo skip" right after a skip). Reset per file.
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 impl Contribution {
@@ -109,8 +126,186 @@ impl Contribution {
             point: point.into(),
             label: label.into(),
             command: command.into(),
-            icon: String::new(),
+            ..Default::default()
         }
+    }
+
+    /// The same entry shown only while the playing item matches every tag of `tags`.
+    pub fn when(mut self, tags: &[&str]) -> Self {
+        self.when = tags.iter().map(|t| t.to_string()).collect();
+        self
+    }
+
+    /// The same entry shown only for streams from `sources`.
+    pub fn when_source(mut self, sources: &[&str]) -> Self {
+        self.when_source = sources.iter().map(|t| t.to_string()).collect();
+        self
+    }
+
+    /// The conditions of this entry.
+    pub fn conditions(&self) -> When {
+        When {
+            kinds: self.when.clone(),
+            sources: self.when_source.clone(),
+            hidden: self.hidden,
+        }
+    }
+}
+
+/// A string or a list of strings (`when = "stream"` or `when = ["stream", "audio"]`),
+/// trimmed, lower-cased, empty entries dropped.
+fn one_or_many<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum V {
+        One(String),
+        Many(Vec<String>),
+    }
+    let v = match <V as serde::Deserialize>::deserialize(d)? {
+        V::One(s) => vec![s],
+        V::Many(v) => v,
+    };
+    Ok(v.into_iter()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect())
+}
+
+/// What is playing, for the conditions of menu entries ([`When::applies`]).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Playing {
+    /// Something is open.
+    pub loaded: bool,
+    /// A URL (http, rtmp, …) rather than a local file.
+    pub stream: bool,
+    /// No video track (album art does not count).
+    pub audio: bool,
+    /// Lower-case host of a stream URL, without `www.` and the port ("" for files).
+    pub host: String,
+}
+
+impl Playing {
+    /// `path` as mpv reports it; `audio`: it has no video track.
+    pub fn of(path: &str, audio: bool) -> Self {
+        let path = path.trim();
+        let stream = path.contains("://") && !path.starts_with("file://");
+        Self {
+            loaded: !path.is_empty(),
+            stream,
+            audio,
+            host: if stream { host_of(path) } else { String::new() },
+        }
+    }
+}
+
+/// Lower-case host of `url` without `www.`, user info and port.
+pub fn host_of(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = auth.rsplit_once('@').map_or(auth, |(_, h)| h);
+    let host = match host.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => host.split(':').next().unwrap_or(""),
+    };
+    let host = host.to_ascii_lowercase();
+    host.strip_prefix("www.")
+        .map(str::to_string)
+        .unwrap_or(host)
+}
+
+/// The hosts of a source name for `when_source` (sub-domains match too).
+pub fn source_hosts(name: &str) -> &'static [&'static str] {
+    match name {
+        "youtube" => &["youtube.com", "youtu.be", "youtube-nocookie.com"],
+        "youtube-music" => &["music.youtube.com"],
+        "soundcloud" => &["soundcloud.com"],
+        "bandcamp" => &["bandcamp.com"],
+        "twitch" => &["twitch.tv"],
+        "vimeo" => &["vimeo.com"],
+        "dailymotion" => &["dailymotion.com"],
+        "jamendo" => &["jamendo.com"],
+        "archive" => &["archive.org"],
+        _ => &[],
+    }
+}
+
+fn host_in(host: &str, domain: &str) -> bool {
+    host == domain || host.strip_suffix(domain).is_some_and(|h| h.ends_with('.'))
+}
+
+/// Conditions of one menu entry (see [`Contribution::when`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct When {
+    pub kinds: Vec<String>,
+    pub sources: Vec<String>,
+    pub hidden: bool,
+}
+
+impl When {
+    /// No conditions: shown as before #93.
+    pub fn is_empty(&self) -> bool {
+        self.kinds.is_empty() && self.sources.is_empty() && !self.hidden
+    }
+
+    /// Whether the static conditions hold for `now` (`hidden` is the plugin's to lift,
+    /// see `plugins::menu_shown`). Unknown tags are ignored, so a newer plugin's
+    /// conditions do not hide its entry on an older player.
+    pub fn applies(&self, now: &Playing) -> bool {
+        if self.kinds.is_empty() && self.sources.is_empty() {
+            return true;
+        }
+        if !now.loaded {
+            return false;
+        }
+        let kinds = self.kinds.iter().all(|k| match k.as_str() {
+            "local" | "file" => !now.stream,
+            "stream" => now.stream,
+            "video" => !now.audio,
+            "audio" => now.audio,
+            _ => true,
+        });
+        let source = self.sources.is_empty()
+            || (now.stream
+                && self.sources.iter().any(|s| {
+                    let hosts = source_hosts(s);
+                    if hosts.is_empty() {
+                        s.contains('.') && host_in(&now.host, s)
+                    } else {
+                        hosts.iter().any(|h| host_in(&now.host, h))
+                    }
+                }));
+        kinds && source
+    }
+
+    /// Short description for the Extensions window ("streams, audio, YouTube").
+    pub fn describe(&self) -> String {
+        let mut v: Vec<String> = self
+            .kinds
+            .iter()
+            .map(|k| match k.as_str() {
+                "local" | "file" => "local files".to_string(),
+                "stream" => "streams".to_string(),
+                "video" => "video".to_string(),
+                "audio" => "audio".to_string(),
+                k => k.to_string(),
+            })
+            .collect();
+        v.extend(self.sources.iter().map(|s| match s.as_str() {
+            "youtube" => "YouTube".to_string(),
+            "youtube-music" => "YouTube Music".to_string(),
+            "soundcloud" => "SoundCloud".to_string(),
+            "bandcamp" => "Bandcamp".to_string(),
+            "twitch" => "Twitch".to_string(),
+            "vimeo" => "Vimeo".to_string(),
+            "dailymotion" => "Dailymotion".to_string(),
+            "jamendo" => "Jamendo".to_string(),
+            "archive" => "Internet Archive".to_string(),
+            s => s.to_string(),
+        }));
+        if self.hidden {
+            v.push("when the plugin offers it".into());
+        }
+        v.join(", ")
     }
 }
 
@@ -196,7 +391,7 @@ pub fn known_defaults(id: &str) -> (Role, Vec<Contribution>) {
                     "add-current",
                 ),
                 c(PALETTE_COMMAND, "Downloads: show the queue", "show"),
-                c(CONTEXT_PLAYER, "Download for offline", "add-current"),
+                c(CONTEXT_PLAYER, "Download for offline", "add-current").when(&["stream"]),
                 c(TRAY_ITEM, "Show downloads", "show"),
                 c(NOTIFY, "Download finished or failed", ""),
             ],
@@ -246,11 +441,11 @@ pub fn known_defaults(id: &str) -> (Role, Vec<Contribution>) {
         ),
         "acoustid" => (
             Role::Feature,
-            vec![c(CONTEXT_PLAYER, "Identify with AcoustID", "identify")],
+            vec![c(CONTEXT_PLAYER, "Identify with AcoustID", "identify").when(&["local", "audio"])],
         ),
         "sponsorblock" => (
             Role::Feature,
-            vec![c(CONTEXT_PLAYER, "Undo SponsorBlock skip", "undo")],
+            vec![c(CONTEXT_PLAYER, "Undo SponsorBlock skip", "undo").when_source(&["youtube"])],
         ),
         "scrobbler" => (
             Role::Feature,
@@ -263,6 +458,89 @@ pub fn known_defaults(id: &str) -> (Role, Vec<Contribution>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conditions_follow_what_is_playing() {
+        let yt_song = Playing::of("https://music.youtube.com/watch?v=abc", true);
+        let yt_video = Playing::of("https://www.youtube.com/watch?v=abc", false);
+        let radio = Playing::of("http://ice.example.org:8000/jazz", true);
+        let song = Playing::of("/music/a.flac", true);
+        let film = Playing::of("/films/b.mkv", false);
+        let nothing = Playing::default();
+        assert_eq!(yt_song.host, "music.youtube.com");
+        assert_eq!(yt_video.host, "youtube.com");
+        assert_eq!(radio.host, "ice.example.org");
+        let w = |kinds: &[&str], sources: &[&str]| {
+            Contribution::new(CONTEXT_PLAYER, "x", "x")
+                .when(kinds)
+                .when_source(sources)
+                .conditions()
+        };
+        let all = [&yt_song, &yt_video, &radio, &song, &film];
+        let shown = |c: &When| all.iter().map(|p| c.applies(p)).collect::<Vec<_>>();
+        // No conditions: always, even with nothing playing (as before #93).
+        assert_eq!(shown(&w(&[], &[])), [true; 5]);
+        assert!(w(&[], &[]).applies(&nothing));
+        assert!(!w(&["stream"], &[]).applies(&nothing));
+        assert_eq!(
+            shown(&w(&["stream"], &[])),
+            [true, true, true, false, false]
+        );
+        assert_eq!(
+            shown(&w(&["local", "audio"], &[])),
+            [false, false, false, true, false]
+        );
+        assert_eq!(
+            shown(&w(&["video"], &[])),
+            [false, true, false, false, true]
+        );
+        assert_eq!(
+            shown(&w(&[], &["youtube"])),
+            [true, true, false, false, false]
+        );
+        assert_eq!(
+            shown(&w(&[], &["youtube-music"])),
+            [true, false, false, false, false]
+        );
+        assert_eq!(
+            shown(&w(&["video"], &["youtube"])),
+            [false, true, false, false, false]
+        );
+        assert_eq!(
+            shown(&w(&[], &["example.org"])),
+            [false, false, true, false, false]
+        );
+        // "notexample.org" is not a sub-domain of example.org.
+        assert!(!w(&[], &["example.org"]).applies(&Playing::of("http://notexample.org/s", true)));
+        // Unknown tags and names are ignored / never match.
+        assert_eq!(shown(&w(&["podcast"], &[])), [true; 5]);
+        assert_eq!(shown(&w(&[], &["nosuchsource"])), [false; 5]);
+        assert_eq!(
+            w(&["stream", "audio"], &["youtube-music"]).describe(),
+            "streams, audio, YouTube Music"
+        );
+    }
+
+    #[test]
+    fn conditions_in_manifests() {
+        #[derive(serde::Deserialize)]
+        struct M {
+            contributes: Vec<Contribution>,
+        }
+        let m: M = toml::from_str(
+            "[[contributes]]\npoint = \"context.player\"\nlabel = \"A\"\ncommand = \"a\"\n\
+             when = \"Stream\"\nwhen_source = [\"youtube\", \" \"]\n\
+             [[contributes]]\npoint = \"context.player\"\ncommand = \"undo\"\nhidden = true\n\
+             [[contributes]]\npoint = \"context.player\"\ncommand = \"b\"\n",
+        )
+        .unwrap();
+        let c = &m.contributes;
+        assert_eq!(c[0].when, ["stream"]);
+        assert_eq!(c[0].when_source, ["youtube"]);
+        assert!(!c[0].hidden && c[1].hidden);
+        assert!(c[2].conditions().is_empty());
+        assert_eq!(c[1].conditions().describe(), "when the plugin offers it");
+    }
 
     #[test]
     fn moved_entries_hidden_only_with_the_replacement() {

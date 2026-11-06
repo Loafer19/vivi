@@ -67,11 +67,41 @@ pub fn sort_key(s: &str) -> &str {
 }
 
 /// Rows plugins contribute at `point` (see `plugins::contrib`): id `plug:<plugin>|<command>`.
-fn plugin_rows(point: &str, icon: &str) -> Vec<MenuItem> {
+/// Only the entries that apply to what is playing (`now`; #93): entries without
+/// conditions always do.
+fn plugin_rows(point: &str, icon: &str, now: &contrib::Playing) -> Vec<MenuItem> {
+    plugins::contributions(point)
+        .into_iter()
+        .filter(|e| e.applies(now))
+        .map(|e| row(&format!("plug:{}|{}", e.id, e.command), &e.label, icon, ""))
+        .collect()
+}
+
+/// Rows for a library item's menu: conditions are about what is playing, so they do not
+/// apply here.
+fn item_rows(point: &str, icon: &str) -> Vec<MenuItem> {
     plugins::contributions(point)
         .into_iter()
         .map(|e| row(&format!("plug:{}|{}", e.id, e.command), &e.label, icon, ""))
         .collect()
+}
+
+/// The Plugins submenu: the plugin actions that apply now, then Side drawer (when a
+/// plugin has a drawer panel) and Extensions…, each its own group; no divider on top
+/// when no action applies.
+fn plugins_menu(actions: Vec<MenuItem>, drawer: bool, extensions_hint: &str) -> Vec<MenuItem> {
+    let mut v = actions;
+    if drawer {
+        v.push(div(row("drawer", "Side drawer", "plugins", "")));
+    }
+    v.push(div(row(
+        "extensions",
+        "Extensions…",
+        "plugins",
+        extensions_hint,
+    )));
+    v[0].divider = false;
+    v
 }
 
 /// `rows` with the first one starting a new group (menu divider).
@@ -135,6 +165,7 @@ fn main_menu(a: &AppWindow, p: &Player) -> Vec<MenuItem> {
 }
 
 fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
+    let now = plugins::playing_now(a, p);
     let tracks = |kind: &str, prefix: &str| -> Vec<MenuItem> {
         p.tracks(kind)
             .into_iter()
@@ -211,7 +242,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 "fullscreen",
                 &keymap::hint(A::Fullscreen),
             ));
-            v.extend(grouped(plugin_rows(contrib::MENU_VIDEO, "video")));
+            v.extend(grouped(plugin_rows(contrib::MENU_VIDEO, "video", &now)));
             v.push(row("panel:2", "Video Adjustments…", "paint", ""));
             v
         }
@@ -223,7 +254,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 p.get("mute").as_deref() == Some("yes"),
             )));
             v.push(row("add-audio", "Add Audio Track…", "add-audio-tracks", ""));
-            v.extend(plugin_rows(contrib::MENU_AUDIO, "audio"));
+            v.extend(plugin_rows(contrib::MENU_AUDIO, "audio", &now));
             v.push(row("panel:1", "Audio Settings…", "audio", ""));
             v
         }
@@ -241,7 +272,7 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
                 "",
             )));
             v.push(row("sub-local", "Load from Computer…", "folder", ""));
-            v.extend(plugin_rows(contrib::MENU_SUBTITLES, "subtitle"));
+            v.extend(plugin_rows(contrib::MENU_SUBTITLES, "subtitle", &now));
             v.push(row("panel:0", "Subtitle Settings…", "subtitle", ""));
             v
         }
@@ -262,19 +293,11 @@ fn submenu(a: &AppWindow, p: &Player, id: &str) -> Vec<MenuItem> {
             ),
         ],
         // Right-click on the player: plugin actions (`context.player`), then Extensions.
-        "plugins" => {
-            let mut v = plugin_rows(contrib::CONTEXT_PLAYER, "plugins");
-            if !plugins::contributions(contrib::DRAWER_PANEL).is_empty() {
-                v.push(div(row("drawer", "Side drawer", "plugins", "")));
-            }
-            v.push(div(row(
-                "extensions",
-                "Extensions…",
-                "plugins",
-                &keymap::hint(A::Extensions),
-            )));
-            v
-        }
+        "plugins" => plugins_menu(
+            plugin_rows(contrib::CONTEXT_PLAYER, "plugins", &now),
+            !plugins::contributions(contrib::DRAWER_PANEL).is_empty(),
+            &keymap::hint(A::Extensions),
+        ),
         "playlist" => vec![
             row("panel:4", "Show Queue", "playlist", ""),
             row("shuffle-now", "Shuffle Queue", "shuffle", ""),
@@ -519,7 +542,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
                             lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1");
                         // `context.item`: plugin actions for files and folders.
                         if matches!(g(1), "audio" | "video" | "folder") {
-                            v.extend(grouped(plugin_rows(contrib::CONTEXT_ITEM, "plugins")));
+                            v.extend(grouped(item_rows(contrib::CONTEXT_ITEM, "plugins")));
                         }
                         if g(1) == "playlist" {
                             let src = crate::store::playlist_source(std::path::Path::new(g(0)));
@@ -709,4 +732,38 @@ fn queue_name() -> String {
         .map(|i| format!("Queue {i}"))
         .find(|n| !names.contains(n))
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids(v: &[MenuItem]) -> Vec<(String, bool)> {
+        v.iter().map(|m| (m.id.to_string(), m.divider)).collect()
+    }
+
+    #[test]
+    fn plugins_menu_keeps_drawer_and_extensions() {
+        let act = vec![row("plug:a|x", "Do X", "plugins", "")];
+        assert_eq!(
+            ids(&plugins_menu(act, true, "")),
+            [
+                ("plug:a|x".to_string(), false),
+                ("drawer".to_string(), true),
+                ("extensions".to_string(), true)
+            ]
+        );
+        // Every action hidden: no divider on top.
+        assert_eq!(
+            ids(&plugins_menu(Vec::new(), true, "")),
+            [
+                ("drawer".to_string(), false),
+                ("extensions".to_string(), true)
+            ]
+        );
+        assert_eq!(
+            ids(&plugins_menu(Vec::new(), false, "")),
+            [("extensions".to_string(), false)]
+        );
+    }
 }

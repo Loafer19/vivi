@@ -49,8 +49,10 @@ pub const FEATURES_KEY: &str = "user-data/vivi/host-features";
 /// * `bars`: the `bar` field on content rows and dialog rows (a native bar),
 /// * `info-dialog`: `info_only` dialogs (no search box, no per-row play / queue),
 /// * `indicators`: `vivi-indicator` / `vivi-indicator-clear` (top-bar status chips),
-/// * `sleep`: `vivi-sleep <spec>` (the shared sleep timer, state in `user-data/vivi/sleep`).
-pub const FEATURES: [&str; 10] = [
+/// * `sleep`: `vivi-sleep <spec>` (the shared sleep timer, state in `user-data/vivi/sleep`),
+/// * `menu-when`: `when` / `when_source` / `hidden` on player-menu contributions and
+///   `vivi-menu <id> [command] show|hide` (#93).
+pub const FEATURES: [&str; 11] = [
     "dialog",
     "confirm",
     "media-meta",
@@ -61,6 +63,7 @@ pub const FEATURES: [&str; 10] = [
     "info-dialog",
     "indicators",
     "sleep",
+    "menu-when",
 ];
 
 /// [`FEATURES`] as published in [`FEATURES_KEY`].
@@ -850,6 +853,7 @@ mod tests {
             "info-dialog",
             "indicators",
             "sleep",
+            "menu-when",
         ] {
             assert!(f.split(' ').any(|x| x == w), "{w}");
         }
