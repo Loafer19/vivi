@@ -4,6 +4,7 @@ export global Dialogs {
     in-out property <image> qr-code;
     in-out property <string> qr-text;
     in-out property <string> qr-caption;
+    callback qr-open-link(string); // the QR dialog's address clicked: open it in the browser
     // Plugin confirmation (src/dialogs.rs `confirm`): the answer goes to `confirm-owner`
     // as plugin command "confirm" with `confirm-key` and "yes" / "no".
     in-out property <string> confirm-owner;

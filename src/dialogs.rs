@@ -221,6 +221,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                 }
             });
     }
+    app.global::<crate::Dialogs>()
+        .on_qr_open_link(|u| crate::settings::open_url(&u));
     {
         let w = app.as_weak();
         app.global::<crate::Dialogs>()

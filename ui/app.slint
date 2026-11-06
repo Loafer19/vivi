@@ -1353,6 +1353,7 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         title: Dialogs.qr-title; code: Dialogs.qr-code; text: Dialogs.qr-text; caption: Dialogs.qr-caption;
         close => { Overlays.qr-open = false; }
+        open-link(u) => { Dialogs.qr-open-link(u); }
     }
 
     // ---------- Add Subtitles (From Computer: core; From OpenSubtitles: Subtitle Search) ----------
