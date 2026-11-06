@@ -526,6 +526,15 @@ fn descendants() -> Vec<i32> {
     out
 }
 
+/// mpv commands that start loading media, which need the render context first
+/// ([`crate::render::when_ready`]).
+fn loads_media(name: &str) -> bool {
+    matches!(
+        name,
+        "loadfile" | "loadlist" | "playlist-play-index" | "playlist-next" | "playlist-prev"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -543,13 +552,4 @@ mod tests {
     fn quoting() {
         assert_eq!(super::quote(r#"/a b/"x"\y"#), r#""/a b/\"x\"\\y""#);
     }
-}
-
-/// mpv commands that start loading media, which need the render context first
-/// ([`crate::render::when_ready`]).
-fn loads_media(name: &str) -> bool {
-    matches!(
-        name,
-        "loadfile" | "loadlist" | "playlist-play-index" | "playlist-next" | "playlist-prev"
-    )
 }
