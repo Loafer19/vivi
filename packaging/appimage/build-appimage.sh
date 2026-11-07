@@ -34,7 +34,11 @@ ln -s vivi.png "$APPDIR/.DirIcon"
 # AppStream metadata for software centres and the AppImage catalog: the Flatpak
 # metainfo, launched through this image's desktop id (vivi.desktop).
 install -d "$APPDIR/usr/share/metainfo"
-sed 's|<launchable type="desktop-id">[^<]*</launchable>|<launchable type="desktop-id">vivi.desktop</launchable>|' \
+# The catalog validates with Ubuntu 22.04's appstream 0.15, which predates
+# <developer> and vcs-browser urls, so those become the older forms here.
+sed -e 's|<launchable type="desktop-id">[^<]*</launchable>|<launchable type="desktop-id">vivi.desktop</launchable>|' \
+  -e '/<url type="vcs-browser">/d' \
+  -e '/<developer id=/,/<\/developer>/c\  <developer_name>Loafer19</developer_name>' \
   "$ROOT/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml" \
   > "$APPDIR/usr/share/metainfo/io.github.loafer19.vivi.appdata.xml"
 grep -q '<launchable type="desktop-id">vivi.desktop</launchable>' "$APPDIR/usr/share/metainfo/io.github.loafer19.vivi.appdata.xml"
