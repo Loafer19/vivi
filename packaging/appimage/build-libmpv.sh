@@ -12,6 +12,12 @@ set -euo pipefail
 
 FFMPEG_VERSION=${FFMPEG_VERSION:-7.1.2}
 MPV_VERSION=${MPV_VERSION:-0.40.0}
+# Older distributions (the AppImage builds on Ubuntu 22.04) ship a libplacebo
+# too old for mpv: BUILD_LIBPLACEBO=1 builds it into $PREFIX first.
+BUILD_LIBPLACEBO=${BUILD_LIBPLACEBO:-0}
+LIBPLACEBO_VERSION=${LIBPLACEBO_VERSION:-v7.349.0}
+# mpv needs wayland-protocols >= 1.31 (Ubuntu 22.04 has 1.25): built into $PREFIX when older.
+WAYLAND_PROTOCOLS_VERSION=${WAYLAND_PROTOCOLS_VERSION:-1.41}
 PREFIX=${PREFIX:-$PWD/deps}
 SRC=${SRC:-$PWD/deps-src}
 JOBS=${JOBS:-$(nproc)}
@@ -24,6 +30,42 @@ if [ ! -d "ffmpeg-$FFMPEG_VERSION" ]; then
 fi
 if [ ! -d "mpv-$MPV_VERSION" ]; then
   curl -fsSL "https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz" | tar xz
+fi
+
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+# Vulkan only where the system has its headers and loader (not installed on the
+# Ubuntu 22.04 AppImage builder: mpv renders through OpenGL for vivi anyway).
+HAVE_VULKAN=disabled
+pkg-config --exists vulkan 2>/dev/null && HAVE_VULKAN=enabled
+
+if ! pkg-config --atleast-version=1.31 wayland-protocols 2>/dev/null; then
+  [ -d "wayland-protocols-$WAYLAND_PROTOCOLS_VERSION" ] || \
+    curl -fsSL "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/$WAYLAND_PROTOCOLS_VERSION/downloads/wayland-protocols-$WAYLAND_PROTOCOLS_VERSION.tar.xz" | tar xJ
+  (
+    cd "wayland-protocols-$WAYLAND_PROTOCOLS_VERSION"
+    rm -rf build
+    meson setup build --prefix="$PREFIX" --datadir=share -Dtests=false
+    meson install -C build
+  )
+  # Headers only (an XML data package): its .pc lands in share/pkgconfig.
+  export PKG_CONFIG_PATH="$PREFIX/share/pkgconfig:$PKG_CONFIG_PATH"
+fi
+
+if [ "$BUILD_LIBPLACEBO" = 1 ]; then
+  [ -d "libplacebo-$LIBPLACEBO_VERSION" ] || \
+    git clone -q --depth 1 --recurse-submodules --shallow-submodules -b "$LIBPLACEBO_VERSION" \
+      https://code.videolan.org/videolan/libplacebo.git "libplacebo-$LIBPLACEBO_VERSION"
+  (
+    cd "libplacebo-$LIBPLACEBO_VERSION"
+    rm -rf build
+    meson setup build --prefix="$PREFIX" --libdir=lib --buildtype=release \
+      -Dstrip=true -Ddemos=false -Dtests=false -Dbench=false -Dfuzz=false \
+      -Dvulkan="$HAVE_VULKAN" -Dshaderc=disabled -Dglslang=disabled \
+      -Dopengl=enabled -Dd3d11=disabled -Dlcms=enabled -Ddovi=disabled -Dlibdovi=disabled \
+      -Dunwind=disabled -Dxxhash=disabled
+    meson compile -C build -j "$JOBS"
+    meson install -C build
+  )
 fi
 
 # FFmpeg's Vulkan hwdec needs recent headers (Ubuntu 24.04 is too old); mpv
@@ -48,7 +90,6 @@ pkg-config --atleast-version=1.3.277 vulkan 2>/dev/null && VULKAN=--enable-vulka
   make install
 )
 
-export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 (
   cd "mpv-$MPV_VERSION"
   rm -rf build
@@ -62,7 +103,7 @@ export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PAT
     -Dopenal=disabled -Dsndio=disabled -Djack=disabled -Dcaca=disabled \
     -Dsixel=disabled -Drubberband=disabled -Dzimg=disabled -Dvapoursynth=disabled \
     -Duchardet=enabled -Dpulse=enabled -Dalsa=enabled -Dpipewire=disabled \
-    -Dvulkan=enabled -Dvaapi=enabled -Dvdpau=enabled
+    -Dvulkan="$HAVE_VULKAN" -Dvaapi=enabled -Dvdpau=enabled
   meson compile -C build -j "$JOBS"
   meson install -C build
 )

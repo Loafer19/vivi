@@ -31,6 +31,14 @@ ln -s usr/share/icons/hicolor/256x256/apps/vivi.png "$APPDIR/vivi.png"
 ln -s vivi.png "$APPDIR/.DirIcon"
 [ -s "$APPDIR/.DirIcon" ] || { echo ".DirIcon missing in $APPDIR" >&2; exit 1; }
 
+# AppStream metadata for software centres and the AppImage catalog: the Flatpak
+# metainfo, launched through this image's desktop id (vivi.desktop).
+install -d "$APPDIR/usr/share/metainfo"
+sed 's|<launchable type="desktop-id">[^<]*</launchable>|<launchable type="desktop-id">vivi.desktop</launchable>|' \
+  "$ROOT/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml" \
+  > "$APPDIR/usr/share/metainfo/io.github.loafer19.vivi.appdata.xml"
+grep -q '<launchable type="desktop-id">vivi.desktop</launchable>' "$APPDIR/usr/share/metainfo/io.github.loafer19.vivi.appdata.xml"
+
 # Host-provided stacks that every desktop ships and that must match the user's
 # session/drivers (per the AppImage excludelist spirit): Wayland, D-Bus,
 # systemd/udev, PulseAudio/ALSA client libraries, libdrm, OpenCL ICD loader.
@@ -66,6 +74,14 @@ for f in "$APPDIR"/usr/bin/vivi "$APPDIR"/usr/lib/*.so*; do
 done
 
 du -sh "$APPDIR"
+# UPDATE_INFO (e.g. gh-releases-zsync|owner|repo|latest|Vivi-*x86_64.AppImage.zsync) embeds
+# update information and makes appimagetool write <output>.zsync next to the image.
+UPDATE_ARGS=()
+[ -n "${UPDATE_INFO:-}" ] && UPDATE_ARGS=(-u "$UPDATE_INFO")
+OUT_ABS=$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")
 ARCH=x86_64 "$TOOLS/appimagetool" --comp zstd --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
-  --mksquashfs-opt -b --mksquashfs-opt 1M "$APPDIR" "$OUT"
-ls -la "$OUT"
+  --mksquashfs-opt -b --mksquashfs-opt 1M "${UPDATE_ARGS[@]}" "$APPDIR" "$OUT_ABS"
+# appimagetool writes the .zsync into the current directory.
+Z=$(basename "$OUT").zsync
+if [ -n "${UPDATE_INFO:-}" ] && [ -f "$Z" ] && [ ! "$Z" -ef "$OUT_ABS.zsync" ]; then mv "$Z" "$OUT_ABS.zsync"; fi
+ls -la "$OUT_ABS"*
