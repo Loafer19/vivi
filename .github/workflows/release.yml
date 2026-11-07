@@ -123,12 +123,13 @@ jobs:
           packaging/appimage/check-abi.sh squashfs-root
           rm -rf squashfs-root
       - name: AppImage starts on a bare Ubuntu 22.04 under Xvfb (as the AppImage catalog tests it)
+        timeout-minutes: 10
         run: |
           VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
           # Only what every desktop has plus the libraries the AppImage leaves to
           # the host (excludelist, Wayland, D-Bus, sound, libdrm); anything vivi
           # loads at run time beyond that must come from the image itself.
-          docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -euc '
+          timeout 480 docker run --rm --init -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -euc '
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y -qq --no-install-recommends xvfb xauth xdotool libgl1 libegl1 libx11-6 libx11-xcb1 libxcb1 \
@@ -139,11 +140,11 @@ jobs:
             cd $T
             HOME=$T XDG_CONFIG_HOME=$T/cfg XDG_DATA_HOME=$T/data XDG_CACHE_HOME=$T/cache XDG_STATE_HOME=$T/state \
               XDG_RUNTIME_DIR=$T/run VIVI_SOCKET=$T/run/vivi.sock VIVI_NO_TRAY=1 APPIMAGE_EXTRACT_AND_RUN=1 \
-              xvfb-run -a -s "-screen 0 1280x800x24" bash -c "
-                ./vivi.AppImage > vivi.log 2>&1 & P=\$!
-                for i in \$(seq 1 30); do kill -0 \$P 2>/dev/null || break; xdotool search --onlyvisible --name . >/dev/null 2>&1 && break; sleep 1; done
-                ok=0; kill -0 \$P 2>/dev/null && xdotool search --onlyvisible --name . >/dev/null 2>&1 && ok=1
-                kill \$P 2>/dev/null || true
+              timeout 120 xvfb-run -a -s "-screen 0 1280x800x24" bash -c "
+                timeout -s KILL 60 ./vivi.AppImage > vivi.log 2>&1 & P=\$!
+                for i in \$(seq 1 30); do kill -0 \$P 2>/dev/null || break; timeout 5 xdotool search --onlyvisible --name . >/dev/null 2>&1 && break; sleep 1; done
+                ok=0; kill -0 \$P 2>/dev/null && timeout 5 xdotool search --onlyvisible --name . >/dev/null 2>&1 && ok=1
+                kill -9 \$P 2>/dev/null || true
                 cat vivi.log
                 [ \$ok = 1 ] || { echo no window; exit 1; }
                 echo window shown"
