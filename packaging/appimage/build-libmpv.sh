@@ -26,11 +26,14 @@ JOBS=${JOBS:-$(nproc)}
 mkdir -p "$SRC" "$PREFIX"
 cd "$SRC"
 
+# Downloads go to a file first so a retry never feeds tar a half stream.
+fetch() { curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$2" "$1"; }
+
 if [ ! -d "ffmpeg-$FFMPEG_VERSION" ]; then
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" | tar xJ
+  fetch "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" ffmpeg.tar.xz && tar xJf ffmpeg.tar.xz && rm ffmpeg.tar.xz
 fi
 if [ ! -d "mpv-$MPV_VERSION" ]; then
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 "https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz" | tar xz
+  fetch "https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz" mpv.tar.gz && tar xzf mpv.tar.gz && rm mpv.tar.gz
 fi
 
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
