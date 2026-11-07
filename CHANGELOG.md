@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-07
+
+A packaging release: the **AppImage now runs on older systems** (built on Ubuntu 22.04, glibc 2.35 or newer), so it can join the AppImage catalog. No player changes.
+
+### Changed
+- **AppImage**: built on Ubuntu 22.04 with its own libplacebo, so it needs glibc 2.35 rather than 2.38; a check in the release build stops any library that asks for more. The Linux tarball and PKGBUILD are still built on Ubuntu 24.04. mpv's own Wayland output is left out of the AppImage's libmpv (Ubuntu 22.04's libwayland is too old for it); Vivi draws video in its own window, so playback is unchanged.
+- **AppImage**: a PNG `.DirIcon`, AppStream metadata for software centres, and update information with a `.zsync` file so AppImageUpdate and similar tools can update it in place.
+
 ## [0.16.0] - 2026-11-06
 
 Highlights: **settings as cards**, regrouped with plain-language labels and real window, autoplay and hidden-file options; **panel transparency** for the bars, library, side panel and drawers; a full **Auto-hide** card; the **Plugins menu shows only what applies** to what is playing; **Discard** in the Downloads panel and **Uninstall…** with confirmation on a plugin's page; faster thumbnails and library database, and a Windows library scan fix.
