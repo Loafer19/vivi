@@ -27,10 +27,10 @@ mkdir -p "$SRC" "$PREFIX"
 cd "$SRC"
 
 if [ ! -d "ffmpeg-$FFMPEG_VERSION" ]; then
-  curl -fsSL "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" | tar xJ
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" | tar xJ
 fi
 if [ ! -d "mpv-$MPV_VERSION" ]; then
-  curl -fsSL "https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz" | tar xz
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 "https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz" | tar xz
 fi
 
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
