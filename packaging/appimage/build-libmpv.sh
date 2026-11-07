@@ -16,8 +16,9 @@ MPV_VERSION=${MPV_VERSION:-0.40.0}
 # too old for mpv: BUILD_LIBPLACEBO=1 builds it into $PREFIX first.
 BUILD_LIBPLACEBO=${BUILD_LIBPLACEBO:-0}
 LIBPLACEBO_VERSION=${LIBPLACEBO_VERSION:-v7.349.0}
-# mpv needs wayland-protocols >= 1.31 (Ubuntu 22.04 has 1.25): built into $PREFIX when older.
-WAYLAND_PROTOCOLS_VERSION=${WAYLAND_PROTOCOLS_VERSION:-1.41}
+# mpv's own Wayland support needs libwayland >= 1.21 (Ubuntu 22.04 has 1.20), so
+# there it is left out (-Dwayland=auto): vivi draws through the render API in its
+# own window, and VA-API hwdec still reaches the GPU through DRM.
 PREFIX=${PREFIX:-$PWD/deps}
 SRC=${SRC:-$PWD/deps-src}
 JOBS=${JOBS:-$(nproc)}
@@ -37,19 +38,6 @@ export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PAT
 # Ubuntu 22.04 AppImage builder: mpv renders through OpenGL for vivi anyway).
 HAVE_VULKAN=disabled
 pkg-config --exists vulkan 2>/dev/null && HAVE_VULKAN=enabled
-
-if ! pkg-config --atleast-version=1.31 wayland-protocols 2>/dev/null; then
-  [ -d "wayland-protocols-$WAYLAND_PROTOCOLS_VERSION" ] || \
-    curl -fsSL "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/$WAYLAND_PROTOCOLS_VERSION/downloads/wayland-protocols-$WAYLAND_PROTOCOLS_VERSION.tar.xz" | tar xJ
-  (
-    cd "wayland-protocols-$WAYLAND_PROTOCOLS_VERSION"
-    rm -rf build
-    meson setup build --prefix="$PREFIX" --datadir=share -Dtests=false
-    meson install -C build
-  )
-  # Headers only (an XML data package): its .pc lands in share/pkgconfig.
-  export PKG_CONFIG_PATH="$PREFIX/share/pkgconfig:$PKG_CONFIG_PATH"
-fi
 
 if [ "$BUILD_LIBPLACEBO" = 1 ]; then
   [ -d "libplacebo-$LIBPLACEBO_VERSION" ] || \
