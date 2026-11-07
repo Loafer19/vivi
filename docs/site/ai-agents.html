@@ -93,7 +93,7 @@ section[id]{scroll-margin-top:120px}
 <section id="setup">
 <h2>Set up in two minutes</h2>
 <div class="steps">
-  <div class="step"><h3>Enable remote control</h3><p>Off by default. Turn on <em>Settings → Controls → Remotes → Allow AI agents and scripts</em> (<em>General → Remote control</em> before 0.15) and restart Vivi, or run <code>VIVI_IPC=1 vivi</code> once.</p></div>
+  <div class="step"><h3>Enable remote control</h3><p>Off by default. Turn on <em>Settings → Controls → Remotes → Allow AI agents and scripts</em> (<em>General → Remote control</em> before 0.15); since 0.16 it applies at once, before that restart Vivi. Or run <code>VIVI_IPC=1 vivi</code> once.</p></div>
   <div class="step"><h3>Get <code>vivi-mcp</code></h3><p>It ships with Vivi: Arch installs <code>/usr/bin/vivi-mcp</code>, Flatpak <code>/app/bin/vivi-mcp</code>, <code>cargo build --release</code> gives <code>target/release/vivi-mcp</code>.</p></div>
   <div class="step"><h3>Add it to your client</h3><p>Paste the config below and restart the client. <code>vivi-mcp --help</code> prints the socket path it uses.</p></div>
 </div>
@@ -269,7 +269,7 @@ override with <code>VIVI_SOCKET</code>), created with mode <code>0600</code>, so
 <h2>Troubleshooting</h2>
 <dl class="faq">
   <dt>“Vivi is not running” or connection refused</dt>
-  <dd>Start Vivi with <em>Allow AI agents and scripts</em> on (Settings → Controls → Remotes; restart after changing it) or run <code>VIVI_IPC=1 vivi</code>. Only one Vivi instance owns the socket.</dd>
+  <dd>Start Vivi with <em>Allow AI agents and scripts</em> on (Settings → Controls → Remotes; it applies at once since 0.16, older versions need a restart) or run <code>VIVI_IPC=1 vivi</code>. Only one Vivi instance owns the socket.</dd>
   <dt>The client cannot find the socket</dt>
   <dd>Some clients do not inherit <code>XDG_RUNTIME_DIR</code>. Pass it explicitly: <code>"env": { "VIVI_SOCKET": "/run/user/1000/vivi.sock" }</code> (check the path with <code>vivi-mcp --help</code>).</dd>
   <dt>“command not found: vivi-mcp”</dt>

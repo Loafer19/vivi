@@ -247,11 +247,14 @@ impl Player {
     /// as soon as a file opens* is off ([`AUTOPLAY`]), then it opens paused.
     pub fn open(&self, path: &str) {
         self.save_position();
-        if let Err(e) = self.mpv.command("loadfile", &[&quote(path)]) {
-            eprintln!("vivi: open {path}: {e:?}");
-        }
-        let play = AUTOPLAY.load(std::sync::atomic::Ordering::Relaxed);
-        let _ = self.mpv.set_property("pause", !play);
+        let (mpv, path) = (self.mpv.clone(), path.to_string());
+        crate::render::when_ready(move || {
+            if let Err(e) = mpv.command("loadfile", &[&quote(&path)]) {
+                eprintln!("vivi: open {path}: {e:?}");
+            }
+            let play = AUTOPLAY.load(std::sync::atomic::Ordering::Relaxed);
+            let _ = mpv.set_property("pause", !play);
+        });
     }
     pub fn toggle_pause(&self) {
         let _ = self.mpv.command("cycle", &["pause"]);
@@ -296,6 +299,15 @@ impl Player {
         self.mpv.get_property::<String>(name).ok()
     }
     pub fn run(&self, cmd: &str) {
+        if loads_media(cmd.split_whitespace().next().unwrap_or("")) {
+            let (mpv, cmd) = (self.mpv.clone(), cmd.to_string());
+            crate::render::when_ready(move || {
+                if let Err(e) = mpv.command(&cmd, &[]) {
+                    eprintln!("vivi: command {cmd}: {e:?}");
+                }
+            });
+            return;
+        }
         if let Err(e) = self.mpv.command(cmd, &[]) {
             eprintln!("vivi: command {cmd}: {e:?}");
         }
@@ -304,6 +316,16 @@ impl Player {
     /// since `mpv_command_string` does not understand `%len%` quoting).
     pub fn cmd(&self, name: &str, args: &[&str]) {
         let q: Vec<String> = args.iter().map(|a| quote(a)).collect();
+        if loads_media(name) {
+            let (mpv, name) = (self.mpv.clone(), name.to_string());
+            crate::render::when_ready(move || {
+                let q: Vec<&str> = q.iter().map(String::as_str).collect();
+                if let Err(e) = mpv.command(&name, &q) {
+                    eprintln!("vivi: command {name}: {e:?}");
+                }
+            });
+            return;
+        }
         let q: Vec<&str> = q.iter().map(String::as_str).collect();
         if let Err(e) = self.mpv.command(name, &q) {
             eprintln!("vivi: command {name}: {e:?}");
@@ -311,6 +333,10 @@ impl Player {
     }
     /// Like [`Player::cmd`], but returns mpv's error instead of logging it.
     pub fn try_cmd(&self, name: &str, args: &[&str]) -> Result<(), String> {
+        if loads_media(name) {
+            self.cmd(name, args);
+            return Ok(());
+        }
         let q: Vec<String> = args.iter().map(|a| quote(a)).collect();
         let q: Vec<&str> = q.iter().map(String::as_str).collect();
         self.mpv.command(name, &q).map_err(|e| format!("{e:?}"))
@@ -378,9 +404,12 @@ impl Player {
 
     /// Append to the queue (mpv playlist); starts playing if idle.
     pub fn enqueue(&self, path: &str) {
-        if let Err(e) = self.mpv.command("loadfile", &[&quote(path), "append-play"]) {
-            eprintln!("vivi: enqueue {path}: {e:?}");
-        }
+        let (mpv, path) = (self.mpv.clone(), path.to_string());
+        crate::render::when_ready(move || {
+            if let Err(e) = mpv.command("loadfile", &[&quote(&path), "append-play"]) {
+                eprintln!("vivi: enqueue {path}: {e:?}");
+            }
+        });
     }
     /// Queue entries: (filename, is_current).
     pub fn queue(&self) -> Vec<(String, bool)> {
@@ -495,6 +524,15 @@ fn descendants() -> Vec<i32> {
     }
     out.reverse();
     out
+}
+
+/// mpv commands that start loading media, which need the render context first
+/// ([`crate::render::when_ready`]).
+fn loads_media(name: &str) -> bool {
+    matches!(
+        name,
+        "loadfile" | "loadlist" | "playlist-play-index" | "playlist-next" | "playlist-prev"
+    )
 }
 
 #[cfg(test)]

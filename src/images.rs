@@ -282,6 +282,12 @@ fn finish(k: Key, d: Option<Decoded>) {
     }
 }
 
+/// The picture of `src` at `size` px if it is already decoded in memory (nothing queued).
+pub fn peek(src: &Path, size: u32) -> Option<slint::Image> {
+    let k: Key = (src.to_path_buf(), size);
+    CACHE.with(|c| c.borrow_mut().lru.get(&k))
+}
+
 /// The picture of `src` shrunk to fit `size` px. Returns it when it is in memory;
 /// otherwise queues it for the worker and calls `done` (UI thread) once it is decoded.
 /// Files that fail to decode are not retried during this run.

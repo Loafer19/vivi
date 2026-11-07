@@ -37,4 +37,6 @@ export global Library {
     callback open-recent(string);
     callback clear-recent();
     callback open-folder();
+    // The browsed list shows items lo..hi (thumbnails load and unload with the view).
+    callback thumb-window(int, int);
 }

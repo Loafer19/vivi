@@ -862,6 +862,7 @@ export component AppWindow inherits Window {
         open-extensions() => { Extensions.select(Extensions.tab, false); }
         add-folders() => { Settings.category = 11; Overlays.settings-open = true; Settings.refresh(11, "", false); }
         clear-recent() => { Library.clear-recent(); }
+        thumb-window(lo, hi) => { Library.thumb-window(lo, hi); }
         forget-recent(it) => { Library.menu(it.recent-key, it.kind, "forget-recent"); }
         popout() => {
             if (Playback.has-media) { Library.full = !Library.full; } else { Playback.open-file(); }
@@ -1353,6 +1354,7 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         title: Dialogs.qr-title; code: Dialogs.qr-code; text: Dialogs.qr-text; caption: Dialogs.qr-caption;
         close => { Overlays.qr-open = false; }
+        open-link(u) => { Dialogs.qr-open-link(u); }
     }
 
     // ---------- Add Subtitles (From Computer: core; From OpenSubtitles: Subtitle Search) ----------

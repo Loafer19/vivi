@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-06
+
+Highlights: **settings as cards**, regrouped with plain-language labels and real window, autoplay and hidden-file options; **panel transparency** for the bars, library, side panel and drawers; a full **Auto-hide** card; the **Plugins menu shows only what applies** to what is playing; **Discard** in the Downloads panel and **Uninstall…** with confirmation on a plugin's page; faster thumbnails and library database, and a Windows library scan fix.
+
 ### Added
 - **Window options** (#97), Settings → Interface → Window: *Remember window size and position* (on by default; saved on quit as `interface.window`; on Wayland only the size, since compositors place windows), *Keep window above other windows* (X11, Windows and macOS; Wayland compositors ignore it, use a window rule) and *Resize window to fit video* (Never / Always / First video only: the window takes the video's size, at most 90% of the screen, when a video starts; not in fullscreen, maximized, miniplayer or for audio). These were placeholders until now and keep their `stub.interface.*` keys.
 - **Start playing as soon as a file opens** (#97), Settings → Playback → Startup: off opens files paused (`stub.playback.autoplay`, on by default).

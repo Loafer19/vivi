@@ -6,7 +6,8 @@ use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamA
 use libmpv2::Mpv;
 use slint::{ComponentHandle, GraphicsAPI, RenderingState};
 use std::ffi::{c_void, CString};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 type ProcFn<'a> = &'a dyn Fn(&std::ffi::CStr) -> *const c_void;
 
@@ -151,29 +152,80 @@ fn gl_strings(gpa: ProcFn) -> (String, String) {
     (get(0x1F00), get(0x1F01))
 }
 
-/// `on_ready` runs once the mpv render context exists. Files must be loaded only after
-/// that, otherwise `vo=libmpv` fails to initialize ("No render context set").
+// The mpv render context is created lazily, on the first frame after something wants
+// to play (see [`when_ready`]). Creating it loads mpv's GL renderer and the hwdec
+// interop (on NVIDIA: libcuda and the CUDA driver), which cost tens of MB while vivi
+// sits idle with nothing open.
+
+/// Set once anything asked for playback; from then on the context is (re)created as
+/// soon as the window has a GL context.
+static WANTED: AtomicBool = AtomicBool::new(false);
+/// The context exists (cleared on rendering teardown).
+static READY: AtomicBool = AtomicBool::new(false);
+type Job = Box<dyn FnOnce() + Send>;
+/// Commands waiting for the render context (files must load only after it exists,
+/// otherwise `vo=libmpv` fails to initialize: "No render context set").
+static WAITING: Mutex<Vec<Job>> = Mutex::new(Vec::new());
+
+thread_local! {
+    static WINDOW: std::cell::RefCell<Option<slint::Weak<crate::AppWindow>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` once the mpv render context exists: right away when it does, otherwise after
+/// the next frame creates it. If no frame comes (window hidden to the tray) the jobs run
+/// anyway after a short wait, so audio still plays.
+pub fn when_ready(f: impl FnOnce() + Send + 'static) {
+    if READY.load(Ordering::Acquire) {
+        f();
+        return;
+    }
+    WANTED.store(true, Ordering::Release);
+    WAITING
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push(Box::new(f));
+    let _ = slint::invoke_from_event_loop(|| {
+        WINDOW.with(|w| {
+            if let Some(a) = w.borrow().as_ref().and_then(|w| w.upgrade()) {
+                a.window().request_redraw();
+            }
+        });
+        slint::Timer::single_shot(std::time::Duration::from_millis(500), run_waiting);
+    });
+}
+
+fn run_waiting() {
+    let jobs = std::mem::take(&mut *WAITING.lock().unwrap_or_else(|e| e.into_inner()));
+    for j in jobs {
+        j();
+    }
+}
+
+/// Hook the mpv render context into the window's rendering. Files given on the command
+/// line should be opened through [`when_ready`] (the player does this itself).
 pub fn attach(
     app: &crate::AppWindow,
     mpv: Arc<Mpv>,
     interop: (String, String),
-    on_ready: impl FnOnce() + 'static,
 ) -> Result<(), slint::SetRenderingNotifierError> {
     let weak = app.as_weak();
+    WINDOW.with(|w| *w.borrow_mut() = Some(weak.clone()));
     let mut ctx: Option<RenderContext> = None;
     let mut gl: Option<GlReset> = None;
-    let mut on_ready = Some(on_ready);
-    app.window()
-        .set_rendering_notifier(move |state, api| match state {
+    app.window().set_rendering_notifier(move |state, api| {
+        let GraphicsAPI::NativeOpenGL {
+            get_proc_address: gpa,
+        } = api
+        else {
+            if matches!(state, RenderingState::RenderingSetup) {
+                eprintln!("vivi: non-OpenGL renderer, video output unavailable");
+            }
+            return;
+        };
+        let gpa: ProcFn = gpa;
+        match state {
             RenderingState::RenderingSetup => {
-                let GraphicsAPI::NativeOpenGL {
-                    get_proc_address: gpa,
-                } = api
-                else {
-                    eprintln!("vivi: non-OpenGL renderer, video output unavailable");
-                    return;
-                };
-                let gpa: ProcFn = gpa;
                 gl = GlReset::load(gpa);
                 let (vendor, renderer) = gl_strings(gpa);
                 if let Some(i) = pick_interop(&interop.0, &interop.1, &vendor, &renderer) {
@@ -181,39 +233,14 @@ pub fn attach(
                         eprintln!("vivi: gpu-hwdec-interop={i}: {e:?}");
                     }
                 }
-                let ptr = &gpa as *const ProcFn as usize;
-                // SAFETY: mpv handle outlives the render context (Arc kept in closure).
-                let handle = unsafe { &mut *mpv.ctx.as_ptr() };
-                match RenderContext::new(
-                    handle,
-                    vec![
-                        RenderParam::ApiType(RenderParamApiType::OpenGl),
-                        RenderParam::InitParams(OpenGLInitParams {
-                            get_proc_address,
-                            ctx: ptr,
-                        }),
-                    ],
-                ) {
-                    Ok(mut rc) => {
-                        let w = weak.clone();
-                        rc.set_update_callback(move || {
-                            let w = w.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(a) = w.upgrade() {
-                                    a.window().request_redraw();
-                                }
-                            });
-                        });
-                        ctx = Some(rc);
-                        if let Some(f) = on_ready.take() {
-                            // Run after this callback returns (outside the GL setup).
-                            slint::Timer::single_shot(std::time::Duration::ZERO, f);
-                        }
-                    }
-                    Err(e) => eprintln!("vivi: mpv render context failed: {e:?}"),
+                if WANTED.load(Ordering::Acquire) {
+                    ctx = create(&mpv, gpa, &weak);
                 }
             }
             RenderingState::BeforeRendering => {
+                if ctx.is_none() && WANTED.load(Ordering::Acquire) {
+                    ctx = create(&mpv, gpa, &weak);
+                }
                 if let (Some(rc), Some(a)) = (
                     &ctx,
                     weak.upgrade()
@@ -230,14 +257,57 @@ pub fn attach(
                     }
                 }
             }
-            RenderingState::AfterRendering => {
-                let _ = &ctx;
-            }
             RenderingState::RenderingTeardown => {
+                READY.store(false, Ordering::Release);
                 ctx = None;
             }
             _ => {}
-        })
+        }
+    })
+}
+
+/// Create the render context (GL context current) and run the waiting jobs after this
+/// rendering callback returns.
+fn create(
+    mpv: &Arc<Mpv>,
+    gpa: ProcFn,
+    weak: &slint::Weak<crate::AppWindow>,
+) -> Option<RenderContext> {
+    let ptr = &gpa as *const ProcFn as usize;
+    // SAFETY: mpv handle outlives the render context (Arc kept in the notifier closure).
+    let handle = unsafe { &mut *mpv.ctx.as_ptr() };
+    match RenderContext::new(
+        handle,
+        vec![
+            RenderParam::ApiType(RenderParamApiType::OpenGl),
+            RenderParam::InitParams(OpenGLInitParams {
+                get_proc_address,
+                ctx: ptr,
+            }),
+        ],
+    ) {
+        Ok(mut rc) => {
+            let w = weak.clone();
+            rc.set_update_callback(move || {
+                let w = w.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(a) = w.upgrade() {
+                        a.window().request_redraw();
+                    }
+                });
+            });
+            READY.store(true, Ordering::Release);
+            slint::Timer::single_shot(std::time::Duration::ZERO, run_waiting);
+            Some(rc)
+        }
+        Err(e) => {
+            eprintln!("vivi: mpv render context failed: {e:?}");
+            // Do not retry every frame; queued files still load (audio plays).
+            WANTED.store(false, Ordering::Release);
+            slint::Timer::single_shot(std::time::Duration::ZERO, run_waiting);
+            None
+        }
+    }
 }
 
 #[cfg(test)]
