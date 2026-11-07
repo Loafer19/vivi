@@ -19,8 +19,17 @@ fetch appimagetool https://github.com/AppImage/appimagetool/releases/download/co
 rm -rf "$APPDIR"
 # linuxdeploy resolves libraries (skipping the AppImage excludelist: glibc,
 # GL/EGL, libX11/xcb core, fontconfig/freetype, ...) and strips everything.
+# winit opens its X11 helpers with dlopen at run time, so linuxdeploy cannot see
+# them: bundle the ones outside the excludelist explicitly (without
+# libxkbcommon-x11 vivi panics on X11 hosts that lack it, as the catalog test did).
+DLOPEN_LIBS=()
+for lib in libxkbcommon-x11.so.0 libxkbcommon.so.0 libxcb-xkb.so.1 libXcursor.so.1 libXi.so.6 libXrandr.so.2; do
+  path=$(/sbin/ldconfig -p | awk -v n="$lib" '$1 == n && /x86-64/ { print $NF; exit }')
+  [ -n "$path" ] || { echo "$lib not found on the build host" >&2; exit 1; }
+  DLOPEN_LIBS+=(--library "$path")
+done
 LD_LIBRARY_PATH="$DEPS/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  "$TOOLS/linuxdeploy" --appdir "$APPDIR" --executable "$ROOT/target/release/vivi" \
+  "$TOOLS/linuxdeploy" --appdir "$APPDIR" --executable "$ROOT/target/release/vivi" "${DLOPEN_LIBS[@]}" \
   --desktop-file "$ROOT/packaging/vivi.desktop" --icon-file "$ROOT/packaging/vivi.svg"
 
 # A PNG icon in the AppDir root and as .DirIcon (the AppImage catalog and file
