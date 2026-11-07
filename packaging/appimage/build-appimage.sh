@@ -23,6 +23,14 @@ LD_LIBRARY_PATH="$DEPS/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   "$TOOLS/linuxdeploy" --appdir "$APPDIR" --executable "$ROOT/target/release/vivi" \
   --desktop-file "$ROOT/packaging/vivi.desktop" --icon-file "$ROOT/packaging/vivi.svg"
 
+# A PNG icon in the AppDir root and as .DirIcon (the AppImage catalog and file
+# managers need it; appimagetool does not accept the SVG for .DirIcon).
+install -Dm644 "$ROOT/packaging/vivi.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/vivi.png"
+rm -f "$APPDIR/vivi.svg" "$APPDIR/vivi.png" "$APPDIR/.DirIcon"
+ln -s usr/share/icons/hicolor/256x256/apps/vivi.png "$APPDIR/vivi.png"
+ln -s vivi.png "$APPDIR/.DirIcon"
+[ -s "$APPDIR/.DirIcon" ] || { echo ".DirIcon missing in $APPDIR" >&2; exit 1; }
+
 # Host-provided stacks that every desktop ships and that must match the user's
 # session/drivers (per the AppImage excludelist spirit): Wayland, D-Bus,
 # systemd/udev, PulseAudio/ALSA client libraries, libdrm, OpenCL ICD loader.
