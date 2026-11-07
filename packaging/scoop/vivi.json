@@ -1,13 +1,13 @@
 {
-    "version": "0.16.0",
+    "version": "0.16.1",
     "description": "Fast, minimal media player built on mpv",
     "homepage": "https://github.com/Loafer19/vivi",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/Loafer19/vivi/releases/download/v0.16.0/vivi-v0.16.0-windows-x86_64.zip",
-            "hash": "34c5de5d8da1ba7c0b278b2a2a23069bce3202eda50377fb4de9043bf0e6948d",
-            "extract_dir": "vivi-v0.16.0-windows-x86_64"
+            "url": "https://github.com/Loafer19/vivi/releases/download/v0.16.1/vivi-v0.16.1-windows-x86_64.zip",
+            "hash": "86ba485a9a8ee60e6896c21475142286d54e322cae25851f325195f8c0b94322",
+            "extract_dir": "vivi-v0.16.1-windows-x86_64"
         }
     },
     "bin": "vivi.exe",
