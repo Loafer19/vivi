@@ -1,0 +1,38 @@
+// Top-bar status chip (src/status.rs): accent icon (+ short label) for a feature that is on.
+
+import { Theme, Metrics, TriIcon } from "../core/theme.slint";
+import { Indicator } from "../state/status.slint";
+import { Duo } from "../core/duo.slint";
+
+// Top-bar status chip (src/status.rs): accent icon (+ short label) for a feature that is
+// on; clicking opens its panel or setting. Two-tone bars draw the icon's solid
+// `-active` art, single-tone bars its plain art in the accent colour.
+export component StatusChip inherits Rectangle {
+    in property <Indicator> it;
+    callback clicked();
+    property <string> solid: root.it.icon + "-active";
+    property <bool> has-solid: Duo.base(root.solid).width > 0;
+    height: 28px;
+    border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.accent.with-alpha(0.22) : Theme.accent.with-alpha(0.10);
+    HorizontalLayout {
+        padding-left: 6px; padding-right: root.it.label != "" ? 8px : 6px; spacing: 5px;
+        TriIcon {
+            y: (parent.height - self.height) / 2; width: 18px; height: 18px;
+            name: Theme.bar-duo && root.has-solid ? root.solid : root.it.icon;
+            tint: Theme.accent; accent-tint: Theme.accent; dim-tint: Theme.accent-dim;
+            flat: !Theme.bar-duo;
+        }
+        if root.it.label != "": Text {
+            text: root.it.label; color: Theme.accent-bright; font-family: "DM Mono"; font-size: Metrics.font-sm;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        accessible-role: button; accessible-label: root.it.tip;
+        accessible-action-default => { root.clicked(); }
+        clicked => { root.clicked(); }
+    }
+    Tooltip { text: @markdown("\{root.it.tip}"); }
+}

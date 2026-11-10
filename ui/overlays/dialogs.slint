@@ -1,0 +1,273 @@
+// Modal dialogs, the resume / toast prompt and the context menus. Instantiated
+// last in the shell so they paint above chrome. Esc stacking lives on AppWindow.
+import { Theme, Metrics } from "../core/theme.slint";
+import { PrimaryButton, ButtonSize } from "../core/buttons.slint";
+import { Modal } from "../core/modal.slint";
+import { SettingsDialog } from "../settings.slint";
+import { CustomizeDialog } from "../toolbar.slint";
+import { OnboardingDialog } from "../onboarding.slint";
+import { NetworkStreamDialog, NewPlaylistDialog, QrDialog, ConfirmDialog, ShortcutsDialog } from "../dialogs.slint";
+import { MenuPanel } from "../menu.slint";
+import { SubtitleDialog, TagReviewDialog, LyricsSearchDialog } from "../plugins.slint";
+import { Overlays } from "../state/overlays.slint";
+import { Playback } from "../state/playback.slint";
+import { Dialogs } from "../state/dialogs.slint";
+import { Menus } from "../state/menus.slint";
+import { Library } from "../state/library.slint";
+import { Settings } from "../state/settings.slint";
+import { Customize } from "../state/customize.slint";
+import { Lyrics } from "../state/lyrics.slint";
+import { Subtitles } from "../state/subtitles.slint";
+import { MusicDialogState } from "../state/music-dialog.slint";
+import { TagReview } from "../state/tag-review.slint";
+import { MusicPane } from "../music-pane.slint";
+import { Notices } from "../state/notices.slint";
+import { ExtensionsDialog } from "../extensions.slint";
+import { PaletteDialog } from "../palette.slint";
+
+export component OverlayDialogs inherits Rectangle {
+    in property <length> bar-h;
+    callback plugin-command(string, string, string);
+    callback focused();
+    background: transparent;
+
+// ---------- Network stream ----------
+if Overlays.network-open: NetworkStreamDialog {
+    width: root.width; height: root.height;
+    ytdlp: Library.ytdlp; history: Dialogs.net-history; error: Dialogs.net-error;
+    urls <=> Dialogs.net-urls; name <=> Dialogs.net-name;
+    submit(u, n) => { Dialogs.network-submit(u, n); }
+    close() => { Overlays.network-open = false; Dialogs.net-error = ""; root.focused(); }
+}
+
+// ---------- New playlist ----------
+if Overlays.new-playlist-open: NewPlaylistDialog {
+    width: root.width; height: root.height;
+    files: Dialogs.new-playlist-files; cover: Dialogs.new-playlist-cover; has-cover: Dialogs.new-playlist-has-cover; error: Dialogs.new-playlist-error;
+    name <=> Dialogs.new-playlist-name;
+    pick-cover => { Dialogs.new-playlist-pick-cover(); }
+    pick-files => { Dialogs.new-playlist-pick-files(); }
+    remove-file(i) => { Dialogs.new-playlist-remove(i); }
+    save(n) => { Dialogs.new-playlist-save(n); }
+    close => { Dialogs.new-playlist-close(); root.focused(); }
+}
+
+// ---------- Settings dialog ----------
+if Overlays.settings-open: SettingsDialog {
+    width: root.width; height: root.height;
+    categories: Settings.categories;
+    rows: Settings.rows;
+    category <=> Settings.category;
+    status: Settings.status;
+    search <=> Settings.search;
+    advanced <=> Settings.advanced;
+    changed(id, v) => { Settings.setting-changed(id, v); }
+    refresh(c, q, adv) => { Settings.refresh(c, q, adv); }
+    close() => { Overlays.settings-open = false; root.focused(); }
+}
+
+// ---------- Extensions window (src/extwin.rs) ----------
+if Overlays.extensions-open: ExtensionsDialog {
+    width: root.width; height: root.height;
+    changed(id, v) => { Settings.setting-changed(id, v); }
+    close() => { Overlays.extensions-open = false; root.focused(); }
+}
+
+// ---------- Plugin QR code (above Settings, which opens it) ----------
+if Overlays.qr-open: QrDialog {
+    width: root.width; height: root.height;
+    title: Dialogs.qr-title; code: Dialogs.qr-code; text: Dialogs.qr-text; caption: Dialogs.qr-caption;
+    close => { Overlays.qr-open = false; }
+    open-link(u) => { Dialogs.qr-open-link(u); }
+}
+
+// ---------- Add Subtitles (From Computer: core; From OpenSubtitles: Subtitle Search) ----------
+if Overlays.subs-open: SubtitleDialog {
+    width: root.width; height: root.height;
+    hits: Subtitles.hits; langs: Subtitles.langs; selected: Subtitles.selected;
+    details: Subtitles.details; preview: Subtitles.preview; save-next: Subtitles.save-next; auto-exact: Subtitles.auto-exact;
+    status: Subtitles.status; busy: Subtitles.busy;
+    query <=> Subtitles.query; lang <=> Subtitles.lang;
+    local: Subtitles.local; folder: Subtitles.folder;
+    target <=> Subtitles.target; source <=> Subtitles.source; online: Subtitles.plugin;
+    cmd(n, a) => {
+        if (!Subtitles.plugin || n == "browse" || n == "toggle" || n == "save-local") { Subtitles.local-cmd(n, a); }
+        else { root.plugin-command("subtitle-search", n, a); }
+    }
+    close => { Overlays.subs-open = false; root.focused(); }
+}
+
+// ---------- Auto-tagger / Free Music ----------
+// Shown as a Library page instead while it is one (Streams hub, #86).
+if Overlays.md-open && !MusicDialogState.page: Modal {
+    width: root.width; height: root.height;
+    // The station browser grows with the window (the modal still keeps it inside).
+    card-width: MusicDialogState.caps.rich ? 1060px : MusicDialogState.caps.grid ? max(900px, min(1400px, root.width * 0.86)) : 900px;
+    card-height: MusicDialogState.caps.rich ? 720px : MusicDialogState.caps.grid ? max(640px, min(960px, root.height * 0.88)) : 640px;
+    dismissed => { Overlays.md-open = false; root.plugin-command(MusicDialogState.owner, "close", ""); root.focused(); }
+    MusicPane {
+        width: 100%; height: 100%;
+        command(o, n, a) => { root.plugin-command(o, n, a); }
+        closed => { root.focused(); }
+    }
+}
+
+// ---------- Plugin confirmation (above Settings and the music dialog) ----------
+if Overlays.confirm-open: ConfirmDialog {
+    width: root.width; height: root.height;
+    title: Dialogs.confirm-title; heading: Dialogs.confirm-heading; text: Dialogs.confirm-text;
+    ok-label: Dialogs.confirm-ok; warning: Dialogs.confirm-warning;
+    check-label: Dialogs.confirm-check; checked <=> Dialogs.confirm-checked; checked-text: Dialogs.confirm-checked-text;
+    answer(yes) => {
+        Overlays.confirm-open = false;
+        root.plugin-command(Dialogs.confirm-owner, "confirm", Dialogs.confirm-key + "\u{1f}" + (yes ? (Dialogs.confirm-check != "" && Dialogs.confirm-checked ? "checked" : "yes") : "no"));
+    }
+}
+
+// ---------- Find Lyrics (Lyrics plugin) ----------
+if Overlays.ls-open: LyricsSearchDialog {
+    width: root.width; height: root.height;
+    results: Lyrics.search-results; status: Lyrics.search-status; preview: Lyrics.search-preview; busy: Lyrics.search-busy;
+    artist <=> Lyrics.search-artist; title <=> Lyrics.search-title; selected <=> Lyrics.search-selected;
+    cmd(n, a) => { root.plugin-command("lyrics", n, a); if (n == "search-close") { root.focused(); } }
+}
+
+// ---------- Auto-tagger review ----------
+if Overlays.tr-open: TagReviewDialog {
+    width: root.width; height: root.height;
+    files: TagReview.files; status: TagReview.status; busy: TagReview.busy;
+    summary: TagReview.summary; summary-sub: TagReview.summary-sub; summary-ok: TagReview.summary-ok; results: TagReview.results; can-undo: TagReview.can-undo;
+    cmd(n, a) => { root.plugin-command("auto-tagger", n, a); if (n == "review-close") { root.focused(); } }
+}
+
+// ---------- Customize player ----------
+if Overlays.customize-open: CustomizeDialog {
+    width: root.width; height: root.height;
+    items: Customize.bar-items; styles: Customize.bar-styles; bar-style: Customize.bar-style;
+    pick-style(st) => { Customize.style(st); }
+    vol-styles: Customize.vol-styles; vol-style: Customize.vol-style;
+    pick-volume(st) => { Customize.pick-volume(st); }
+    available: Customize.available;
+    items-meta: Customize.bar-meta; available-meta: Customize.available-meta;
+    profiles: Customize.profiles; profile: Customize.profile;
+    move(i, d) => { Customize.move(i, d); }
+    remove(i) => { Customize.remove(i); }
+    add(id) => { Customize.add(id); }
+    pick-profile(p) => { Customize.select-profile(p); }
+    save() => { Customize.done(true); root.focused(); }
+    cancel() => { Customize.done(false); root.focused(); }
+}
+
+// ---------- First-run onboarding ----------
+if Overlays.onboarding-open: OnboardingDialog {
+    width: root.width; height: root.height;
+    step <=> Settings.onboarding-step;
+    dark: Theme.dark; accent: Settings.accent-name;
+    accents: Settings.accent-names; swatches: Settings.accent-colors;
+    keys: Settings.onboarding-keys; actions: Settings.onboarding-actions;
+    set-theme(t) => { Settings.setting-changed("interface.theme", t); }
+    set-accent(a) => { Settings.setting-changed("interface.accent", a); }
+    finish() => { Settings.onboarding-done(); root.focused(); }
+}
+
+// ---------- Properties & Metadata ----------
+if Overlays.info-open: Modal {
+    card-width: 520px;
+    card-height: icol.preferred-height;
+    inset: 48px;
+    card-background: Theme.bar-solid;
+    bordered: false;
+    dismissed => { Overlays.info-open = false; }
+    icol := VerticalLayout {
+        padding: 20px; spacing: 10px;
+        Text { text: Dialogs.info-title; color: Theme.fg-1; font-size: Metrics.font-lg; overflow: elide; }
+        Rectangle { height: 1px; background: Theme.bg-a1; }
+        for k[i] in Dialogs.info-keys: HorizontalLayout {
+            spacing: 10px;
+            Text { text: k; color: Theme.fg-a3; font-size: Metrics.font-base; width: 110px; }
+            Text { text: Dialogs.info-values[i]; color: Theme.fg-a2; font-size: Metrics.font-base; wrap: word-wrap; horizontal-stretch: 1; }
+        }
+        HorizontalLayout {
+            alignment: end;
+            PrimaryButton {
+                size: ButtonSize.sm; min-w: 80px; text: "Close";
+                clicked => { Overlays.info-open = false; }
+            }
+        }
+    }
+}
+
+// ---------- Keyboard shortcuts ("?") ----------
+if Overlays.shortcuts-open: ShortcutsDialog {
+    width: root.width; height: root.height;
+    actions: Settings.shortcut-actions; keys: Settings.shortcut-keys;
+    close => { Overlays.shortcuts-open = false; root.focused(); }
+}
+
+// ---------- Toast / resume prompt (above every screen and dialog, below the menus;
+// also without media, e.g. plugin results while browsing the library or Extensions) ----------
+if Notices.resume-text != "": Rectangle {
+    width: toast.preferred-width; height: 52px;
+    x: (root.width - self.width) / 2;
+    y: root.height - (Playback.has-media ? root.bar-h : 0px) - self.height - 16px;
+    border-radius: Metrics.radius-xxl;
+    background: Theme.bar;
+    toast := HorizontalLayout {
+        padding-left: 20px; padding-right: 10px; spacing: 24px;
+        Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
+        HorizontalLayout {
+            spacing: 10px; padding-top: 10px; padding-bottom: 10px;
+            if Notices.toast-action != "" && Notices.toast-action-text == Notices.resume-text: Rectangle {
+                width: ta-label.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
+                ta-label := Text { text: Notices.toast-action; color: Theme.accent-bright; vertical-alignment: center; }
+                TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; accessible-action-default => { Notices.toast-run(Notices.toast-action-id); } clicked => { Notices.toast-run(Notices.toast-action-id); } }
+            }
+            if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
+                width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
+                so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
+                TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; accessible-action-default => { Notices.start-over(); } clicked => { Notices.start-over(); } }
+            }
+            Rectangle {
+                width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;
+                Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
+                TouchArea { accessible-role: button; accessible-label: "OK"; mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
+            }
+        }
+    }
+}
+
+// ---------- Menus (topmost) ----------
+// ---------- Command palette (src/palette.rs) ----------
+if Overlays.palette-open: PaletteDialog {
+    width: root.width; height: root.height;
+    close => { Overlays.palette-open = false; root.focused(); }
+}
+
+if Menus.menu-kind != "": TouchArea {
+    clicked => { Menus.menu-kind = ""; Menus.sub-open = ""; }
+    pointer-event(e) => {
+        if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { Menus.menu-kind = ""; Menus.sub-open = ""; }
+    }
+}
+if Menus.menu-kind != "": main-menu := MenuPanel {
+    width: Menus.menu-width;
+    x: max(4px, min(Menus.menu-x, root.width - self.width - 4px));
+    y: max(4px, min(Menus.menu-y, root.height - self.height - 4px));
+    items: Menus.menu-items;
+    open-sub: Menus.sub-open;
+    activated(id) => { Menus.menu-activate(id); }
+    row-hovered(id, y) => {
+        Menus.sub-y = self.y + y - 4px;
+        Menus.sub-open = id;
+        Menus.menu-sub(id);
+    }
+}
+if Menus.menu-kind != "" && Menus.sub-open != "" && Menus.sub-items.length > 0: MenuPanel {
+    property <length> right-x: Menus.menu-x + Menus.menu-width - 4px;
+    width: 265px;
+    x: self.right-x + self.width > root.width ? max(4px, Menus.menu-x - self.width + 4px) : self.right-x;
+    y: max(4px, min(Menus.sub-y, root.height - self.height - 4px));
+    items: Menus.sub-items;
+    activated(id) => { Menus.menu-activate(id); }
+}
+}

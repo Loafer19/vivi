@@ -1,0 +1,86 @@
+// A configurable bottom-bar item and a row of the ⋯ overflow menu (see toolbar.slint).
+
+import { Theme, Metrics, TriIcon } from "../core/theme.slint";
+import { IconButton, ButtonSize } from "../core/buttons.slint";
+import { VolumeStyle } from "../core/types.slint";
+import { Tools } from "../toolbar.slint";
+import { VolumeBar, VolumeSlider, VolumePopup, VolumePercent } from "volume.slint";
+
+// A configurable bottom-bar item (see toolbar.slint for the catalogue).
+export component BarItem inherits HorizontalLayout {
+    in property <string> id;
+    in property <bool> active;
+    in property <bool> muted;
+    in property <float> volume;
+    in property <float> volume-max: 150;
+    in property <bool> fullscreen;
+    in property <bool> wide: true; // room for the volume slider
+    in property <bool> shown: true; // false = collapsed into the overflow menu
+    in property <bool> compact: false;
+    in property <VolumeStyle> vstyle: VolumeStyle.cone;
+    in property <bool> boxed: true; // bar style draws boxed tracks (all but Plain)
+    callback act(string);
+    callback volume-changed(float);
+    // close-none / -low / -medium are the muted and lower-volume speakers of the icon sheet.
+    property <string> vol-duo: root.muted || root.volume < 1 ? "close-none"
+            : root.volume < 50 ? "close-low"
+            : root.volume < 100 ? "close-medium"
+            : "volume-high";
+    spacing: root.compact ? 2px : 6px;
+    horizontal-stretch: 0;
+    if root.shown && root.id == "volume" && root.vstyle != VolumeStyle.popup: IconButton { tab-focus: false;
+        size: root.compact ? ButtonSize.sm : ButtonSize.md;
+        tip: Tools.label("volume");
+        duo: root.vol-duo; bar: true;
+        clicked => { root.act("mute"); }
+    }
+    if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.popup: VerticalLayout { alignment: center; VolumePopup {
+        compact: root.compact; duo: root.vol-duo; flat: !Theme.bar-duo; tip: Tools.label("volume");
+        value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+        mute => { root.act("mute"); }
+    } }
+    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.bar: VerticalLayout { alignment: root.compact ? center : start; VolumeSlider {
+        compact: root.compact; boxed: root.boxed; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    } }
+    if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.percent: VerticalLayout { alignment: root.compact ? center : start; VolumePercent {
+        compact: root.compact; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    } }
+    // Inline bars: centred on the row like the seek track, so both share one vertical centre.
+    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.cone && root.compact: VerticalLayout { alignment: center; VolumeBar {
+        compact: true; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    } }
+    // Classic: the seek track has its own row; the wedge stays in line with the buttons.
+    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.cone && !root.compact: VolumeBar {
+        compact: false; value: root.volume; maximum: root.volume-max;
+        changed(v) => { root.volume-changed(v); }
+    }
+    // Icon only on the bar (labels live in the ⋯ overflow menu and hover Tooltip).
+    if root.shown && root.id != "volume": IconButton { tab-focus: false;
+        size: root.compact ? ButtonSize.sm : ButtonSize.md; active: root.active; tip: Tools.label(root.id);
+        duo: root.id == "fullscreen" && root.fullscreen ? "fullscreen-active" : Tools.duo(root.id); bar: true;
+        clicked => { root.act(root.id); }
+    }
+}
+
+export component OverflowRow inherits Rectangle {
+    in property <string> id;
+    // Plugin buttons: their own label / icon (else the Tools catalogue's).
+    in property <string> plabel;
+    in property <string> pduo; // plugin button icon name
+    property <string> label: root.plabel != "" ? root.plabel : Tools.label(root.id);
+    in property <bool> active;
+    callback act(string);
+    border-radius: Metrics.radius-sm;
+    background: ta.has-hover ? Theme.bg-a1 : transparent;
+    clip: true;
+    ta := TouchArea { accessible-role: button; accessible-label: root.label; mouse-cursor: pointer; clicked => { root.act(root.id); } }
+    HorizontalLayout {
+        padding-left: 8px; spacing: 10px;
+        TriIcon { name: root.plabel != "" ? root.pduo : Tools.duo(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
+        Text { text: root.label; color: root.active ? Theme.accent : Theme.fg-1; vertical-alignment: center; }
+    }
+}

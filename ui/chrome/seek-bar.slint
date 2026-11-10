@@ -1,0 +1,166 @@
+// Playback seek track: chapters, bookmarks, A-B range, waveform and hover preview.
+
+import { Theme, Metrics } from "../core/theme.slint";
+import { Playback } from "../state/playback.slint";
+
+export component SeekBar inherits Rectangle {
+    in property <float> position;
+    in property <float> duration;
+    in property <[image]> frames; // evenly spaced preview frames from the Chapter Thumbnails cache (may be empty)
+    in property <[float]> chapters; // chapter start times (s) → segment gaps on the track
+    in property <[float]> marks; // bookmark times (s) → accent pins (src/bookmarks.rs)
+    in property <[float]> peaks; // audio waveform peaks 0..1 (empty = plain bar)
+    in property <float> range-a: -1; // plugin range (vivi-range), drawn in blue
+    in property <float> range-b: -1;
+    in property <string> range-label;
+    in property <float> ab-a: -1; // A-B loop / range bounds in seconds (-1 = unset)
+    in property <float> ab-b: -1;
+    in property <length> track-h: 8px;
+    in property <bool> boxed: false; // full-height dark track, dim fill, slim bright handle
+    callback seek(float);
+    callback ab-set(float, float);
+    pure callback fmt(float) -> string;
+    height: 18px;
+    property <float> frac: duration > 0 ? clamp(position / duration, 0, 1) : 0;
+    property <float> hover-frac: clamp(ta.mouse-x / self.width, 0, 1);
+    property <bool> hovering: ta.has-hover;
+    changed hovering => {
+        if self.hovering && root.duration > 0 {
+            Playback.preview-wanted();
+        }
+    }
+    property <bool> wave: root.peaks.length > 0;
+    property <float> ra: root.duration > 0 && root.ab-a >= 0 ? clamp(root.ab-a / root.duration, 0, 1) : -1;
+    property <float> rb: root.duration > 0 && root.ab-b >= 0 ? clamp(root.ab-b / root.duration, 0, 1) : (root.ra >= 0 ? root.frac : -1);
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: root.wave || root.boxed ? root.height : (ta.has-hover ? root.track-h + 2px : root.track-h);
+        border-radius: root.boxed ? 4px : 2px;
+        background: root.wave ? transparent : root.boxed ? Theme.track : Theme.bg-a1;
+        clip: root.boxed;
+        if ta.has-hover && !root.wave: Rectangle {
+            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
+            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
+            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * root.hover-frac);
+            background: root.boxed ? Theme.track-tick : Theme.divider;
+        }
+        if !root.wave: Rectangle {
+            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
+            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
+            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * (ta.pressed ? root.hover-frac : root.frac));
+            background: root.boxed ? (ta.has-hover ? Theme.track-fill-hover : Theme.track-fill) : (ta.has-hover ? Theme.accent-bright : Theme.accent);
+        }
+        // Waveform: one bar per peak, the played part in the accent colour.
+        for v[i] in root.peaks: Rectangle {
+            x: parent.width * i / root.peaks.length;
+            width: max(1px, parent.width / root.peaks.length - 1px);
+            height: max(2px, parent.height * clamp(v, 0, 1));
+            y: (parent.height - self.height) / 2;
+            border-radius: Metrics.radius-xs;
+            background: (i + 0.5) / root.peaks.length <= (ta.pressed ? root.hover-frac : root.frac) ? Theme.accent
+                : ta.has-hover && (i + 0.5) / root.peaks.length <= root.hover-frac ? Theme.fg-a2 : Theme.fg-a3;
+        }
+        // Chapter boundaries cut the track into segments.
+        for c in root.chapters: Rectangle {
+            visible: root.duration > 0 && c > 0.5 && c < root.duration - 0.5;
+            x: parent.width * c / max(root.duration, 1) - 2px; width: 4px;
+            height: parent.height; background: Theme.bar.with-alpha(1);
+            // Notch above and below so boundaries read on thin tracks too.
+            if !root.boxed: Rectangle { x: 1px; width: 2px; y: -4px; height: 3px; border-radius: self.width / 2; background: Theme.fg-a2; }
+            if !root.boxed: Rectangle { x: 1px; width: 2px; y: parent.height + 1px; height: 3px; border-radius: self.width / 2; background: Theme.fg-a2; }
+        }
+        // Plugin range (Cut & Export In/Out)
+        if root.duration > 0 && root.range-a >= 0: Rectangle {
+            property <float> e: root.range-b >= 0 ? root.range-b : root.position;
+            x: parent.width * clamp(min(root.range-a, self.e) / root.duration, 0, 1);
+            width: parent.width * clamp(abs(self.e - root.range-a) / root.duration, 0, 1);
+            height: parent.height; border-radius: Metrics.radius-xs;
+            background: Theme.range.with-alpha(0.25); border-width: 1px; border-color: Theme.range;
+        }
+        // Bookmarks: an accent line through the track with a dot above it.
+        for m in root.marks: Rectangle {
+            visible: root.duration > 0 && m >= 0 && m <= root.duration;
+            x: parent.width * clamp(m / max(root.duration, 1), 0, 1) - 1px; width: 2px;
+            height: parent.height; background: Theme.accent-bright;
+            if !root.boxed: Rectangle { x: -2px; y: -7px; width: 6px; height: 6px; border-radius: 3px; background: Theme.accent-bright; }
+        }
+        // A-B range overlay
+        if root.ra >= 0 && root.rb >= 0: Rectangle {
+            x: parent.width * min(root.ra, root.rb); width: parent.width * abs(root.rb - root.ra);
+            height: parent.height; border-radius: Metrics.radius-xs;
+            background: Theme.accent.with-alpha(0.28);
+            border-width: 1px; border-color: Theme.accent-bright;
+        }
+    }
+    // Playhead handle (compact style)
+    if root.duration > 0 && !root.wave: Rectangle {
+        width: root.boxed ? 5px : 4px; height: root.boxed ? root.height - 3px : root.track-h + 8px; border-radius: root.boxed ? 2.5px : 2px;
+        x: clamp(1.5px + (root.width - 3px) * (ta.pressed ? root.hover-frac : root.frac) - self.width, 1.5px, root.width - self.width - 1.5px); y: (root.height - self.height) / 2;
+        background: Theme.accent;
+        visible: root.boxed || root.track-h > 8px || ta.has-hover;
+    }
+    // Hover frame preview (#10; frames from the Chapter Thumbnails package)
+    if ta.has-hover && root.duration > 0 && root.frames.length > 0: Rectangle {
+        y: -30px - 6px - 108px;
+        width: 192px; height: 108px;
+        x: clamp(ta.mouse-x - self.width / 2, 0, root.width - self.width);
+        border-radius: Metrics.radius-md; clip: true;
+        background: Theme.video-bg;
+        border-width: 1px; border-color: Theme.divider;
+        Image {
+            width: parent.width; height: parent.height; image-fit: contain;
+            source: root.frames[round(root.hover-frac * (root.frames.length - 1))];
+        }
+    }
+    // Hover time tooltip
+    if ta.has-hover && root.duration > 0: Rectangle {
+        y: -30px;
+        width: tiptext.preferred-width + 12px; height: 22px;
+        x: clamp(ta.mouse-x - self.width / 2, 0, root.width - self.width);
+        border-radius: Metrics.radius-sm;
+        background: Theme.bg-a1;
+        tiptext := Text {
+            text: root.fmt(root.hover-frac * root.duration);
+            color: Theme.fg-1; font-family: "DM Mono"; font-size: Metrics.font-sm;
+            horizontal-alignment: center; vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        accessible-role: slider; accessible-label: "Seek";
+        accessible-value: root.fmt(root.position) + " of " + root.fmt(root.duration);
+        accessible-value-minimum: 0; accessible-value-maximum: root.duration; accessible-value-step: 5;
+        accessible-action-increment => { root.seek(min(root.duration, root.position + 5)); }
+        accessible-action-decrement => { root.seek(max(0, root.position - 5)); }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.up && root.duration > 0) {
+                root.seek(root.hover-frac * root.duration);
+            }
+        }
+    }
+    // Draggable A/B edge handles
+    if root.ra >= 0 && root.ab-b >= 0: Rectangle {
+        x: root.width * root.ra - 5px; width: 10px; height: root.height + 6px; y: -3px;
+        Rectangle { x: 3px; width: 4px; border-radius: self.width / 2; background: ha.has-hover || ha.pressed ? Theme.on-media : Theme.accent-bright; }
+        ha := TouchArea {
+            mouse-cursor: ew-resize;
+            moved => {
+                if (self.pressed) {
+                    root.ab-set(clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration, root.ab-b);
+                }
+            }
+        }
+    }
+    if root.ab-a >= 0 && root.ab-b >= 0: Rectangle {
+        x: root.width * root.rb - 5px; width: 10px; height: root.height + 6px; y: -3px;
+        Rectangle { x: 3px; width: 4px; border-radius: self.width / 2; background: hb.has-hover || hb.pressed ? Theme.on-media : Theme.accent-bright; }
+        hb := TouchArea {
+            mouse-cursor: ew-resize;
+            moved => {
+                if (self.pressed) {
+                    root.ab-set(root.ab-a, clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration);
+                }
+            }
+        }
+    }
+}

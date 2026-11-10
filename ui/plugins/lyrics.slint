@@ -1,0 +1,529 @@
+// Lyrics plugin (src/plugins/lyrics.rs): overlay view, full-screen karaoke and manual search.
+
+import { Theme, Metrics, Icon, TriIcon } from "../core/theme.slint";
+import { TextField } from "../core/controls.slint";
+import { Modal } from "../core/modal.slint";
+import { FlatButton, PrimaryButton } from "../core/buttons.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// A clickable lyrics line: on a live stream click it, or focus it (Tab) and press Enter /
+// Space, when it is being sung to sync the lyrics to it; on a file it jumps there
+// (`verb`). `label` "" = hit area only (drawn over the animated karaoke lines).
+component SyncLine inherits Rectangle {
+    in property <string> label;
+    in property <length> size: 16px;
+    in property <int> weight: 600;
+    in property <color> fg: Theme.stage-fg;
+    in property <float> dim: 0.86;
+    in property <string> name: root.label; // screen-reader text
+    in property <string> verb: "Sync lyrics to this line: ";
+    callback activated();
+    callback moved(); // pointer moved over the line: keep the player chrome shown
+    // Player chrome shown: when it auto-hides the pointer is hidden, so is the hover.
+    in property <bool> chrome: true;
+    property <bool> hover: ta.has-hover && root.chrome;
+    border-radius: Metrics.radius-lg;
+    background: root.hover ? Theme.stage-chip-hover : transparent;
+    animate background { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; padding-top: 3px; padding-bottom: 3px;
+        Text {
+            visible: root.label != "";
+            text: root.label; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center;
+            font-size: root.size; font-weight: root.weight; color: root.fg; opacity: root.hover || kf.has-focus ? 1 : root.dim;
+            min-height: root.size * 0.9;
+        }
+    }
+    ta := TouchArea {
+        accessible-role: button; accessible-label: root.verb + root.name;
+        accessible-action-default => { root.activated(); }
+        mouse-cursor: root.chrome ? MouseCursor.pointer : MouseCursor.none; clicked => { root.activated(); }
+        changed mouse-x => { root.moved(); }
+        changed mouse-y => { root.moved(); }
+    }
+    kf := FocusScope {
+        focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
+}
+
+// "Click the line being sung to sync": the hint of a live stream's unsynced list.
+component SyncHint inherits Rectangle {
+    in property <color> fg: Theme.stage-fg;
+    in property <color> chip: Theme.stage-chip;
+    width: ht.preferred-width + 28px; height: 28px; border-radius: self.height / 2;
+    background: root.chip;
+    ht := Text {
+        text: "Live stream · click the line being sung to sync";
+        color: root.fg.with-alpha(0.72); font-size: Metrics.font-sm; font-weight: 600;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+}
+
+// Karaoke lyrics: the current line in the accent color, neighbours fading out; the
+// block scrolls smoothly as lines change. Drawn over video or the visualizer.
+export component LyricsView inherits Rectangle {
+    in property <[string]> lines;
+    in property <int> index: -1;
+    in property <length> size: 22px;
+    in property <bool> plain;
+    // Live stream with synced lyrics: lines can be clicked to sync (see SyncLine).
+    in property <bool> live;
+    // Synced lyrics of a file: a click on a line jumps there.
+    in property <bool> seekable;
+    callback cmd(string, string);
+    callback activity(); // pointer moved over a line
+    in property <bool> chrome: true; // player chrome shown (hover hides with it)
+    property <length> line-h: root.size * 1.7;
+    property <int> visible-lines: root.plain ? 8 : 5;
+    // Dim the picture behind the lyrics (off over the visualizer).
+    in property <bool> backdrop;
+    height: self.line-h * self.visible-lines;
+    clip: true;
+    if root.backdrop: Rectangle {
+        x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
+        border-radius: Metrics.radius-xxl; background: Theme.media-chip;
+    }
+    if !root.plain: Rectangle {
+        for l[i] in root.lines: Text {
+            property <int> d: abs(i - root.index);
+            visible: self.d <= 3;
+            x: 0; width: root.width;
+            y: (i - root.index + 2) * root.line-h;
+            height: root.line-h;
+            animate y { duration: 260ms; easing: ease-out; }
+            text: l == "" ? "♪" : l;
+            horizontal-alignment: center; vertical-alignment: center;
+            overflow: elide;
+            font-size: i == root.index ? root.size * 1.15 : root.size;
+            font-weight: i == root.index ? 700 : 500;
+            color: i == root.index ? Theme.accent : Theme.on-media;
+            opacity: i == root.index ? 1 : max(0.15, 0.7 - self.d * 0.2);
+            animate opacity, color { duration: 200ms; }
+        }
+        // Live stream: click another line to re-sync; a file: click a line to jump there.
+        if root.live || root.seekable: Rectangle {
+            for l[i] in root.lines: SyncLine {
+                visible: abs(i - root.index) <= 2;
+                x: (root.width - self.width) / 2; width: min(root.width, 760px);
+                y: (i - root.index + 2) * root.line-h; height: root.line-h;
+                animate y { duration: 260ms; easing: ease-out; }
+                name: l == "" ? "instrumental" : l; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
+                activated => { root.cmd(root.live ? "sync-line" : "seek-line", i); } moved => { root.activity(); } chrome: root.chrome;
+            }
+        }
+    }
+    // Live stream, not synced yet: every line clickable, with the hint on top.
+    if root.plain && root.live: Flickable {
+        x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
+        content-height: lcol.preferred-height;
+        lcol := VerticalLayout {
+            padding-top: 12px + 36px; padding-bottom: 12px; padding-left: 8px; padding-right: 8px;
+            for l[i] in root.lines: SyncLine {
+                label: l == "" ? " " : l; size: root.size * 0.8; weight: 500; fg: Theme.on-media; dim: 0.85;
+                name: l == "" ? "instrumental" : l;
+                activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
+            }
+        }
+    }
+    if root.plain && root.live: SyncHint { x: (parent.width - self.width) / 2; y: 10px; fg: Theme.on-media; chip: Theme.media-chip; }
+    // Plain lyrics (no timing): every line, scroll with the wheel or by dragging.
+    if root.plain && !root.live: Flickable {
+        x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
+        content-height: col.preferred-height;
+        col := VerticalLayout {
+            padding-top: 12px; padding-bottom: 12px;
+            for l in root.lines: Text {
+                text: l;
+                horizontal-alignment: center; vertical-alignment: center;
+                wrap: word-wrap;
+                font-size: root.size * 0.8; font-weight: 500;
+                color: Theme.on-media; opacity: 0.85;
+            }
+        }
+    }
+}
+
+// ---------- Lyrics: full-screen karaoke view and manual search (src/plugins/lyrics.rs) ----------
+// A word of the current line (enhanced LRC): `progress` 0..1 drives the accent wipe.
+export struct KWord { text: string, gap: bool, row: int, progress: float }
+export struct LyricsHit { title: string, artist: string, album: string, duration: string, synced: bool, close: bool }
+
+// Rounded pill button of the karaoke header.
+component KPill inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 34px; width: (root.has-icon ? 23px : 0px) + kt.preferred-width + 30px; border-radius: self.height / 2;
+    background: root.primary ? (ta.has-hover ? Theme.accent-bright : Theme.accent) : (ta.has-hover ? Theme.stage-chip-hover : Theme.stage-chip);
+    border-width: 1px; border-color: root.primary ? transparent : Theme.stage-chip-line;
+    opacity: root.enabled ? 1 : 0.4;
+    animate background { duration: 120ms; }
+    if root.has-icon: Icon { x: 15px; y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: root.icon; tint: root.primary ? Theme.bg-b2 : Theme.stage-fg.with-alpha(0.8); }
+    kt := Text { x: root.has-icon ? 38px : 15px; width: self.preferred-width; height: parent.height; text: root.text; color: root.primary ? Theme.bg-b2 : Theme.stage-fg.with-alpha(0.88); font-size: Metrics.font-md; font-weight: 600; vertical-alignment: center; }
+    ta := TouchArea { enabled: root.enabled; accessible-role: button; accessible-label: root.text; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Full-screen karaoke: the current line large and centred in the accent colour (with a
+// word-by-word wipe for enhanced LRC), past lines dimmed above, upcoming lines below;
+// the list glides as lines change. Header: track, source, timing offset, search, save.
+/// What the lyrics plugin currently has for the track (typed, so views never
+/// compare display strings).
+export enum LyricsState { found, searching, missing, instrumental }
+
+export component KaraokeView inherits Rectangle {
+    in property <LyricsState> state: LyricsState.missing;
+    in property <float> offset-s;
+    in property <[string]> lines;
+    in property <int> index: -1;
+    in property <bool> plain;
+    // Live stream with synced lyrics: lines are clickable to sync (the offset stepper
+    // fine-tunes it once synced).
+    in property <bool> live;
+    // Synced lyrics of a file: a click on a line jumps there.
+    in property <bool> seekable;
+    // The offset needs synced lyrics (and, on a stream, a first sync).
+    property <bool> can-offset: root.lines.length > 0 && !root.plain;
+    in property <[KWord]> words;
+    in property <int> rows;
+    in property <string> title;
+    in property <string> artist;
+    in property <string> source;
+    in property <string> offset;
+    in property <bool> can-save-lrc;
+    in property <bool> can-embed;
+    in property <bool> manual;
+    in property <length> big: 48px;
+    // Player chrome shown (follows the UI auto-hide): header, hint and cursor hide with it.
+    in property <bool> chrome: true;
+    callback cmd(string, string);
+    callback activity(); // pointer moved: reset the auto-hide timer
+    property <length> small: root.big * 0.55;
+    property <length> pitch: root.small * 1.85;
+    property <length> line-h: root.big * 1.28;
+    // Height kept for the current line is the same for every line (two rows), so nothing
+    // shifts when a line wraps at the smallest size.
+    property <length> cur-h: root.line-h * max(2, root.rows) + 12px;
+    property <length> side: max(40px, root.width * 0.08);
+    // Shrink-to-fit: the current line uses the large size only when it fits on one row,
+    // otherwise the largest size that does, down to the size of the other lines.
+    property <length> avail: root.width - 2 * root.side;
+    property <length> fit: root.index >= 0 && root.index < root.lines.length
+        ? max(root.small, min(root.big, root.big * (root.avail / max(1px, measure.preferred-width)) * 0.98))
+        : root.big;
+    measure := Text {
+        visible: false;
+        text: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
+        font-size: root.big; font-weight: 800;
+    }
+    background: Theme.stage;
+    clip: true;
+    TouchArea {   // swallow clicks on the backdrop; moves show the chrome again
+        mouse-cursor: root.chrome ? MouseCursor.default : MouseCursor.none;
+        changed mouse-x => { root.activity(); }
+        changed mouse-y => { root.activity(); }
+    }
+    // Soft accent glow behind the current line.
+    Rectangle {
+        y: root.height * 0.18; height: root.height * 0.64;
+        background: @radial-gradient(circle, Theme.accent.with-alpha(0.13) 0%, Theme.accent.with-alpha(0.04) 45%, transparent 75%);
+    }
+
+    area := Rectangle {
+        y: 112px; height: root.height - 112px - 120px;
+        clip: true;
+        property <length> mid: self.height / 2;
+        if !root.plain: Rectangle {
+            for l[i] in root.lines: Text {
+                property <int> d: i - root.index;
+                property <bool> cur: i == root.index;
+                visible: abs(self.d) <= 8;
+                x: root.side; width: area.width - 2 * root.side;
+                height: self.cur ? root.cur-h : root.pitch;
+                y: self.cur ? area.mid - root.cur-h / 2
+                    : self.d < 0 ? area.mid - root.cur-h / 2 + self.d * root.pitch
+                    : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
+                animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
+                text: l == "" ? "♪" : l;
+                font-size: self.cur ? root.fit : root.small;
+                animate font-size { duration: 320ms; easing: ease-out; }
+                font-weight: self.cur ? 800 : 600;
+                wrap: word-wrap; overflow: elide;
+                horizontal-alignment: center; vertical-alignment: center;
+                color: self.cur ? Theme.accent : Theme.stage-fg;
+                opacity: self.cur ? (root.rows > 0 ? 0 : 1) : max(0.07, (self.d < 0 ? 0.30 : 0.58) - (abs(self.d) - 1) * 0.085);
+                animate opacity, color { duration: 260ms; }
+            }
+            // Word-level wipe of the current line (enhanced LRC).
+            if root.rows > 0 && root.index >= 0: VerticalLayout {
+                x: root.side; width: area.width - 2 * root.side;
+                y: area.mid - root.cur-h / 2; height: root.cur-h;
+                alignment: center;
+                for r in root.rows: HorizontalLayout {
+                    alignment: center; height: root.line-h;
+                    for w in root.words: Rectangle {
+                        property <bool> on: w.row == r;
+                        visible: self.on;
+                        width: self.on ? base.preferred-width + (w.gap ? root.fit * 0.27 : 0px) : 0px;
+                        base := Text {
+                            x: 0; y: 0; width: self.preferred-width; height: root.line-h;
+                            text: w.text; font-size: root.fit; font-weight: 800;
+                            color: Theme.stage-fg; opacity: 0.4; vertical-alignment: center;
+                        }
+                        Rectangle {
+                            x: 0; y: 0; height: root.line-h; clip: true;
+                            width: base.preferred-width * w.progress;
+                            animate width { duration: 110ms; easing: linear; }
+                            Text {
+                                x: 0; y: 0; width: base.preferred-width; height: root.line-h;
+                                text: w.text; font-size: root.fit; font-weight: 800;
+                                color: Theme.accent; vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+            // Live stream: click another line to re-sync; a file: click a line to jump
+            // there (hit areas over the lines).
+            if root.live || root.seekable: Rectangle {
+                for l[i] in root.lines: SyncLine {
+                    property <int> d: i - root.index;
+                    property <bool> cur: i == root.index;
+                    visible: abs(self.d) <= 6;
+                    x: root.side - 12px; width: area.width - 2 * root.side + 24px;
+                    height: self.cur ? root.cur-h : root.pitch;
+                    y: self.cur ? area.mid - root.cur-h / 2
+                        : self.d < 0 ? area.mid - root.cur-h / 2 + self.d * root.pitch
+                        : area.mid + root.cur-h / 2 + (self.d - 1) * root.pitch;
+                    animate y { duration: 480ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
+                    name: l == "" ? "instrumental" : l; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
+                    activated => { root.cmd(root.live ? "sync-line" : "seek-line", i); } moved => { root.activity(); } chrome: root.chrome;
+                }
+            }
+        }
+        // Live stream, not synced yet: every line, clickable, under the hint.
+        if root.plain && root.live: Flickable {
+            x: root.side - 12px; width: area.width - 2 * root.side + 24px;
+            content-height: lcol.preferred-height;
+            lcol := VerticalLayout {
+                padding-top: 24px + 40px; padding-bottom: 48px; spacing: 2px;
+                for l[i] in root.lines: SyncLine {
+                    label: l == "" ? "♪" : l; size: root.small * 1.05;
+                    name: l == "" ? "instrumental" : l;
+                    activated => { root.cmd("sync-line", i); } moved => { root.activity(); } chrome: root.chrome;
+                }
+            }
+        }
+        if root.plain && root.live: SyncHint { x: (parent.width - self.width) / 2; y: 12px; }
+        // Plain lyrics: the whole text, scroll with the wheel or by dragging.
+        if root.plain && !root.live: Flickable {
+            x: root.side; width: area.width - 2 * root.side;
+            content-height: pcol.preferred-height;
+            pcol := VerticalLayout {
+                padding-top: 24px; padding-bottom: 48px; spacing: 4px;
+                for l in root.lines: Text {
+                    text: l; wrap: word-wrap; horizontal-alignment: center;
+                    font-size: root.small * 1.05; font-weight: 600; color: l == "" ? transparent : Theme.stage-fg; opacity: 0.86;
+                    min-height: root.small * 0.9;
+                }
+            }
+        }
+        // Fade the list out towards the top and bottom.
+        if !root.plain: Rectangle { y: 0; height: 90px; background: @linear-gradient(180deg, Theme.stage 0%, Theme.stage.with-alpha(0) 100%); }
+        if !root.plain: Rectangle { y: parent.height - 90px; height: 90px; background: @linear-gradient(180deg, Theme.stage.with-alpha(0) 0%, Theme.stage 100%); }
+        // No lyrics yet.
+        if root.lines.length == 0: VerticalLayout {
+            alignment: center; spacing: 14px;
+            HorizontalLayout { alignment: center;
+                Rectangle { width: 76px; height: 76px; border-radius: self.height / 2; background: Theme.accent.with-alpha(0.14);
+                    TriIcon { width: 34px; height: 34px; name: "music"; tint: Theme.accent; } } }
+            Text { text: root.state == LyricsState.searching ? "Looking for lyrics…" : root.state == LyricsState.instrumental ? "Instrumental" : "No lyrics for this track"; color: Theme.stage-fg; font-size: Metrics.font-xxl; font-weight: 700; horizontal-alignment: center; }
+            Text { text: root.state == LyricsState.instrumental ? "LRCLIB lists this track as instrumental. If it has words, search for them." : "Search LRCLIB by artist and title, or put a .lrc file next to the song."; color: Theme.fg-a2; font-size: Metrics.font-base; horizontal-alignment: center; }
+            HorizontalLayout { alignment: center; padding-top: 6px;
+                KPill { primary: true; text: "Search lyrics…"; has-icon: true; icon: @image-url("../../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
+        }
+    }
+
+    // Header: track on the left, actions on the right (hidden with the player chrome).
+    Rectangle {
+        visible: root.chrome;
+        y: 40px; height: 72px;
+        background: @linear-gradient(180deg, Theme.stage 0%, Theme.stage.with-alpha(0) 100%);
+        HorizontalLayout {
+            padding-left: root.side; padding-right: 20px; spacing: 10px;
+            VerticalLayout {
+                alignment: center; horizontal-stretch: 1; spacing: 2px;
+                Text { text: root.title == "" ? "Lyrics" : root.title; color: Theme.stage-fg; font-size: Metrics.font-xl; font-weight: 700; overflow: elide; }
+                HorizontalLayout { spacing: 8px; alignment: start;
+                    if root.artist != "": Text { text: root.artist; color: Theme.fg-a2; font-size: Metrics.font-base; overflow: elide; vertical-alignment: center; }
+                    if root.artist != "": Text { text: "·"; color: Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center; }
+                    Text { text: root.source; color: Theme.accent; font-size: Metrics.font-md; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                }
+            }
+            // Timing offset stepper.
+            VerticalLayout { alignment: center;
+                Rectangle {
+                    height: 34px; width: orow.preferred-width; border-radius: self.height / 2; background: Theme.stage-chip;
+                    opacity: root.can-offset ? 1 : 0.4;
+                    border-width: 1px; border-color: Theme.stage-chip-line;
+                    orow := HorizontalLayout {
+                        Rectangle { width: 40px; border-radius: self.height / 2; background: m.has-hover ? Theme.stage-chip-hover : transparent;
+                            Text { text: "−"; color: Theme.stage-fg; font-size: Metrics.font-h3; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            m := TouchArea { enabled: root.can-offset; accessible-role: button; accessible-label: "Lyrics offset −0.1 s"; mouse-cursor: pointer; clicked => { root.cmd("offset", "-0.1"); } } }
+                        Rectangle { width: 76px;
+                            Text { text: root.offset; color: root.offset-s == 0 ? Theme.stage-fg.with-alpha(0.69) : Theme.accent; font-family: "DM Mono"; font-size: Metrics.font-md; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { enabled: root.can-offset; accessible-role: button; accessible-label: "Lyrics offset " + root.offset + " (double-click to reset)"; accessible-action-default => { root.cmd("offset", "reset"); } mouse-cursor: pointer; double-clicked => { root.cmd("offset", "reset"); } } }
+                        Rectangle { width: 40px; border-radius: self.height / 2; background: p.has-hover ? Theme.stage-chip-hover : transparent;
+                            Text { text: "+"; color: Theme.stage-fg; font-size: Metrics.font-h3; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            p := TouchArea { enabled: root.can-offset; accessible-role: button; accessible-label: "Lyrics offset +0.1 s"; mouse-cursor: pointer; clicked => { root.cmd("offset", "0.1"); } } }
+                    }
+                }
+            }
+            VerticalLayout { alignment: center;
+                KPill { text: "Search"; has-icon: true; icon: @image-url("../../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
+            if root.manual: VerticalLayout { alignment: center;
+                KPill { text: "Reset pick"; has-icon: true; icon: @image-url("../../assets/icons/refresh.svg"); clicked => { root.cmd("forget", ""); } } }
+            if root.can-save-lrc: VerticalLayout { alignment: center;
+                KPill { text: "Save .lrc"; has-icon: true; icon: @image-url("../../assets/icons/save.svg"); clicked => { root.cmd("save-lrc", ""); } } }
+            if root.can-embed: VerticalLayout { alignment: center;
+                KPill { text: "Embed"; clicked => { root.cmd("embed", ""); } } }
+            VerticalLayout { alignment: center;
+                Rectangle { width: 34px; height: 34px; border-radius: self.height / 2; background: xa.has-hover ? Theme.stage-chip-hover : Theme.stage-chip;
+                    Icon { width: 16px; height: 16px; source: @image-url("../../assets/icons/close.svg"); tint: Theme.stage-fg; }
+                    xa := TouchArea { accessible-role: button; accessible-label: "Close karaoke"; mouse-cursor: pointer; clicked => { root.cmd("karaoke", "off"); } } } }
+        }
+    }
+    // Shortcut hint above the player controls.
+    Text {
+        visible: root.chrome;
+        y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
+        text: root.live && root.plain ? "Click or Enter on the line being sung to sync   ·   L  close   ·   Ctrl L  search"
+            : root.live ? "Click a line to re-sync   ·   [  ]  fine-tune ±0.1 s   ·   Shift  ±0.5 s   ·   L  close"
+            : root.seekable ? "Click a line to jump there   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   L  close   ·   Ctrl L  search"
+            : "L  close   ·   Ctrl L  search";
+        color: Theme.stage-fg.with-alpha(0.33); font-size: Metrics.font-sm;
+    }
+}
+
+component HitRow inherits Rectangle {
+    in property <LyricsHit> hit;
+    in property <bool> selected;
+    callback clicked();
+    callback activated();
+    height: 52px; border-radius: Metrics.radius-lg;
+    background: root.selected ? Theme.accent.with-alpha(0.16) : ta.has-hover ? Theme.bg-a1 : transparent;
+    border-width: 1px; border-color: root.selected ? Theme.accent.with-alpha(0.6) : transparent;
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; spacing: 12px;
+        VerticalLayout { alignment: center; horizontal-stretch: 1; spacing: 2px;
+            Text { text: root.hit.title; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; overflow: elide; }
+            Text { text: root.hit.artist + (root.hit.album != "" ? "  ·  " + root.hit.album : ""); color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
+        }
+        if root.hit.duration != "": Text {
+            text: root.hit.duration; vertical-alignment: center; font-family: "DM Mono"; font-size: Metrics.font-md;
+            color: root.hit.close ? Theme.accent : Theme.fg-a2;
+        }
+        VerticalLayout { alignment: center;
+            Rectangle {
+                width: 64px; height: 22px; border-radius: self.height / 2;
+                background: root.hit.synced ? Theme.accent.with-alpha(0.22) : Theme.bg-a1;
+                Text { text: root.hit.synced ? "Synced" : "Plain"; font-size: Metrics.font-xs; font-weight: 600; horizontal-alignment: center; vertical-alignment: center;
+                    color: root.hit.synced ? Theme.accent-bright : Theme.fg-a2; }
+            }
+        }
+    }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.hit.title + ", " + root.hit.artist; accessible-item-selected: root.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
+// Find Lyrics: edit artist and title, search LRCLIB, pick a result (synced first, the
+// duration in accent when it matches the playing file within 3 s) with a preview.
+export component LyricsSearchDialog inherits Modal {
+    in property <[LyricsHit]> results;
+    in property <string> status;
+    in property <string> preview;
+    in property <bool> busy;
+    in-out property <string> artist;
+    in-out property <string> title;
+    in-out property <int> selected: -1;
+    callback cmd(string, string);
+    property <bool> ok: root.selected >= 0 && root.selected < root.results.length && !root.busy;
+    card-width: 940px;
+    card-height: 660px;
+    dismissed => { root.cmd("search-close", ""); }
+    VerticalLayout {
+        Rectangle {
+            height: 44px; background: Theme.bg-b1;
+            HorizontalLayout {
+                padding-left: 16px; padding-right: 8px; spacing: 8px;
+                TriIcon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; name: "music"; tint: Theme.accent; }
+                Text { horizontal-stretch: 1; text: "Find Lyrics"; color: Theme.fg-1; font-size: Metrics.font-base; font-weight: 600; vertical-alignment: center; }
+                Text { text: "LRCLIB"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
+                VerticalLayout { alignment: center;
+                    Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: cx.has-hover ? Theme.bg-a1 : transparent;
+                        Icon { width: 16px; height: 16px; source: @image-url("../../assets/icons/close.svg"); }
+                        cx := TouchArea { accessible-role: button; accessible-label: "Close"; mouse-cursor: pointer; clicked => { root.cmd("search-close", ""); } } } }
+            }
+        }
+        HorizontalLayout {
+            padding: 12px; spacing: 8px;
+            VerticalLayout { horizontal-stretch: 2; spacing: 4px;
+                Text { text: "Artist"; color: Theme.fg-a3; font-size: Metrics.font-xs; }
+                TextField { height: 36px; text <=> root.artist; placeholder: "Artist (optional)"; accepted => { root.selected = -1; root.cmd("search", ""); } } }
+            VerticalLayout { horizontal-stretch: 3; spacing: 4px;
+                Text { text: "Title"; color: Theme.fg-a3; font-size: Metrics.font-xs; }
+                TextField { height: 36px; text <=> root.title; placeholder: "Song title"; accepted => { root.selected = -1; root.cmd("search", ""); } } }
+            VerticalLayout { alignment: end;
+                PrimaryButton {
+                    min-w: 104px; enabled: !root.busy; text: root.busy ? "Searching" : "Search"; icon: @image-url("../../assets/icons/search.svg");
+                    clicked => { root.selected = -1; root.cmd("search", ""); }
+                }
+            }
+        }
+        HorizontalLayout {
+            vertical-stretch: 1; padding-left: 12px; padding-right: 12px; spacing: 12px;
+            Rectangle {
+                horizontal-stretch: 3;
+                ScrollView {
+                    VerticalLayout { spacing: 2px; alignment: start;
+                        for h[i] in root.results: HitRow {
+                            hit: h; selected: i == root.selected;
+                            clicked => { root.selected = i; root.cmd("search-select", i); }
+                            activated => { root.selected = i; root.cmd("search-use", i); }
+                        }
+                    }
+                }
+                if root.results.length == 0: Text {
+                    width: parent.width - 32px; x: 16px; horizontal-alignment: center; vertical-alignment: center; wrap: word-wrap;
+                    text: root.status; color: Theme.fg-a2; font-size: Metrics.font-md;
+                }
+            }
+            Rectangle {
+                horizontal-stretch: 2; border-radius: Metrics.radius-lg; background: Theme.bg-b1; border-width: 1px; border-color: Theme.bg-a1;
+                ScrollView {
+                    VerticalLayout { padding: 14px; alignment: start;
+                        Text { text: root.preview == "" ? "Select a result to preview its lyrics." : root.preview; wrap: word-wrap;
+                            color: root.preview == "" ? Theme.fg-a3 : Theme.fg-2; font-size: Metrics.font-md; }
+                    }
+                }
+            }
+        }
+        HorizontalLayout {
+            padding: 12px; padding-left: 16px; spacing: 8px;
+            Text { horizontal-stretch: 1; text: root.results.length > 0 ? root.status : ""; color: Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; }
+            FlatButton { text: "Cancel"; clicked => { root.cmd("search-close", ""); } }
+            FlatButton { text: "Use plain text"; enabled: root.ok; clicked => { root.cmd("search-plain", root.selected); } }
+            Rectangle {
+                width: 120px; height: 32px; border-radius: Metrics.radius-md; background: Theme.accent; opacity: root.ok ? 1 : 0.5;
+                Text { text: "Use lyrics"; color: Theme.bg-b2; font-weight: 600; font-size: Metrics.font-md; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { enabled: root.ok; accessible-role: button; accessible-label: "Use lyrics"; mouse-cursor: pointer; clicked => { root.cmd("search-use", root.selected); } }
+            }
+        }
+    }
+}

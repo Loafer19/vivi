@@ -1,0 +1,52 @@
+// Top bar: title, status chips and window buttons. Reveal / auto-hide is driven by the shell.
+import { Theme, Metrics } from "../core/theme.slint";
+import { IconButton } from "../core/buttons.slint";
+import { Playback } from "../state/playback.slint";
+import { Overlays } from "../state/overlays.slint";
+import { Settings } from "../state/settings.slint";
+import { Status } from "../state/status.slint";
+import { AutoHide } from "../state/autohide.slint";
+import { StatusChip } from "status-chip.slint";
+
+export component TopBar inherits Rectangle {
+    in property <float> reveal;
+    in property <bool> fullscreen;
+    callback close-window();
+    callback activity();
+    callback hovered(bool);
+    out property <bool> strip-hover: strip.has-hover;
+
+// ---------- Top bar (title) ----------
+// Hover strip that reveals the bar. It must sit *below* the bar in z-order (declared
+// first); declared after it, it swallowed every click on the top-bar buttons.
+strip := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
+if root.reveal > 0: Rectangle {
+    y: AutoHide.anim == 2 ? -(1 - root.reveal) * self.height : 0; height: 40px;
+    opacity: AutoHide.anim == 1 ? root.reveal : 1;
+    // Theme.bar's opacity, or what Panel transparency says (#95).
+    background: Playback.has-media ? Theme.panel(Theme.bar-solid, Theme.dark ? 0.93 : 0.94) : Theme.bg-a4;
+    // Holds the buttons, so it stays hovered while the pointer is on one of them.
+    TouchArea {
+    init => { root.hovered(false); }
+    changed has-hover => { root.hovered(self.has-hover); root.activity(); }
+    HorizontalLayout {
+        padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
+        IconButton { tab-focus: false; bar: true; duo: "open"; tip: "Open file"; clicked => { Playback.open-file(); } }
+        if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "home"; tip: "Library"; active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
+        Text {
+            horizontal-stretch: 1;
+            text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
+            color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
+            overflow: elide;
+        }
+        // Status indicators (sleep timer, loudness, A-B loop, speed, remote, plugins).
+        for it in Status.items: StatusChip { y: (parent.height - self.height) / 2; it: it; clicked => { Status.clicked(it.id); } }
+        if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "pip"; tip: "Miniplayer (P)"; clicked => { Playback.toggle-mini(); } }
+        IconButton { tab-focus: false; bar: true; duo: "settings"; tip: "Settings (Ctrl+,)"; active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
+        IconButton { tab-focus: false; bar: true; duo: "fullscreen"; tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
+        // Same as the window's close button (General → Window → Close button: tray or quit).
+        IconButton { tab-focus: false; bar: true; duo: "close-window"; tip: "Close"; clicked => { root.close-window(); } }
+    }
+    }
+}
+}

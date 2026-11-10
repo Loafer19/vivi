@@ -1,22 +1,17 @@
 // Vivi player UI. Layout & tokens follow the Figma "Player" frame:
 // topbar 40px #191919 (pad 6, gap 10, title Inter 14 #8F8F8F centered),
 // Controls 54px #191919 @93% (pad 20/11, gap 20), radii 4/6.
+// Shell: this file is the window and wires chrome / overlays imported from
+// ui/chrome/* and ui/overlays/*. Plugin surfaces live in ui/plugins/*.
 
-import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
-import { ScrollView } from "std-widgets.slint";
+import { Theme, Metrics } from "core/theme.slint";
 import { SidePanel, Item } from "panel.slint";
-import { SettingsDialog, SettingRow } from "settings.slint";
-import { CustomizeDialog, Tools } from "toolbar.slint";
-import { OnboardingDialog } from "onboarding.slint";
+import { SettingRow } from "settings.slint";
 import { LibraryView, LibItem } from "library.slint";
-import { NetworkStreamDialog, NewPlaylistDialog, QrDialog, ConfirmDialog, ShortcutsDialog } from "dialogs.slint";
 import { FxState } from "filters.slint";
-import { MenuPanel, MenuItem } from "menu.slint";
 import { VizView, VizDropdown } from "viz.slint";
-import { SkipButton, LyricsView, SubtitleDialog, FmRow, MdFilter, NowPlayingCard, TagReviewDialog, TagFile, TagField, TagCover, TagResult, KaraokeView, LyricsState, LyricsSearchDialog, KWord, LyricsHit, SubHit } from "plugins.slint";
-import { Modal } from "core/modal.slint";
-import { IconButton, PrimaryButton, FlatButton, ButtonSize } from "core/buttons.slint";
-import { BarStyle, BarMetrics, Bars, VolumeStyle, PanelTab, Overlay, TagStatus } from "core/types.slint";
+import { SkipButton, LyricsView, NowPlayingCard, KaraokeView, LyricsState } from "plugins.slint";
+import { BarStyle, BarMetrics, Bars, PanelTab, Overlay, TagStatus } from "core/types.slint";
 import { Overlays } from "state/overlays.slint";
 import { Playback } from "state/playback.slint";
 import { Panel } from "state/panel.slint";
@@ -34,528 +29,26 @@ import { TagReview } from "state/tag-review.slint";
 import { NowPlaying } from "state/now-playing.slint";
 import { Streams, StreamCard, StreamService } from "state/streams.slint";
 import { NowActions } from "streams.slint";
-import { MusicPane } from "music-pane.slint";
 import { Notices } from "state/notices.slint";
 import { Viz } from "state/viz.slint";
 import { SkipIntro } from "state/skip-intro.slint";
-import { Extensions, ExtTab } from "state/extensions.slint";
-import { ExtensionsDialog } from "extensions.slint";
-import { Palette, PaletteItem } from "state/palette.slint";
-import { PaletteDialog } from "palette.slint";
+import { Extensions } from "state/extensions.slint";
+import { Palette } from "state/palette.slint";
 import { Drawer } from "state/drawer.slint";
 import { Status, Indicator } from "state/status.slint";
-import { Duo } from "core/duo.slint";
 import { Bookmarks, BookmarkRow } from "state/bookmarks.slint";
 import { SideDrawer } from "drawer.slint";
 import { AutoHide } from "state/autohide.slint";
+import { TopBar } from "chrome/top-bar.slint";
+import { BottomBar } from "chrome/bottom-bar.slint";
+import { MiniPlayer } from "chrome/miniplayer.slint";
+import { OverflowRow } from "chrome/bar-item.slint";
+import { LoadingOverlay, StreamErrorBanner, HintToast } from "overlays/notices.slint";
+import { OverlayDialogs } from "overlays/dialogs.slint";
 export { MenuItem } from "menu.slint";
 export { About } from "about.slint";
 export { LiveRow } from "core/rows.slint";
 export { Item, SettingRow, Theme, LibItem, FxState, LyricsState, BarStyle, PanelTab, Overlay, TagStatus, Overlays, Playback, Panel, Dialogs, Menus, Library, Settings, Customize, Lyrics, Subtitles, MusicDialogState, MdCaps, TagReview, NowPlaying, Streams, StreamCard, StreamService, Notices, Viz, SkipIntro, Extensions, Palette, Drawer, Downloads, Status, Indicator, Bookmarks, BookmarkRow, AutoHide }
-
-// Top-bar status chip (src/status.rs): accent icon (+ short label) for a feature that is
-// on; clicking opens its panel or setting. Two-tone bars draw the icon's solid
-// `-active` art, single-tone bars its plain art in the accent colour.
-component StatusChip inherits Rectangle {
-    in property <Indicator> it;
-    callback clicked();
-    property <string> solid: root.it.icon + "-active";
-    property <bool> has-solid: Duo.base(root.solid).width > 0;
-    height: 28px;
-    border-radius: Metrics.radius-md;
-    background: ta.has-hover ? Theme.accent.with-alpha(0.22) : Theme.accent.with-alpha(0.10);
-    HorizontalLayout {
-        padding-left: 6px; padding-right: root.it.label != "" ? 8px : 6px; spacing: 5px;
-        TriIcon {
-            y: (parent.height - self.height) / 2; width: 18px; height: 18px;
-            name: Theme.bar-duo && root.has-solid ? root.solid : root.it.icon;
-            tint: Theme.accent; accent-tint: Theme.accent; dim-tint: Theme.accent-dim;
-            flat: !Theme.bar-duo;
-        }
-        if root.it.label != "": Text {
-            text: root.it.label; color: Theme.accent-bright; font-family: "DM Mono"; font-size: Metrics.font-sm;
-            vertical-alignment: center;
-        }
-    }
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        accessible-role: button; accessible-label: root.it.tip;
-        accessible-action-default => { root.clicked(); }
-        clicked => { root.clicked(); }
-    }
-    Tooltip { text: @markdown("\{root.it.tip}"); }
-}
-
-component SeekBar inherits Rectangle {
-    in property <float> position;
-    in property <float> duration;
-    in property <[image]> frames; // evenly spaced preview frames from the Chapter Thumbnails cache (may be empty)
-    in property <[float]> chapters; // chapter start times (s) → segment gaps on the track
-    in property <[float]> marks; // bookmark times (s) → accent pins (src/bookmarks.rs)
-    in property <[float]> peaks; // audio waveform peaks 0..1 (empty = plain bar)
-    in property <float> range-a: -1; // plugin range (vivi-range), drawn in blue
-    in property <float> range-b: -1;
-    in property <string> range-label;
-    in property <float> ab-a: -1; // A-B loop / range bounds in seconds (-1 = unset)
-    in property <float> ab-b: -1;
-    in property <length> track-h: 8px;
-    in property <bool> boxed: false; // full-height dark track, dim fill, slim bright handle
-    callback seek(float);
-    callback ab-set(float, float);
-    pure callback fmt(float) -> string;
-    height: 18px;
-    property <float> frac: duration > 0 ? clamp(position / duration, 0, 1) : 0;
-    property <float> hover-frac: clamp(ta.mouse-x / self.width, 0, 1);
-    property <bool> hovering: ta.has-hover;
-    changed hovering => {
-        if self.hovering && root.duration > 0 {
-            Playback.preview-wanted();
-        }
-    }
-    property <bool> wave: root.peaks.length > 0;
-    property <float> ra: root.duration > 0 && root.ab-a >= 0 ? clamp(root.ab-a / root.duration, 0, 1) : -1;
-    property <float> rb: root.duration > 0 && root.ab-b >= 0 ? clamp(root.ab-b / root.duration, 0, 1) : (root.ra >= 0 ? root.frac : -1);
-    track := Rectangle {
-        y: (parent.height - self.height) / 2;
-        height: root.wave || root.boxed ? root.height : (ta.has-hover ? root.track-h + 2px : root.track-h);
-        border-radius: root.boxed ? 4px : 2px;
-        background: root.wave ? transparent : root.boxed ? Theme.track : Theme.bg-a1;
-        clip: root.boxed;
-        if ta.has-hover && !root.wave: Rectangle {
-            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
-            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
-            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * root.hover-frac);
-            background: root.boxed ? Theme.track-tick : Theme.divider;
-        }
-        if !root.wave: Rectangle {
-            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
-            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
-            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * (ta.pressed ? root.hover-frac : root.frac));
-            background: root.boxed ? (ta.has-hover ? Theme.track-fill-hover : Theme.track-fill) : (ta.has-hover ? Theme.accent-bright : Theme.accent);
-        }
-        // Waveform: one bar per peak, the played part in the accent colour.
-        for v[i] in root.peaks: Rectangle {
-            x: parent.width * i / root.peaks.length;
-            width: max(1px, parent.width / root.peaks.length - 1px);
-            height: max(2px, parent.height * clamp(v, 0, 1));
-            y: (parent.height - self.height) / 2;
-            border-radius: Metrics.radius-xs;
-            background: (i + 0.5) / root.peaks.length <= (ta.pressed ? root.hover-frac : root.frac) ? Theme.accent
-                : ta.has-hover && (i + 0.5) / root.peaks.length <= root.hover-frac ? Theme.fg-a2 : Theme.fg-a3;
-        }
-        // Chapter boundaries cut the track into segments.
-        for c in root.chapters: Rectangle {
-            visible: root.duration > 0 && c > 0.5 && c < root.duration - 0.5;
-            x: parent.width * c / max(root.duration, 1) - 2px; width: 4px;
-            height: parent.height; background: Theme.bar.with-alpha(1);
-            // Notch above and below so boundaries read on thin tracks too.
-            if !root.boxed: Rectangle { x: 1px; width: 2px; y: -4px; height: 3px; border-radius: self.width / 2; background: Theme.fg-a2; }
-            if !root.boxed: Rectangle { x: 1px; width: 2px; y: parent.height + 1px; height: 3px; border-radius: self.width / 2; background: Theme.fg-a2; }
-        }
-        // Plugin range (Cut & Export In/Out)
-        if root.duration > 0 && root.range-a >= 0: Rectangle {
-            property <float> e: root.range-b >= 0 ? root.range-b : root.position;
-            x: parent.width * clamp(min(root.range-a, self.e) / root.duration, 0, 1);
-            width: parent.width * clamp(abs(self.e - root.range-a) / root.duration, 0, 1);
-            height: parent.height; border-radius: Metrics.radius-xs;
-            background: Theme.range.with-alpha(0.25); border-width: 1px; border-color: Theme.range;
-        }
-        // Bookmarks: an accent line through the track with a dot above it.
-        for m in root.marks: Rectangle {
-            visible: root.duration > 0 && m >= 0 && m <= root.duration;
-            x: parent.width * clamp(m / max(root.duration, 1), 0, 1) - 1px; width: 2px;
-            height: parent.height; background: Theme.accent-bright;
-            if !root.boxed: Rectangle { x: -2px; y: -7px; width: 6px; height: 6px; border-radius: 3px; background: Theme.accent-bright; }
-        }
-        // A-B range overlay
-        if root.ra >= 0 && root.rb >= 0: Rectangle {
-            x: parent.width * min(root.ra, root.rb); width: parent.width * abs(root.rb - root.ra);
-            height: parent.height; border-radius: Metrics.radius-xs;
-            background: Theme.accent.with-alpha(0.28);
-            border-width: 1px; border-color: Theme.accent-bright;
-        }
-    }
-    // Playhead handle (compact style)
-    if root.duration > 0 && !root.wave: Rectangle {
-        width: root.boxed ? 5px : 4px; height: root.boxed ? root.height - 3px : root.track-h + 8px; border-radius: root.boxed ? 2.5px : 2px;
-        x: clamp(1.5px + (root.width - 3px) * (ta.pressed ? root.hover-frac : root.frac) - self.width, 1.5px, root.width - self.width - 1.5px); y: (root.height - self.height) / 2;
-        background: Theme.accent;
-        visible: root.boxed || root.track-h > 8px || ta.has-hover;
-    }
-    // Hover frame preview (#10; frames from the Chapter Thumbnails package)
-    if ta.has-hover && root.duration > 0 && root.frames.length > 0: Rectangle {
-        y: -30px - 6px - 108px;
-        width: 192px; height: 108px;
-        x: clamp(ta.mouse-x - self.width / 2, 0, root.width - self.width);
-        border-radius: Metrics.radius-md; clip: true;
-        background: Theme.video-bg;
-        border-width: 1px; border-color: Theme.divider;
-        Image {
-            width: parent.width; height: parent.height; image-fit: contain;
-            source: root.frames[round(root.hover-frac * (root.frames.length - 1))];
-        }
-    }
-    // Hover time tooltip
-    if ta.has-hover && root.duration > 0: Rectangle {
-        y: -30px;
-        width: tiptext.preferred-width + 12px; height: 22px;
-        x: clamp(ta.mouse-x - self.width / 2, 0, root.width - self.width);
-        border-radius: Metrics.radius-sm;
-        background: Theme.bg-a1;
-        tiptext := Text {
-            text: root.fmt(root.hover-frac * root.duration);
-            color: Theme.fg-1; font-family: "DM Mono"; font-size: Metrics.font-sm;
-            horizontal-alignment: center; vertical-alignment: center;
-        }
-    }
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        accessible-role: slider; accessible-label: "Seek";
-        accessible-value: root.fmt(root.position) + " of " + root.fmt(root.duration);
-        accessible-value-minimum: 0; accessible-value-maximum: root.duration; accessible-value-step: 5;
-        accessible-action-increment => { root.seek(min(root.duration, root.position + 5)); }
-        accessible-action-decrement => { root.seek(max(0, root.position - 5)); }
-        pointer-event(e) => {
-            if (e.kind == PointerEventKind.up && root.duration > 0) {
-                root.seek(root.hover-frac * root.duration);
-            }
-        }
-    }
-    // Draggable A/B edge handles
-    if root.ra >= 0 && root.ab-b >= 0: Rectangle {
-        x: root.width * root.ra - 5px; width: 10px; height: root.height + 6px; y: -3px;
-        Rectangle { x: 3px; width: 4px; border-radius: self.width / 2; background: ha.has-hover || ha.pressed ? Theme.on-media : Theme.accent-bright; }
-        ha := TouchArea {
-            mouse-cursor: ew-resize;
-            moved => {
-                if (self.pressed) {
-                    root.ab-set(clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration, root.ab-b);
-                }
-            }
-        }
-    }
-    if root.ab-a >= 0 && root.ab-b >= 0: Rectangle {
-        x: root.width * root.rb - 5px; width: 10px; height: root.height + 6px; y: -3px;
-        Rectangle { x: 3px; width: 4px; border-radius: self.width / 2; background: hb.has-hover || hb.pressed ? Theme.on-media : Theme.accent-bright; }
-        hb := TouchArea {
-            mouse-cursor: ew-resize;
-            moved => {
-                if (self.pressed) {
-                    root.ab-set(root.ab-a, clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration);
-                }
-            }
-        }
-    }
-}
-
-// Cone volume control (Figma "volume": 88x28 wedge, green→red gradient fill).
-// The fill width follows the Figma states: 10% → 7px … 100% → 63px, 150% → 75px, 200% → 88px.
-component VolumeBar inherits Rectangle {
-    in property <float> value;
-    in property <float> maximum: 150;
-    callback changed(float);
-    in property <bool> compact: false;
-    width: compact ? 56px : 88px; height: compact ? Metrics.bar-track-h : 28px;
-    // volume (percent) → filled width in Figma units (0..88)
-    pure function fill-of(v: float) -> float {
-        if (v <= 0) { return 0; }
-        if (v <= 50) { return v * 0.66; }
-        if (v <= 60) { return 33 + (v - 50) * 0.8; }
-        if (v <= 70) { return 41 + (v - 60) * 0.7; }
-        if (v <= 100) { return 48 + (v - 70) * 0.5; }
-        if (v <= 150) { return 63 + (v - 100) * 0.24; }
-        return min(88, 75 + (v - 150) * 0.26);
-    }
-    // inverse of fill-of
-    pure function volume-of(x: float) -> float {
-        if (x <= 33) { return x / 0.66; }
-        if (x <= 41) { return 50 + (x - 33) / 0.8; }
-        if (x <= 48) { return 60 + (x - 41) / 0.7; }
-        if (x <= 63) { return 70 + (x - 48) / 0.5; }
-        if (x <= 75) { return 100 + (x - 63) / 0.24; }
-        return 150 + (x - 75) / 0.26;
-    }
-    property <float> fx: fill-of(min(root.value, root.maximum));
-    // wedge edges: top y = 10.5 - x*10/88, bottom y = 15.5 + x*11/88
-    Path {
-        width: 100%; height: 100%;
-        viewbox-x: 0; viewbox-y: 0; viewbox-width: 88; viewbox-height: 28;
-        fill: Theme.track;
-        MoveTo { x: 0; y: 10; }
-        LineTo { x: 88; y: 0; }
-        LineTo { x: 88; y: 28; }
-        LineTo { x: 0; y: 16; }
-        Close { }
-    }
-    // gradient fill, inset ~1.5 units so the black wedge reads as an outline
-    Path {
-        width: 100%; height: 100%;
-        viewbox-x: 0; viewbox-y: 0; viewbox-width: 88; viewbox-height: 28;
-        fill: @linear-gradient(90deg, Theme.meter-low 0%, Theme.meter-mid 58%, Theme.meter-high 79%, Theme.meter-peak 100%);
-        opacity: 0.8; // Figma renders the gradient at ~80% over the black wedge
-        MoveTo { x: 1.5; y: 11.5; }
-        LineTo { x: 86.5; y: 2; }
-        LineTo { x: 86.5; y: 26; }
-        LineTo { x: 1.5; y: 14.5; }
-        Close { }
-    }
-    // unfilled part
-    Path {
-        width: 100%; height: 100%;
-        viewbox-x: 0; viewbox-y: 0; viewbox-width: 88; viewbox-height: 28;
-        fill: Theme.track;
-        MoveTo { x: root.fx; y: 10.5 - root.fx * 10 / 88; }
-        LineTo { x: 88; y: 0.5; }
-        LineTo { x: 88; y: 27.5; }
-        LineTo { x: root.fx; y: 15.5 + root.fx * 12 / 88; }
-        Close { }
-    }
-    TouchArea {
-        mouse-cursor: pointer;
-        accessible-role: slider; accessible-label: "Volume"; accessible-value: round(root.value) + "%";
-        accessible-value-minimum: 0; accessible-value-maximum: root.maximum; accessible-value-step: 5;
-        accessible-action-increment => { root.changed(min(root.maximum, root.value + 5)); }
-        accessible-action-decrement => { root.changed(max(0, root.value - 5)); }
-        moved => { if (self.pressed) { root.changed(min(root.maximum, root.volume-of(clamp(self.mouse-x / self.width, 0, 1) * 88))); } }
-        pointer-event(e) => {
-            if (e.kind == PointerEventKind.down) { root.changed(min(root.maximum, root.volume-of(clamp(self.mouse-x / self.width, 0, 1) * 88))); }
-        }
-        scroll-event(e) => {
-            root.changed(clamp(root.value + (e.delta-y > 0 ? 5 : -5), 0, root.maximum));
-            accept
-        }
-    }
-}
-
-// Shared input for every volume control style: one slider for screen readers (value, step,
-// increment / decrement), click / drag to set, wheel to step. `cone` maps the position
-// through the cone's fill curve; `vertical` reads bottom → top; `relative` drags change the
-// value by the distance moved (the percentage readout has no track to point at).
-component VolumeTouch inherits TouchArea {
-    in property <float> value;
-    in property <float> maximum: 150;
-    in property <bool> cone;
-    in property <bool> vertical;
-    in property <bool> relative;
-    callback changed(float);
-    callback tapped(); // a press without a drag (relative mode)
-    property <float> start;
-    property <bool> dragged;
-    mouse-cursor: root.relative ? ew-resize : pointer;
-    accessible-role: slider; accessible-label: "Volume"; accessible-value: round(root.value) + "%";
-    accessible-value-minimum: 0; accessible-value-maximum: root.maximum; accessible-value-step: 5;
-    accessible-action-increment => { root.changed(min(root.maximum, root.value + 5)); }
-    accessible-action-decrement => { root.changed(max(0, root.value - 5)); }
-    pure function cone-volume(x: float) -> float {
-        if (x <= 33) { return x / 0.66; }
-        if (x <= 41) { return 50 + (x - 33) / 0.8; }
-        if (x <= 48) { return 60 + (x - 41) / 0.7; }
-        if (x <= 63) { return 70 + (x - 48) / 0.5; }
-        if (x <= 75) { return 100 + (x - 63) / 0.24; }
-        return 150 + (x - 75) / 0.26;
-    }
-    pure function at() -> float {
-        root.vertical ? 1 - clamp(self.mouse-y / self.height, 0, 1) : clamp(self.mouse-x / self.width, 0, 1)
-    }
-    function set-at() {
-        root.changed(min(root.maximum, root.cone ? root.cone-volume(root.at() * 88) : root.at() * root.maximum));
-    }
-    pointer-event(e) => {
-        if (e.kind == PointerEventKind.down) {
-            root.start = root.value; root.dragged = false;
-            if (!root.relative) { root.set-at(); }
-        }
-        if (e.kind == PointerEventKind.up && root.relative && !root.dragged) { root.tapped(); }
-    }
-    moved => {
-        if (self.pressed) {
-            if (root.relative) {
-                root.dragged = root.dragged || abs(self.mouse-x - self.pressed-x) > 3px;
-                if (root.dragged) { root.changed(clamp(round(root.start + (self.mouse-x - self.pressed-x) / 2px), 0, root.maximum)); }
-            } else { root.set-at(); }
-        }
-    }
-    scroll-event(e) => {
-        root.changed(clamp(root.value + (e.delta-y > 0 ? 5 : -5), 0, root.maximum));
-        accept
-    }
-}
-
-// "Bar" volume: a flat slider drawn like the seek track of the current bar style.
-component VolumeSlider inherits Rectangle {
-    in property <float> value;
-    in property <float> maximum: 150;
-    in property <bool> compact;
-    in property <bool> boxed: true;
-    callback changed(float);
-    width: compact ? 64px : 88px; height: compact ? Metrics.bar-track-h : 28px;
-    property <float> frac: clamp(root.value / max(1, root.maximum), 0, 1);
-    track := Rectangle {
-        y: (parent.height - self.height) / 2;
-        height: root.boxed ? (root.compact ? root.height : Metrics.bar-track-h) : 4px;
-        border-radius: root.boxed ? 4px : 2px;
-        background: root.boxed ? Theme.track : Theme.bg-a1;
-        Rectangle {
-            x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
-            height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
-            width: max(0, (parent.width - (root.boxed ? 3px : 0)) * root.frac);
-            background: root.boxed ? (ta.has-hover ? Theme.track-fill-hover : Theme.track-fill) : (ta.has-hover ? Theme.accent-bright : Theme.accent);
-        }
-    }
-    Rectangle {
-        width: root.boxed ? 5px : 4px; height: root.boxed ? track.height - 3px : 12px; border-radius: 2px;
-        x: clamp(1.5px + (root.width - 3px) * root.frac - self.width, 1.5px, root.width - self.width - 1.5px);
-        y: (root.height - self.height) / 2;
-        background: Theme.accent;
-        visible: root.boxed || ta.has-hover;
-    }
-    ta := VolumeTouch { value: root.value; maximum: root.maximum; changed(v) => { root.changed(v); } }
-}
-
-// "Popup" volume: the speaker icon only; hovering it opens a vertical slider above, the wheel
-// changes the volume and a click mutes.
-component VolumePopup inherits Rectangle {
-    in property <float> value;
-    in property <float> maximum: 150;
-    in property <bool> compact;
-    in property <string> duo; // icon name (two-tone, see TriIcon)
-    in property <bool> flat; // single-tone (Theme.bar-duo off)
-    in property <string> tip;
-    callback changed(float);
-    callback mute();
-    width: compact ? 28px : 36px; height: compact ? 26px : 32px;
-    border-radius: Metrics.radius-md;
-    background: ita.has-hover ? Theme.bg-a1 : transparent;
-    property <bool> open: ita.has-hover || pta.has-hover || pta.pressed;
-    TriIcon { name: root.duo; flat: root.flat; width: root.compact ? 18px : 20px; height: self.width; tint: ita.has-hover ? Theme.fg-1 : Theme.fg-2; }
-    ita := VolumeTouch {
-        value: root.value; maximum: root.maximum; relative: true;
-        accessible-label: root.tip;
-        changed(v) => { root.changed(v); }
-        tapped => { root.mute(); }
-    }
-    // The pop-up reaches down to the icon so moving onto it keeps it open.
-    Rectangle {
-        visible: root.open;
-        property <length> card-h: 132px;
-        x: (root.width - self.width) / 2; y: -self.card-h - 4px;
-        width: 40px; height: self.card-h + 4px;
-        Rectangle {
-            height: parent.card-h; border-radius: Metrics.radius-md;
-            background: Theme.bar.with-alpha(1); border-width: 1px; border-color: Theme.divider;
-            Text { y: 8px; height: 14px; text: round(root.value) + "%"; color: Theme.fg-a2; font-size: Metrics.font-micro; horizontal-alignment: center; }
-            Rectangle {
-                x: (parent.width - self.width) / 2; y: 28px; width: 6px; height: parent.height - 40px;
-                border-radius: self.width / 2; background: Theme.track;
-                Rectangle {
-                    y: parent.height * (1 - clamp(root.value / max(1, root.maximum), 0, 1));
-                    height: parent.height - self.y; border-radius: parent.border-radius;
-                    background: pta.has-hover ? Theme.accent-bright : Theme.accent;
-                }
-                pta := VolumeTouch {
-                    x: -12px; width: parent.width + 24px;
-                    value: root.value; maximum: root.maximum; vertical: true;
-                    changed(v) => { root.changed(v); }
-                }
-            }
-        }
-    }
-}
-
-// "Percent" volume: the number next to the speaker icon; drag sideways or scroll to change.
-component VolumePercent inherits Rectangle {
-    in property <float> value;
-    in property <float> maximum: 150;
-    in property <bool> compact;
-    callback changed(float);
-    width: pt.preferred-width + 8px; height: compact ? 26px : 32px;
-    border-radius: Metrics.radius-sm;
-    background: ta.has-hover || ta.pressed ? Theme.bg-a1 : transparent;
-    pt := Text {
-        text: round(root.value) + "%"; font-size: Metrics.font-sm; font-family: "DM Mono";
-        color: ta.has-hover ? Theme.fg-1 : Theme.fg-a2; vertical-alignment: center; horizontal-alignment: center;
-    }
-    ta := VolumeTouch { value: root.value; maximum: root.maximum; relative: true; changed(v) => { root.changed(v); } }
-}
-
-// A configurable bottom-bar item (see toolbar.slint for the catalogue).
-component BarItem inherits HorizontalLayout {
-    in property <string> id;
-    in property <bool> active;
-    in property <bool> muted;
-    in property <float> volume;
-    in property <float> volume-max: 150;
-    in property <bool> fullscreen;
-    in property <bool> wide: true; // room for the volume slider
-    in property <bool> shown: true; // false = collapsed into the overflow menu
-    in property <bool> compact: false;
-    in property <VolumeStyle> vstyle: VolumeStyle.cone;
-    in property <bool> boxed: true; // bar style draws boxed tracks (all but Plain)
-    callback act(string);
-    callback volume-changed(float);
-    // close-none / -low / -medium are the muted and lower-volume speakers of the icon sheet.
-    property <string> vol-duo: root.muted || root.volume < 1 ? "close-none"
-            : root.volume < 50 ? "close-low"
-            : root.volume < 100 ? "close-medium"
-            : "volume-high";
-    spacing: root.compact ? 2px : 6px;
-    horizontal-stretch: 0;
-    if root.shown && root.id == "volume" && root.vstyle != VolumeStyle.popup: IconButton { tab-focus: false;
-        size: root.compact ? ButtonSize.sm : ButtonSize.md;
-        tip: Tools.label("volume");
-        duo: root.vol-duo; bar: true;
-        clicked => { root.act("mute"); }
-    }
-    if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.popup: VerticalLayout { alignment: center; VolumePopup {
-        compact: root.compact; duo: root.vol-duo; flat: !Theme.bar-duo; tip: Tools.label("volume");
-        value: root.volume; maximum: root.volume-max;
-        changed(v) => { root.volume-changed(v); }
-        mute => { root.act("mute"); }
-    } }
-    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.bar: VerticalLayout { alignment: root.compact ? center : start; VolumeSlider {
-        compact: root.compact; boxed: root.boxed; value: root.volume; maximum: root.volume-max;
-        changed(v) => { root.volume-changed(v); }
-    } }
-    if root.shown && root.id == "volume" && root.vstyle == VolumeStyle.percent: VerticalLayout { alignment: root.compact ? center : start; VolumePercent {
-        compact: root.compact; value: root.volume; maximum: root.volume-max;
-        changed(v) => { root.volume-changed(v); }
-    } }
-    // Inline bars: centred on the row like the seek track, so both share one vertical centre.
-    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.cone && root.compact: VerticalLayout { alignment: center; VolumeBar {
-        compact: true; value: root.volume; maximum: root.volume-max;
-        changed(v) => { root.volume-changed(v); }
-    } }
-    // Classic: the seek track has its own row; the wedge stays in line with the buttons.
-    if root.shown && root.wide && root.id == "volume" && root.vstyle == VolumeStyle.cone && !root.compact: VolumeBar {
-        compact: false; value: root.volume; maximum: root.volume-max;
-        changed(v) => { root.volume-changed(v); }
-    }
-    // Icon only on the bar (labels live in the ⋯ overflow menu and hover Tooltip).
-    if root.shown && root.id != "volume": IconButton { tab-focus: false;
-        size: root.compact ? ButtonSize.sm : ButtonSize.md; active: root.active; tip: Tools.label(root.id);
-        duo: root.id == "fullscreen" && root.fullscreen ? "fullscreen-active" : Tools.duo(root.id); bar: true;
-        clicked => { root.act(root.id); }
-    }
-}
-
-component OverflowRow inherits Rectangle {
-    in property <string> id;
-    // Plugin buttons: their own label / icon (else the Tools catalogue's).
-    in property <string> plabel;
-    in property <string> pduo; // plugin button icon name
-    property <string> label: root.plabel != "" ? root.plabel : Tools.label(root.id);
-    in property <bool> active;
-    callback act(string);
-    border-radius: Metrics.radius-sm;
-    background: ta.has-hover ? Theme.bg-a1 : transparent;
-    clip: true;
-    ta := TouchArea { accessible-role: button; accessible-label: root.label; mouse-cursor: pointer; clicked => { root.act(root.id); } }
-    HorizontalLayout {
-        padding-left: 8px; spacing: 10px;
-        TriIcon { name: root.plabel != "" ? root.pduo : Tools.duo(root.id); width: 20px; height: 20px; y: 8px; tint: root.active ? Theme.accent : Theme.fg-1; }
-        Text { text: root.label; color: root.active ? Theme.accent : Theme.fg-1; vertical-alignment: center; }
-    }
-}
 
 export component AppWindow inherits Window {
     icon: @image-url("../packaging/vivi.svg");
@@ -728,7 +221,7 @@ export component AppWindow inherits Window {
     // `-k` values animate from 0 (hidden) to 1 (shown); `-v` is what the bars draw with
     // (the plain 0 / 1 while Animation is Instant, as before).
     property <bool> chrome-off: root.ui-hidden && Playback.has-media;
-    property <bool> top-on: !root.mini && (root.show-ui || top-ta.has-hover || (!AutoHide.top && !root.chrome-off));
+    property <bool> top-on: !root.mini && (root.show-ui || topbar.strip-hover || (!AutoHide.top && !root.chrome-off));
     property <bool> bottom-on: !root.mini && Playback.has-media && (root.show-ui || (!AutoHide.bottom && !root.chrome-off));
     property <float> top-k: root.top-on ? 1 : 0;
     animate top-k { duration: 180ms; easing: ease-out; }
@@ -870,40 +363,16 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Top bar (title) ----------
-    // Hover strip that reveals the bar. It must sit *below* the bar in z-order (declared
-    // first); declared after it, it swallowed every click on the top-bar buttons.
-    top-ta := TouchArea { y: 0; height: 40px; changed has-hover => { root.activity(); } }
-    if root.top-v > 0: Rectangle {
-        y: AutoHide.anim == 2 ? -(1 - root.top-v) * self.height : 0; height: 40px;
-        opacity: AutoHide.anim == 1 ? root.top-v : 1;
-        // Theme.bar's opacity, or what Panel transparency says (#95).
-        background: Playback.has-media ? Theme.panel(Theme.bar-solid, Theme.dark ? 0.93 : 0.94) : Theme.bg-a4;
-        // Holds the buttons, so it stays hovered while the pointer is on one of them.
-        TouchArea {
-        init => { root.top-hover = false; }
-        changed has-hover => { root.top-hover = self.has-hover; root.activity(); }
-        HorizontalLayout {
-            padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
-            IconButton { tab-focus: false; bar: true; duo: "open"; tip: "Open file"; clicked => { Playback.open-file(); } }
-            if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "home"; tip: "Library"; active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
-            Text {
-                horizontal-stretch: 1;
-                text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
-                color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
-                overflow: elide;
-            }
-            // Status indicators (sleep timer, loudness, A-B loop, speed, remote, plugins).
-            for it in Status.items: StatusChip { y: (parent.height - self.height) / 2; it: it; clicked => { Status.clicked(it.id); } }
-            if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "pip"; tip: "Miniplayer (P)"; clicked => { Playback.toggle-mini(); } }
-            IconButton { tab-focus: false; bar: true; duo: "settings"; tip: "Settings (Ctrl+,)"; active: Overlays.settings-open; clicked => { Overlays.settings-open = !Overlays.settings-open; Settings.refresh(Settings.category, "", false); } }
-            IconButton { tab-focus: false; bar: true; duo: "fullscreen"; tip: root.fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"; active: root.fullscreen; clicked => { Playback.toggle-fullscreen(); } }
-            // Same as the window's close button (General → Window → Close button: tray or quit).
-            IconButton { tab-focus: false; bar: true; duo: "close-window"; tip: "Close"; clicked => { root.close-window(); } }
-        }
-        }
+    topbar := TopBar {
+        width: 100%; height: 40px;
+        reveal: root.top-v;
+        fullscreen: root.fullscreen;
+        close-window => { root.close-window(); }
+        activity => { root.activity(); }
+        hovered(h) => { root.top-hover = h; }
     }
 
-    if !root.mini && Playback.has-media && Viz.audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || top-ta.has-hover): VizDropdown {
+    if !root.mini && Playback.has-media && Viz.audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || topbar.strip-hover): VizDropdown {
         x: 12px; y: 50px;
         modes: Viz.modes; mode: Viz.mode;
         select(i) => { Viz.select(i); }
@@ -982,50 +451,11 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Network stream loading spinner / error ----------
-    if Notices.loading-show && !root.mini: Rectangle {
-        background: transparent;
-        VerticalLayout {
-            alignment: center; spacing: 14px;
-            HorizontalLayout { alignment: center;
-                Rectangle { width: 48px; height: 48px;
-                    Image {
-                        width: 48px; height: 48px; source: @image-url("../assets/icons/spinner.svg");
-                        colorize: Theme.accent;
-                        transform-rotation: mod(animation-tick() / 1ms, 1000) * 0.36deg;
-                    }
-                }
-            }
-            Text { text: Notices.loading-buffering ? "Buffering…" : "Opening…"; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-alignment: center; }
-            Text { text: Notices.loading-name; color: Theme.fg-1; font-size: Metrics.font-h3; horizontal-alignment: center; overflow: elide; }
-        }
+    if Notices.loading-show && !root.mini: LoadingOverlay {
+        width: 100%; height: 100%;
     }
-    if Notices.stream-error != "": Rectangle {
-        width: min(se.preferred-width + se-actions.preferred-width + 52px, root.width - 32px); height: 48px;
-        x: (root.width - self.width) / 2;
-        y: root.height - root.bar-h - self.height - 16px;
-        border-radius: Metrics.radius-xxl; background: Theme.bar;
-        // Click the message to dismiss it.
-        TouchArea { accessible-role: button; accessible-label: "Dismiss: " + Notices.stream-error; clicked => { Notices.stream-error = ""; } }
-        HorizontalLayout {
-            padding-left: 20px; padding-right: 10px; spacing: 12px;
-            se := Text { text: Notices.stream-error; color: Theme.err; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-            se-actions := HorizontalLayout {
-                alignment: center; spacing: Metrics.space-1; horizontal-stretch: 0;
-                if Notices.stream-url != "": FlatButton {
-                    y: (48px - self.height) / 2; size: ButtonSize.sm; text: "Retry";
-                    clicked => { Notices.stream-error = ""; Playback.open-url(Notices.stream-url); }
-                }
-                FlatButton {
-                    y: (48px - self.height) / 2; size: ButtonSize.sm; text: Notices.stream-copied ? "Copied ✓" : "Copy";
-                    clicked => { se-copy.select-all(); se-copy.copy(); se-copy.clear-selection(); Notices.stream-copied = true; }
-                }
-            }
-        }
-        // Invisible carrier for the clipboard copy (message and URL).
-        se-copy := TextInput {
-            height: 0px; visible: false; read-only: true;
-            text: Notices.stream-url != "" ? Notices.stream-error + "\n" + Notices.stream-url : Notices.stream-error;
-        }
+    if Notices.stream-error != "": StreamErrorBanner {
+        win-w: root.width; win-h: root.height; bar-h: root.bar-h;
     }
 
     // ---------- Skip intro / credits (Skip Intro plugin) ----------
@@ -1040,258 +470,48 @@ export component AppWindow inherits Window {
 
     // ---------- Controls ----------
     // ---------- Bottom bar: every element is a movable item (Customize Player) ----------
-    // Compact / Waveform / Plain: one row with the seekbar inline where "seek" sits.
-    // Classic: the seekbar spans a row on top and "seek" becomes a flexible gap.
-    if root.bottom-v > 0: Rectangle {
-        y: root.height - self.height + (AutoHide.anim == 2 ? (1 - root.bottom-v) * self.height : 0);
-        height: root.bar-h;
-        opacity: AutoHide.anim == 1 ? root.bottom-v : 1;
-        // Theme.bar-dark's opacity, or what Panel transparency says (#95).
-        background: Theme.dark ? Theme.panel(#181818, 0.95) : Theme.panel(Theme.bar-solid, 0.94);
-        // Swallows clicks so they don't toggle play, and holds the bar's controls so it
-        // stays hovered while the pointer is on one of them.
-        TouchArea {
-        init => { root.bottom-hover = false; }
-        changed has-hover => { root.bottom-hover = self.has-hover; root.activity(); }
-        Rectangle { y: 0; height: 1px; background: Theme.bar-line; }
-        VerticalLayout {
-            padding-left: root.bar.pad-x-left; padding-right: root.bar.pad-x-right;
-            padding-top: root.bar.pad-top; padding-bottom: root.bar.pad-bottom;
-            spacing: 2px;
-            if root.bar-classic: SeekBar {
-                position: Playback.position; duration: Playback.duration;
-                frames: Playback.preview-frames;
-                chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
-                ab-set(x, y) => { Playback.set-ab(x, y); }
-                fmt(t) => { root.fmt(t) }
-                seek(t) => { Playback.seek(t); fs.focus(); }
-            }
-            HorizontalLayout {
-                spacing: root.bar.gap;
-                for id[i] in Customize.bar-items: HorizontalLayout {
-                    property <bool> on: i >= Customize.bar-cum.length || Customize.bar-cum[i] < 0 || Customize.bar-cum[i] <= root.bar-fit;
-                    property <bool> ab: Playback.ab-a >= 0 && Playback.ab-b >= 0;
-                    horizontal-stretch: id == "seek" || id == "spacer" ? 1 : 0;
-                    spacing: 2px;
-                    if id == "prev": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Previous"; duo: "previous"; clicked => { Playback.prev(); } }
-                    if id == "play": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; primary: true; tip: Playback.playing ? "Pause" : "Play"; duo: Playback.playing ? "pause" : "play"; clicked => { Playback.toggle-play(); fs.focus(); } }
-                    if id == "next": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Next"; duo: "next"; clicked => { Playback.next(); } }
-                    if on && id == "back10": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Back 10 s"; duo: "backward-10-sec"; clicked => { Playback.seek(max(0, Playback.position - 10)); fs.focus(); } }
-                    if on && id == "fwd10": IconButton { tab-focus: false; bar: true; size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: "Forward 10 s"; duo: "forward-10-sec"; clicked => { Playback.seek(min(Playback.duration, Playback.position + 10)); fs.focus(); } }
-                    if id == "time": HorizontalLayout {
-                        padding-left: 8px; padding-right: 6px; spacing: 4px;
-                        Text {
-                            text: ab ? "*" + fmt(Playback.ab-a) : fmt(Playback.position);
-                            color: ab ? Theme.accent-bright : (root.bar-classic ? Theme.fg-1 : Theme.fg-a2);
-                            font-size: Metrics.font-sm; vertical-alignment: center;
-                        }
-                        if ab: Text {
-                            text: "‹"; color: na.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
-                            na := TouchArea { accessible-role: button; accessible-label: "Loop start 0.5 s earlier"; mouse-cursor: pointer; clicked => { Playback.set-ab(max(0, Playback.ab-a - 0.5), Playback.ab-b); } }
-                        }
-                    }
-                    if id == "duration": HorizontalLayout {
-                        padding-left: 6px; padding-right: 6px; spacing: 4px;
-                        if ab: Text {
-                            text: "›"; color: nb.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
-                            nb := TouchArea { accessible-role: button; accessible-label: "Loop end 0.5 s later"; mouse-cursor: pointer; clicked => { Playback.set-ab(Playback.ab-a, min(Playback.duration, Playback.ab-b + 0.5)); } }
-                        }
-                        Text {
-                            text: ab ? "*" + fmt(Playback.ab-b) : fmt(Playback.duration);
-                            color: ab ? Theme.accent-bright : Theme.fg-a2;
-                            font-size: Metrics.font-sm; vertical-alignment: center;
-                        }
-                        if ab: IconButton { tab-focus: false; size: true ? ButtonSize.sm : ButtonSize.md; tip: "Clear A-B range"; icon: @image-url("../assets/icons/close.svg"); clicked => { Playback.set-ab(-1, -1); fs.focus(); } }
-                    }
-                    // Centred on the row (a fixed-height child would sit at the top).
-                    if id == "seek" && !root.bar-classic: VerticalLayout { alignment: center; horizontal-stretch: 1; SeekBar {
-                        horizontal-stretch: 1;
-                        height: Playback.wave-peaks.length > 0 ? Metrics.bar-wave-h : Metrics.bar-track-h;
-                        boxed: root.bar.boxed;
-                        track-h: 4px;
-                        position: Playback.position; duration: Playback.duration;
-                        frames: Playback.preview-frames; peaks: Playback.wave-peaks;
-                        chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
-                        ab-set(x, y) => { Playback.set-ab(x, y); }
-                        fmt(t) => { root.fmt(t) }
-                        seek(t) => { Playback.seek(t); fs.focus(); }
-                    } }
-                    if id == "spacer" || (id == "seek" && root.bar-classic): Rectangle { horizontal-stretch: 1; }
-                    // A plugin's button (`controlbar.button`), when the user added it in Customize.
-                    if on && i < Customize.bar-meta.length && Customize.bar-meta[i].label != "": IconButton { tab-focus: false; bar: true;
-                        size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; tip: Customize.bar-meta[i].label;
-                        duo: Icons.plugin-duo(Customize.bar-meta[i].icon);
-                        clicked => { root.bar-act(id); fs.focus(); }
-                    }
-                    if on && !root.is-core(id) && (i >= Customize.bar-meta.length || Customize.bar-meta[i].label == ""): BarItem {
-                        id: id; compact: !root.bar-classic; wide: root.bar-has-volume; active: root.bar-active(id); vstyle: Customize.vol-style; boxed: root.bar.boxed; muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;
-                        act(x) => { root.bar-act(x); fs.focus(); }
-                        volume-changed(v) => { Playback.volume = v; Playback.volume-changed(v); }
-                    }
-                }
-                if Customize.bar-slots > root.bar-fit: IconButton { tab-focus: false; bar: true;
-                    size: !root.bar-classic ? ButtonSize.sm : ButtonSize.md; duo: "more"; tip: "More";
-                    clicked => { overflow.show(); }
-                }
-            }
-        }
-        }
+    if root.bottom-v > 0: BottomBar {
+        width: 100%;
+        reveal: root.bottom-v;
+        win-h: root.height;
+        bar: root.bar;
+        bar-fit: root.bar-fit;
+        bar-has-volume: root.bar-has-volume;
+        fullscreen: root.fullscreen;
+        focused => { fs.focus(); }
+        activity => { root.activity(); }
+        hovered(h) => { root.bottom-hover = h; }
+        more => { overflow.show(); }
+        act(id) => { root.bar-act(id); }
+        is-core(id) => { root.is-core(id) }
+        bar-active(id) => { root.bar-active(id) }
+        fmt(t) => { root.fmt(t) }
     }
 
     // ---------- Extension hint above the seek bar (src/preview.rs) ----------
-    // Toast look, high enough to clear the seek bar's hover time (and above a toast).
-    if !root.mini && Playback.has-media && root.show-ui && Notices.hint-text != "": Rectangle {
-        width: min(hint.preferred-width, root.width - 32px); height: 44px;
-        x: (root.width - self.width) / 2;
-        y: root.height - root.bar-h - self.height - (Notices.resume-text != "" ? 84px : 40px);
-        border-radius: Metrics.radius-xxl;
-        background: Theme.bar;
-        border-width: 1px; border-color: Theme.divider;
-        TouchArea { } // keep clicks off the video
-        hint := HorizontalLayout {
-            padding-left: Metrics.space-4; padding-right: Metrics.space-2; spacing: Metrics.space-4;
-            Text { text: Notices.hint-text; color: Theme.fg-2; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-            HorizontalLayout {
-                spacing: Metrics.space-1; horizontal-stretch: 0;
-                VerticalLayout { alignment: center;
-                    PrimaryButton { size: ButtonSize.sm; text: Notices.hint-action; clicked => { Notices.hint-accept(); fs.focus(); } }
-                }
-                VerticalLayout { alignment: center;
-                    FlatButton { size: ButtonSize.sm; text: "Don't show again"; clicked => { Notices.hint-never(); fs.focus(); } }
-                }
-            }
-        }
+    if !root.mini && Playback.has-media && root.show-ui && Notices.hint-text != "": HintToast {
+        win-w: root.width; win-h: root.height; bar-h: root.bar-h;
+        focused => { fs.focus(); }
     }
 
     // ---------- Miniplayer (Figma "Miniplayer" variants) ----------
-    // Tiny: video only; hovering shows play/pause and the way back.
-    if root.mini && root.mini-tiny && Playback.has-media && root.show-ui: Rectangle {
-        width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
-        background: Theme.scrim-soft;
-        IconButton { tab-focus: false; x: 6px; y: 6px; duo: "window"; tip: "Full player (P)"; clicked => { Playback.toggle-mini(); } }
-        IconButton { tab-focus: false;
-            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            primary: true; tip: Playback.playing ? "Pause" : "Play";
-            duo: Playback.playing ? "pause" : "play";
-            clicked => { Playback.toggle-play(); fs.focus(); }
-        }
-        Rectangle {
-            y: parent.height - 4px; height: 4px; x: 0;
-            width: Playback.duration > 0 ? parent.width * Playback.position / Playback.duration : 0;
-            background: Theme.accent;
-        }
+    if root.mini: MiniPlayer {
+        width: 100%; height: 100%;
+        show-ui: root.show-ui;
+        tiny: root.mini-tiny;
+        video-y: root.mini-video-y;
+        video-h: root.mini-video-h;
+        strip-h: root.mini-strip-h;
+        q-shown: root.mini-q-shown;
+        q-h: root.mini-q-h;
+        folder: root.mini-folder;
+        sub: root.mini-sub;
+        q-meta: root.mini-q-meta;
+        queue-durations: root.queue-durations;
+        queue: root.mini-queue;
+        q-sel <=> root.mini-q-sel;
+        focused => { fs.focus(); }
     }
-    // Compact: × / ⧉ in the corners, transport in the middle, progress along the bottom edge.
-    if root.mini && !root.mini-tiny && Playback.has-media && root.show-ui: Rectangle {
-        width: root.width; height: root.mini-video-h; x: 0; y: root.mini-video-y;
-        background: Theme.scrim-soft;
-        IconButton { tab-focus: false; x: 8px; y: 8px; icon: @image-url("../assets/icons/close.svg"); tip: "Stop and close the miniplayer"; clicked => { Playback.stop(); Playback.toggle-mini(); } }
-        IconButton { tab-focus: false; x: parent.width - self.width - 8px; y: 8px; duo: "window"; tip: "Full player (P)"; clicked => { Playback.toggle-mini(); } }
-        HorizontalLayout {
-            x: (parent.width - self.preferred-width) / 2; y: (parent.height - 40px) / 2; width: self.preferred-width; height: 40px;
-            spacing: 18px; alignment: center;
-            IconButton { tab-focus: false; y: 4px; tip: "Previous"; duo: "previous"; clicked => { Playback.prev(); } }
-            IconButton { tab-focus: false; y: 2px; primary: true; tip: Playback.playing ? "Pause" : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? "Replay" : "Play"); duo: Playback.playing ? "pause" : (Playback.duration > 0 && Playback.position >= Playback.duration - 0.5 ? "replay" : "play"); clicked => { Playback.toggle-play(); fs.focus(); } }
-            IconButton { tab-focus: false; y: 4px; tip: "Next"; duo: "next"; clicked => { Playback.next(); } }
-        }
-        Rectangle {
-            x: 10px; width: parent.width - 20px; y: parent.height - 18px; height: 14px;
-            Rectangle { y: 5px; height: 4px; border-radius: self.height / 2; background: Theme.on-media-dim; }
-            Rectangle { x: 0; y: 5px; height: 4px; border-radius: self.height / 2; width: Playback.duration > 0 ? parent.width * Playback.position / Playback.duration : 0; background: Theme.accent.mix(Theme.video-bg, 70%); }
-            Rectangle {
-                x: (Playback.duration > 0 ? parent.width * Playback.position / Playback.duration : 0) - 5px; y: 2px;
-                width: 10px; height: 10px; border-radius: self.height / 2; background: Theme.accent;
-            }
-            TouchArea {
-                mouse-cursor: pointer;
-                accessible-role: slider; accessible-label: "Seek";
-                accessible-value-minimum: 0; accessible-value-maximum: Playback.duration; accessible-value: round(Playback.position) + " s";
-                clicked => { if (Playback.duration > 0) { Playback.seek(clamp(self.mouse-x / self.width, 0, 1) * Playback.duration); } }
-            }
-        }
-    }
-    // Info strip under the video: title, folder, subtitle track and the queue toggle.
-    if root.mini && !root.mini-tiny: Rectangle {
-        x: 0; y: root.mini-video-y + root.mini-video-h; width: root.width; height: root.mini-strip-h;
-        background: Theme.bar-solid;
-        TouchArea { }
-        VerticalLayout {
-            padding-left: 12px; padding-right: 8px; padding-top: 7px; padding-bottom: 5px; spacing: 2px;
-            Text { text: Playback.media-title; color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
-            HorizontalLayout {
-                spacing: 6px;
-                Icon { y: 4px; width: 14px; height: 14px; source: @image-url("../assets/icons/folder.svg"); tint: Theme.fg-a3; }
-                Text { text: root.mini-folder; color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; overflow: elide; max-width: 120px; }
-                Rectangle { width: 6px; }
-                Icon { y: 4px; width: 14px; height: 14px; source: @image-url("../assets/icons/subtitles.svg"); tint: Theme.fg-a3; }
-                Text { text: root.mini-sub; color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                Rectangle {
-                    width: 26px; height: 22px; border-radius: Metrics.radius-sm;
-                    background: qta.has-hover ? Theme.bg-a1 : transparent;
-                    Icon { width: 16px; height: 16px; source: @image-url("../assets/icons/queue.svg"); tint: root.mini-queue ? Theme.accent : Theme.fg-a2; }
-                    qta := TouchArea { accessible-role: button; accessible-label: "Queue"; accessible-checked: root.mini-queue; mouse-cursor: pointer; clicked => { Playback.toggle-mini-queue(); } }
-                    Tooltip { text: @markdown("Queue"); }
-                }
-            }
-        }
-    }
-    // Queue variant: header, item count/length with sort/remove/add, draggable rows.
-    if root.mini-q-shown: Rectangle {
-        y: 0; height: root.mini-q-h;
-        background: Theme.bar-solid;
-        TouchArea { }
-        VerticalLayout {
-            Rectangle {
-                height: 36px; background: Theme.surface-head;
-                Text { text: "Queue"; color: Theme.fg-a2; font-size: Metrics.font-sm; }
-            }
-            HorizontalLayout {
-                height: 34px; padding-left: 12px; padding-right: 6px; spacing: 2px;
-                Text { text: root.mini-q-meta; color: Theme.fg-a3; font-size: Metrics.font-xs; vertical-alignment: center; horizontal-stretch: 1; }
-                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; duo: "sort"; tip: "Sort by name"; clicked => { Playback.queue-sort(); } }
-                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; duo: "remove"; tip: "Remove selected"; clicked => { if (root.mini-q-sel >= 0) { Panel.queue-remove(root.mini-q-sel); root.mini-q-sel = -1; } } }
-                IconButton { tab-focus: false; y: 2px; width: 30px; height: 30px; duo: "add"; tip: "Add files"; clicked => { Panel.queue-add(); } }
-            }
-            ScrollView {
-                vertical-stretch: 1;
-                VerticalLayout {
-                    alignment: start; spacing: 0px; padding-left: 6px; padding-right: 6px;
-                    for it[i] in Panel.queue: Rectangle {
-                        height: 30px; border-radius: Metrics.radius-sm;
-                        property <length> dy;
-                        background: i == root.mini-q-sel ? Theme.bg-a1 : row-ta.has-hover ? Theme.hover : transparent;
-                        row-ta := TouchArea {
-                            accessible-role: list-item; accessible-label: it.label; accessible-item-selected: i == root.mini-q-sel;
-                            accessible-action-default => { Panel.queue-play(i); }
-                            mouse-cursor: pointer;
-                            clicked => { root.mini-q-sel = i; }
-                            double-clicked => { Panel.queue-play(i); }
-                        }
-                        HorizontalLayout {
-                            padding-left: 4px; padding-right: 8px; spacing: 8px;
-                            Rectangle {
-                                width: 22px;
-                                Icon { width: 14px; height: 14px; source: @image-url("../assets/icons/list.svg"); tint: drag.pressed ? Theme.accent : Theme.fg-a3; }
-                                drag := TouchArea {
-                                    accessible-role: button; accessible-label: "Drag to re-order " + it.label;
-                                    mouse-cursor: grab;
-                                    pointer-event(e) => {
-                                        if (e.kind == PointerEventKind.up) {
-                                            let d = round((self.mouse-y - self.pressed-y) / 30px);
-                                            if (d != 0) { Panel.queue-move(i, clamp(d, -i, Panel.queue.length - 1 - i)); }
-                                        }
-                                    }
-                                }
-                            }
-                            Text { text: it.label; color: it.selected ? Theme.accent : Theme.fg-a2; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                            Text { text: i < root.queue-durations.length ? root.queue-durations[i] : ""; color: Theme.fg-a3; font-family: "DM Mono"; font-size: Metrics.font-xs; vertical-alignment: center; }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
 
     overflow := PopupWindow {
         x: root.width - 220px; y: root.height - root.bar-h - self.height - 6px;
@@ -1307,244 +527,11 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ---------- Network stream ----------
-    if Overlays.network-open: NetworkStreamDialog {
-        width: root.width; height: root.height;
-        ytdlp: Library.ytdlp; history: Dialogs.net-history; error: Dialogs.net-error;
-        urls <=> Dialogs.net-urls; name <=> Dialogs.net-name;
-        submit(u, n) => { Dialogs.network-submit(u, n); }
-        close() => { Overlays.network-open = false; Dialogs.net-error = ""; fs.focus(); }
-    }
-
-    // ---------- New playlist ----------
-    if Overlays.new-playlist-open: NewPlaylistDialog {
-        width: root.width; height: root.height;
-        files: Dialogs.new-playlist-files; cover: Dialogs.new-playlist-cover; has-cover: Dialogs.new-playlist-has-cover; error: Dialogs.new-playlist-error;
-        name <=> Dialogs.new-playlist-name;
-        pick-cover => { Dialogs.new-playlist-pick-cover(); }
-        pick-files => { Dialogs.new-playlist-pick-files(); }
-        remove-file(i) => { Dialogs.new-playlist-remove(i); }
-        save(n) => { Dialogs.new-playlist-save(n); }
-        close => { Dialogs.new-playlist-close(); fs.focus(); }
-    }
-
-    // ---------- Settings dialog ----------
-    if Overlays.settings-open: SettingsDialog {
-        width: root.width; height: root.height;
-        categories: Settings.categories;
-        rows: Settings.rows;
-        category <=> Settings.category;
-        status: Settings.status;
-        search <=> Settings.search;
-        advanced <=> Settings.advanced;
-        changed(id, v) => { Settings.setting-changed(id, v); }
-        refresh(c, q, adv) => { Settings.refresh(c, q, adv); }
-        close() => { Overlays.settings-open = false; fs.focus(); }
-    }
-
-    // ---------- Extensions window (src/extwin.rs) ----------
-    if Overlays.extensions-open: ExtensionsDialog {
-        width: root.width; height: root.height;
-        changed(id, v) => { Settings.setting-changed(id, v); }
-        close() => { Overlays.extensions-open = false; fs.focus(); }
-    }
-
-    // ---------- Plugin QR code (above Settings, which opens it) ----------
-    if Overlays.qr-open: QrDialog {
-        width: root.width; height: root.height;
-        title: Dialogs.qr-title; code: Dialogs.qr-code; text: Dialogs.qr-text; caption: Dialogs.qr-caption;
-        close => { Overlays.qr-open = false; }
-        open-link(u) => { Dialogs.qr-open-link(u); }
-    }
-
-    // ---------- Add Subtitles (From Computer: core; From OpenSubtitles: Subtitle Search) ----------
-    if Overlays.subs-open: SubtitleDialog {
-        width: root.width; height: root.height;
-        hits: Subtitles.hits; langs: Subtitles.langs; selected: Subtitles.selected;
-        details: Subtitles.details; preview: Subtitles.preview; save-next: Subtitles.save-next; auto-exact: Subtitles.auto-exact;
-        status: Subtitles.status; busy: Subtitles.busy;
-        query <=> Subtitles.query; lang <=> Subtitles.lang;
-        local: Subtitles.local; folder: Subtitles.folder;
-        target <=> Subtitles.target; source <=> Subtitles.source; online: Subtitles.plugin;
-        cmd(n, a) => {
-            if (!Subtitles.plugin || n == "browse" || n == "toggle" || n == "save-local") { Subtitles.local-cmd(n, a); }
-            else { root.plugin-command("subtitle-search", n, a); }
-        }
-        close => { Overlays.subs-open = false; fs.focus(); }
-    }
-
-    // ---------- Auto-tagger / Free Music ----------
-    // Shown as a Library page instead while it is one (Streams hub, #86).
-    if Overlays.md-open && !MusicDialogState.page: Modal {
-        width: root.width; height: root.height;
-        // The station browser grows with the window (the modal still keeps it inside).
-        card-width: MusicDialogState.caps.rich ? 1060px : MusicDialogState.caps.grid ? max(900px, min(1400px, root.width * 0.86)) : 900px;
-        card-height: MusicDialogState.caps.rich ? 720px : MusicDialogState.caps.grid ? max(640px, min(960px, root.height * 0.88)) : 640px;
-        dismissed => { Overlays.md-open = false; root.plugin-command(MusicDialogState.owner, "close", ""); fs.focus(); }
-        MusicPane {
-            width: 100%; height: 100%;
-            command(o, n, a) => { root.plugin-command(o, n, a); }
-            closed => { fs.focus(); }
-        }
-    }
-
-    // ---------- Plugin confirmation (above Settings and the music dialog) ----------
-    if Overlays.confirm-open: ConfirmDialog {
-        width: root.width; height: root.height;
-        title: Dialogs.confirm-title; heading: Dialogs.confirm-heading; text: Dialogs.confirm-text;
-        ok-label: Dialogs.confirm-ok; warning: Dialogs.confirm-warning;
-        check-label: Dialogs.confirm-check; checked <=> Dialogs.confirm-checked; checked-text: Dialogs.confirm-checked-text;
-        answer(yes) => {
-            Overlays.confirm-open = false;
-            root.plugin-command(Dialogs.confirm-owner, "confirm", Dialogs.confirm-key + "\u{1f}" + (yes ? (Dialogs.confirm-check != "" && Dialogs.confirm-checked ? "checked" : "yes") : "no"));
-        }
-    }
-
-    // ---------- Find Lyrics (Lyrics plugin) ----------
-    if Overlays.ls-open: LyricsSearchDialog {
-        width: root.width; height: root.height;
-        results: Lyrics.search-results; status: Lyrics.search-status; preview: Lyrics.search-preview; busy: Lyrics.search-busy;
-        artist <=> Lyrics.search-artist; title <=> Lyrics.search-title; selected <=> Lyrics.search-selected;
-        cmd(n, a) => { root.plugin-command("lyrics", n, a); if (n == "search-close") { fs.focus(); } }
-    }
-
-    // ---------- Auto-tagger review ----------
-    if Overlays.tr-open: TagReviewDialog {
-        width: root.width; height: root.height;
-        files: TagReview.files; status: TagReview.status; busy: TagReview.busy;
-        summary: TagReview.summary; summary-sub: TagReview.summary-sub; summary-ok: TagReview.summary-ok; results: TagReview.results; can-undo: TagReview.can-undo;
-        cmd(n, a) => { root.plugin-command("auto-tagger", n, a); if (n == "review-close") { fs.focus(); } }
-    }
-
-    // ---------- Customize player ----------
-    if Overlays.customize-open: CustomizeDialog {
-        width: root.width; height: root.height;
-        items: Customize.bar-items; styles: Customize.bar-styles; bar-style: Customize.bar-style;
-        pick-style(st) => { Customize.style(st); }
-        vol-styles: Customize.vol-styles; vol-style: Customize.vol-style;
-        pick-volume(st) => { Customize.pick-volume(st); }
-        available: Customize.available;
-        items-meta: Customize.bar-meta; available-meta: Customize.available-meta;
-        profiles: Customize.profiles; profile: Customize.profile;
-        move(i, d) => { Customize.move(i, d); }
-        remove(i) => { Customize.remove(i); }
-        add(id) => { Customize.add(id); }
-        pick-profile(p) => { Customize.select-profile(p); }
-        save() => { Customize.done(true); fs.focus(); }
-        cancel() => { Customize.done(false); fs.focus(); }
-    }
-
-    // ---------- First-run onboarding ----------
-    if Overlays.onboarding-open: OnboardingDialog {
-        width: root.width; height: root.height;
-        step <=> Settings.onboarding-step;
-        dark: Theme.dark; accent: Settings.accent-name;
-        accents: Settings.accent-names; swatches: Settings.accent-colors;
-        keys: Settings.onboarding-keys; actions: Settings.onboarding-actions;
-        set-theme(t) => { Settings.setting-changed("interface.theme", t); }
-        set-accent(a) => { Settings.setting-changed("interface.accent", a); }
-        finish() => { Settings.onboarding-done(); fs.focus(); }
-    }
-
-    // ---------- Properties & Metadata ----------
-    if Overlays.info-open: Modal {
-        card-width: 520px;
-        card-height: icol.preferred-height;
-        inset: 48px;
-        card-background: Theme.bar-solid;
-        bordered: false;
-        dismissed => { Overlays.info-open = false; }
-        icol := VerticalLayout {
-            padding: 20px; spacing: 10px;
-            Text { text: Dialogs.info-title; color: Theme.fg-1; font-size: Metrics.font-lg; overflow: elide; }
-            Rectangle { height: 1px; background: Theme.bg-a1; }
-            for k[i] in Dialogs.info-keys: HorizontalLayout {
-                spacing: 10px;
-                Text { text: k; color: Theme.fg-a3; font-size: Metrics.font-base; width: 110px; }
-                Text { text: Dialogs.info-values[i]; color: Theme.fg-a2; font-size: Metrics.font-base; wrap: word-wrap; horizontal-stretch: 1; }
-            }
-            HorizontalLayout {
-                alignment: end;
-                PrimaryButton {
-                    size: ButtonSize.sm; min-w: 80px; text: "Close";
-                    clicked => { Overlays.info-open = false; }
-                }
-            }
-        }
-    }
-
-    // ---------- Keyboard shortcuts ("?") ----------
-    if Overlays.shortcuts-open: ShortcutsDialog {
-        width: root.width; height: root.height;
-        actions: Settings.shortcut-actions; keys: Settings.shortcut-keys;
-        close => { Overlays.shortcuts-open = false; fs.focus(); }
-    }
-
-    // ---------- Toast / resume prompt (above every screen and dialog, below the menus;
-    // also without media, e.g. plugin results while browsing the library or Extensions) ----------
-    if Notices.resume-text != "": Rectangle {
-        width: toast.preferred-width; height: 52px;
-        x: (root.width - self.width) / 2;
-        y: root.height - (Playback.has-media ? root.bar-h : 0px) - self.height - 16px;
-        border-radius: Metrics.radius-xxl;
-        background: Theme.bar;
-        toast := HorizontalLayout {
-            padding-left: 20px; padding-right: 10px; spacing: 24px;
-            Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
-            HorizontalLayout {
-                spacing: 10px; padding-top: 10px; padding-bottom: 10px;
-                if Notices.toast-action != "" && Notices.toast-action-text == Notices.resume-text: Rectangle {
-                    width: ta-label.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
-                    ta-label := Text { text: Notices.toast-action; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: Notices.toast-action; mouse-cursor: pointer; accessible-action-default => { Notices.toast-run(Notices.toast-action-id); } clicked => { Notices.toast-run(Notices.toast-action-id); } }
-                }
-                if Notices.resume-offer != "" && Notices.resume-offer == Notices.resume-text: Rectangle {
-                    width: so.preferred-width + 20px; border-radius: Metrics.radius-md; background: Theme.accent-bg;
-                    so := Text { text: "Start over"; color: Theme.accent-bright; vertical-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: "Start over"; mouse-cursor: pointer; accessible-action-default => { Notices.start-over(); } clicked => { Notices.start-over(); } }
-                }
-                Rectangle {
-                    width: 44px; border-radius: Metrics.radius-md; background: Theme.accent;
-                    Text { text: "OK"; color: Theme.bg-b2; font-weight: 600; vertical-alignment: center; horizontal-alignment: center; }
-                    TouchArea { accessible-role: button; accessible-label: "OK"; mouse-cursor: pointer; clicked => { Notices.dismiss-resume(); } }
-                }
-            }
-        }
-    }
-
-    // ---------- Menus (topmost) ----------
-    // ---------- Command palette (src/palette.rs) ----------
-    if Overlays.palette-open: PaletteDialog {
-        width: root.width; height: root.height;
-        close => { Overlays.palette-open = false; fs.focus(); }
-    }
-
-    if Menus.menu-kind != "": TouchArea {
-        clicked => { Menus.menu-kind = ""; Menus.sub-open = ""; }
-        pointer-event(e) => {
-            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { Menus.menu-kind = ""; Menus.sub-open = ""; }
-        }
-    }
-    if Menus.menu-kind != "": main-menu := MenuPanel {
-        width: Menus.menu-width;
-        x: max(4px, min(Menus.menu-x, root.width - self.width - 4px));
-        y: max(4px, min(Menus.menu-y, root.height - self.height - 4px));
-        items: Menus.menu-items;
-        open-sub: Menus.sub-open;
-        activated(id) => { Menus.menu-activate(id); }
-        row-hovered(id, y) => {
-            Menus.sub-y = self.y + y - 4px;
-            Menus.sub-open = id;
-            Menus.menu-sub(id);
-        }
-    }
-    if Menus.menu-kind != "" && Menus.sub-open != "" && Menus.sub-items.length > 0: MenuPanel {
-        property <length> right-x: Menus.menu-x + Menus.menu-width - 4px;
-        width: 265px;
-        x: self.right-x + self.width > root.width ? max(4px, Menus.menu-x - self.width + 4px) : self.right-x;
-        y: max(4px, min(Menus.sub-y, root.height - self.height - 4px));
-        items: Menus.sub-items;
-        activated(id) => { Menus.menu-activate(id); }
+    OverlayDialogs {
+        width: 100%; height: 100%;
+        bar-h: root.bar-h;
+        plugin-command(o, n, a) => { root.plugin-command(o, n, a); }
+        focused => { fs.focus(); }
     }
     } // keys
 }
