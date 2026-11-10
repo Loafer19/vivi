@@ -3,6 +3,7 @@ name = "vivi"
 version = "0.16.1"
 edition = "2021"
 description = "Fast, lightweight media player inspired by Juxtopposed's VLC redesign"
+license = "MIT"
 
 [dependencies]
 slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "unstable-winit-030", "accessibility"] }
@@ -12,7 +13,7 @@ rfd = "0.15"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"
 walkdir = "2.5.0"
-rusqlite = { version = "0.40.2", default-features = false }
+rusqlite = { version = "0.41.1", default-features = false }
 lofty = "0.25.4"
 md5 = "0.8.1"
 ureq = { version = "3", features = ["json"] }
@@ -38,7 +39,7 @@ zbus = { version = "5", default-features = false, features = ["blocking-api", "a
 
 # Windows/macOS: compile SQLite in (no system library to link against).
 [target.'cfg(not(target_os = "linux"))'.dependencies]
-rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.41.1", default-features = false, features = ["bundled"] }
 
 [build-dependencies]
 slint-build = "1.8"

@@ -27,8 +27,11 @@ allow = [
     "Unlicense",
     "Zlib",
     "0BSD",
-    # libmpv2 / libmpv2-sys (bindings to the LGPL libmpv, linked dynamically).
+    # libmpv2 / libmpv2-sys declare the deprecated SPDX id "LGPL-2.1"
+    # (LGPL-2.1-or-later in practice; we cannot change their manifests).
     "LGPL-2.1",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
     # Slint, used under its royalty-free license.
     "LicenseRef-Slint-Royalty-free-2.0",
 ]
