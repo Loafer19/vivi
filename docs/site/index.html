@@ -31,13 +31,13 @@
     <a class="btn primary" href="https://github.com/Loafer19/vivi/releases/latest"><i data-lucide="download"></i>Download</a>
     <a class="btn ghost" href="#install"><i data-lucide="terminal"></i>One-line install</a>
   </div>
-  <ul class="stats" aria-label="Measured on the v0.16.2 Linux release">
+  <ul class="stats" aria-label="Measured on the v0.16.3 Linux release">
     <li><b>19.0 MB</b><span>Linux download</span></li>
     <li><b>48.8 MB</b><span>installed</span></li>
     <li><b>&lt;1 s</b><span>to first window</span></li>
     <li><b>MIT</b><span>free and open source</span></li>
   </ul>
-  <p class="meta">v0.16.2, Linux x86_64 tarball; installed size excludes the system libmpv.
+  <p class="meta">v0.16.3, Linux x86_64 tarball; installed size excludes the system libmpv.
   <a href="compare.html#numbers">How we measured</a> · Linux, Windows, macOS</p>
 </section>
 <div class="demo">
@@ -108,7 +108,7 @@
 <section class="get" aria-labelledby="install">
 <h2 id="install">Get Vivi</h2>
 <p class="lead">Install, update or remove Vivi with one copy-paste. Pick your system; the commands use the latest release, v@VIVI_VERSION@.</p>
-<p class="lead">Direct downloads (sizes for v0.16.2):</p>
+<p class="lead">Direct downloads (sizes for v0.16.3):</p>
 <div class="dls">
   <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>Linux tarball</h3><p>x86_64 · 19.0 MB · needs libmpv</p></a>
   <a class="card link" href="https://github.com/Loafer19/vivi/releases/latest"><h3>Flatpak</h3><p>x86_64 · 15.0 MB · Flathub runtime</p></a>
@@ -215,13 +215,13 @@ sudo pacman -R vivi-git</code></pre></div></div>
 <div class="panel" role="tabpanel" id="g-source" aria-labelledby="gb-source" tabindex="0" hidden>
 <div data-for="linux">
 <div class="way"><h3>1. Dependencies</h3><p>Pick your distribution. Optional at runtime: <code>ffmpeg</code> (library thumbnails) and <code>yt-dlp</code> (YouTube).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code><span class="cmt"># Debian / Ubuntu</span>
-sudo apt install build-essential pkg-config git libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev libsqlite3-dev
+sudo apt install build-essential pkg-config git libmpv-dev libxkbcommon-dev libfontconfig1-dev libgtk-3-dev
 
 <span class="cmt"># Fedora</span>
-sudo dnf install gcc pkgconf-pkg-config git mpv-devel libxkbcommon-devel fontconfig-devel gtk3-devel sqlite-devel
+sudo dnf install gcc pkgconf-pkg-config git mpv-devel libxkbcommon-devel fontconfig-devel gtk3-devel
 
 <span class="cmt"># Arch / Omarchy</span>
-sudo pacman -S --needed base-devel git rust mpv sqlite libxkbcommon wayland mesa</code></pre></div></div>
+sudo pacman -S --needed base-devel git rust mpv libxkbcommon wayland mesa</code></pre></div></div>
 <div class="way"><h3>2. Rust</h3><p>Debian, Ubuntu and Fedora: get a current stable Rust with rustup (Arch's <code>rust</code> package above is fine).</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre></div></div>
 <div class="way"><h3>3. Build and run</h3><p><code>vivi</code> and <code>vivi-mcp</code> end up in <code>target/release/</code>. Your own build has no built-in Jamendo and AcoustID keys: add yours in Settings, or set <code>VIVI_JAMENDO_CLIENT_ID</code> and <code>VIVI_ACOUSTID_KEY</code> when building. <a href="https://github.com/Loafer19/vivi/blob/master/docs/features.md#build-from-source-arch--omarchy">More in the docs</a>.</p><div class="code"><button type="button" class="copy" aria-label="Copy command">Copy</button><pre><code>git clone https://github.com/Loafer19/vivi &amp;&amp; cd vivi
 cargo build --release
