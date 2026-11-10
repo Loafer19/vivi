@@ -1,5 +1,6 @@
-//! One shared scheduler for the UI thread's repeating work (event polling, the control
-//! socket, plugin ticks, tray and MPRIS updates, …).
+//! One shared scheduler for the UI thread's repeating work (plugin ticks, tray and
+//! MPRIS updates, …). Player events and the control socket wake the UI when something
+//! arrives rather than polling here.
 //!
 //! Every task keeps its own interval, but they all run off a single [`slint::Timer`]
 //! that is armed for the next due task. A task that falls due within a quarter of its

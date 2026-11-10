@@ -168,19 +168,45 @@ pub(crate) fn debug_ui(app: &AppWindow) {
     if let Some(m) = var("VIVI_MENU") {
         let sub = var("VIVI_SUB");
         let w = app.as_weak();
+        // Other screenshot hooks wait 2.5 s; then wait until startup scripts have been
+        // handed to mpv (or 4 s more) so package entries are present (#103).
         slint::Timer::single_shot(Duration::from_millis(2500), move || {
-            let Some(a) = w.upgrade() else { return };
-            let f: Vec<&str> = m.splitn(4, ';').collect();
-            let num = |i: usize| f.get(i).and_then(|v| v.parse().ok()).unwrap_or(100.0);
-            let ctx = f.get(3).copied().unwrap_or("").replace(['|', '~'], "\n");
-            a.global::<crate::Menus>()
-                .invoke_menu_request(f[0].into(), num(1), num(2), ctx.into());
-            if let Some((id, y)) = sub.as_deref().and_then(|s| s.split_once(';')) {
-                a.global::<crate::Menus>()
-                    .set_sub_y(y.parse().unwrap_or(0.0));
-                a.global::<crate::Menus>().set_sub_open(id.into());
-                a.global::<crate::Menus>().invoke_menu_sub(id.into());
+            fn open(
+                w: slint::Weak<AppWindow>,
+                m: String,
+                sub: Option<String>,
+                deadline: std::time::Instant,
+            ) {
+                if !crate::plugins::startup_scripts_loaded() && std::time::Instant::now() < deadline
+                {
+                    slint::Timer::single_shot(Duration::from_millis(100), move || {
+                        open(w, m, sub, deadline);
+                    });
+                    return;
+                }
+                let Some(a) = w.upgrade() else { return };
+                let f: Vec<&str> = m.splitn(4, ';').collect();
+                let num = |i: usize| f.get(i).and_then(|v| v.parse().ok()).unwrap_or(100.0);
+                let ctx = f.get(3).copied().unwrap_or("").replace(['|', '~'], "\n");
+                a.global::<crate::Menus>().invoke_menu_request(
+                    f[0].into(),
+                    num(1),
+                    num(2),
+                    ctx.into(),
+                );
+                if let Some((id, y)) = sub.as_deref().and_then(|s| s.split_once(';')) {
+                    a.global::<crate::Menus>()
+                        .set_sub_y(y.parse().unwrap_or(0.0));
+                    a.global::<crate::Menus>().set_sub_open(id.into());
+                    a.global::<crate::Menus>().invoke_menu_sub(id.into());
+                }
             }
+            open(
+                w,
+                m,
+                sub,
+                std::time::Instant::now() + Duration::from_secs(4),
+            );
         });
     }
     // VIVI_SUBS=folder: "To This Folder"; =search: "From OpenSubtitles".

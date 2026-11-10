@@ -220,6 +220,58 @@ pub fn screenshot_path(s: &str, overwrite: bool) -> Result<std::path::PathBuf, S
 }
 
 #[cfg(unix)]
+type IpcReq = (
+    String,
+    Value,
+    std::sync::mpsc::Sender<Result<Value, String>>,
+);
+
+#[cfg(unix)]
+struct IpcUi {
+    rx: std::sync::mpsc::Receiver<IpcReq>,
+    app: slint::Weak<crate::AppWindow>,
+    player: std::rc::Rc<crate::player::Player>,
+}
+
+#[cfg(unix)]
+thread_local! {
+    static IPC: std::cell::RefCell<Option<IpcUi>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(unix)]
+static IPC_WAKE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Wake the UI thread once to drain queued control-socket requests (#107).
+#[cfg(unix)]
+fn poke_ui() {
+    use std::sync::atomic::Ordering;
+    if IPC_WAKE.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    if slint::invoke_from_event_loop(drain_ui).is_err() {
+        IPC_WAKE.store(false, Ordering::Release);
+    }
+}
+
+#[cfg(unix)]
+fn drain_ui() {
+    use std::sync::atomic::Ordering;
+    IPC_WAKE.store(false, Ordering::Release);
+    IPC.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let Some(i) = slot.as_mut() else {
+            return;
+        };
+        let Some(a) = i.app.upgrade() else {
+            return;
+        };
+        while let Ok((cmd, args, reply)) = i.rx.try_recv() {
+            let _ = reply.send(handle(&a, &i.player, &cmd, &args));
+        }
+    });
+}
+
+#[cfg(unix)]
 pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>, enabled: bool) {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::fs::PermissionsExt;
@@ -293,6 +345,7 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
                                 if tx.send((cmd.to_string(), args, rtx)).is_err() {
                                     return Err("vivi is closing".to_string());
                                 }
+                                poke_ui();
                                 rrx.recv_timeout(std::time::Duration::from_secs(5))
                                     .unwrap_or_else(|_| Err("vivi did not answer".into()))
                             };
@@ -339,13 +392,12 @@ pub fn setup(app: &crate::AppWindow, player: &std::rc::Rc<crate::player::Player>
         }
     });
 
-    let w = app.as_weak();
-    let p = player.clone();
-    crate::ticker::every(std::time::Duration::from_millis(40), move || {
-        let Some(a) = w.upgrade() else { return };
-        while let Ok((cmd, args, reply)) = rx.try_recv() {
-            let _ = reply.send(handle(&a, &p, &cmd, &args));
-        }
+    IPC.with(|i| {
+        *i.borrow_mut() = Some(IpcUi {
+            rx,
+            app: app.as_weak(),
+            player: player.clone(),
+        });
     });
 }
 

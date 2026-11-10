@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Player menu package entries at startup** (#103): if the player menu (Plugins, Video, Audio, Subtitle) is already open when a package script finishes loading or sends `vivi-menu` show/hide, the menu rebuilds so entries such as YouTube Music's Radio, Download and Like appear without closing it. The debug `VIVI_MENU` hook still waits 2.5 s, then until startup scripts have been handed to mpv (at most 4 s more).
+
+### Changed
+- **Idle CPU** (#107): player events and the control socket wake the UI when something arrives instead of polling every 30–40 ms; auto-hide uses a one-shot deadline instead of a 250 ms timer, so it does not run while nothing can hide (no media, or paused with *Keep shown while paused*). Playback position, plugin ticks, IPC replies and auto-hide behaviour are unchanged.
+
 ## [0.16.1] - 2026-11-07
 
 A packaging release: the **AppImage now runs on older systems** (built on Ubuntu 22.04, glibc 2.35 or newer), so it can join the AppImage catalog. No player changes.

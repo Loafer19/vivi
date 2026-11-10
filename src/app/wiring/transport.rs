@@ -37,6 +37,7 @@ pub(crate) fn wire(
             let fs = !w.is_fullscreen();
             w.set_fullscreen(fs);
             a.set_fullscreen(fs);
+            crate::app::wiring::autohide::reconsider();
         }
     };
     let tfs = toggle_fs.clone();

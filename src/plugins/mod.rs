@@ -280,6 +280,20 @@ pub fn active(id: &str) -> bool {
     with(|r| r.entries.iter().any(|e| e.active && e.manifest.id == id)).unwrap_or(false)
 }
 
+/// Whether every enabled script that should load on startup has been handed to mpv.
+pub fn startup_scripts_loaded() -> bool {
+    with(|r| {
+        let c = r.cfg.borrow();
+        if !scripts::load_on_startup(&c) {
+            return true;
+        }
+        r.scripts
+            .iter()
+            .all(|s| !is_enabled(&c, &s.manifest) || r.loaded.contains(&s.manifest.id))
+    })
+    .unwrap_or(true)
+}
+
 /// Whether plugin `id` is on and running: an active built-in, or a script mpv has loaded
 /// that is still enabled (#94: an installed but disabled script is not; a script turned
 /// off keeps running in mpv until restart, but counts as off).
@@ -563,7 +577,7 @@ use crate::config;
 
 /// Re-read the scripts folder; enabled new scripts are loaded. Returns the count.
 pub fn rescan() -> usize {
-    with(|r| {
+    let n = with(|r| {
         let new = all_scripts(&r.entries);
         let c = r.cfg.borrow().clone();
         for s in &new {
@@ -578,7 +592,9 @@ pub fn rescan() -> usize {
             .filter(|s| s.manifest.origin == Origin::Script)
             .count()
     })
-    .unwrap_or(0)
+    .unwrap_or(0);
+    crate::menus::refresh_open();
+    n
 }
 
 /// Rescan after installing package `id`; whether it is now loaded in mpv.
@@ -1075,6 +1091,8 @@ pub fn file_loaded() {
             e.plugin.file_loaded(&ctx!(r, a, e));
         }
     });
+    // Outside `with`: rebuilding the menu asks for contributions.
+    crate::menus::refresh_open();
 }
 
 /// Send a command to one plugin (no-op when it is disabled).
@@ -1146,6 +1164,7 @@ pub fn set_menu_shown(id: &str, command: &str, shown: bool) {
         }
         m.insert((id.to_string(), command.to_string()), shown);
     });
+    crate::menus::refresh_open();
 }
 
 /// Whether entry `command` of plugin `id` is shown (`hidden`: it starts hidden).

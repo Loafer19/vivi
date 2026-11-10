@@ -80,11 +80,54 @@ pub(crate) fn configure(a: &AppWindow, i: &config::Interface) {
         "slide" => 2,
         _ => 0,
     });
+    reconsider();
 }
 
-/// The returned timer drives the auto-hide; keep it alive for the app's lifetime.
-#[must_use]
-pub(crate) fn wire(app: &AppWindow, player: &Rc<Player>) -> slint::Timer {
+/// Whether the controls can hide right now (media playing, mode allows it).
+fn hideable(cfg: &Cfg, has_media: bool, playing: bool, fullscreen: bool) -> bool {
+    let mode_ok = match cfg.mode.as_str() {
+        "never" => false,
+        "fullscreen" => fullscreen,
+        _ => true,
+    };
+    mode_ok && has_media && (playing || !cfg.keep_paused)
+}
+
+/// Whether the controls should stay shown after `idle` without activity.
+fn should_show(
+    cfg: &Cfg,
+    has_media: bool,
+    playing: bool,
+    fullscreen: bool,
+    idle: Duration,
+    brief: bool,
+    audio_only: bool,
+) -> bool {
+    let wait = if brief {
+        cfg.delay.min(BRIEF)
+    } else {
+        cfg.delay
+    };
+    !(hideable(cfg, has_media, playing, fullscreen)
+        && idle > wait
+        && !(cfg.keep_audio && audio_only))
+}
+
+thread_local! {
+    static TIMER: slint::Timer = slint::Timer::default();
+    static RUN: RefCell<Option<Rc<dyn Fn()>>> = RefCell::new(None);
+}
+
+/// Re-evaluate visibility and the subtitle margin; arm a one-shot for the hide
+/// deadline only while something can actually hide (#107).
+pub(crate) fn reconsider() {
+    let run = RUN.with(|r| r.borrow().clone());
+    if let Some(run) = run {
+        run();
+    }
+}
+
+pub(crate) fn wire(app: &AppWindow, player: &Rc<Player>) {
     // When the controls were last woken; `brief` shortens the next idle wait.
     let last = Rc::new(Cell::new(Instant::now()));
     let brief = Rc::new(Cell::new(false));
@@ -105,6 +148,7 @@ pub(crate) fn wire(app: &AppWindow, player: &Rc<Player>) -> slint::Timer {
             if hidden {
                 a.set_controls_visible(true);
             }
+            reconsider();
         })
     };
     {
@@ -161,64 +205,80 @@ pub(crate) fn wire(app: &AppWindow, player: &Rc<Player>) -> slint::Timer {
             }
         });
     }
-    let hide_timer = slint::Timer::default();
     {
         let sub_margin = Cell::new(-1i64);
         let hp = player.clone();
         let weak = app.as_weak();
-        hide_timer.start(
-            slint::TimerMode::Repeated,
-            Duration::from_millis(250),
-            move || {
-                let Some(a) = weak.upgrade() else { return };
-                let cfg = CFG.with(|c| c.borrow().clone());
-                let wait = if brief.get() {
-                    cfg.delay.min(BRIEF)
+        let last = last.clone();
+        let brief = brief.clone();
+        let run = Rc::new(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let cfg = CFG.with(|c| c.borrow().clone());
+            let wait = if brief.get() {
+                cfg.delay.min(BRIEF)
+            } else {
+                cfg.delay
+            };
+            let pb = a.global::<crate::Playback>();
+            let can_hide = hideable(
+                &cfg,
+                pb.get_has_media(),
+                pb.get_playing(),
+                a.get_fullscreen(),
+            );
+            let want = should_show(
+                &cfg,
+                pb.get_has_media(),
+                pb.get_playing(),
+                a.get_fullscreen(),
+                last.get().elapsed(),
+                brief.get(),
+                crate::viz::audio_only(&hp),
+            );
+            if a.get_controls_visible() != want {
+                a.set_controls_visible(want);
+            }
+            // Lift subtitles above the bottom bar while it is shown.
+            // Same as `show-ui` in ui/app.slint: an open panel, library, drawer or
+            // menu keeps the bars up while "Keep shown while a panel or menu is open".
+            let ah = a.global::<crate::AutoHide>();
+            let ov = a.global::<crate::Overlays>();
+            let held = ah.get_keep_panel()
+                && (ov.get_library_open()
+                    || ov.get_drawer_open()
+                    || !a.global::<crate::Menus>().get_menu_kind().is_empty());
+            let bar = want || !ah.get_bottom() || ov.get_panel_open() || held;
+            let h = a
+                .window()
+                .size()
+                .to_logical(a.window().scale_factor())
+                .height
+                .max(1.0);
+            let margin = if bar {
+                22 + (72.0 * 720.0 / h) as i64
+            } else {
+                22
+            };
+            if sub_margin.get() != margin {
+                sub_margin.set(margin);
+                hp.set("sub-margin-y", &margin.to_string());
+            }
+            TIMER.with(|t| {
+                if can_hide && want {
+                    let left = wait.saturating_sub(last.get().elapsed());
+                    t.start(
+                        slint::TimerMode::SingleShot,
+                        left.max(Duration::from_millis(1)),
+                        reconsider,
+                    );
                 } else {
-                    cfg.delay
-                };
-                let pb = a.global::<crate::Playback>();
-                let hideable = match cfg.mode.as_str() {
-                    "never" => false,
-                    "fullscreen" => a.get_fullscreen(),
-                    _ => true,
-                } && pb.get_has_media()
-                    && (pb.get_playing() || !cfg.keep_paused);
-                let want = !(hideable
-                    && last.get().elapsed() > wait
-                    && !(cfg.keep_audio && crate::viz::audio_only(&hp)));
-                if a.get_controls_visible() != want {
-                    a.set_controls_visible(want);
+                    t.stop();
                 }
-                // Lift subtitles above the bottom bar while it is shown.
-                // Same as `show-ui` in ui/app.slint: an open panel, library, drawer or
-                // menu keeps the bars up while "Keep shown while a panel or menu is open".
-                let ah = a.global::<crate::AutoHide>();
-                let ov = a.global::<crate::Overlays>();
-                let held = ah.get_keep_panel()
-                    && (ov.get_library_open()
-                        || ov.get_drawer_open()
-                        || !a.global::<crate::Menus>().get_menu_kind().is_empty());
-                let bar = want || !ah.get_bottom() || ov.get_panel_open() || held;
-                let h = a
-                    .window()
-                    .size()
-                    .to_logical(a.window().scale_factor())
-                    .height
-                    .max(1.0);
-                let margin = if bar {
-                    22 + (72.0 * 720.0 / h) as i64
-                } else {
-                    22
-                };
-                if sub_margin.get() != margin {
-                    sub_margin.set(margin);
-                    hp.set("sub-margin-y", &margin.to_string());
-                }
-            },
-        );
+            });
+        });
+        RUN.with(|r| *r.borrow_mut() = Some(run));
     }
-    hide_timer
+    reconsider();
 }
 
 #[cfg(test)]
@@ -234,5 +294,58 @@ mod tests {
         assert_eq!(delay_secs(99.0), 30.0);
         assert_eq!(delay_secs(0.0), 2.0);
         assert_eq!(delay_secs(f64::NAN), 2.0);
+    }
+
+    #[test]
+    fn idle_without_media_stays_shown() {
+        let cfg = Cfg::default();
+        assert!(should_show(
+            &cfg,
+            false,
+            false,
+            false,
+            Duration::from_secs(10),
+            false,
+            false
+        ));
+        assert!(!hideable(&cfg, false, false, false));
+    }
+
+    #[test]
+    fn playing_hides_after_the_delay() {
+        let cfg = Cfg::default();
+        assert!(should_show(
+            &cfg,
+            true,
+            true,
+            false,
+            Duration::from_millis(500),
+            false,
+            false
+        ));
+        assert!(!should_show(
+            &cfg,
+            true,
+            true,
+            false,
+            Duration::from_secs(3),
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn keep_paused_does_not_hide_while_paused() {
+        let cfg = Cfg::default();
+        assert!(cfg.keep_paused);
+        assert!(should_show(
+            &cfg,
+            true,
+            false,
+            false,
+            Duration::from_secs(10),
+            false,
+            false
+        ));
     }
 }

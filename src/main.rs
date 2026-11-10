@@ -94,15 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = AppWindow::new()?;
     let log = std::env::var_os("VIVI_LOG").is_some();
 
-    let weak = app.as_weak();
-    let (player, events) = Player::new(move || {
-        let w = weak.clone();
-        let _ = slint::invoke_from_event_loop(move || {
-            if let Some(a) = w.upgrade() {
-                a.window().request_redraw();
-            }
-        });
-    })?;
+    let (player, events) = Player::new(app::wiring::events::wake)?;
     let player = Rc::new(player);
     let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
     app::startup::setup_features(&app, &player, &cfg, log);
@@ -136,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app::wiring::keys::wire(&app, &player, toggle_fs, open_file);
 
     // Auto-hide controls/cursor after inactivity while playing.
-    let _hide_timer = app::wiring::autohide::wire(&app, &player);
+    app::wiring::autohide::wire(&app, &player);
 
     app::wiring::window::wire(&app, &player);
 

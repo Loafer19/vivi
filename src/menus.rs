@@ -501,6 +501,103 @@ struct Ctx {
     kind: String,
 }
 
+thread_local! {
+    static REFRESH: RefCell<Option<Rc<dyn Fn()>>> = RefCell::new(None);
+}
+
+/// Rebuild the open menu (and its submenu) so package entries that arrive after it
+/// opened — a script finishing `load-script`, or `vivi-menu` show/hide — show up (#103).
+pub fn refresh_open() {
+    let cb = REFRESH.with(|f| f.borrow().clone());
+    if let Some(cb) = cb {
+        cb();
+    }
+}
+
+fn menu_rows(
+    a: &AppWindow,
+    p: &Player,
+    ctx: &Rc<RefCell<Ctx>>,
+    cfg: &Rc<RefCell<Config>>,
+    kind: &str,
+    c: &str,
+) -> Vec<MenuItem> {
+    match kind {
+        "main" => {
+            // Player menu: plugin entries get no item argument.
+            *ctx.borrow_mut() = Ctx::default();
+            main_menu(a, p)
+        }
+        "recent" => recent_menu(),
+        "lib" => {
+            let f: Vec<&str> = c.split('\n').collect();
+            let g = |i: usize| f.get(i).copied().unwrap_or("");
+            *ctx.borrow_mut() = Ctx {
+                key: g(0).into(),
+                kind: g(1).into(),
+            };
+            let mut v = lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1");
+            // `context.item`: plugin actions for files and folders.
+            if matches!(g(1), "audio" | "video" | "folder") {
+                v.extend(grouped(item_rows(contrib::CONTEXT_ITEM, "plugins")));
+            }
+            if g(1) == "playlist" {
+                let src = crate::store::playlist_source(std::path::Path::new(g(0)));
+                synced_rows(&mut v, src.is_some());
+            }
+            v
+        }
+        "sort" => {
+            let cur = cfg.borrow().library.sort.clone();
+            SORTS
+                .iter()
+                .map(|(k, l)| check(&format!("sort:{k}"), l, sort_key(&cur) == *k))
+                .collect()
+        }
+        "view" => {
+            let grid = cfg.borrow().library.view != "list";
+            vec![
+                MenuItem {
+                    checked: grid,
+                    ..row("view:grid", "Grid View", "grid-view", "")
+                },
+                MenuItem {
+                    checked: !grid,
+                    ..row("view:list", "List View", "list-view", "")
+                },
+            ]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn present_menu(
+    a: &AppWindow,
+    p: &Player,
+    items: &Rc<VecModel<MenuItem>>,
+    subs: &Rc<VecModel<MenuItem>>,
+    kind: &str,
+    v: Vec<MenuItem>,
+    keep_sub: bool,
+) {
+    if v.is_empty() {
+        return;
+    }
+    items.set_vec(v);
+    a.global::<crate::Menus>()
+        .set_menu_width(if kind == "main" { 292.0 } else { 265.0 });
+    a.global::<crate::Menus>().set_menu_kind(kind.into());
+    if keep_sub {
+        let sub = a.global::<crate::Menus>().get_sub_open();
+        if !sub.is_empty() {
+            subs.set_vec(submenu(a, p, &sub));
+        }
+    } else {
+        subs.set_vec(Vec::new());
+        a.global::<crate::Menus>().set_sub_open("".into());
+    }
+}
+
 pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     let items = Rc::new(VecModel::<MenuItem>::default());
     let subs = Rc::new(VecModel::<MenuItem>::default());
@@ -519,71 +616,53 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
             ctx.clone(),
             cfg.clone(),
         );
+        let last = Rc::new(RefCell::new(None::<(String, f32, f32, String)>));
         // ctx for "lib": "<key>\n<kind>\n<pinned>\n<watched>\n<progress>"
-        app.global::<crate::Menus>()
-            .on_menu_request(move |kind, x, y, c| {
-                let Some(a) = w.upgrade() else { return };
-                let c = c.to_string();
-                let v = match kind.as_str() {
-                    "main" => {
-                        // Player menu: plugin entries get no item argument.
-                        *ctx.borrow_mut() = Ctx::default();
-                        main_menu(&a, &p)
+        {
+            let last = last.clone();
+            let (w, p, items, subs, ctx, cfg) = (
+                w.clone(),
+                p.clone(),
+                items.clone(),
+                subs.clone(),
+                ctx.clone(),
+                cfg.clone(),
+            );
+            app.global::<crate::Menus>()
+                .on_menu_request(move |kind, x, y, c| {
+                    let Some(a) = w.upgrade() else { return };
+                    let c = c.to_string();
+                    *last.borrow_mut() = Some((kind.to_string(), x, y, c.clone()));
+                    let v = menu_rows(&a, &p, &ctx, &cfg, kind.as_str(), &c);
+                    a.global::<crate::Menus>().set_menu_x(x);
+                    a.global::<crate::Menus>().set_menu_y(y);
+                    present_menu(&a, &p, &items, &subs, kind.as_str(), v, false);
+                });
+        }
+        {
+            let (w, p, items, subs, ctx, cfg, last) = (
+                w.clone(),
+                p.clone(),
+                items.clone(),
+                subs.clone(),
+                ctx.clone(),
+                cfg.clone(),
+                last.clone(),
+            );
+            REFRESH.with(|f| {
+                *f.borrow_mut() = Some(Rc::new(move || {
+                    let Some(a) = w.upgrade() else { return };
+                    if a.global::<crate::Menus>().get_menu_kind().is_empty() {
+                        return;
                     }
-                    "recent" => recent_menu(),
-                    "lib" => {
-                        let f: Vec<&str> = c.split('\n').collect();
-                        let g = |i: usize| f.get(i).copied().unwrap_or("");
-                        *ctx.borrow_mut() = Ctx {
-                            key: g(0).into(),
-                            kind: g(1).into(),
-                        };
-                        let mut v =
-                            lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1");
-                        // `context.item`: plugin actions for files and folders.
-                        if matches!(g(1), "audio" | "video" | "folder") {
-                            v.extend(grouped(item_rows(contrib::CONTEXT_ITEM, "plugins")));
-                        }
-                        if g(1) == "playlist" {
-                            let src = crate::store::playlist_source(std::path::Path::new(g(0)));
-                            synced_rows(&mut v, src.is_some());
-                        }
-                        v
-                    }
-                    "sort" => {
-                        let cur = cfg.borrow().library.sort.clone();
-                        SORTS
-                            .iter()
-                            .map(|(k, l)| check(&format!("sort:{k}"), l, sort_key(&cur) == *k))
-                            .collect()
-                    }
-                    "view" => {
-                        let grid = cfg.borrow().library.view != "list";
-                        vec![
-                            MenuItem {
-                                checked: grid,
-                                ..row("view:grid", "Grid View", "grid-view", "")
-                            },
-                            MenuItem {
-                                checked: !grid,
-                                ..row("view:list", "List View", "list-view", "")
-                            },
-                        ]
-                    }
-                    _ => Vec::new(),
-                };
-                if v.is_empty() {
-                    return;
-                }
-                items.set_vec(v);
-                subs.set_vec(Vec::new());
-                a.global::<crate::Menus>()
-                    .set_menu_width(if kind == "main" { 292.0 } else { 265.0 });
-                a.global::<crate::Menus>().set_menu_x(x);
-                a.global::<crate::Menus>().set_menu_y(y);
-                a.global::<crate::Menus>().set_sub_open("".into());
-                a.global::<crate::Menus>().set_menu_kind(kind);
+                    let Some((kind, _x, _y, c)) = last.borrow().clone() else {
+                        return;
+                    };
+                    let v = menu_rows(&a, &p, &ctx, &cfg, &kind, &c);
+                    present_menu(&a, &p, &items, &subs, &kind, v, true);
+                }));
             });
+        }
     }
     {
         let (w, p, subs) = (app.as_weak(), player.clone(), subs.clone());
