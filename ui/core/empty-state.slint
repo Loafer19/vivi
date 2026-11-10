@@ -13,12 +13,12 @@ export component EmptyState inherits VerticalLayout {
     in property <string> primary-text;
     in property <string> secondary-text;
     in property <string> tertiary-text;
-    in property <length> pad-top: 40px;
+    in property <length> pad-top: 16px;
     callback primary();
     callback secondary();
     callback tertiary();
 
-    alignment: center;
+    alignment: start;
     spacing: 10px;
     padding-top: root.pad-top;
     padding-left: 24px;

@@ -336,14 +336,24 @@ impl Lib {
                 if !self.search.is_empty() {
                     files.retain(|m| self.matches(m));
                 } else if arg.is_empty() {
-                    // Roots
-                    out.push(Self::action("action:add-folder", "Add", "add"));
-                    for r in &cfg.library.folders {
-                        let n = files
-                            .iter()
-                            .filter(|m| m.path.starts_with(&format!("{r}/")))
-                            .count();
-                        if n > 0 {
+                    // Roots. Skip the "Add" row when there are no folders with
+                    // videos so the shared empty state can show (#102).
+                    let groups: Vec<(&String, usize)> = cfg
+                        .library
+                        .folders
+                        .iter()
+                        .map(|r| {
+                            let n = files
+                                .iter()
+                                .filter(|m| m.path.starts_with(&format!("{r}/")))
+                                .count();
+                            (r, n)
+                        })
+                        .filter(|(_, n)| *n > 0)
+                        .collect();
+                    if !groups.is_empty() {
+                        out.push(Self::action("action:add-folder", "Add", "add"));
+                        for (r, n) in groups {
                             let pin = cfg.library.pinned.contains(r);
                             out.push(Self::group(
                                 format!("video:{r}"),
@@ -402,11 +412,14 @@ impl Lib {
             }
             Nav::Music if arg.is_empty() && self.search.is_empty() => {
                 crumbs.push(("music".into(), "Music".into()));
-                out.push(Self::action("action:add-folder", "Add", "add"));
-                out.push(Self::action("music:songs", "Songs", "songs"));
-                out.push(Self::action("music:albums", "Albums", "album"));
-                out.push(Self::action("music:artists", "Artists", "artist"));
-                out.push(Self::action("music:genres", "Genres", "genre"));
+                // Songs/Albums/… only once there is audio; otherwise EmptyState (#102).
+                if self.media.iter().any(|m| m.kind == MediaKind::Audio) {
+                    out.push(Self::action("action:add-folder", "Add", "add"));
+                    out.push(Self::action("music:songs", "Songs", "songs"));
+                    out.push(Self::action("music:albums", "Albums", "album"));
+                    out.push(Self::action("music:artists", "Artists", "artist"));
+                    out.push(Self::action("music:genres", "Genres", "genre"));
+                }
             }
             // The Streams hub and service pages (src/streams): drawn by the hub, no items.
             Nav::Streams => crumbs.push(("streams".into(), "Streams".into())),
@@ -528,12 +541,15 @@ impl Lib {
             }
             Nav::Playlists => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
-                out.push(Self::action(
-                    "action:create-playlist",
-                    "Create playlist",
-                    "add",
-                ));
                 let marks = crate::bookmarks::list_all().len();
+                let lists = store::playlists();
+                if !lists.is_empty() || marks > 0 {
+                    out.push(Self::action(
+                        "action:create-playlist",
+                        "Create playlist",
+                        "add",
+                    ));
+                }
                 if marks > 0 {
                     let mut it = Self::action("bookmarks", "Bookmarks", "bookmark");
                     it.subtitle = format!("{marks} saved").into();
@@ -543,7 +559,7 @@ impl Lib {
                     .into_iter()
                     .map(|m| (m.id, m.name))
                     .collect();
-                for (name, path) in store::playlists() {
+                for (name, path) in lists {
                     let text = std::fs::read_to_string(&path).unwrap_or_default();
                     let n = text
                         .lines()
