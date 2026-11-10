@@ -155,7 +155,19 @@ component FooterCheck inherits Rectangle {
             if root.checked: Icon { width: 14px; height: 14px; source: @image-url("../../assets/icons/check-selected.svg"); tint: Theme.bg-b2; } }
         Text { text: root.text; color: Theme.fg-2; font-size: Metrics.font-sm; vertical-alignment: center; }
     }
-    TouchArea { accessible-role: checkbox; accessible-label: root.label; accessible-checked: root.checked; mouse-cursor: pointer; clicked => { root.toggled(); } }
+    TouchArea {
+        accessible-role: checkbox; accessible-label: root.label; accessible-checked: root.checked;
+        mouse-cursor: pointer; accessible-action-default => { root.toggled(); }
+        clicked => { root.toggled(); }
+    }
+    kf := FocusScope {
+        focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.toggled(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: Metrics.radius-sm; }
 }
 
 // Add Subtitles (Figma "Add Subtitles to Playlist/Folder"): target (this file / this
@@ -182,6 +194,7 @@ export component SubtitleDialog inherits Modal {
     in property <bool> online: true; // Subtitle Search is on (else From Computer only)
     callback cmd(string, string);    // → plugin-command("subtitle-search", …)
     callback close();
+    accessible-role: text; accessible-label: "Add subtitles";
     property <bool> ok: root.selected >= 0 && root.selected < root.hits.length && !root.busy;
     property <bool> can-save: root.source == 0 ? root.ok : root.local.length > 0;
     card-width: 1080px;

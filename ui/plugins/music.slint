@@ -158,6 +158,8 @@ component ViewToggle inherits HorizontalLayout {
 export component MusicBody inherits Rectangle {
     in property <bool> page;
     in property <string> title;
+    accessible-role: text;
+    accessible-label: root.title != "" ? root.title : "Plugin";
     in property <[Item]> results;
     in property <[image]> logos;
     in property <string> status;
@@ -495,6 +497,9 @@ export component NowPlayingCard inherits Rectangle {
     in property <bool> music;
     height: 120px;
     border-radius: Metrics.radius-xxl;
+    accessible-role: text;
+    accessible-label: "Now playing: " + root.station + (root.track != "" ? ", " + root.track : "");
+    accessible-description: root.info;
     background: Theme.bg-a4.with-alpha(0.88);
     border-width: 1px; border-color: Theme.accent.with-alpha(0.45);
     drop-shadow-blur: 24px; drop-shadow-color: Theme.shadow-soft;

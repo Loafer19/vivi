@@ -26,7 +26,20 @@ component Check inherits Rectangle {
     background: root.checked ? Theme.accent : transparent;
     opacity: root.enabled ? 1 : 0.35;
     if root.checked: Icon { width: 14px; height: 14px; source: @image-url("../../assets/icons/check-active.svg"); tint: Theme.bg-b2; }
-    TouchArea { enabled: root.enabled; accessible-role: checkbox; accessible-label: root.label; accessible-checked: root.checked; mouse-cursor: pointer; clicked => { root.toggled(); } }
+    TouchArea {
+        enabled: root.enabled; accessible-role: checkbox; accessible-label: root.label;
+        accessible-checked: root.checked; accessible-enabled: root.enabled; mouse-cursor: pointer;
+        accessible-action-default => { if (root.enabled) { root.toggled(); } }
+        clicked => { root.toggled(); }
+    }
+    kf := FocusScope {
+        enabled: root.enabled; focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { if (root.enabled) { root.toggled(); } return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
 }
 
 component Thumb inherits Rectangle {
@@ -63,6 +76,7 @@ export component TagReviewDialog inherits Modal {
     in property <[TagResult]> results;
     in property <bool> can-undo;
     callback cmd(string, string);
+    accessible-role: text; accessible-label: "Review tags";
     property <image> zoom-img;
     property <string> zoom-info;
     property <bool> zoomed;

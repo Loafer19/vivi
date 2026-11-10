@@ -22,6 +22,8 @@ export component MiniPlayer inherits Rectangle {
     in-out property <int> q-sel;
     callback focused();
     background: transparent;
+    accessible-role: text;
+    accessible-label: "Miniplayer";
 
 // ---------- Miniplayer (Figma "Miniplayer" variants) ----------
 // Tiny: video only; hovering shows play/pause and the way back.
