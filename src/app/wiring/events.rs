@@ -221,6 +221,7 @@ fn drain() {
             crate::plugins::arm_ticks();
             crate::streams::arm();
             crate::tray::sync();
+            crate::viz::arm();
         }
         // Commands arrive via invoke_from_event_loop; position and metadata
         // are published here so MPRIS does not need a 100 ms poll.

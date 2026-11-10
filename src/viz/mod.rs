@@ -24,7 +24,7 @@ use crate::{AppWindow, Theme};
 use analysis::Analyzer;
 use canvas::{Canvas, Palette, Rgb};
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
@@ -59,17 +59,21 @@ struct Viz {
 
 thread_local! {
     /// Toggled by the plugin registry (Settings → Extensions).
-    static ENABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    static ENABLED: Cell<bool> = const { Cell::new(true) };
     /// Setting *Colors* is *Album art*.
-    static ART_COLORS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static ART_COLORS: Cell<bool> = const { Cell::new(false) };
+    static TICK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
+    static CTX: RefCell<Option<Ctx>> = const { RefCell::new(None) };
 }
+
+type Ctx = (slint::Weak<AppWindow>, Rc<Player>, Rc<RefCell<Viz>>);
 
 /// The visualizer as a plugin: enabling/disabling shows or hides it; modes are picked
 /// in the player (dropdown, `V` / `Shift+V`, the command palette or IPC).
 pub struct VizPlugin;
 
 impl crate::plugins::Plugin for VizPlugin {
-    /// The visualizer draws from its own frame task (see `setup`).
+    /// The visualizer draws from its own ~30 fps frame task (see [`arm`]).
     fn wants_tick(&self, _cx: &crate::plugins::Ctx) -> bool {
         false
     }
@@ -96,11 +100,13 @@ impl crate::plugins::Plugin for VizPlugin {
         cx.app
             .global::<crate::Viz>()
             .set_audio(cx.app.global::<crate::Playback>().get_has_media() && audio_only(cx.player));
+        arm();
     }
     fn disable(&mut self, cx: &crate::plugins::Ctx) {
         ENABLED.with(|e| e.set(false));
         cx.app.global::<crate::Viz>().set_enabled(false);
         cx.app.global::<crate::Viz>().set_audio(false);
+        let _ = run();
     }
     fn setting_changed(&mut self, cx: &crate::plugins::Ctx, key: &str) {
         if key == "colors" {
@@ -227,14 +233,42 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
             let _ = std::fs::create_dir_all(crate::store::state_dir());
             let _ = std::fs::write(mode_file(), name.as_str());
         }
+        arm();
     });
 
-    let (w, p) = (app.as_weak(), player.clone());
-    crate::ticker::frames(FRAME, move || {
-        if let Some(a) = w.upgrade() {
-            viz.borrow_mut().tick(&a, &p);
-        }
-    });
+    CTX.with(|c| *c.borrow_mut() = Some((app.as_weak(), player.clone(), viz)));
+}
+
+fn run() -> bool {
+    CTX.with(|c| {
+        let Some((w, p, viz)) = c.borrow().clone() else {
+            TICK.with(crate::ticker::clear);
+            return false;
+        };
+        let Some(a) = w.upgrade() else {
+            TICK.with(crate::ticker::clear);
+            return false;
+        };
+        let keep = viz.borrow_mut().tick(&a, &p);
+        keep
+    })
+}
+
+/// Start the ~30 fps frame task when a visualizer mode can draw; stop it otherwise.
+/// Player events and mode changes call this so the timer does not run while idle.
+pub fn arm() {
+    if TICK.with(|slot| slot.get().is_some()) {
+        return;
+    }
+    if run() {
+        TICK.with(|slot| {
+            if slot.get().is_none() {
+                slot.set(Some(crate::ticker::frames(FRAME, || {
+                    run();
+                })));
+            }
+        });
+    }
 }
 
 /// The playing song's cover colour for *Colors → Album art*: looked up on a worker
@@ -444,43 +478,40 @@ impl Viz {
         }
     }
 
-    fn tick(&mut self, a: &AppWindow, p: &Player) {
+    fn tick(&mut self, a: &AppWindow, p: &Player) -> bool {
         let now = Instant::now();
         let dt = (now - self.last).as_secs_f32().min(0.2);
         self.last = now;
         self.tick = self.tick.wrapping_add(1);
 
-        // Media changes: poll cheaply (every ~250 ms while not drawing).
         if !enabled() {
             self.remove_tap(p);
             self.path = None;
-            return;
+            TICK.with(crate::ticker::clear);
+            return false;
         }
-        let drawing =
-            self.audio_only && self.mode > 0 && a.global::<crate::Playback>().get_has_media();
-        if drawing || self.tick.is_multiple_of(8) {
-            let path = a
-                .global::<crate::Playback>()
-                .get_has_media()
-                .then(|| p.get("path"))
-                .flatten();
-            let tc: i64 = p.mpv.get_property("track-list/count").unwrap_or(0);
-            if path != self.path || tc != self.track_count {
-                if path != self.path {
-                    self.tap.clear();
-                    self.an = None;
-                }
-                self.path = path;
-                self.track_count = tc;
-                self.audio_only = self.path.is_some() && audio_only(p);
-                a.global::<crate::Viz>().set_audio(self.audio_only);
+        let path = a
+            .global::<crate::Playback>()
+            .get_has_media()
+            .then(|| p.get("path"))
+            .flatten();
+        let tc: i64 = p.mpv.get_property("track-list/count").unwrap_or(0);
+        if path != self.path || tc != self.track_count {
+            if path != self.path {
+                self.tap.clear();
+                self.an = None;
             }
+            self.path = path;
+            self.track_count = tc;
+            self.audio_only = self.path.is_some() && audio_only(p);
+            a.global::<crate::Viz>().set_audio(self.audio_only);
         }
         let active =
             self.audio_only && self.mode > 0 && a.global::<crate::Playback>().get_has_media();
         if !active {
             self.remove_tap(p);
-            return;
+            TICK.with(crate::ticker::clear);
+            return false;
         }
         // Install the tap, and every ~2 s make sure it is still last in the chain.
         if !self.tap_open || self.tick.is_multiple_of(60) {
@@ -527,7 +558,7 @@ impl Viz {
             self.paused_for + dt
         };
         if self.paused_for > 1.5 && self.canvas.w > 1 {
-            return; // settled; keep the last frame and save CPU
+            return true; // settled; keep the last frame and save CPU
         }
 
         // Analysis
@@ -572,7 +603,7 @@ impl Viz {
             self.canvas.clear(pal.bg);
         }
         let Some(m) = self.modes.get_mut(self.mode - 1) else {
-            return;
+            return true;
         };
         m.draw(&mut self.canvas, &an.f, &pal);
         let note = if m.name() == "Pitch" && an.f.pitch_conf > 0.15 {
@@ -587,6 +618,7 @@ impl Viz {
         self.canvas.write_rgba(buf.make_mut_slice());
         a.global::<crate::Viz>()
             .set_frame(slint::Image::from_rgba8(buf));
+        true
     }
 }
 
