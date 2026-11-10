@@ -39,7 +39,7 @@ pub struct PluginState {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Interface {
-    /// "dark" | "light"
+    /// "dark" | "light" | "system"
     pub theme: String,
     /// Accent color as `#RRGGBB`.
     pub accent: String,
@@ -405,7 +405,7 @@ pub struct Preset {
 impl Default for Interface {
     fn default() -> Self {
         Self {
-            theme: "dark".into(),
+            theme: "system".into(),
             accent: "#D37918".into(),
             autohide_secs: 2.0,
             autohide_mode: "delay".into(),
@@ -1108,6 +1108,13 @@ mod toolbar_tests {
         // Older configs have no volume_style: serde default → Cone.
         let i: Interface = toml::from_str("bar_style = \"Plain\"").unwrap();
         assert_eq!(i.volume_style, "Cone");
+    }
+
+    #[test]
+    fn new_installs_default_to_system_theme() {
+        assert_eq!(Interface::default().theme, "system");
+        let i: Interface = toml::from_str("theme = \"dark\"").unwrap();
+        assert_eq!(i.theme, "dark");
     }
 
     #[test]

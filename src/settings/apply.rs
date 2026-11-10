@@ -8,21 +8,60 @@ pub static LONG_SKIP: AtomicU32 = AtomicU32::new(60);
 pub static VOLUME_STEP: AtomicU32 = AtomicU32::new(5);
 
 /// "system" theme: follow GTK_THEME or the GNOME color-scheme when available.
+/// If neither names a dark or light preference (no portal, empty Xvfb session,
+/// GNOME `default`), use light so a bare Ubuntu 22.04 catalog run is not a
+/// dark window.
 pub(crate) fn system_dark() -> bool {
-    if let Ok(t) = std::env::var("GTK_THEME") {
-        return !t.to_lowercase().contains("light") || t.to_lowercase().contains("dark");
-    }
+    system_dark_from(
+        std::env::var("GTK_THEME").ok().as_deref(),
+        gnome_color_scheme().as_deref(),
+    )
+}
+
+fn gnome_color_scheme() -> Option<String> {
     #[cfg(target_os = "linux")]
-    if let Ok(o) = std::process::Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
-        .output()
     {
-        let s = String::from_utf8_lossy(&o.stdout);
+        let o = std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+            .output()
+            .ok()?;
+        if !o.status.success() {
+            return None;
+        }
+        let s = String::from_utf8_lossy(&o.stdout).into_owned();
+        if s.trim().is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+pub(crate) fn system_dark_from(gtk_theme: Option<&str>, color_scheme: Option<&str>) -> bool {
+    if let Some(t) = gtk_theme {
+        let t = t.to_lowercase();
+        if t.contains("dark") {
+            return true;
+        }
+        if t.contains("light") {
+            return false;
+        }
+    }
+    if let Some(s) = color_scheme {
+        let s = s.to_lowercase();
+        // GNOME: 'prefer-dark' / 'prefer-light' / 'default'
+        if s.contains("prefer-dark") || (s.contains("dark") && !s.contains("light")) {
+            return true;
+        }
         if s.contains("light") {
             return false;
         }
     }
-    true
+    false
 }
 
 pub fn apply_theme(a: &AppWindow, c: &Config) {
@@ -398,6 +437,21 @@ pub fn sync_panel(a: &AppWindow, p: &Player) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_theme_follows_named_preference_else_light() {
+        assert!(system_dark_from(Some("Adwaita-dark"), None));
+        assert!(!system_dark_from(Some("Adwaita-light"), None));
+        assert!(system_dark_from(None, Some("'prefer-dark'")));
+        assert!(!system_dark_from(None, Some("'prefer-light'")));
+        assert!(!system_dark_from(None, Some("'default'")));
+        assert!(!system_dark_from(None, None));
+        // An explicit GTK theme wins over a missing desktop scheme.
+        assert!(system_dark_from(
+            Some("Adwaita-dark"),
+            Some("'prefer-light'")
+        ));
+    }
 
     #[test]
     fn replaygain_fallback_only_while_on() {

@@ -302,7 +302,7 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
     // ---------- Interface ----------
     r.cat("Interface")
         .header("Appearance")
-        .seg("interface.theme", "Theme", "Dark or light interface colors. System follows the desktop's color scheme when it can be detected.", &cap(&c.interface.theme), &["Dark", "Light", "System"]);
+        .seg("interface.theme", "Theme", "Dark or light interface colors. System default follows the desktop color scheme when it can be detected, and Light when it cannot (for example a bare session with no portal).", &cap(&c.interface.theme), &["Dark", "Light", "System"]);
     r.push(
         "interface.accent",
         "Accent color",
