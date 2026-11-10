@@ -8,7 +8,7 @@ import { FlatButton, PrimaryButton } from "../core/buttons.slint";
 import { Badge, BadgeTone } from "../core/rows.slint";
 import { ScrollView } from "std-widgets.slint";
 
-component SubRow inherits Rectangle {
+export component SubRow inherits Rectangle {
     in property <Item> item;
     callback clicked();
     callback activated();
