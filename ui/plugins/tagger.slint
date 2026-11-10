@@ -76,7 +76,7 @@ export component TagReviewDialog inherits Modal {
     in property <[TagResult]> results;
     in property <bool> can-undo;
     callback cmd(string, string);
-    accessible-role: text; accessible-label: "Review tags";
+    accessible-role: AccessibleRole.text; accessible-label: "Review tags";
     property <image> zoom-img;
     property <string> zoom-info;
     property <bool> zoomed;

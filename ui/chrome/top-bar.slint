@@ -15,7 +15,7 @@ export component TopBar inherits Rectangle {
     callback activity();
     callback hovered(bool);
     out property <bool> strip-hover: strip.has-hover;
-    accessible-role: text;
+    accessible-role: AccessibleRole.text;
     accessible-label: Playback.has-media ? Playback.media-title : "Vivi Media Player";
 
 // ---------- Top bar (title) ----------

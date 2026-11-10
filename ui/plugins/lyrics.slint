@@ -84,7 +84,7 @@ export component LyricsView inherits Rectangle {
     in property <bool> backdrop;
     height: self.line-h * self.visible-lines;
     clip: true;
-    accessible-role: text;
+    accessible-role: AccessibleRole.text;
     accessible-label: "Lyrics";
     accessible-description: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
     if root.backdrop: Rectangle {
@@ -241,7 +241,7 @@ export component KaraokeView inherits Rectangle {
     }
     background: Theme.stage;
     clip: true;
-    accessible-role: text;
+    accessible-role: AccessibleRole.text;
     accessible-label: root.title != "" ? "Karaoke: " + root.title + (root.artist != "" ? ", " + root.artist : "") : "Karaoke";
     accessible-description: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
     TouchArea {   // swallow clicks on the backdrop; moves show the chrome again
@@ -473,7 +473,7 @@ export component LyricsSearchDialog inherits Modal {
     in-out property <int> selected: -1;
     callback cmd(string, string);
     property <bool> ok: root.selected >= 0 && root.selected < root.results.length && !root.busy;
-    accessible-role: text; accessible-label: "Find lyrics";
+    accessible-role: AccessibleRole.text; accessible-label: "Find lyrics";
     card-width: 940px;
     card-height: 660px;
     dismissed => { root.cmd("search-close", ""); }

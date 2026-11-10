@@ -194,7 +194,7 @@ export component SubtitleDialog inherits Modal {
     in property <bool> online: true; // Subtitle Search is on (else From Computer only)
     callback cmd(string, string);    // → plugin-command("subtitle-search", …)
     callback close();
-    accessible-role: text; accessible-label: "Add subtitles";
+    accessible-role: AccessibleRole.text; accessible-label: "Add subtitles";
     property <bool> ok: root.selected >= 0 && root.selected < root.hits.length && !root.busy;
     property <bool> can-save: root.source == 0 ? root.ok : root.local.length > 0;
     card-width: 1080px;

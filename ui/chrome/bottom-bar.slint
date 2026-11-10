@@ -27,7 +27,7 @@ export component BottomBar inherits Rectangle {
     pure callback is-core(string) -> bool;
     pure callback bar-active(string) -> bool;
     pure callback fmt(float) -> string;
-    accessible-role: text;
+    accessible-role: AccessibleRole.text;
     accessible-label: "Playback controls";
 
     background: Theme.dark ? Theme.panel(#181818, 0.95) : Theme.panel(Theme.bar-solid, 0.94);
