@@ -45,6 +45,12 @@
     <binary>vivi</binary>
   </provides>
   <releases>
+    <release version="0.16.2" date="2026-11-10">
+      <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.2</url>
+      <description>
+        <p>Lower idle CPU and RAM, accessibility and empty states, a player-menu fix, a SQLite security update, and System default theme for new installs.</p>
+      </description>
+    </release>
     <release version="0.16.1" date="2026-11-07">
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.1</url>
     </release>

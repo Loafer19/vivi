@@ -2,11 +2,21 @@
 
 ## [Unreleased]
 
-### Fixed
-- **Player menu package entries at startup** (#103): if the player menu (Plugins, Video, Audio, Subtitle) is already open when a package script finishes loading or sends `vivi-menu` show/hide, the menu rebuilds so entries such as YouTube Music's Radio, Download and Like appear without closing it. The debug `VIVI_MENU` hook still waits 2.5 s, then until startup scripts have been handed to mpv (at most 4 s more).
+## [0.16.2] - 2026-11-10
+
+Highlights: **idle CPU down from 2.98% to 0.02%** and about **50 MB less RAM** (#107); **accessibility and empty states** on every screen (#102); a **player-menu fix** so package entries such as YouTube Music Radio appear without closing the menu (#103); the **SQLite security update** for RUSTSEC-2026-0459; and new installs default to the **system color scheme**.
+
+### Added
+- **Accessibility** (#102): screen-reader names, roles and keyboard focus across the library, settings, chrome, overlays and plugin UI. `plugins.slint` and `app.slint` are split into focused chrome, overlay and plugin files.
+- **Empty states** (#102): a shared empty-state pattern (icon, short title, one sentence and optional actions) on library Home and sections, search, playlists, downloads, streams, settings, the side panel, lyrics and the command palette.
 
 ### Changed
-- **Idle CPU** (#107): player events and the control socket wake the UI when something arrives instead of polling every 30–40 ms; auto-hide uses a one-shot deadline instead of a 250 ms timer, so it does not run while nothing can hide (no media, or paused with *Keep shown while paused*). The remaining idle tickers only run while they have work: plugin ticks (default `wants_tick` is false; lyrics highlight and skip-intro only while playing; searches and dialogs while they are in flight), MPRIS on player and D-Bus events rather than every 100 ms, the Streams hub every 250 ms only on that page or while a stream plays, downloads and now-playing every 500 ms only while media is loaded or a job is dirty, the tray when playback or downloads change instead of every 700 ms, and the visualizer's ~30 fps frame timer only while audio-only media is showing a mode (not while idle or on video). Playback position, IPC replies and auto-hide behaviour are unchanged.
+- **Idle CPU and RAM** (#107): idle CPU 2.98% → 0.02% and about 50 MB less RAM. Player events and the control socket wake the UI when something arrives instead of polling every 30–40 ms; auto-hide uses a one-shot deadline instead of a 250 ms timer, so it does not run while nothing can hide (no media, or paused with *Keep shown while paused*). The remaining idle tickers only run while they have work: plugin ticks (default `wants_tick` is false; lyrics highlight and skip-intro only while playing; searches and dialogs while they are in flight), MPRIS on player and D-Bus events rather than every 100 ms, the Streams hub every 250 ms only on that page or while a stream plays, downloads and now-playing every 500 ms only while media is loaded or a job is dirty, the tray when playback or downloads change instead of every 700 ms, and the visualizer's ~30 fps frame timer only while audio-only media is showing a mode (not while idle or on video). Playback position, IPC replies and auto-hide behaviour are unchanged.
+- **Theme**: new installs default to *System* (`interface.theme = "system"`), which follows the desktop light/dark scheme when it can be detected (GTK_THEME or GNOME `color-scheme`) and uses Light when there is no portal or preference — so a bare Ubuntu 22.04 Xvfb session, as in the AppImage catalog, renders light. Saved user settings are unchanged.
+- **SQLite**: rusqlite 0.41.1 for [RUSTSEC-2026-0459](https://rustsec.org/advisories/RUSTSEC-2026-0459).
+
+### Fixed
+- **Player menu package entries at startup** (#103): if the player menu (Plugins, Video, Audio, Subtitle) is already open when a package script finishes loading or sends `vivi-menu` show/hide, the menu rebuilds so entries such as YouTube Music's Radio, Download and Like appear without closing it. The debug `VIVI_MENU` hook still waits 2.5 s, then until startup scripts have been handed to mpv (at most 4 s more).
 
 ## [0.16.1] - 2026-11-07
 
