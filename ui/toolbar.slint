@@ -72,7 +72,14 @@ component Glyph inherits Rectangle {
     width: 20px; height: 24px; border-radius: Metrics.radius-sm;
     background: ta.has-hover && enabled ? Theme.divider : transparent;
     Text { text: root.text; color: enabled ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center; horizontal-alignment: center; }
-    ta := TouchArea { mouse-cursor: enabled ? pointer : default; clicked => { if (root.enabled) { root.clicked(); } } }
+    ta := TouchArea {
+        mouse-cursor: enabled ? pointer : default;
+        accessible-role: button;
+        accessible-label: root.text == "‹" ? "Move left" : root.text == "›" ? "Move right" : "Remove from bar";
+        accessible-enabled: root.enabled;
+        accessible-action-default => { if (root.enabled) { root.clicked(); } }
+        clicked => { if (root.enabled) { root.clicked(); } }
+    }
 }
 
 // One placed item: icon with move/remove controls and a hover label.
@@ -98,6 +105,9 @@ component Placed inherits Rectangle {
     // Drag shows an accent insertion marker where the tile will land.
     hov := TouchArea {
         mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
+        accessible-role: button;
+        accessible-label: "Reorder " + (root.plug ? root.meta.label : Tools.label(root.id));
+        accessible-description: "Drag sideways or use the move buttons";
         pointer-event(e) => {
             if (e.kind == PointerEventKind.up && e.button == PointerEventButton.left && root.steps != 0) {
                 root.move(root.steps);
@@ -217,6 +227,7 @@ component VolumePreview inherits Rectangle {
 }
 
 export component CustomizeDialog inherits Modal {
+    label: "Customize player";
     in property <[string]> items;
     in property <[ToolMeta]> items-meta;
     in property <[ToolMeta]> available-meta;

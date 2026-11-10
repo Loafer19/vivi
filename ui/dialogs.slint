@@ -10,6 +10,7 @@ import { PrimaryButton, SecondaryButton, ButtonSize } from "core/buttons.slint";
 component DialogFrame inherits Modal {
     in property <string> title;
     in property <length> dialog-width: 760px;
+    label: root.title;
     callback close();
     card-width: root.dialog-width;
     card-height: col.preferred-height;
@@ -77,6 +78,7 @@ export component NetworkStreamDialog inherits Rectangle {
                 box := TextInput {
                     x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px;
                     text <=> root.urls; single-line: false; wrap: word-wrap;
+                    accessible-label: "Network URL";
                     color: Theme.fg-2; font-size: Metrics.font-sm; font-family: "DM Mono";
                     selection-background-color: Theme.accent-bg;
                 }
@@ -96,7 +98,7 @@ export component NetworkStreamDialog inherits Rectangle {
                 }
             }
             Heading { title: "Playlist Name"; extra: "(optional)"; hint: "The playlist will be saved and displayed with this title."; }
-            TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite TV Channels"; }
+            TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite TV Channels"; label: "Playlist name"; }
             if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Metrics.font-sm; wrap: word-wrap; }
             Rectangle { height: 8px; }
             HorizontalLayout {
@@ -136,7 +138,7 @@ export component NewPlaylistDialog inherits Rectangle {
                 VerticalLayout {
                     horizontal-stretch: 1; spacing: 12px; alignment: start;
                     Heading { title: "Playlist Details"; hint: "The playlist will be saved and displayed with this title and thumbnail."; }
-                    nm := TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite Videos"; accepted => { root.save(root.name); } }
+                    nm := TextField { height: 30px; text <=> root.name; placeholder: "e.g., Favorite Videos"; label: "Playlist name"; accepted => { root.save(root.name); } }
                 }
                 Rectangle {
                     width: 96px; height: 96px; border-radius: Metrics.radius-sm; clip: true;

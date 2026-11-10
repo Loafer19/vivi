@@ -70,7 +70,7 @@ component SliderRow inherits VerticalLayout {
     }
     Slider {
         value: root.value; minimum: root.minimum; maximum: root.maximum; step: root.step;
-        ticks: 0; live: true;
+        ticks: 0; live: true; label: root.label;
         changed(v) => { root.value = v; root.changed(v); }
     }
 }
@@ -165,7 +165,7 @@ component ColorField inherits HorizontalLayout {
     in-out property <string> value;
     callback accepted(string);
     spacing: 6px; width: 170px;
-    TextField { horizontal-stretch: 1; text <=> root.value; placeholder: "#FFFFFF"; accepted(t) => { root.accepted(t); } }
+    TextField { horizontal-stretch: 1; text <=> root.value; placeholder: "#FFFFFF"; label: "Color"; accepted(t) => { root.accepted(t); } }
     Rectangle { width: 26px; height: 26px; y: 3px; border-radius: Metrics.radius-sm; border-width: 1px; border-color: Theme.divider;
         background: root.value == "#000000" ? black : root.value == "#FFFFFF" ? white : root.value == "#FFFF00" ? yellow : Theme.fg-2; }
 }
@@ -424,23 +424,24 @@ export component SidePanel inherits Rectangle {
                         Slider {
                             value: root.speed; minimum: 0.25; maximum: 2; step: root.speed-step; ticks: 6;
                             labels: ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
+                            label: "Playback speed";
                             changed(v) => { root.speed = v; root.set-prop("speed", v); }
                         }
                     }
                     Group { title: "Display";
                         Line { label: "Show Statistics"; hint: "mpv stats overlay";
-                            Toggle { on: root.stats-on; toggled => { root.stats-on = !root.stats-on; root.run("script-binding stats/display-stats-toggle"); } } }
+                            Toggle { on: root.stats-on; label: "Show Statistics"; toggled => { root.stats-on = !root.stats-on; root.run("script-binding stats/display-stats-toggle"); } } }
                         Line { label: "Subtitle Timeline on Seekbar"; hint: "Coming soon";
-                            Toggle { on: root.sub-timeline; enabled: false; toggled => { root.sub-timeline = !root.sub-timeline; } } }
+                            Toggle { on: root.sub-timeline; enabled: false; label: "Subtitle Timeline on Seekbar"; toggled => { root.sub-timeline = !root.sub-timeline; } } }
                         if root.viz-enabled: Line { label: "Audio Visualizer"; hint: "Music and radio (no video)";
-                            Dropdown { width: 170px; options: root.viz-modes; value: root.viz-modes.length > root.viz-mode ? root.viz-modes[root.viz-mode] : ""; selected(i, o) => { root.viz-select(i); } } }
+                            Dropdown { width: 170px; options: root.viz-modes; value: root.viz-modes.length > root.viz-mode ? root.viz-modes[root.viz-mode] : ""; label: "Audio Visualizer"; selected(i, o) => { root.viz-select(i); } } }
                     }
                     Group { title: "Control";
                         Line { label: "Reverse"; hint: "Play backwards (mpv play-direction)";
-                            Toggle { on: root.reverse-on; toggled => { root.reverse-on = !root.reverse-on; root.set-prop("play-direction", root.reverse-on ? "backward" : "forward"); } } }
+                            Toggle { on: root.reverse-on; label: "Reverse"; toggled => { root.reverse-on = !root.reverse-on; root.set-prop("play-direction", root.reverse-on ? "backward" : "forward"); } } }
                         // Sleep timer (src/sleep.rs): fades the volume out, then pauses.
                         Line { label: "Sleep Timer"; hint: Status.sleep-state;
-                            Dropdown { width: 170px; options: Status.sleep-options; value: Status.sleep-options[Status.sleep-choice];
+                            Dropdown { width: 170px; options: Status.sleep-options; value: Status.sleep-options[Status.sleep-choice]; label: "Sleep Timer";
                                 selected(i, o) => {
                                     Status.sleep-set(i == 0 ? "off" : i == 1 ? "min:15" : i == 2 ? "min:30" : i == 3 ? "min:60"
                                         : i == 4 ? "min:" + Status.sleep-minutes : i == 5 ? "eof" : i == 6 ? "chapter" : "items:" + Status.sleep-items);
@@ -452,7 +453,7 @@ export component SidePanel inherits Rectangle {
                             Stepper { name: "Sleep after items"; value: Status.sleep-items; unit: Status.sleep-items == 1 ? "item" : "items"; minimum: 1; maximum: 99;
                                 changed(v) => { Status.sleep-items = v; Status.sleep-set("items:" + v); } } }
                         Line { label: "Fade Out"; hint: "Lowers the volume before pausing";
-                            Dropdown { width: 170px; options: Status.fade-options;
+                            Dropdown { width: 170px; options: Status.fade-options; label: "Fade Out";
                                 value: Status.sleep-fade == 0 ? "No fade" : Status.sleep-fade + " s";
                                 selected(i, o) => { Status.sleep-fade-set(i * 15); } } }
                         Line { label: "A-B Loop"; hint: root.ab-state;
@@ -460,7 +461,7 @@ export component SidePanel inherits Rectangle {
                     }
                     if root.lyrics-enabled: Group { title: "Lyrics";
                         Line { label: "Karaoke View"; hint: "Full-screen lyrics · L";
-                            Toggle { on: root.karaoke-open; toggled => { root.lyrics("karaoke", root.karaoke-open ? "off" : "on"); } } }
+                            Toggle { on: root.karaoke-open; label: "Karaoke View"; toggled => { root.lyrics("karaoke", root.karaoke-open ? "off" : "on"); } } }
                         Line { label: "Timing Offset"; hint: "Saved per track · [ ] ±0.1 s, Shift ±0.5 s";
                             HorizontalLayout { spacing: 4px;
                                 for d in [-0.5, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: oa.has-hover ? Theme.field-raised : Theme.field;
@@ -488,7 +489,7 @@ export component SidePanel inherits Rectangle {
                     spacing: 6px; alignment: start;
                     Group { first: true; title: "Geometry";
                         Text { text: "Flip"; color: Theme.fg-a1; font-size: Metrics.font-md; }
-                        Segmented { options: ["None", "Horizontal", "Vertical"]; value: root.flip;
+                        Segmented { options: ["None", "Horizontal", "Vertical"]; value: root.flip; label: "Flip";
                             selected(o) => {
                                 root.flip = o;
                                 root.run("vf remove @vflip");
@@ -496,25 +497,25 @@ export component SidePanel inherits Rectangle {
                                 if (o == "Vertical") { root.run("vf add @vflip:vflip"); }
                             } }
                         Line { label: "Rotate";
-                            Segmented { width: 200px; options: ["0°", "90°", "180°", "270°"]; value: root.rotate + "°";
+                            Segmented { width: 200px; options: ["0°", "90°", "180°", "270°"]; value: root.rotate + "°"; label: "Rotate";
                                 selected(o) => { root.rotate = o == "90°" ? 90 : o == "180°" ? 180 : o == "270°" ? 270 : 0; root.set-prop("video-rotate", root.rotate); } } }
                         Line { label: "Zoom";
-                            Dropdown { width: 170px; options: ["0.5×", "1:1 Original", "1.5×", "2×"];
+                            Dropdown { width: 170px; options: ["0.5×", "1:1 Original", "1.5×", "2×"]; label: "Zoom";
                                 value: root.zoom <= -0.9 ? "0.5×" : root.zoom >= 0.95 ? "2×" : root.zoom >= 0.5 ? "1.5×" : abs(root.zoom) < 0.01 ? "1:1 Original" : round(pow(2, root.zoom) * 100) / 100 + "×";
                                 selected(i, o) => { root.zoom = i == 0 ? -1 : i == 2 ? 0.585 : i == 3 ? 1 : 0; root.set-prop("video-zoom", root.zoom); } } }
                         Line { label: "Aspect Ratio";
-                            Dropdown { width: 170px; options: ["Default", "16:9", "4:3", "2.35:1", "1:1"]; value: root.aspect == "-1" ? "Default" : root.aspect;
+                            Dropdown { width: 170px; options: ["Default", "16:9", "4:3", "2.35:1", "1:1"]; value: root.aspect == "-1" ? "Default" : root.aspect; label: "Aspect Ratio";
                                 selected(i, o) => { root.aspect = i == 0 ? "-1" : o; root.set-prop("video-aspect-override", root.aspect); } } }
                         Line { label: "Crop"; hint: "Pan & scan to fill";
-                            Dropdown { width: 170px; options: ["Default", "Fill 50%", "Fill"]; value: root.panscan >= 99 ? "Fill" : root.panscan >= 1 ? "Fill 50%" : "Default";
+                            Dropdown { width: 170px; options: ["Default", "Fill 50%", "Fill"]; value: root.panscan >= 99 ? "Fill" : root.panscan >= 1 ? "Fill 50%" : "Default"; label: "Crop";
                                 selected(i, o) => { root.panscan = i * 50; root.set-prop("panscan", i * 0.5); } } }
                     }
                     Group { title: "Rendering";
                         Line { label: "HDR"; hint: "Tone mapping";
-                            Dropdown { width: 170px; options: ["Auto", "Passthrough", "Tone-map to SDR"]; value: root.hdr;
+                            Dropdown { width: 170px; options: ["Auto", "Passthrough", "Tone-map to SDR"]; value: root.hdr; label: "HDR";
                                 selected(i, o) => { root.hdr = o; root.set-prop("target-colorspace-hint", i == 1 ? "yes" : "no"); root.set-prop("tone-mapping", i == 2 ? "bt.2390" : "auto"); } } }
                         Line { label: "Hardware Decoding";
-                            Segmented { width: 170px; options: ["Auto", "Off"]; value: root.hwdec == "no" ? "Off" : "Auto";
+                            Segmented { width: 170px; options: ["Auto", "Off"]; value: root.hwdec == "no" ? "Off" : "Auto"; label: "Hardware Decoding";
                                 selected(o) => { root.set-prop("hwdec", o == "Off" ? "no" : "auto-safe"); } } }
                     }
                     Group { title: "Filters";
@@ -529,7 +530,7 @@ export component SidePanel inherits Rectangle {
                     Group { first: true; title: "Track";
                         OptionList { items: root.audio-tracks; empty-text: "No audio tracks"; pick(it) => { root.set-prop("aid", it.key); } }
                         Line { label: "Stereo Mode";
-                            Dropdown { width: 170px; options: ["Auto", "Stereo", "Mono", "Swap L/R"]; value: root.stereo;
+                            Dropdown { width: 170px; options: ["Auto", "Stereo", "Mono", "Swap L/R"]; value: root.stereo; label: "Stereo Mode";
                                 selected(i, o) => {
                                     root.stereo = o;
                                     root.set-prop("audio-channels", i == 1 ? "stereo" : i == 2 ? "mono" : "auto-safe");
@@ -610,9 +611,9 @@ export component SidePanel inherits Rectangle {
                         SliderRow { label: "Position"; unit: "%"; minimum: 0; maximum: 150; default-value: 100;
                             value <=> root.sub-pos; changed(v) => { root.set-prop("sub-pos", round(v)); } }
                         Line { label: "Override Embedded Style"; hint: "Force these settings on ASS subs";
-                            Toggle { on: root.sub-ass-override; toggled => { root.sub-ass-override = !root.sub-ass-override; root.set-prop("sub-ass-override", root.sub-ass-override ? "force" : "scale"); } } }
+                            Toggle { on: root.sub-ass-override; label: "Override Embedded Style"; toggled => { root.sub-ass-override = !root.sub-ass-override; root.set-prop("sub-ass-override", root.sub-ass-override ? "force" : "scale"); } } }
                         Line { label: "Font";
-                            TextField { width: 170px; text <=> root.sub-font; placeholder: "Inter"; accepted(t) => { root.set-prop("sub-font", t); } } }
+                            TextField { width: 170px; text <=> root.sub-font; placeholder: "Inter"; label: "Subtitle font"; accepted(t) => { root.set-prop("sub-font", t); } } }
                         Line { label: "Text Color";
                             ColorField { value <=> root.sub-color; accepted(t) => { root.set-prop("sub-color", t); } } }
                         Line { label: "Outline Color";
@@ -674,7 +675,7 @@ export component SidePanel inherits Rectangle {
                 // ---- Compact library ----
                 if root.tab == PanelTab.library: VerticalLayout {
                     spacing: 10px; alignment: start;
-                    lsearch := TextField { placeholder: "Search library"; edited(t) => { root.library-search(t); } }
+                    lsearch := TextField { placeholder: "Search library"; label: "Search library"; edited(t) => { root.library-search(t); } }
                     if lsearch.text == "" && root.recent.length > 0: SectionHeader { text: "Recent"; }
                     for it[i] in root.recent: Rectangle {
                         visible: lsearch.text == "" && i < 5;
@@ -730,7 +731,7 @@ export component SidePanel inherits Rectangle {
                     SectionHeader { text: "Save queue as playlist"; }
                     HorizontalLayout {
                         spacing: 6px;
-                        name := TextField { placeholder: "Playlist name"; horizontal-stretch: 1; }
+                        name := TextField { placeholder: "Playlist name"; label: "Playlist name"; horizontal-stretch: 1; }
                         SecondaryButton { size: ButtonSize.sm; width: 80px; text: "Save"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.playlist-save(name.text); name.text = ""; } }
                     }
                     SectionHeader { text: "Playlists"; }

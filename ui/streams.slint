@@ -29,7 +29,17 @@ export component HubButton inherits Rectangle {
         width: root.size * 0.56; height: root.size * 0.56; name: root.icon;
         tint: root.on ? Theme.accent-bright : ta.has-hover ? Theme.fg-1 : Theme.fg-a2;
     }
-    ta := TouchArea { enabled: root.enabled; accessible-role: button; accessible-label: root.label; accessible-checked: root.on; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { enabled: root.enabled; accessible-role: button; accessible-label: root.label; accessible-checked: root.on; accessible-enabled: root.enabled; accessible-action-default => { root.clicked(); } mouse-cursor: pointer; clicked => { root.clicked(); } }
+    kf := FocusScope {
+        enabled: root.enabled; focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle {
+        border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius;
+    }
     if root.label != "": Tooltip { text: @markdown("\{root.label}"); }
 }
 
@@ -45,7 +55,7 @@ export component StreamTile inherits Rectangle {
     border-radius: Metrics.radius-lg;
     background: card.playing ? Theme.accent.with-alpha(0.14) : ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
     border-width: 1px; border-color: card.playing ? Theme.accent.with-alpha(0.6) : transparent;
-    ta := TouchArea { accessible-role: button; accessible-label: "Play " + root.card.title; mouse-cursor: pointer; clicked => { root.play(); } }
+    ta := TouchArea { accessible-role: button; accessible-label: "Play " + root.card.title; accessible-description: root.card.sub; accessible-checked: root.card.playing; mouse-cursor: pointer; clicked => { root.play(); } }
     Rectangle {
         x: 8px; y: 8px; width: parent.width - 16px; height: root.logo-h;
         border-radius: Metrics.radius-md; background: Theme.bg-b1; clip: true;
@@ -165,7 +175,17 @@ component Tab inherits Rectangle {
         VerticalLayout { alignment: center; TriIcon { width: 16px; height: 16px; name: root.active && root.active-icon != "" ? root.active-icon : root.icon; tint: root.active ? Theme.accent-bright : Theme.fg-a2; } }
         if root.named: Text { text: root.text; color: root.active ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-base; vertical-alignment: center; }
     }
-    ta := TouchArea { accessible-role: tab; accessible-label: root.text; accessible-item-selected: root.active; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { accessible-role: tab; accessible-label: root.text; accessible-item-selected: root.active; accessible-action-default => { root.clicked(); } mouse-cursor: pointer; clicked => { root.clicked(); } }
+    kf := FocusScope {
+        focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle {
+        border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius;
+    }
     if !root.named: Tooltip { text: @markdown("\{root.text}"); }
 }
 

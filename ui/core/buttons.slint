@@ -117,6 +117,7 @@ export component IconButton inherits Rectangle {
         clicked => { root.clicked(); }
         accessible-role: button;
         accessible-label: root.tip;
+        accessible-checked: root.active;
         accessible-action-default => { root.clicked(); }
     }
     kf := FocusScope {
