@@ -333,7 +333,9 @@ export component AppWindow inherits Window {
         sidebar: self.docked;
         x: 0; y: 40px;
         width: self.docked ? min(427px, root.width) : root.width;
-        height: root.height - 40px - (self.docked ? root.bar-h : 0px);
+        // Idle: only the 40px title bar. While playing, also keep clear of the bottom bar
+        // (docked sidebar and full-screen library both sit above it).
+        height: root.height - 40px - (Playback.has-media ? root.bar-h : 0px);
         items: Library.items; continue-items: Library.continue; recent-items: Library.recent; pinned-items: Library.pinned;
         listen-items: Library.listen; folder-items: Library.folders; list-items: Library.lists; artist-items: Library.artists;
         nav: Library.nav; crumb-keys: Library.crumb-keys; crumb-labels: Library.crumb-labels;
@@ -365,6 +367,9 @@ export component AppWindow inherits Window {
 
     // ---------- Top bar (title) ----------
     topbar := TopBar {
+        // Slint 1.18 centers elements that omit x/y; without this the 40px title
+        // bar sits in the middle of the window and covers library empty-state buttons.
+        x: 0; y: 0;
         width: 100%; height: 40px;
         reveal: root.top-v;
         fullscreen: root.fullscreen;
