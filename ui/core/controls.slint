@@ -113,7 +113,7 @@ export component TextField inherits Rectangle {
         color: Theme.fg-2; font-size: Metrics.font-md; vertical-alignment: center;
         selection-background-color: Theme.accent-bg;
         single-line: true;
-        accessible-role: text;
+        accessible-role: AccessibleRole.text-input;
         accessible-label: root.label != "" ? root.label : root.placeholder;
         edited => { root.edited(self.text); }
         accepted => { root.accepted(self.text); }
