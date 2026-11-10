@@ -20,4 +20,9 @@ export global Overlays {
     in-out property <bool> drawer-open; // plugin side drawer
     in-out property <bool> library-open; // library (an overlay only while media is loaded)
     in-out property <bool> karaoke-open; // full-window karaoke
+    // Start idle work again when the library or a plugin dialog opens (#107).
+    callback ui-activity;
+    changed library-open => { ui-activity(); }
+    changed md-open => { ui-activity(); }
+    changed ls-open => { ui-activity(); }
 }

@@ -26,7 +26,7 @@
 //! packages can tell a Vivi that publishes it from an older one.
 
 use crate::player::Player;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
@@ -290,6 +290,42 @@ struct State {
 
 thread_local! {
     static ST: RefCell<State> = RefCell::new(State::default());
+    static TICK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
+}
+
+fn has_path() -> bool {
+    ST.with(|s| {
+        s.borrow()
+            .player
+            .as_ref()
+            .and_then(|p| p.get("path"))
+            .is_some_and(|p| !p.is_empty())
+    })
+}
+
+/// Poll stream titles and late covers only while something is loaded.
+pub fn arm() {
+    if !has_path() {
+        return;
+    }
+    TICK.with(|slot| {
+        crate::ticker::ensure(slot, Duration::from_millis(500), || {
+            refresh();
+            if !has_path() {
+                TICK.with(crate::ticker::clear);
+            }
+        });
+    });
+}
+
+/// Publish now and start or stop the 500 ms poll to match whether media is loaded.
+pub fn sync() {
+    refresh();
+    if has_path() {
+        arm();
+    } else {
+        TICK.with(crate::ticker::clear);
+    }
 }
 
 /// The track last published (default while idle).
@@ -402,6 +438,8 @@ pub fn refresh() {
     });
     if let Some(id) = changed {
         publish(&p, &t, id);
+        crate::plugins::arm_ticks();
+        crate::desktop::poke();
     }
 }
 
@@ -415,18 +453,17 @@ pub fn file_loaded() {
             .unwrap_or_default()
     });
     ST.with(|s| s.borrow_mut().loaded = path);
-    refresh();
+    sync();
 }
 
-/// Set the capability flag, publish the idle state and poll every 500 ms (stream titles,
-/// covers rendered in the background, metadata sent later).
+/// Set the capability flag, publish the idle state, and poll every 500 ms only while
+/// media is loaded (stream titles, covers rendered in the background, metadata sent later).
 pub fn setup(player: &Rc<Player>) {
     if let Err(e) = player.mpv.set_property(CAPABILITY, API_VERSION) {
         eprintln!("vivi: set {CAPABILITY}: {e:?}");
     }
     ST.with(|s| s.borrow_mut().player = Some(player.clone()));
     refresh();
-    crate::ticker::every(Duration::from_millis(500), refresh);
 }
 
 /// One string / int / double value of the node map.

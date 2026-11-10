@@ -145,6 +145,21 @@ impl Plugin for Lyrics {
             _ => {}
         }
     }
+    fn wants_tick(&self, cx: &Ctx) -> bool {
+        if self.search.task.is_running()
+            || self.task.is_running()
+            || self.radio.as_ref().is_some_and(|r| r.task.is_running())
+        {
+            return true;
+        }
+        if !cx.app.global::<crate::Playback>().get_playing() {
+            return false;
+        }
+        if self.radio.is_some() && cx.get("radio-mode") != "Off" {
+            return true;
+        }
+        self.lrc.is_some() && !self.plain()
+    }
     fn tick(&mut self, cx: &Ctx) {
         self.search_tick(cx);
         let np = crate::nowplaying::current_id();

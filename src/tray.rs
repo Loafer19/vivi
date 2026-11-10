@@ -169,6 +169,12 @@ pub fn set_downloads(line: &str) {
             *d.borrow_mut() = line.to_string();
         }
     });
+    update();
+}
+
+/// Copy the current player / downloads state to the tray (playback events).
+pub fn sync() {
+    update();
 }
 
 /// Hook the close button and start the tray shortly after startup.
@@ -234,7 +240,6 @@ fn attach(bus: linux::Bus) {
             u.bus = Some(bus);
         }
     });
-    crate::ticker::every(std::time::Duration::from_millis(700), update);
     update();
 }
 

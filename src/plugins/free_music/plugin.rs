@@ -212,6 +212,12 @@ impl Plugin for FreeMusic {
             _ => {}
         }
     }
+    fn wants_tick(&self, cx: &Ctx) -> bool {
+        self.typed.is_some()
+            || !self.pending.is_empty()
+            || (cx.app.global::<crate::Overlays>().get_md_open()
+                && cx.app.global::<crate::MusicDialogState>().get_owner() == ID)
+    }
     fn tick(&mut self, cx: &Ctx) {
         if self.typed.is_some_and(|t| {
             t.elapsed() >= DEBOUNCE && cx.app.global::<crate::MusicDialogState>().get_owner() == ID

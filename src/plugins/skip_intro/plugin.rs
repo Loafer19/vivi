@@ -186,6 +186,10 @@ impl Plugin for SkipIntro {
         self.reload(cx);
     }
 
+    fn wants_tick(&self, cx: &Ctx) -> bool {
+        cx.app.global::<crate::Playback>().get_playing()
+            && cx.app.global::<crate::Playback>().get_has_media()
+    }
     fn tick(&mut self, cx: &Ctx) {
         // Chapters added later (SponsorBlock, scene detection), another file, or the
         // duration of a stream known only now.

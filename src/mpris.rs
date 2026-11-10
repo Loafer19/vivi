@@ -61,10 +61,10 @@ struct Root {
 #[interface(name = "org.mpris.MediaPlayer2")]
 impl Root {
     fn raise(&self) {
-        let _ = self.tx.send(Cmd::Raise);
+        send_cmd(&self.tx, Cmd::Raise);
     }
     fn quit(&self) {
-        let _ = self.tx.send(Cmd::Quit);
+        send_cmd(&self.tx, Cmd::Quit);
     }
     #[zbus(property)]
     fn can_quit(&self) -> bool {
@@ -162,36 +162,41 @@ fn us(secs: f64) -> i64 {
     (secs * 1e6) as i64
 }
 
+fn send_cmd(tx: &Sender<Cmd>, cmd: Cmd) {
+    let _ = tx.send(cmd);
+    let _ = slint::invoke_from_event_loop(crate::desktop::poke);
+}
+
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl Player {
     fn play_pause(&self) {
-        let _ = self.tx.send(Cmd::PlayPause);
+        send_cmd(&self.tx, Cmd::PlayPause);
     }
     fn play(&self) {
-        let _ = self.tx.send(Cmd::Play);
+        send_cmd(&self.tx, Cmd::Play);
     }
     fn pause(&self) {
-        let _ = self.tx.send(Cmd::Pause);
+        send_cmd(&self.tx, Cmd::Pause);
     }
     fn stop(&self) {
-        let _ = self.tx.send(Cmd::Stop);
+        send_cmd(&self.tx, Cmd::Stop);
     }
     fn next(&self) {
-        let _ = self.tx.send(Cmd::Next);
+        send_cmd(&self.tx, Cmd::Next);
     }
     fn previous(&self) {
-        let _ = self.tx.send(Cmd::Previous);
+        send_cmd(&self.tx, Cmd::Previous);
     }
     fn seek(&self, offset: i64) {
-        let _ = self.tx.send(Cmd::Seek(offset as f64 / 1e6));
+        send_cmd(&self.tx, Cmd::Seek(offset as f64 / 1e6));
     }
     fn set_position(&self, track_id: ObjectPath<'_>, position: i64) {
         if track_id.as_str() == TRACK {
-            let _ = self.tx.send(Cmd::SetPosition(position as f64 / 1e6));
+            send_cmd(&self.tx, Cmd::SetPosition(position as f64 / 1e6));
         }
     }
     fn open_uri(&self, uri: &str) {
-        let _ = self.tx.send(Cmd::Open(uri.to_string()));
+        send_cmd(&self.tx, Cmd::Open(uri.to_string()));
     }
     /// Emitted after a jump in position (seek), per the MPRIS spec.
     #[zbus(signal)]
@@ -276,7 +281,7 @@ impl Player {
     }
     #[zbus(property)]
     fn set_volume(&self, v: f64) {
-        let _ = self.tx.send(Cmd::Volume((v * 100.0).clamp(0.0, 150.0)));
+        send_cmd(&self.tx, Cmd::Volume((v * 100.0).clamp(0.0, 150.0)));
     }
     #[zbus(property(emits_changed_signal = "false"))]
     fn position(&self) -> i64 {

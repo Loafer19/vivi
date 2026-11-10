@@ -6,7 +6,7 @@
 - **Player menu package entries at startup** (#103): if the player menu (Plugins, Video, Audio, Subtitle) is already open when a package script finishes loading or sends `vivi-menu` show/hide, the menu rebuilds so entries such as YouTube Music's Radio, Download and Like appear without closing it. The debug `VIVI_MENU` hook still waits 2.5 s, then until startup scripts have been handed to mpv (at most 4 s more).
 
 ### Changed
-- **Idle CPU** (#107): player events and the control socket wake the UI when something arrives instead of polling every 30–40 ms; auto-hide uses a one-shot deadline instead of a 250 ms timer, so it does not run while nothing can hide (no media, or paused with *Keep shown while paused*). Playback position, plugin ticks, IPC replies and auto-hide behaviour are unchanged.
+- **Idle CPU** (#107): player events and the control socket wake the UI when something arrives instead of polling every 30–40 ms; auto-hide uses a one-shot deadline instead of a 250 ms timer, so it does not run while nothing can hide (no media, or paused with *Keep shown while paused*). The remaining idle tickers only run while they have work: plugin ticks (default `wants_tick` is false; lyrics highlight and skip-intro only while playing; searches and dialogs while they are in flight), MPRIS on player and D-Bus events rather than every 100 ms, the Streams hub every 250 ms only on that page or while a stream plays, downloads and now-playing every 500 ms only while media is loaded or a job is dirty, and the tray when playback or downloads change instead of every 700 ms. Playback position, IPC replies and auto-hide behaviour are unchanged.
 
 ## [0.16.1] - 2026-11-07
 

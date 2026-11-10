@@ -70,7 +70,7 @@ pub struct VizPlugin;
 
 impl crate::plugins::Plugin for VizPlugin {
     /// The visualizer draws from its own frame task (see `setup`).
-    fn wants_tick(&self) -> bool {
+    fn wants_tick(&self, _cx: &crate::plugins::Ctx) -> bool {
         false
     }
     fn manifest(&self) -> crate::plugins::Manifest {

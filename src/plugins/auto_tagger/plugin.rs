@@ -276,6 +276,12 @@ impl Plugin for AutoTagger {
             _ => {}
         }
     }
+    fn file_loaded(&mut self, cx: &Ctx) {
+        self.auto_tick(cx);
+    }
+    fn wants_tick(&self, _cx: &Ctx) -> bool {
+        self.rx.is_some() || self.auto.job.is_some() || self.auto.pending.is_some()
+    }
     fn tick(&mut self, cx: &Ctx) {
         self.auto_tick(cx);
         let Some(rx) = &self.rx else { return };

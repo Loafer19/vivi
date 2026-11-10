@@ -576,7 +576,7 @@ pub fn mcp_download(
 
 impl Plugin for SubtitleSearch {
     /// `tick` only collects search results: idle while no search runs.
-    fn wants_tick(&self) -> bool {
+    fn wants_tick(&self, _cx: &Ctx) -> bool {
         self.auto_rx.is_some() || self.rx.is_some()
     }
     fn manifest(&self) -> Manifest {

@@ -19,7 +19,7 @@ pub mod store;
 
 pub use store::Stream;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -112,6 +112,7 @@ thread_local! {
     static HUB: RefCell<Hub> = RefCell::new(Hub::default());
     /// Card logos decoded by the image cache, drained by the tick.
     static DECODED: RefCell<Vec<(String, slint::Image)>> = const { RefCell::new(Vec::new()) };
+    static TICK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
 }
 
 fn with<R>(f: impl FnOnce(&mut Hub) -> R) -> R {
@@ -410,6 +411,7 @@ pub fn nav_changed(a: &AppWindow, nav: &str) {
             reconcile(&a, true);
         }
     });
+    arm();
 }
 
 /// A plugin opens its dialog (instead of `md_open = true`): as a hub page when it is a
@@ -801,7 +803,44 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         with(|h| h.np = np);
     });
     learn_plugins();
-    crate::ticker::every(Duration::from_millis(250), tick);
+    arm();
+}
+
+/// True while the Streams hub or a service page is on screen, or a network stream plays.
+fn should_run() -> bool {
+    let Some((a, p)) = with(|h| Some((h.app.upgrade()?, h.player.clone()?))) else {
+        return with(|h| h.nav == "streams" || h.nav.starts_with("service:"));
+    };
+    let nav_ok = with(|h| h.nav == "streams" || h.nav.starts_with("service:"));
+    if nav_ok {
+        let has_media = a.global::<crate::Playback>().get_has_media();
+        let lib_open = a.global::<crate::Overlays>().get_library_open();
+        if !has_media || lib_open {
+            return true;
+        }
+    }
+    let path = p.get("path").unwrap_or_default();
+    a.global::<crate::Playback>().get_has_media()
+        && path.contains("://")
+        && !path.starts_with("file://")
+}
+
+/// Start the hub tick (logos, now-playing card, reconcile) if it has work.
+pub fn arm() {
+    TICK.with(|slot| {
+        if slot.get().is_some() {
+            return;
+        }
+        if !should_run() {
+            return;
+        }
+        crate::ticker::ensure(slot, Duration::from_millis(250), || {
+            tick();
+            if !should_run() {
+                TICK.with(crate::ticker::clear);
+            }
+        });
+    });
 }
 
 fn tick() {

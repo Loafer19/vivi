@@ -364,6 +364,11 @@ impl Plugin for NetworkStreams {
             _ => {}
         }
     }
+    fn wants_tick(&self, cx: &Ctx) -> bool {
+        let open = cx.app.global::<crate::Overlays>().get_md_open()
+            && cx.app.global::<crate::MusicDialogState>().get_owner() == ID;
+        open || self.task.is_running() || self.epg_rx.is_some() || self.logos_dirty
+    }
     fn tick(&mut self, cx: &Ctx) {
         self.poll = self.poll.wrapping_add(1);
         if cx.app.global::<crate::Overlays>().get_md_open()

@@ -8,7 +8,8 @@
 //!
 //! * [`Plugin::enable`] / [`Plugin::disable`] when toggled (and `enable` at startup),
 //! * [`Plugin::file_loaded`] after mpv loaded a new file,
-//! * [`Plugin::tick`] every [`TICK`] while enabled,
+//! * [`Plugin::tick`] every [`TICK`] while [`Plugin::wants_tick`] is true (the host
+//!   starts and stops that timer, so idle plugins do not wake the UI),
 //! * [`Plugin::setting_changed`] and [`Plugin::command`] for settings and UI callbacks.
 //!
 //! mpv Lua/JS user scripts in `~/.config/vivi/scripts` show up as *external plugins*
@@ -40,7 +41,7 @@ use crate::config::Config;
 use crate::player::Player;
 use crate::AppWindow;
 use slint::ComponentHandle;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -365,10 +366,12 @@ pub trait Plugin {
     fn disable(&mut self, _cx: &Ctx) {}
     fn file_loaded(&mut self, _cx: &Ctx) {}
     fn tick(&mut self, _cx: &Ctx) {}
-    /// Whether [`Plugin::tick`] has anything to do right now; the host skips the call
-    /// otherwise. Plugins without a `tick` override it with `false`.
-    fn wants_tick(&self) -> bool {
-        true
+    /// Whether [`Plugin::tick`] has anything to do right now. The host starts the
+    /// shared [`TICK`] timer only while some enabled plugin returns true, and stops
+    /// it when none do. Default is false: plugins without ongoing work (a search,
+    /// synced lyrics while playing, …) must not keep the UI awake.
+    fn wants_tick(&self, _cx: &Ctx) -> bool {
+        false
     }
     fn setting_changed(&mut self, _cx: &Ctx, _key: &str) {}
     /// A UI callback or an [`SettingKind::Action`] button addressed to this plugin.
@@ -412,6 +415,7 @@ pub struct Registry {
 
 thread_local! {
     static REG: RefCell<Option<Registry>> = const { RefCell::new(None) };
+    static TICK_TASK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
 }
 
 /// Run `f` with the registry (UI thread only). Not re-entrant.
@@ -430,6 +434,49 @@ macro_rules! ctx {
             scripts: &$reg.scripts,
         }
     };
+}
+
+fn on_plugin_tick() {
+    let keep = with(|r| {
+        let Some(a) = r.app.upgrade() else {
+            return false;
+        };
+        let mut keep = false;
+        for e in r.entries.iter_mut().filter(|e| e.active) {
+            let cx = ctx!(r, a, e);
+            if e.plugin.wants_tick(&cx) {
+                e.plugin.tick(&cx);
+                keep |= e.plugin.wants_tick(&cx);
+            }
+        }
+        keep
+    })
+    .unwrap_or(false);
+    if !keep {
+        TICK_TASK.with(crate::ticker::clear);
+    }
+}
+
+/// Start the plugin tick timer if any enabled plugin has work right now.
+/// Safe to call from the UI thread outside [`with`].
+pub fn arm_ticks() {
+    TICK_TASK.with(|slot| {
+        if slot.get().is_some() {
+            return;
+        }
+        let needed = with(|r| {
+            let Some(a) = r.app.upgrade() else {
+                return false;
+            };
+            r.entries
+                .iter()
+                .any(|e| e.active && e.plugin.wants_tick(&ctx!(r, a, e)))
+        })
+        .unwrap_or(false);
+        if needed {
+            crate::ticker::ensure(slot, TICK, on_plugin_tick);
+        }
+    });
 }
 
 /// Manifests of all plugins (built-in first, then scripts), for the Settings page.
@@ -559,18 +606,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     })
     .unwrap_or(true);
     packages::setup(app, auto);
-    crate::ticker::every(TICK, || {
-        with(|r| {
-            let Some(a) = r.app.upgrade() else { return };
-            for e in r
-                .entries
-                .iter_mut()
-                .filter(|e| e.active && e.plugin.wants_tick())
-            {
-                e.plugin.tick(&ctx!(r, a, e));
-            }
-        });
+    app.global::<crate::Overlays>().on_ui_activity(|| {
+        arm_ticks();
+        crate::streams::arm();
     });
+    arm_ticks();
 }
 
 use crate::config;
@@ -1093,6 +1133,7 @@ pub fn file_loaded() {
     });
     // Outside `with`: rebuilding the menu asks for contributions.
     crate::menus::refresh_open();
+    arm_ticks();
 }
 
 /// Send a command to one plugin (no-op when it is disabled).
@@ -1123,6 +1164,7 @@ pub fn command(id: &str, name: &str, args: &[String]) {
     if !builtin {
         host::ui_event(id, name, args);
     }
+    arm_ticks();
 }
 
 /// One entry an enabled plugin contributes to a surface (see [`contrib`]).
@@ -1528,7 +1570,7 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
         Some((i, k)) => (i, Some(k)),
         None => (rest, None),
     };
-    with(|r| {
+    let out = with(|r| {
         let a = r.app.upgrade()?;
         // External scripts and packages.
         if let Some(s) = r.scripts.iter().find(|s| s.manifest.id == id).cloned() {
@@ -1620,7 +1662,9 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
             }
         }
     })
-    .flatten()
+    .flatten();
+    arm_ticks();
+    out
 }
 
 /// Forget plugin `id`'s on / off choice and settings (uninstalling it without keeping

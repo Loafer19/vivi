@@ -1,6 +1,7 @@
 //! One shared scheduler for the UI thread's repeating work (plugin ticks, tray and
 //! MPRIS updates, …). Player events and the control socket wake the UI when something
-//! arrives rather than polling here.
+//! arrives rather than polling here. Callers start a task only while it has work and
+//! [`stop`] (or [`clear`]) it when idle so the shared timer can go to sleep.
 //!
 //! Every task keeps its own interval, but they all run off a single [`slint::Timer`]
 //! that is armed for the next due task. A task that falls due within a quarter of its
@@ -54,10 +55,7 @@ pub fn frames(every: Duration, f: impl FnMut() + 'static) -> Task {
     add(every, Duration::ZERO, f)
 }
 
-/// End `task`; it does not run again (also when stopped from inside another task's run).
-/// Every current task lives as long as the app, so nothing stops one yet; kept for
-/// one-off tasks.
-#[allow(dead_code)]
+/// End `task`; it does not run again (also when stopped from inside its own run).
 pub fn stop(task: Task) {
     SCHED.with(|s| {
         let mut s = s.borrow_mut();
@@ -70,6 +68,21 @@ pub fn stop(task: Task) {
         });
     });
     rearm();
+}
+
+/// Start `f` every `every` unless `slot` already holds a running task.
+pub fn ensure(slot: &Cell<Option<Task>>, every: Duration, f: impl FnMut() + 'static) {
+    if slot.get().is_some() {
+        return;
+    }
+    slot.set(Some(self::every(every, f)));
+}
+
+/// Stop and forget the task in `slot`, if any.
+pub fn clear(slot: &Cell<Option<Task>>) {
+    if let Some(t) = slot.take() {
+        stop(t);
+    }
 }
 
 fn add(every: Duration, slack: Duration, f: impl FnMut() + 'static) -> Task {

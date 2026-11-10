@@ -52,6 +52,7 @@ fn drain() {
         };
         let was = (d.load.visible(), d.load.buffering());
         let mut hide = false;
+        let mut activity = false;
         while let Ok(ev) = d.events.try_recv() {
             match ev {
                 PlayerEvent::TimePos(t) => {
@@ -65,13 +66,24 @@ fn drain() {
                 }
                 PlayerEvent::Pause(p) => {
                     hide = true;
+                    activity = true;
                     a.global::<crate::Playback>().set_playing(!p)
                 }
-                PlayerEvent::Volume(v) => a.global::<crate::Playback>().set_volume(v as f32),
-                PlayerEvent::Mute(m) => a.global::<crate::Playback>().set_muted(m),
-                PlayerEvent::Title(t) => a.global::<crate::Playback>().set_media_title(t.into()),
+                PlayerEvent::Volume(v) => {
+                    activity = true;
+                    a.global::<crate::Playback>().set_volume(v as f32)
+                }
+                PlayerEvent::Mute(m) => {
+                    activity = true;
+                    a.global::<crate::Playback>().set_muted(m)
+                }
+                PlayerEvent::Title(t) => {
+                    activity = true;
+                    a.global::<crate::Playback>().set_media_title(t.into())
+                }
                 PlayerEvent::FileLoaded => {
                     hide = true;
+                    activity = true;
                     d.fit = true;
                     a.global::<crate::Playback>().set_has_media(true);
                     refresh_lists(&a, &d.player, d.log);
@@ -112,7 +124,10 @@ fn drain() {
                             .into(),
                     );
                 }
-                PlayerEvent::ListsChanged => refresh_lists(&a, &d.player, d.log),
+                PlayerEvent::ListsChanged => {
+                    activity = true;
+                    refresh_lists(&a, &d.player, d.log)
+                }
                 PlayerEvent::AbLoop => abloop::sync(&a, &d.player),
                 PlayerEvent::LoopShuffle => crate::loopsync::sync(&a, &d.player),
                 PlayerEvent::TrackCount(n) => {
@@ -122,6 +137,7 @@ fn drain() {
                 }
                 PlayerEvent::StartFile => {
                     hide = true;
+                    activity = true;
                     crate::transitions::start_file();
                     d.last_err.clear();
                     let path = d.player.get("path").unwrap_or_default();
@@ -142,6 +158,8 @@ fn drain() {
                 PlayerEvent::Buffering(b) => d.load.cache(b),
                 PlayerEvent::EndFile(err) => {
                     hide = true;
+                    activity = true;
+                    crate::nowplaying::sync();
                     let name = a.global::<crate::Notices>().get_loading_name().to_string();
                     if let Some(url) = d.load.end(err) {
                         let why = if d.last_err.is_empty() {
@@ -199,6 +217,14 @@ fn drain() {
         if hide {
             crate::app::wiring::autohide::reconsider();
         }
+        if activity {
+            crate::plugins::arm_ticks();
+            crate::streams::arm();
+            crate::tray::sync();
+        }
+        // Commands arrive via invoke_from_event_loop; position and metadata
+        // are published here so MPRIS does not need a 100 ms poll.
+        crate::desktop::poke();
         a.window().request_redraw();
     });
 }

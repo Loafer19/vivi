@@ -22,7 +22,7 @@ use crate::player::Player;
 use crate::AppWindow;
 use serde::{Deserialize, Serialize};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -299,11 +299,24 @@ thread_local! {
     static UI: RefCell<Option<Ui>> = const { RefCell::new(None) };
     /// Artwork URLs already handed to a fetch thread this run.
     static ASKED: RefCell<std::collections::HashSet<String>> = RefCell::new(Default::default());
+    static TICK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
+}
+
+fn arm() {
+    TICK.with(|slot| {
+        crate::ticker::ensure(slot, std::time::Duration::from_millis(500), || {
+            refresh();
+            if !ST.with(|s| s.borrow().dirty) {
+                TICK.with(crate::ticker::clear);
+            }
+        });
+    });
 }
 
 /// Redraw the rows on the next refresh tick (an artwork arrived or was decoded).
 fn mark_dirty() {
     ST.with(|s| s.borrow_mut().dirty = true);
+    arm();
 }
 
 /// The local file of a job's artwork: a path (or `file://` URL) as it is; an http(s)
@@ -458,6 +471,9 @@ pub fn report(plugin: &str, job: &str, r: Report) {
         }
         s.dirty = true;
     });
+    if ST.with(|st| st.borrow().dirty) {
+        arm();
+    }
 }
 
 /// What the host's Discard deletes once the job ended: the reported file and its `.part`
@@ -491,6 +507,7 @@ pub fn remove(plugin: &str, job: &str) {
         s.dirty = true;
         s.save = true;
     });
+    arm();
 }
 
 /// Running (queued, active, paused) jobs and the overall share done (-1 = unknown).
@@ -742,7 +759,6 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         };
         crate::plugins::run(&plugin, &cmd, &args);
     });
-    crate::ticker::every(std::time::Duration::from_millis(500), refresh);
     refresh();
 }
 
