@@ -113,11 +113,15 @@ fn apps_use_light_theme() -> Option<u32> {
         ) -> i32;
     }
 
-    const HKEY_CURRENT_USER: *mut core::ffi::c_void = 0x8000_0001u32 as usize as *mut core::ffi::c_void;
+    const HKEY_CURRENT_USER: *mut core::ffi::c_void =
+        0x8000_0001u32 as usize as *mut core::ffi::c_void;
     const RRF_RT_REG_DWORD: u32 = 0x0000_0010;
 
     fn wide(s: &str) -> Vec<u16> {
-        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
     }
 
     let subkey = wide(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
