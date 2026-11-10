@@ -7,15 +7,33 @@ pub static SHORT_SKIP: AtomicU32 = AtomicU32::new(5);
 pub static LONG_SKIP: AtomicU32 = AtomicU32::new(60);
 pub static VOLUME_STEP: AtomicU32 = AtomicU32::new(5);
 
-/// "system" theme: follow GTK_THEME or the GNOME color-scheme when available.
-/// If neither names a dark or light preference (no portal, empty Xvfb session,
-/// GNOME `default`), use light so a bare Ubuntu 22.04 catalog run is not a
-/// dark window.
+/// "system" theme: follow the desktop light/dark scheme when it can be detected.
+/// Linux: GTK_THEME, then GNOME `color-scheme`. If neither names a preference
+/// (no portal, empty Xvfb, GNOME `default`), use light so a bare Ubuntu 22.04
+/// catalog run is not a dark window.
+/// Windows: `HKCU\...\Themes\Personalize\AppsUseLightTheme` (0 = dark).
+/// macOS: `AppleInterfaceStyle` (`Dark` = dark; absent = light).
+/// Fallback is light on every platform.
 pub(crate) fn system_dark() -> bool {
-    system_dark_from(
-        std::env::var("GTK_THEME").ok().as_deref(),
-        gnome_color_scheme().as_deref(),
-    )
+    #[cfg(target_os = "linux")]
+    {
+        system_dark_from(
+            std::env::var("GTK_THEME").ok().as_deref(),
+            gnome_color_scheme().as_deref(),
+        )
+    }
+    #[cfg(windows)]
+    {
+        system_dark_from_windows_apps_use_light_theme(apps_use_light_theme())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        system_dark_from_macos_interface_style(apple_interface_style().as_deref())
+    }
+    #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+    {
+        false
+    }
 }
 
 fn gnome_color_scheme() -> Option<String> {
@@ -62,6 +80,84 @@ pub(crate) fn system_dark_from(gtk_theme: Option<&str>, color_scheme: Option<&st
         }
     }
     false
+}
+
+/// Windows `AppsUseLightTheme`: `Some(0)` is dark; any other value or `None` is light.
+#[cfg(any(test, windows))]
+pub(crate) fn system_dark_from_windows_apps_use_light_theme(value: Option<u32>) -> bool {
+    matches!(value, Some(0))
+}
+
+/// macOS `AppleInterfaceStyle`: `"Dark"` (any case, surrounding whitespace ok) is dark;
+/// absent or any other value is light.
+#[cfg(any(test, target_os = "macos"))]
+pub(crate) fn system_dark_from_macos_interface_style(value: Option<&str>) -> bool {
+    matches!(value, Some(s) if s.trim().eq_ignore_ascii_case("dark"))
+}
+
+#[cfg(windows)]
+fn apps_use_light_theme() -> Option<u32> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn RegGetValueW(
+            hkey: *mut core::ffi::c_void,
+            lp_sub_key: *const u16,
+            lp_value: *const u16,
+            dw_flags: u32,
+            pdw_type: *mut u32,
+            pv_data: *mut core::ffi::c_void,
+            pcb_data: *mut u32,
+        ) -> i32;
+    }
+
+    const HKEY_CURRENT_USER: *mut core::ffi::c_void = 0x8000_0001u32 as usize as *mut core::ffi::c_void;
+    const RRF_RT_REG_DWORD: u32 = 0x0000_0010;
+
+    fn wide(s: &str) -> Vec<u16> {
+        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    let subkey = wide(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+    let value = wide("AppsUseLightTheme");
+    let mut data: u32 = 0;
+    let mut data_size: u32 = 4;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            (&mut data as *mut u32).cast(),
+            &mut data_size,
+        )
+    };
+    if status == 0 {
+        Some(data)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn apple_interface_style() -> Option<String> {
+    let o = std::process::Command::new("defaults")
+        .args(["read", "-g", "AppleInterfaceStyle"])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&o.stdout);
+    let s = s.trim();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.to_string())
+    }
 }
 
 pub fn apply_theme(a: &AppWindow, c: &Config) {
@@ -451,6 +547,24 @@ mod tests {
             Some("Adwaita-dark"),
             Some("'prefer-light'")
         ));
+    }
+
+    #[test]
+    fn windows_apps_use_light_theme_zero_is_dark() {
+        assert!(system_dark_from_windows_apps_use_light_theme(Some(0)));
+        assert!(!system_dark_from_windows_apps_use_light_theme(Some(1)));
+        assert!(!system_dark_from_windows_apps_use_light_theme(Some(2)));
+        assert!(!system_dark_from_windows_apps_use_light_theme(None));
+    }
+
+    #[test]
+    fn macos_interface_style_dark_is_dark() {
+        assert!(system_dark_from_macos_interface_style(Some("Dark")));
+        assert!(system_dark_from_macos_interface_style(Some(" dark\n")));
+        assert!(system_dark_from_macos_interface_style(Some("DARK")));
+        assert!(!system_dark_from_macos_interface_style(Some("Light")));
+        assert!(!system_dark_from_macos_interface_style(Some("")));
+        assert!(!system_dark_from_macos_interface_style(None));
     }
 
     #[test]
