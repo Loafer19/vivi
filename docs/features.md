@@ -90,7 +90,7 @@ On Arch and derivatives it builds the `vivi-bin` package with `makepkg -si`; els
 | Platform | Package |
 |---|---|
 | Arch / Omarchy | `packaging/arch/vivi-bin` (prebuilt) or `packaging/arch/vivi` (from source): `makepkg -si`. The release also ships a ready `PKGBUILD` with checksums. |
-| Any Linux | `Vivi-<version>-x86_64.AppImage` (slim libmpv bundled, ~44 MB): `chmod +x` and run |
+| Any Linux | `Vivi-<version>-x86_64.AppImage` (slim libmpv bundled, ~45 MB): `chmod +x` and run |
 | Linux Flatpak | `vivi-<version>-x86_64.flatpak`: `flatpak install --user vivi-<version>-x86_64.flatpak` (runtime from Flathub). Build it yourself with `packaging/flatpak/` (see `packaging/README.md`) |
 | Linux tarball | `vivi-<version>-linux-x86_64.tar.gz` (needs system `mpv`) with `.desktop` file and icons |
 | Windows 10/11 | `vivi-<version>-windows-x86_64.zip` — unzip, run `vivi.exe` (`libmpv-2.dll` included) |
