@@ -118,13 +118,13 @@ Opening files from the file manager, the command line or the library works nativ
 
 ## Build from source (Arch / Omarchy)
 ```sh
-sudo pacman -S --needed mpv sqlite rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
+sudo pacman -S --needed mpv rust base-devel libxkbcommon wayland mesa xdg-desktop-portal
 # optional: ffmpeg (library thumbnails), yt-dlp (YouTube & other sites)
 git clone https://github.com/Loafer19/vivi && cd vivi
 cargo build --release
 ./target/release/vivi ~/Videos/film.mkv
 ```
-Debian/Ubuntu: `sudo apt install libmpv-dev libsqlite3-dev libxkbcommon-x11-0 libfontconfig1-dev`.
+Debian/Ubuntu: `sudo apt install libmpv-dev libxkbcommon-x11-0 libfontconfig1-dev`.
 
 Debugging: `VIVI_LOG=1` (position/track log), `VIVI_MPV_DEBUG=1` (verbose mpv log),
 `VIVI_X11=1` (force XWayland).

@@ -5,7 +5,7 @@
 | `vivi-bin` | release tarball `vivi-v<ver>-linux-x86_64.tar.gz` (x86_64) | nothing, installs the prebuilt `vivi` and `vivi-mcp` |
 | `vivi-git` | `master` from git | `cargo build --release` (x86_64, aarch64) |
 
-Both depend on `mpv` (for `libmpv.so`), `sqlite`, `fontconfig`, `libxkbcommon` and
+Both depend on `mpv` (for `libmpv.so`), `fontconfig`, `libxkbcommon` and
 `hicolor-icon-theme`, and install `/usr/bin/vivi`, `/usr/bin/vivi-mcp`, `vivi.desktop`,
 the scalable and 256 px icons, the AppStream metainfo and the license. They conflict with
 each other and with `vivi`.

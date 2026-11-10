@@ -1,13 +1,13 @@
 # Maintainer: Loafer19 <https://github.com/Loafer19>
 # Build from the tagged source release.
 pkgname=vivi
-pkgver=0.16.2
+pkgver=0.16.3
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Loafer19/vivi"
 license=('MIT')
-depends=('mpv' 'sqlite' 'libxkbcommon' 'fontconfig' 'xdg-desktop-portal' 'hicolor-icon-theme')
+depends=('mpv' 'libxkbcommon' 'fontconfig' 'xdg-desktop-portal' 'hicolor-icon-theme')
 optdepends=('ffmpeg: library thumbnails and album covers'
             'yt-dlp: YouTube and other sites in Open Network Stream')
 makedepends=('cargo')

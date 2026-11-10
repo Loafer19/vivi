@@ -36,7 +36,7 @@ Or grab a file from [Releases](https://github.com/Loafer19/vivi/releases/latest)
 | Windows 10/11 | `vivi-<version>-windows-x86_64.zip` → run `vivi.exe` |
 | macOS (Apple Silicon) | `vivi-<version>-macos-arm64.zip` → unsigned, right-click → Open first time |
 
-Build from source: `cargo build --release` (needs libmpv, sqlite; see [docs/features.md](docs/features.md#build-from-source-arch--omarchy)).
+Build from source: `cargo build --release` (needs libmpv; see [docs/features.md](docs/features.md#build-from-source-arch--omarchy)).
 
 ## License
 MIT. UI based on Juxtopposed's “VLC Redesign” Figma file. Credits in [docs/features.md](docs/features.md#credits).
