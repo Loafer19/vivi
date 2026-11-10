@@ -312,12 +312,12 @@ export component Equalizer inherits VerticalLayout {
     HorizontalLayout {
         spacing: 8px;
         PresetDropdown { horizontal-stretch: 1; rename-request(n) => { root.renaming = n; } }
-        Toggle { y: 1px; on: root.on; toggled => { FxState.set("eq", 11, root.on ? 0 : 1); } }
+        Toggle { y: 1px; on: root.on; label: "Equalizer"; toggled => { FxState.set("eq", 11, root.on ? 0 : 1); } }
     }
     if root.renaming != "": HorizontalLayout {
         spacing: 6px;
         rn := TextField {
-            horizontal-stretch: 1; text: root.renaming; placeholder: "Preset name";
+            horizontal-stretch: 1; text: root.renaming; placeholder: "Preset name"; label: "Preset name";
             accepted(t) => { FxState.preset-action("rename", root.renaming, t); root.renaming = ""; }
             init => { self.text = root.renaming; }
         }
@@ -381,7 +381,7 @@ component ToggleRow inherits HorizontalLayout {
     callback toggled();
     spacing: 8px; height: 30px;
     Text { text: root.label; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
-    Toggle { on: root.on; toggled => { root.toggled(); } }
+    Toggle { on: root.on; label: root.label; toggled => { root.toggled(); } }
 }
 
 component ColorRow inherits HorizontalLayout {
@@ -392,9 +392,9 @@ component ColorRow inherits HorizontalLayout {
     in property <color> swatch;
     spacing: 8px; height: 30px;
     Text { text: root.label; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; }
-    hx := TextField { width: 84px; text: root.hex; accepted(t) => { FxState.set-color(root.index, t); } }
+    hx := TextField { width: 84px; text: root.hex; label: root.label + " hex"; accepted(t) => { FxState.set-color(root.index, t); } }
     Rectangle { y: 4px; width: 22px; height: 22px; border-radius: Metrics.radius-sm; background: root.swatch; }
-    Toggle { on: root.on; toggled => { FxState.set("color", root.index, root.on ? 0 : 1); } }
+    Toggle { on: root.on; label: root.label; toggled => { FxState.set("color", root.index, root.on ? 0 : 1); } }
 }
 
 // Section header with an ON/OFF switch for audio effects.
@@ -406,7 +406,7 @@ component EffectHeader inherits HorizontalLayout {
     spacing: 8px;
     Text { text: root.title; color: Theme.fg-1; font-weight: 600; font-size: Metrics.font-base; vertical-alignment: center; horizontal-stretch: 1; }
     ResetLink { y: 3px; clicked => { root.reset(); } }
-    Toggle { on: root.on; toggled => { root.toggled(); } }
+    Toggle { on: root.on; label: root.title; toggled => { root.toggled(); } }
 }
 
 export component VideoFilters inherits VerticalLayout {

@@ -94,7 +94,7 @@ component PluginCard inherits Rectangle {
             }
         }
         VerticalLayout { alignment: center;
-            Toggle { on: root.on; toggled => { root.changed(setting.id, root.on ? "false" : "true"); } }
+            Toggle { on: root.on; label: setting.title; toggled => { root.changed(setting.id, root.on ? "false" : "true"); } }
         }
     }
 }
@@ -159,7 +159,7 @@ component Info inherits Rectangle {
     in property <string> text;
     width: 18px; height: 18px;
     Icon { source: @image-url("../assets/icons/info.svg"); width: 16px; height: 16px; tint: ta.has-hover ? Theme.accent : Theme.fg-a3; }
-    ta := TouchArea { }
+    ta := TouchArea { accessible-role: button; accessible-label: "More information"; accessible-description: root.text; }
     if ta.has-hover: Rectangle {
         x: 24px; y: -6px; z: 10;
         width: 280px; height: tip.preferred-height + 16px;
@@ -245,7 +245,12 @@ export component Row inherits Rectangle {
     // Library folder: icon, path and file count, remove button (brighter on hover).
     if setting.kind == "folder": Rectangle {
         y: root.gap; width: parent.width; height: root.body;
-        fta := TouchArea { width: parent.width; height: parent.height; }
+        fta := TouchArea {
+            width: parent.width; height: parent.height;
+            accessible-role: list-item;
+            accessible-label: "Library folder: " + setting.title;
+            accessible-description: setting.value;
+        }
         HorizontalLayout {
             padding-left: root.inset-l; padding-right: root.inset-r - 6px; spacing: 12px;
             VerticalLayout { alignment: center; TriIcon { name: "folder"; width: 22px; height: 22px; } }
@@ -333,6 +338,7 @@ export component Row inherits Rectangle {
 }
 
 export component SettingsDialog inherits Modal {
+    label: "Settings";
     in property <[string]> categories;
     property <bool> narrow: root.width < 760px;
     in property <[SettingRow]> rows;
@@ -372,7 +378,7 @@ export component SettingsDialog inherits Modal {
                     TriIcon { x: 10px; width: 20px; height: 20px; name: "search"; tint: Theme.fg-a3; }
                     TextField {
                         x: 30px; width: parent.width - 34px; height: parent.height; background: transparent;
-                        text <=> root.search; placeholder: "Search";
+                        text <=> root.search; placeholder: "Search"; label: "Search settings";
                         edited(t) => { root.refresh(root.category, t, root.advanced); }
                     }
                 }
@@ -412,12 +418,14 @@ export component SettingsDialog inherits Modal {
                     horizontal-stretch: 1;
                     options: root.categories;
                     value: root.categories[root.category];
+                    label: "Settings category";
                     selected(i, c) => { root.go(i); }
                 }
                 TextField {
                     horizontal-stretch: 1;
                     text <=> root.search;
                     placeholder: "Search";
+                    label: "Search settings";
                     edited(t) => { root.refresh(root.category, t, root.advanced); }
                 }
             }

@@ -22,10 +22,11 @@ component ThemeCard inherits Rectangle {
         }
     }
     Text { x: 12px; y: root.height - 36px; text: root.name; color: Theme.fg-1; font-size: Metrics.font-lg; }
-    TouchArea { accessible-role: button; accessible-label: root.name; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    TouchArea { accessible-role: button; accessible-label: root.name; accessible-checked: root.selected; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 export component OnboardingDialog inherits Modal {
+    label: "Welcome to vivi";
     in-out property <int> step: 0;
     in property <bool> dark: true;
     in property <string> accent;

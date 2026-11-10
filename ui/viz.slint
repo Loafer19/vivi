@@ -32,7 +32,7 @@ export component VizDropdown inherits Rectangle {
         Text { text: root.modes[root.mode]; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
     }
-    ta := TouchArea { accessible-role: combobox; accessible-label: "Visualizer"; accessible-value: root.modes[root.mode]; mouse-cursor: pointer; clicked => { pop.show(); } }
+    ta := TouchArea { accessible-role: combobox; accessible-label: "Visualizer"; accessible-value: root.modes[root.mode]; accessible-action-default => { pop.show(); } mouse-cursor: pointer; clicked => { pop.show(); } }
     pop := PopupWindow {
         x: 0; y: root.height + 4px;
         width: root.width;
@@ -55,6 +55,8 @@ export component VizDropdown inherits Rectangle {
 export component VizView inherits Rectangle {
     in property <image> frame;
     in property <string> note; // dominant pitch name (Pitch mode), "" = none
+    accessible-role: image;
+    accessible-label: root.note != "" ? "Audio visualizer, " + root.note : "Audio visualizer";
     background: Theme.bg-b1;
     Image { width: 100%; height: 100%; source: root.frame; image-fit: fill; }
     if root.note != "": Text {

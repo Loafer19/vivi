@@ -19,6 +19,8 @@ component JobRow inherits Rectangle {
     background: ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
     accessible-role: list-item;
     accessible-label: root.job.title + ", " + root.job.plugin + ", " + root.job.detail;
+    accessible-description: root.job.state + (root.job.progress >= 0 ? ", " + round(root.job.progress * 100) + "%" : "");
+    accessible-value: root.job.progress >= 0 ? round(root.job.progress * 100) + "%" : "";
     ta := TouchArea { }
     HorizontalLayout {
         padding-left: root.job.child ? 40px : 12px; padding-right: 8px; spacing: 12px;

@@ -32,7 +32,11 @@ export component PaletteDialog inherits Rectangle {
         Palette.selected = clamp(Palette.selected + d, 0, max(0, Palette.items.length - 1));
     }
     background: Theme.scrim;
-    TouchArea { clicked => { root.close(); } }
+    TouchArea {
+        accessible-role: button;
+        accessible-label: "Close command palette";
+        clicked => { root.close(); }
+    }
     card := Rectangle {
         width: min(640px, root.width - 32px);
         height: col.preferred-height;

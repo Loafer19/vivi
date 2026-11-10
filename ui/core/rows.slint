@@ -59,6 +59,8 @@ export component ListRow inherits Rectangle {
     in property <brush> selected-bg: Theme.accent-bg;
     // Screen-reader name of the row.
     in property <string> label;
+    in property <string> description;
+    in property <bool> checked;
     out property <bool> row-hovered: ta.has-hover;
     callback clicked();
     callback entered();
@@ -71,6 +73,8 @@ export component ListRow inherits Rectangle {
     ta := TouchArea {
         enabled: root.enabled; mouse-cursor: pointer;
         accessible-role: list-item; accessible-label: root.label;
+        accessible-description: root.description;
+        accessible-checked: root.checked;
         accessible-item-selected: root.selected; accessible-enabled: root.enabled;
         accessible-action-default => { root.clicked(); }
         clicked => { root.clicked(); }

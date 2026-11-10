@@ -90,6 +90,7 @@ component Tile inherits Rectangle {
     }
     ta := TouchArea {
         accessible-role: button; accessible-label: root.it.title + (root.it.subtitle != "" ? ", " + root.it.subtitle : "");
+        accessible-description: root.it.kind + (root.it.progress > 0 ? ", " + round(root.it.progress * 100) + "% played" : "") + (root.it.pinned ? ", favorite" : "");
         mouse-cursor: pointer;
         clicked => { root.open(); }
         pointer-event(e) => {
@@ -158,6 +159,7 @@ component LibRow inherits ListRow {
     callback menu(length, length);
     callback forget();
     label: root.it.title;
+    description: root.it.subtitle != "" ? root.it.subtitle : root.it.kind;
     row-height: 32px; radius: 0; hover-bg: transparent;
     clicked => { root.open(); }
     right-clicked(x, y) => { if (root.it.kind != "action") { root.menu(x, y); } }
@@ -547,7 +549,7 @@ export component LibraryView inherits Rectangle {
                 }
             }
             if root.searching && !root.hub: TextField {
-                placeholder: "Search library"; text <=> root.query;
+                placeholder: "Search library"; label: "Search library"; text <=> root.query;
                 edited(t) => { root.search(t); }
                 init => { self.focus-input(); }
             }

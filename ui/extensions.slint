@@ -52,6 +52,7 @@ component HeaderButton inherits Rectangle {
 }
 
 export component ExtensionsDialog inherits Modal {
+    label: "Extensions";
     callback changed(string, string);   // a settings row changed (routed like Settings)
     callback close();
     property <bool> market: Extensions.tab == "";
