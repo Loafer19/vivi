@@ -8,7 +8,7 @@ import { Toggle, Slider, Segmented, TextField, Dropdown } from "core/controls.sl
 import { Equalizer, VideoFilters, AudioEffects } from "filters.slint";
 import { Format } from "core/format.slint";
 import { SecondaryButton, ButtonSize } from "core/buttons.slint";
-import { SecondaryButton, ButtonSize } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { SectionHeader, ValueChip, ListRow } from "core/rows.slint";
 import { PanelTab } from "core/types.slint";
 import { Icons } from "core/icons.slint";
@@ -630,10 +630,11 @@ export component SidePanel inherits Rectangle {
                         show-minus: false; plus-tip: "Add bookmark (Ctrl+B)";
                         plus => { Bookmarks.add(); }
                     }
-                    if Bookmarks.items.length == 0: VerticalLayout {
-                        spacing: 10px; alignment: start;
-                        Text { text: "No bookmarks yet — press + or Ctrl+B. They are saved with the file and shown on the seek bar."; color: Theme.fg-a3; wrap: word-wrap; }
-                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; icon: @image-url("../assets/icons/bookmark.svg"); text: "Add bookmark"; clicked => { Bookmarks.add(); } } }
+                    if Bookmarks.items.length == 0: EmptyState {
+                        icon: "bookmarks"; title: "No bookmarks yet"; pad-top: 16px;
+                        sentence: "They are saved with the file and shown on the seek bar. Press + or Ctrl+B.";
+                        primary-text: "Add bookmark";
+                        primary => { Bookmarks.add(); }
                     }
                     for it[i] in Bookmarks.items: BookmarkItem {
                         it: it; index: i; editing: Bookmarks.editing == i;
@@ -652,7 +653,10 @@ export component SidePanel inherits Rectangle {
                 // ---- Chapters ----
                 if root.tab == PanelTab.chapters: VerticalLayout {
                     spacing: 2px; alignment: start;
-                    if root.chapters.length == 0: Text { text: "No chapters in this file."; color: Theme.fg-a3; }
+                    if root.chapters.length == 0: EmptyState {
+                        icon: "chapters"; title: "No chapters"; pad-top: 16px;
+                        sentence: "This file has no chapter markers.";
+                    }
                     for it[i] in root.chapters: crow := Rectangle {
                         property <bool> thumb: i < root.chapter-has-thumb.length && root.chapter-has-thumb[i];
                         height: self.thumb ? 52px : 38px;
@@ -691,7 +695,10 @@ export component SidePanel inherits Rectangle {
                         }
                     }
                     if lsearch.text == "" && root.recent.length > 0: SectionHeader { text: "Files"; }
-                    if root.library.length == 0: Text { text: "No matching files. Folders are set in Settings → Library."; color: Theme.fg-a3; wrap: word-wrap; }
+                    if root.library.length == 0: EmptyState {
+                        icon: "search"; title: "No matching files"; pad-top: 16px;
+                        sentence: "Folders are set in Settings → Library.";
+                    }
                     for it in root.library: Rectangle {
                         height: 34px; border-radius: Metrics.radius-sm;
                         background: lta.has-hover ? Theme.bg-a1 : transparent;
@@ -714,10 +721,11 @@ export component SidePanel inherits Rectangle {
                         minus-tip: "Clear queue"; plus-tip: "Add files";
                         minus => { root.queue-clear(); } plus => { root.queue-add(); }
                     }
-                    if root.queue.length == 0: VerticalLayout {
-                        spacing: 10px; alignment: start;
-                        Text { text: "Queue is empty — add files or drop them on the window."; color: Theme.fg-a3; wrap: word-wrap; }
-                        HorizontalLayout { alignment: start; SecondaryButton { size: ButtonSize.sm; icon: @image-url("../assets/icons/add-file.svg"); text: "Add files"; clicked => { root.queue-add(); } } }
+                    if root.queue.length == 0: EmptyState {
+                        icon: "queue"; title: "Queue is empty"; pad-top: 16px;
+                        sentence: "Add files or drop them on the window.";
+                        primary-text: "Add files";
+                        primary => { root.queue-add(); }
                     }
                     VerticalLayout {
                         spacing: 2px; alignment: start;
@@ -735,7 +743,10 @@ export component SidePanel inherits Rectangle {
                         SecondaryButton { size: ButtonSize.sm; width: 80px; text: "Save"; icon: @image-url("../assets/icons/save.svg"); clicked => { root.playlist-save(name.text); name.text = ""; } }
                     }
                     SectionHeader { text: "Playlists"; }
-                    if root.playlists.length == 0: Text { text: "No saved playlists"; color: Theme.fg-a3; }
+                    if root.playlists.length == 0: EmptyState {
+                        icon: "playlist"; title: "No saved playlists"; pad-top: 16px;
+                        sentence: "Save the current queue as a playlist to see it here.";
+                    }
                     for pl in root.playlists: Rectangle {
                         height: 34px; border-radius: Metrics.radius-sm;
                         background: pta.has-hover ? Theme.bg-a1 : transparent;

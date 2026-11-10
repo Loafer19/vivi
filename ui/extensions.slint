@@ -9,6 +9,7 @@ import { Toggle } from "core/controls.slint";
 import { Icons } from "core/icons.slint";
 import { Modal } from "core/modal.slint";
 import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { SectionHeader } from "core/rows.slint";
 import { Row, SettingRow } from "settings.slint";
 import { Extensions, ExtTab, ExtAction } from "state/extensions.slint";
@@ -174,7 +175,10 @@ export component ExtensionsDialog inherits Modal {
                 vertical-stretch: 1;
                 VerticalLayout {
                     alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;
-                    if Extensions.rows.length == 0: Text { height: 40px; vertical-alignment: center; text: "This plugin has no settings."; color: Theme.fg-a3; }
+                    if Extensions.rows.length == 0: EmptyState {
+                        icon: "plugins"; title: "No settings";
+                        sentence: "This plugin has nothing to configure.";
+                    }
                     for r in Extensions.rows: Row { setting: r; changed(id, v) => { root.changed(id, v); } }
                 }
             }

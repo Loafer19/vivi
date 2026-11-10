@@ -4,6 +4,7 @@
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { IconButton, SecondaryButton, ButtonSize } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { TextField } from "core/controls.slint";
 import { Downloads, DlJob } from "state/downloads.slint";
 
@@ -101,10 +102,9 @@ export component DownloadsView inherits VerticalLayout {
         if Downloads.finished: HorizontalLayout { alignment: start; SecondaryButton { text: "Clear finished"; size: ButtonSize.sm; clicked => { Downloads.clear-finished(); } } }
     }
     if Downloads.line != "": Text { text: Downloads.line; color: Theme.fg-a2; font-size: Metrics.font-sm; }
-    if Downloads.jobs.length == 0: VerticalLayout {
-        padding-top: 30px; spacing: 6px;
-        Text { text: "No downloads yet"; color: Theme.fg-1; font-size: Metrics.font-lg; horizontal-alignment: center; }
-        Text { text: "Downloads from Free Music, Offline Downloads and other extensions show up here."; color: Theme.fg-a3; horizontal-alignment: center; wrap: word-wrap; }
+    if Downloads.jobs.length == 0: EmptyState {
+        icon: "download"; title: "No downloads yet";
+        sentence: "Downloads from Free Music, Offline Downloads and other extensions show up here.";
     }
     for j in Downloads.jobs: JobRow { job: j; narrow: root.narrow; }
 }

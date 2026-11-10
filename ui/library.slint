@@ -9,7 +9,7 @@ import { TextField } from "core/controls.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { ListRow, LiveRow, LiveRows, MeterBar } from "core/rows.slint";
-import { PrimaryButton, SecondaryButton } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { ExtTab, ExtWidget } from "state/extensions.slint";
 import { Downloads } from "state/downloads.slint";
 import { DownloadsView } from "downloads.slint";
@@ -427,6 +427,7 @@ export component LibraryView inherits Rectangle {
     callback open-file();
     callback open-network();
     callback add-folders();
+    callback create-playlist();
     callback clear-recent();
     callback thumb-window(int, int);
     // Remove one Recent entry (hover ×).
@@ -557,6 +558,7 @@ export component LibraryView inherits Rectangle {
             if Streams.view == "hub": StreamsHub {
                 vertical-stretch: 1; padding-bottom: 16px; narrow: root.sidebar || root.width < 640px;
                 command(o, n, a) => { root.plugin-command(o, n, a); }
+                open-extensions => { root.open-extensions(); }
             }
             if Streams.view == "service": ServicePage {
                 vertical-stretch: 1; padding-bottom: 16px;
@@ -568,17 +570,14 @@ export component LibraryView inherits Rectangle {
                     alignment: start; padding-top: 3px; padding-bottom: 20px; padding-right: 8px; spacing: 30px;
                     if root.nav == "home" && root.query == "": VerticalLayout {
                         spacing: 33px;
-                        if root.count == 0 && root.recent-items.length == 0: VerticalLayout {
-                            spacing: 10px; padding-top: 40px;
-                            HorizontalLayout { alignment: center; Image { source: @image-url("../packaging/vivi.svg"); width: 72px; height: 72px; } }
-                            Text { text: "Your library is empty"; color: Theme.fg-1; font-size: Metrics.font-xl; horizontal-alignment: center; }
-                            Text { text: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play."; color: Theme.fg-a1; horizontal-alignment: center; wrap: word-wrap; }
-                            HorizontalLayout {
-                                alignment: center; spacing: Metrics.space-2; padding-top: 6px;
-                                PrimaryButton { icon: @image-url("../assets/icons/file.svg"); text: "Open file"; clicked => { root.open-file(); } }
-                                SecondaryButton { icon: @image-url("../assets/icons/streaming.svg"); text: "Open stream"; clicked => { root.open-network(); } }
-                                SecondaryButton { icon: @image-url("../assets/icons/new_folder.svg"); text: "Add folders"; clicked => { root.add-folders(); } }
-                            }
+                        if root.count == 0 && root.recent-items.length == 0: EmptyState {
+                            picture: @image-url("../packaging/vivi.svg");
+                            title: "Your library is empty";
+                            sentence: "Open a file, or add folders in Settings → Library (Ctrl+,). Drop files anywhere to play.";
+                            primary-text: "Open file"; secondary-text: "Open stream"; tertiary-text: "Add folders";
+                            primary => { root.open-file(); }
+                            secondary => { root.open-network(); }
+                            tertiary => { root.add-folders(); }
                         }
                         // Streams: favorites and recent streams (#86), above the source chips.
                         if Streams.home.length > 0: StreamsRow { open-hub => { root.navigate("streams"); } }
@@ -647,9 +646,28 @@ export component LibraryView inherits Rectangle {
                         scroll-y: -lsv.content-y; view-h: lsv.visible-height; window(lo, hi) => { root.thumb-window(lo, hi); }
                         open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); }
                     }
-                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0: Text {
-                        text: root.scanning ? "Scanning…" : (root.query != "" ? "Nothing matches “" + root.query + "”." : "Nothing here yet.");
-                        color: Theme.fg-a3;
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0 && root.scanning: Text {
+                        text: "Scanning…"; color: Theme.fg-a3;
+                    }
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0 && !root.scanning && root.query != "": EmptyState {
+                        icon: "search"; title: "No matching files";
+                        sentence: "Nothing in the library matches “" + root.query + "”. Try another search, or add more folders.";
+                        primary-text: "Clear search";
+                        primary => { root.query = ""; root.search(""); }
+                    }
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0 && !root.scanning && root.query == "" && root.section == "playlists": EmptyState {
+                        icon: "playlist"; title: "No playlists yet";
+                        sentence: "Save the queue from the side panel, or create a playlist to see it here.";
+                        primary-text: "New playlist";
+                        primary => { root.create-playlist(); }
+                    }
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0 && !root.scanning && root.query == "" && root.section != "playlists": EmptyState {
+                        icon: root.section == "music" ? "music" : (root.section == "recent" ? "recent" : "videos");
+                        title: "Nothing here yet";
+                        sentence: "Add folders in Settings → Library, or open a file to start this collection.";
+                        primary-text: "Open file"; secondary-text: "Add folders";
+                        primary => { root.open-file(); }
+                        secondary => { root.add-folders(); }
                     }
                 }
             }

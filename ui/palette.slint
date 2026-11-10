@@ -71,7 +71,11 @@ export component PaletteDialog inherits Rectangle {
                     }
                 }
                 Rectangle { height: 1px; background: Theme.bg-a1; }
-                if Palette.items.length == 0: Text { height: 36px; x: 12px; text: "No matching commands."; color: Theme.fg-a3; vertical-alignment: center; }
+                if Palette.items.length == 0: VerticalLayout {
+                    padding-left: 12px; padding-right: 12px; padding-top: 10px; padding-bottom: 10px; spacing: 2px;
+                    Text { text: "No matching commands."; color: Theme.fg-a3; font-size: Metrics.font-md; }
+                    Text { text: "Try a different search."; color: Theme.fg-a3; font-size: Metrics.font-sm; }
+                }
                 for it[i] in Palette.items: VerticalLayout {
                     if i >= root.first && i < root.first + root.rows: PaletteRow {
                         item: it; selected: i == Palette.selected;

@@ -1,0 +1,55 @@
+// Shared empty list/page: muted icon in a circle, a short title, one sentence,
+// and optional primary/secondary/tertiary buttons (#102).
+import { Theme, Metrics, TriIcon } from "theme.slint";
+import { PrimaryButton, SecondaryButton } from "buttons.slint";
+
+export component EmptyState inherits VerticalLayout {
+    // TriIcon name from assets/icons (via Duo). Ignored when `picture` is set.
+    in property <string> icon;
+    // Optional raw image (Library Home uses the vivi mark). Shown at 72px with no circle.
+    in property <image> picture;
+    in property <string> title;
+    in property <string> sentence;
+    in property <string> primary-text;
+    in property <string> secondary-text;
+    in property <string> tertiary-text;
+    in property <length> pad-top: 40px;
+    callback primary();
+    callback secondary();
+    callback tertiary();
+
+    alignment: center;
+    spacing: 10px;
+    padding-top: root.pad-top;
+    padding-left: 24px;
+    padding-right: 24px;
+
+    HorizontalLayout {
+        alignment: center;
+        if root.picture.width > 0: Image {
+            source: root.picture; width: 72px; height: 72px; image-fit: contain;
+            accessible-role: AccessibleRole.image; accessible-label: root.title;
+        }
+        if root.picture.width <= 0 && root.icon != "": Rectangle {
+            width: 72px; height: 72px; border-radius: 36px; background: Theme.bg-a3;
+            TriIcon {
+                x: 18px; y: 18px; width: 36px; height: 36px;
+                name: root.icon; tint: Theme.fg-a2; flat: true;
+            }
+        }
+    }
+    Text {
+        text: root.title; color: Theme.fg-1; font-size: Metrics.font-xl;
+        horizontal-alignment: center; wrap: word-wrap;
+    }
+    Text {
+        text: root.sentence; color: Theme.fg-a1; font-size: Metrics.font-base;
+        horizontal-alignment: center; wrap: word-wrap;
+    }
+    if root.primary-text != "" || root.secondary-text != "" || root.tertiary-text != "": HorizontalLayout {
+        alignment: center; spacing: Metrics.space-2; padding-top: 6px;
+        if root.primary-text != "": PrimaryButton { text: root.primary-text; clicked => { root.primary(); } }
+        if root.secondary-text != "": SecondaryButton { text: root.secondary-text; clicked => { root.secondary(); } }
+        if root.tertiary-text != "": SecondaryButton { text: root.tertiary-text; clicked => { root.tertiary(); } }
+    }
+}

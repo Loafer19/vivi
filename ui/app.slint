@@ -354,6 +354,7 @@ export component AppWindow inherits Window {
         run-widget(id, cmd) => { Extensions.run(id, cmd); }
         open-extensions() => { Extensions.select(Extensions.tab, false); }
         add-folders() => { Settings.category = 11; Overlays.settings-open = true; Settings.refresh(11, "", false); }
+        create-playlist() => { Library.create-playlist(); }
         clear-recent() => { Library.clear-recent(); }
         thumb-window(lo, hi) => { Library.thumb-window(lo, hi); }
         forget-recent(it) => { Library.menu(it.recent-key, it.kind, "forget-recent"); }

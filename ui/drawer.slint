@@ -5,6 +5,7 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { SecondaryButton } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { SectionHeader, MeterBar, LiveRows } from "core/rows.slint";
 import { Drawer } from "state/drawer.slint";
 import { Lyrics } from "state/lyrics.slint";
@@ -53,7 +54,10 @@ export component SideDrawer inherits Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 alignment: start; padding: 16px; spacing: 10px;
-                if Drawer.tab == "lyrics" && Lyrics.lines.length == 0: Text { text: Lyrics.state == LyricsState.instrumental ? "Instrumental track: LRCLIB lists no lyrics for it." : "No lyrics for this track yet."; color: Theme.fg-a3; wrap: word-wrap; }
+                if Drawer.tab == "lyrics" && Lyrics.lines.length == 0: EmptyState {
+                    icon: "music"; title: "No lyrics"; pad-top: 16px;
+                    sentence: Lyrics.state == LyricsState.instrumental ? "Instrumental track: LRCLIB lists no lyrics for it." : "No lyrics for this track yet.";
+                }
                 if Drawer.tab == "lyrics": VerticalLayout {
                     spacing: 2px;
                     // Synced lyrics of a file: click a line to jump there.

@@ -256,8 +256,8 @@ fn library_folders(r: &mut Rows) {
     if empty {
         r.push(
             "library.add",
-            "No folders yet. Add the folders that hold your videos and music.",
-            "",
+            "No folders yet",
+            "Add the folders that hold your videos and music. Vivi scans them, including sub-folders.",
             "empty",
             "Add folder".into(),
         );

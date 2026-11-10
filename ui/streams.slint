@@ -8,6 +8,7 @@ import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { TextField } from "core/controls.slint";
 import { Icons } from "core/icons.slint";
 import { FlatButton, PrimaryButton } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { Streams, StreamCard, StreamService } from "state/streams.slint";
 import { NowPlaying } from "state/now-playing.slint";
 import { MusicDialogState } from "state/music-dialog.slint";
@@ -98,15 +99,17 @@ export component StreamTile inherits Rectangle {
 export component StreamGrid inherits Rectangle {
     in property <[StreamCard]> cards;
     in property <bool> removable;
+    in property <string> empty-icon;
+    in property <string> empty-title;
     in property <string> empty-text;
     property <length> gap: 12px;
     property <length> inner: self.width - 14px;
     property <int> cols: max(1, floor((self.inner + self.gap) / (168px + self.gap)));
     property <length> tile-w: (self.inner - (self.cols - 1) * self.gap) / self.cols;
     property <length> tile-h: self.tile-w * 0.62 + 56px;
-    if root.cards.length == 0: Text {
-        y: 24px; width: parent.width; text: root.empty-text; color: Theme.fg-a3; font-size: Metrics.font-base;
-        horizontal-alignment: center; wrap: word-wrap;
+    if root.cards.length == 0: EmptyState {
+        width: parent.width;
+        icon: root.empty-icon; title: root.empty-title; sentence: root.empty-text;
     }
     ScrollView {
         content-height: ceil(root.cards.length / root.cols) * (root.tile-h + root.gap);
@@ -250,6 +253,7 @@ component UrlBar inherits Rectangle {
 // The Streams section of the Library.
 export component StreamsHub inherits VerticalLayout {
     callback command(string, string, string);
+    callback open-extensions();
     // Set by the Library while docked over the video (or in a small window): the tab
     // rows shrink to icons so the page stays inside the panel (#95).
     in property <bool> narrow;
@@ -274,10 +278,12 @@ export component StreamsHub inherits VerticalLayout {
     }
     if Streams.tab == "recent": StreamGrid {
         vertical-stretch: 1; cards: Streams.recent; removable: true;
+        empty-icon: "streaming"; empty-title: "No recent streams";
         empty-text: "Streams you play show here: radio, TV, links you paste and music services.";
     }
     if Streams.tab == "favorites": StreamGrid {
         vertical-stretch: 1; cards: Streams.favorites;
+        empty-icon: "favorite"; empty-title: "No favorites yet";
         empty-text: "Star a stream (★ on its card or in the now-playing card) to keep it here.";
     }
     if Streams.tab != "recent" && Streams.tab != "favorites" && Streams.page-owner != "" && MusicDialogState.page: Rectangle {
@@ -290,11 +296,15 @@ export component StreamsHub inherits VerticalLayout {
     }
     if Streams.tab != "recent" && Streams.tab != "favorites" && (Streams.page-owner == "" || !MusicDialogState.page): Rectangle {
         vertical-stretch: 1;
-        Text {
+        if Streams.tab == "music" && Streams.services.length == 0: EmptyState {
+            width: parent.width; icon: "music"; title: "No music services";
+            sentence: "Turn on Free Music or install YouTube Music in Extensions (Ctrl+E).";
+            primary-text: "Open Extensions";
+            primary => { root.open-extensions(); }
+        }
+        if !(Streams.tab == "music" && Streams.services.length == 0): Text {
             y: 24px; width: parent.width; horizontal-alignment: center; wrap: word-wrap; color: Theme.fg-a3; font-size: Metrics.font-base;
-            text: Streams.tab == "music" && Streams.services.length == 0
-                ? "No music services are on. Turn on Free Music or install YouTube Music in Extensions (Ctrl+E)."
-                : "Loading…";
+            text: "Loading…";
         }
     }
     if NowPlaying.show || NowPlaying.bar: NowBar { }

@@ -8,6 +8,7 @@ import { Dropdown, Toggle, Slider, Segmented, TextField, PathField, AdvancedBar 
 import { Icons } from "core/icons.slint";
 import { Modal } from "core/modal.slint";
 import { FlatButton, SecondaryButton, ButtonBase, ButtonKind, IconButton } from "core/buttons.slint";
+import { EmptyState } from "core/empty-state.slint";
 import { Badge, BadgeTone } from "core/rows.slint";
 
 export struct SettingRow {
@@ -21,7 +22,7 @@ export struct SettingRow {
     //   options = [version, author, icon key, source]) | "secret" (hidden text)
     // | "buttons" (title/info + one button per label; clicked label is the value)
     // | "folder" (Library folder: title = path, value = file count text; × sends (id, "run"))
-    // | "empty" (empty state of a card: title = text, value = button label sending (id, "run"))
+    // | "empty" (empty state of a card: title, info = sentence, value = button label sending (id, "run"))
     // A "header" with labels shows them as buttons on the right of its title; button i
     // sends (options[i], "run"). On Settings pages its info is a subtitle, not a tooltip.
     // | "package" (catalog card: title = name, info = description, value = "confirm"
@@ -198,7 +199,7 @@ export component Row inherits Rectangle {
     property <length> ctl-w: min(300px, (root.width - root.inset-l - root.inset-r) * 0.45);
     property <length> body: setting.kind == "plugin" ? 76px : setting.kind == "package" ? 104px
         : setting.kind == "header" ? (!root.in-card ? 48px : setting.info != "" ? 66px : 52px)
-        : setting.kind == "advanced" ? 56px : setting.kind == "folder" ? 52px : setting.kind == "empty" ? 92px
+        : setting.kind == "advanced" ? 56px : setting.kind == "folder" ? 52px : setting.kind == "empty" ? 248px
         : setting.kind == "slider" && setting.labels.length > 0 ? (root.in-card ? 62px : 58px)
         : root.in-card ? 48px : 42px;
     height: root.gap + root.body + root.tail;
@@ -267,12 +268,11 @@ export component Row inherits Rectangle {
         }
     }
     // Empty card: a line of text and the button that fills it.
-    if setting.kind == "empty": VerticalLayout {
-        y: root.gap; width: parent.width; height: root.body; padding-left: root.inset-l; padding-right: root.inset-r;
-        alignment: center; spacing: 12px;
-        Text { text: setting.title; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-alignment: center; wrap: word-wrap; }
-        HorizontalLayout { alignment: center;
-            SecondaryButton { text: setting.value; clicked => { root.changed(setting.id, "run"); } } }
+    if setting.kind == "empty": EmptyState {
+        y: root.gap; width: parent.width;
+        icon: "new_folder"; title: setting.title; sentence: setting.info;
+        primary-text: setting.value; pad-top: 16px;
+        primary => { root.changed(setting.id, "run"); }
     }
     if setting.kind != "header" && setting.kind != "advanced" && setting.kind != "plugin" && setting.kind != "package"
         && setting.kind != "folder" && setting.kind != "empty": HorizontalLayout {
@@ -456,7 +456,10 @@ export component SettingsDialog inherits Modal {
                 vertical-stretch: 1;
                 VerticalLayout {
                     alignment: start; padding-left: 24px; padding-right: 24px; padding-bottom: 24px;
-                    if root.rows.length == 0: Text { height: 40px; vertical-alignment: center; text: "No matching settings."; color: Theme.fg-a3; }
+                    if root.rows.length == 0: EmptyState {
+                        icon: "search"; title: "No matching settings";
+                        sentence: "Try a different search, or browse a category in the sidebar.";
+                    }
                     for r in root.rows: Row {
                         setting: r; advanced: root.advanced;
                         changed(id, v) => { root.changed(id, v); }

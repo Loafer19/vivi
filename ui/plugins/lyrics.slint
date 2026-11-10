@@ -4,6 +4,7 @@ import { Theme, Metrics, Icon, TriIcon } from "../core/theme.slint";
 import { TextField } from "../core/controls.slint";
 import { Modal } from "../core/modal.slint";
 import { FlatButton, PrimaryButton } from "../core/buttons.slint";
+import { EmptyState } from "../core/empty-state.slint";
 import { ScrollView } from "std-widgets.slint";
 
 // A clickable lyrics line: on a live stream click it, or focus it (Tab) and press Enter /
@@ -358,15 +359,17 @@ export component KaraokeView inherits Rectangle {
         if !root.plain: Rectangle { y: 0; height: 90px; background: @linear-gradient(180deg, Theme.stage 0%, Theme.stage.with-alpha(0) 100%); }
         if !root.plain: Rectangle { y: parent.height - 90px; height: 90px; background: @linear-gradient(180deg, Theme.stage.with-alpha(0) 0%, Theme.stage 100%); }
         // No lyrics yet.
-        if root.lines.length == 0: VerticalLayout {
-            alignment: center; spacing: 14px;
-            HorizontalLayout { alignment: center;
-                Rectangle { width: 76px; height: 76px; border-radius: self.height / 2; background: Theme.accent.with-alpha(0.14);
-                    TriIcon { width: 34px; height: 34px; name: "music"; tint: Theme.accent; } } }
-            Text { text: root.state == LyricsState.searching ? "Looking for lyrics…" : root.state == LyricsState.instrumental ? "Instrumental" : "No lyrics for this track"; color: Theme.stage-fg; font-size: Metrics.font-xxl; font-weight: 700; horizontal-alignment: center; }
-            Text { text: root.state == LyricsState.instrumental ? "LRCLIB lists this track as instrumental. If it has words, search for them." : "Search LRCLIB by artist and title, or put a .lrc file next to the song."; color: Theme.fg-a2; font-size: Metrics.font-base; horizontal-alignment: center; }
-            HorizontalLayout { alignment: center; padding-top: 6px;
-                KPill { primary: true; text: "Search lyrics…"; has-icon: true; icon: @image-url("../../assets/icons/search.svg"); clicked => { root.cmd("search-open", ""); } } }
+        if root.lines.length == 0 && root.state == LyricsState.searching: Text {
+            text: "Looking for lyrics…"; color: Theme.stage-fg; font-size: Metrics.font-lg;
+            horizontal-alignment: center; vertical-alignment: center;
+            width: parent.width; height: parent.height;
+        }
+        if root.lines.length == 0 && root.state != LyricsState.searching: EmptyState {
+            width: parent.width; height: parent.height;
+            icon: "music"; title: "No lyrics";
+            sentence: root.state == LyricsState.instrumental ? "Instrumental track: LRCLIB lists no lyrics for it." : "No lyrics for this track yet.";
+            primary-text: "Search lyrics…";
+            primary => { root.cmd("search-open", ""); }
         }
     }
 
