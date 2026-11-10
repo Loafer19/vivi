@@ -1,0 +1,124 @@
+// Bottom playback bar: every element is a movable item (Customize Player).
+// Compact / Waveform / Plain: one row with the seekbar inline where "seek" sits.
+// Classic: the seekbar spans a row on top and "seek" becomes a flexible gap.
+import { Theme, Metrics } from "../core/theme.slint";
+import { IconButton, ButtonSize } from "../core/buttons.slint";
+import { BarMetrics } from "../core/types.slint";
+import { Playback } from "../state/playback.slint";
+import { Customize } from "../state/customize.slint";
+import { Bookmarks } from "../state/bookmarks.slint";
+import { AutoHide } from "../state/autohide.slint";
+import { Icons } from "../core/icons.slint";
+import { SeekBar } from "seek-bar.slint";
+import { BarItem } from "bar-item.slint";
+
+export component BottomBar inherits Rectangle {
+    in property <float> reveal;
+    in property <length> win-h;
+    in property <BarMetrics> bar;
+    in property <int> bar-fit;
+    in property <bool> bar-has-volume;
+    in property <bool> fullscreen;
+    callback focused();
+    callback activity();
+    callback hovered(bool);
+    callback more();
+    callback act(string);
+    pure callback is-core(string) -> bool;
+    pure callback bar-active(string) -> bool;
+    pure callback fmt(float) -> string;
+
+    background: Theme.dark ? Theme.panel(#181818, 0.95) : Theme.panel(Theme.bar-solid, 0.94);
+    y: root.win-h - self.height + (AutoHide.anim == 2 ? (1 - root.reveal) * self.height : 0);
+    height: root.bar.height;
+    opacity: AutoHide.anim == 1 ? root.reveal : 1;
+
+    // Swallows clicks so they don't toggle play, and holds the bar's controls so it
+    // stays hovered while the pointer is on one of them.
+    TouchArea {
+    init => { root.hovered(false); }
+    changed has-hover => { root.hovered(self.has-hover); root.activity(); }
+    Rectangle { y: 0; height: 1px; background: Theme.bar-line; }
+    VerticalLayout {
+        padding-left: root.bar.pad-x-left; padding-right: root.bar.pad-x-right;
+        padding-top: root.bar.pad-top; padding-bottom: root.bar.pad-bottom;
+        spacing: 2px;
+        if root.bar.classic: SeekBar {
+            position: Playback.position; duration: Playback.duration;
+            frames: Playback.preview-frames;
+            chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
+            ab-set(x, y) => { Playback.set-ab(x, y); }
+            fmt(t) => { root.fmt(t) }
+            seek(t) => { Playback.seek(t); root.focused(); }
+        }
+        HorizontalLayout {
+            spacing: root.bar.gap;
+            for id[i] in Customize.bar-items: HorizontalLayout {
+                property <bool> on: i >= Customize.bar-cum.length || Customize.bar-cum[i] < 0 || Customize.bar-cum[i] <= root.bar-fit;
+                property <bool> ab: Playback.ab-a >= 0 && Playback.ab-b >= 0;
+                horizontal-stretch: id == "seek" || id == "spacer" ? 1 : 0;
+                spacing: 2px;
+                if id == "prev": IconButton { tab-focus: false; bar: true; size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; tip: "Previous"; duo: "previous"; clicked => { Playback.prev(); } }
+                if id == "play": IconButton { tab-focus: false; bar: true; size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; primary: true; tip: Playback.playing ? "Pause" : "Play"; duo: Playback.playing ? "pause" : "play"; clicked => { Playback.toggle-play(); root.focused(); } }
+                if id == "next": IconButton { tab-focus: false; bar: true; size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; tip: "Next"; duo: "next"; clicked => { Playback.next(); } }
+                if on && id == "back10": IconButton { tab-focus: false; bar: true; size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; tip: "Back 10 s"; duo: "backward-10-sec"; clicked => { Playback.seek(max(0, Playback.position - 10)); root.focused(); } }
+                if on && id == "fwd10": IconButton { tab-focus: false; bar: true; size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; tip: "Forward 10 s"; duo: "forward-10-sec"; clicked => { Playback.seek(min(Playback.duration, Playback.position + 10)); root.focused(); } }
+                if id == "time": HorizontalLayout {
+                    padding-left: 8px; padding-right: 6px; spacing: 4px;
+                    Text {
+                        text: ab ? "*" + fmt(Playback.ab-a) : fmt(Playback.position);
+                        color: ab ? Theme.accent-bright : (root.bar.classic ? Theme.fg-1 : Theme.fg-a2);
+                        font-size: Metrics.font-sm; vertical-alignment: center;
+                    }
+                    if ab: Text {
+                        text: "‹"; color: na.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
+                        na := TouchArea { accessible-role: button; accessible-label: "Loop start 0.5 s earlier"; mouse-cursor: pointer; clicked => { Playback.set-ab(max(0, Playback.ab-a - 0.5), Playback.ab-b); } }
+                    }
+                }
+                if id == "duration": HorizontalLayout {
+                    padding-left: 6px; padding-right: 6px; spacing: 4px;
+                    if ab: Text {
+                        text: "›"; color: nb.has-hover ? Theme.accent-bright : Theme.fg-a2; font-size: Metrics.font-h3; vertical-alignment: center; width: 14px; horizontal-alignment: center;
+                        nb := TouchArea { accessible-role: button; accessible-label: "Loop end 0.5 s later"; mouse-cursor: pointer; clicked => { Playback.set-ab(Playback.ab-a, min(Playback.duration, Playback.ab-b + 0.5)); } }
+                    }
+                    Text {
+                        text: ab ? "*" + fmt(Playback.ab-b) : fmt(Playback.duration);
+                        color: ab ? Theme.accent-bright : Theme.fg-a2;
+                        font-size: Metrics.font-sm; vertical-alignment: center;
+                    }
+                    if ab: IconButton { tab-focus: false; size: true ? ButtonSize.sm : ButtonSize.md; tip: "Clear A-B range"; icon: @image-url("../../assets/icons/close.svg"); clicked => { Playback.set-ab(-1, -1); root.focused(); } }
+                }
+                // Centred on the row (a fixed-height child would sit at the top).
+                if id == "seek" && !root.bar.classic: VerticalLayout { alignment: center; horizontal-stretch: 1; SeekBar {
+                    horizontal-stretch: 1;
+                    height: Playback.wave-peaks.length > 0 ? Metrics.bar-wave-h : Metrics.bar-track-h;
+                    boxed: root.bar.boxed;
+                    track-h: 4px;
+                    position: Playback.position; duration: Playback.duration;
+                    frames: Playback.preview-frames; peaks: Playback.wave-peaks;
+                    chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
+                    ab-set(x, y) => { Playback.set-ab(x, y); }
+                    fmt(t) => { root.fmt(t) }
+                    seek(t) => { Playback.seek(t); root.focused(); }
+                } }
+                if id == "spacer" || (id == "seek" && root.bar.classic): Rectangle { horizontal-stretch: 1; }
+                // A plugin's button (`controlbar.button`), when the user added it in Customize.
+                if on && i < Customize.bar-meta.length && Customize.bar-meta[i].label != "": IconButton { tab-focus: false; bar: true;
+                    size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; tip: Customize.bar-meta[i].label;
+                    duo: Icons.plugin-duo(Customize.bar-meta[i].icon);
+                    clicked => { root.act(id); root.focused(); }
+                }
+                if on && !root.is-core(id) && (i >= Customize.bar-meta.length || Customize.bar-meta[i].label == ""): BarItem {
+                    id: id; compact: !root.bar.classic; wide: root.bar-has-volume; active: root.bar-active(id); vstyle: Customize.vol-style; boxed: root.bar.boxed; muted: Playback.muted; volume: Playback.volume; volume-max: Playback.volume-max; fullscreen: root.fullscreen;
+                    act(x) => { root.act(x); root.focused(); }
+                    volume-changed(v) => { Playback.volume = v; Playback.volume-changed(v); }
+                }
+            }
+            if Customize.bar-slots > root.bar-fit: IconButton { tab-focus: false; bar: true;
+                size: !root.bar.classic ? ButtonSize.sm : ButtonSize.md; duo: "more"; tip: "More";
+                clicked => { root.more(); }
+            }
+        }
+    }
+    }
+}

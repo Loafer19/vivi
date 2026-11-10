@@ -1,0 +1,85 @@
+// Transient notices drawn over the player: the network loading spinner, the stream
+// error banner and the extension hint above the seek bar.
+import { Theme, Metrics } from "../core/theme.slint";
+import { PrimaryButton, FlatButton, ButtonSize } from "../core/buttons.slint";
+import { Notices } from "../state/notices.slint";
+import { Playback } from "../state/playback.slint";
+
+export component LoadingOverlay inherits Rectangle {
+    background: transparent;
+    VerticalLayout {
+        alignment: center; spacing: 14px;
+        HorizontalLayout { alignment: center;
+            Rectangle { width: 48px; height: 48px;
+                Image {
+                    width: 48px; height: 48px; source: @image-url("../../assets/icons/spinner.svg");
+                    colorize: Theme.accent;
+                    transform-rotation: mod(animation-tick() / 1ms, 1000) * 0.36deg;
+                }
+            }
+        }
+        Text { text: Notices.loading-buffering ? "Buffering…" : "Opening…"; color: Theme.fg-a2; font-size: Metrics.font-md; horizontal-alignment: center; }
+        Text { text: Notices.loading-name; color: Theme.fg-1; font-size: Metrics.font-h3; horizontal-alignment: center; overflow: elide; }
+    }
+}
+
+export component StreamErrorBanner inherits Rectangle {
+    in property <length> win-w;
+    in property <length> win-h;
+    in property <length> bar-h;
+
+    width: min(se.preferred-width + se-actions.preferred-width + 52px, root.win-w - 32px); height: 48px;
+    x: (root.win-w - self.width) / 2;
+    y: root.win-h - root.bar-h - self.height - 16px;
+    border-radius: Metrics.radius-xxl; background: Theme.bar;
+    // Click the message to dismiss it.
+    TouchArea { accessible-role: button; accessible-label: "Dismiss: " + Notices.stream-error; clicked => { Notices.stream-error = ""; } }
+    HorizontalLayout {
+        padding-left: 20px; padding-right: 10px; spacing: 12px;
+        se := Text { text: Notices.stream-error; color: Theme.err; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        se-actions := HorizontalLayout {
+            alignment: center; spacing: Metrics.space-1; horizontal-stretch: 0;
+            if Notices.stream-url != "": FlatButton {
+                y: (48px - self.height) / 2; size: ButtonSize.sm; text: "Retry";
+                clicked => { Notices.stream-error = ""; Playback.open-url(Notices.stream-url); }
+            }
+            FlatButton {
+                y: (48px - self.height) / 2; size: ButtonSize.sm; text: Notices.stream-copied ? "Copied ✓" : "Copy";
+                clicked => { se-copy.select-all(); se-copy.copy(); se-copy.clear-selection(); Notices.stream-copied = true; }
+            }
+        }
+    }
+    // Invisible carrier for the clipboard copy (message and URL).
+    se-copy := TextInput {
+        height: 0px; visible: false; read-only: true;
+        text: Notices.stream-url != "" ? Notices.stream-error + "\n" + Notices.stream-url : Notices.stream-error;
+    }
+}
+
+export component HintToast inherits Rectangle {
+    in property <length> win-w;
+    in property <length> win-h;
+    in property <length> bar-h;
+    callback focused();
+
+    width: min(hint.preferred-width, root.win-w - 32px); height: 44px;
+    x: (root.win-w - self.width) / 2;
+    y: root.win-h - root.bar-h - self.height - (Notices.resume-text != "" ? 84px : 40px);
+    border-radius: Metrics.radius-xxl;
+    background: Theme.bar;
+    border-width: 1px; border-color: Theme.divider;
+    TouchArea { } // keep clicks off the video
+    hint := HorizontalLayout {
+        padding-left: Metrics.space-4; padding-right: Metrics.space-2; spacing: Metrics.space-4;
+        Text { text: Notices.hint-text; color: Theme.fg-2; font-size: Metrics.font-base; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        HorizontalLayout {
+            spacing: Metrics.space-1; horizontal-stretch: 0;
+            VerticalLayout { alignment: center;
+                PrimaryButton { size: ButtonSize.sm; text: Notices.hint-action; clicked => { Notices.hint-accept(); root.focused(); } }
+            }
+            VerticalLayout { alignment: center;
+                FlatButton { size: ButtonSize.sm; text: "Don't show again"; clicked => { Notices.hint-never(); root.focused(); } }
+            }
+        }
+    }
+}

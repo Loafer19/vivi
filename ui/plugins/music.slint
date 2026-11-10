@@ -1,0 +1,519 @@
+// Shared music-plugin dialog body (Free Music, Network Streams, Auto-tagger) and the now-playing card.
+
+import { Theme, Metrics, Icon, TriIcon } from "../core/theme.slint";
+import { Item } from "../core/types.slint";
+import { Dropdown, TextField, EdgeFades } from "../core/controls.slint";
+import { FlatButton } from "../core/buttons.slint";
+import { MeterBar } from "../core/rows.slint";
+import { ScrollView } from "std-widgets.slint";
+import { ViewButton } from "subtitles.slint";
+
+// Grid tile of the station browser: the logo (or a radio icon) with the name under it
+// (two lines, then elided; the full name in the tooltip).
+component StationTile inherits Rectangle {
+    in property <Item> item;
+    in property <image> logo;
+    in property <length> logo-h;
+    callback clicked();
+    callback activated();
+    border-radius: Metrics.radius-lg;
+    background: item.selected ? Theme.accent.with-alpha(0.14) : ta.has-hover ? Theme.bg-a1 : Theme.bg-a3;
+    border-width: 1px; border-color: item.selected ? Theme.accent.with-alpha(0.6) : transparent;
+    Rectangle {
+        x: 8px; y: 8px; width: parent.width - 16px; height: root.logo-h;
+        border-radius: Metrics.radius-md; background: Theme.bg-b1; clip: true;
+        if root.logo.width > 0: Image { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; source: root.logo; image-fit: contain; }
+        if root.logo.width == 0: TriIcon {
+            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; width: 36px; height: 36px; tint: Theme.fg-a3;
+            base: @image-url("../../assets/icons/layers/streaming-twotone-b.svg"); accent: @image-url("../../assets/icons/layers/streaming-twotone-a.svg"); dim: @image-url("../../assets/icons/layers/streaming-twotone-d.svg");
+        }
+    }
+    Text {
+        x: 8px; y: root.logo-h + 14px; width: parent.width - 16px; height: parent.height - root.logo-h - 20px;
+        text: root.item.key; wrap: word-wrap; overflow: elide;
+        horizontal-alignment: center; vertical-alignment: top;
+        color: Theme.fg-1; font-size: Metrics.font-sm;
+    }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.item.key + ", " + root.item.label; accessible-item-selected: root.item.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+    Tooltip { text: @markdown("\{root.item.key}"); }
+}
+
+// Free Music result row (src/plugins/free_music.rs): cover, title, artist · album,
+// source badge, licence chip (green when commercial use is allowed), duration. `bar`:
+// a native 0–1 bar under the title (plugin dialog rows, `"bar"`), < 0 for none.
+export struct FmRow { title: string, sub: string, badge: string, lic: string, free: bool, dur: string, cover: image, has-cover: bool, dl: bool, saved: bool, selected: bool, bar: float }
+// A dropdown filter of the shared music dialog (Free Music: mood, licence, length, sort).
+export struct MdFilter { name: string, options: [string], value: string }
+
+component TrackRow inherits Rectangle {
+    in property <FmRow> fm;
+    in property <bool> actions: true; // per-row play / queue / download (off in info dialogs)
+    callback clicked();
+    callback activated();
+    callback play();
+    callback queue();
+    callback download();
+    height: 52px; border-radius: Metrics.radius-md;
+    background: fm.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
+    HorizontalLayout {
+        padding-left: 6px; padding-right: 10px; spacing: 10px;
+        Rectangle {
+            y: 6px; width: 40px; height: 40px; border-radius: Metrics.radius-sm; clip: true;
+            background: Theme.accent.with-alpha(0.15);
+            if root.fm.has-cover: Image { width: parent.width; height: parent.height; source: root.fm.cover; image-fit: cover; }
+            if !root.fm.has-cover: TriIcon { x: 10px; y: 10px; width: 20px; height: 20px; name: "music"; tint: Theme.accent; }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1; alignment: center; spacing: 2px;
+            Text { text: root.fm.title; color: fm.selected ? Theme.accent-bright : Theme.fg-1; font-size: Metrics.font-md; font-weight: 600; overflow: elide; }
+            if root.fm.sub != "" || root.fm.bar < 0: Text { text: root.fm.sub; color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
+            if root.fm.bar >= 0: MeterBar { value: root.fm.bar; label: root.fm.title + " " + root.fm.dur; }
+        }
+        if root.fm.badge != "": VerticalLayout { alignment: center;
+            Rectangle {
+                width: bt.preferred-width + 12px; height: 18px; border-radius: self.height / 2;
+                background: root.fm.badge == "Jamendo" ? Theme.info-bg.with-alpha(0.25) : root.fm.badge == "FMA" ? Theme.tag-pink.with-alpha(0.25) : Theme.neutral-bg.with-alpha(0.19);
+                bt := Text { text: root.fm.badge; color: Theme.fg-2; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+        if root.fm.lic != "": VerticalLayout { alignment: center;
+            Rectangle {
+                width: max(64px, lt.preferred-width + 12px); height: 18px; border-radius: self.height / 2;
+                border-width: 1px; border-color: root.fm.free ? Theme.ok : Theme.divider;
+                background: root.fm.free ? Theme.ok-bg.with-alpha(0.18) : transparent;
+                lt := Text { text: root.fm.lic; color: root.fm.free ? Theme.ok : Theme.fg-a2; font-size: Metrics.font-micro; horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+        if root.fm.saved: VerticalLayout { alignment: center; Icon { width: 18px; height: 18px; source: @image-url("../../assets/icons/check-active.svg"); tint: Theme.ok; } }
+        Text { width: 40px; text: root.fm.dur; color: Theme.fg-a3; font-size: Metrics.font-sm; horizontal-alignment: right; vertical-alignment: center; }
+        if root.actions: HorizontalLayout { spacing: 10px;
+        for b[k] in [
+            { icon: @image-url("../../assets/icons/play.svg"), tip: "Play", on: true },
+            { icon: @image-url("../../assets/icons/queue.svg"), tip: "Add to queue", on: true },
+            { icon: @image-url("../../assets/icons/arrow-down.svg"), tip: "Download", on: root.fm.dl },
+        ]: Rectangle {
+            y: 12px; width: 28px; height: 28px; border-radius: self.height / 2;
+            opacity: (ta.has-hover || root.fm.selected) ? (b.on ? 1 : 0.3) : (k == 2 && b.on ? 0.45 : 0);
+            background: bta.has-hover && b.on ? Theme.accent.with-alpha(0.25) : transparent;
+            Icon { x: 6px; y: 6px; width: 16px; height: 16px; source: b.icon; tint: bta.has-hover ? Theme.accent-bright : Theme.fg-a2; }
+            bta := TouchArea { enabled: b.on; accessible-role: button; accessible-label: b.tip + ": " + root.fm.title; mouse-cursor: pointer;
+                clicked => { if k == 0 { root.play(); } else if k == 1 { root.queue(); } else { root.download(); } } }
+        }
+        }
+    }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub + (root.fm.saved ? ", downloaded" : ""); accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } z: -1; mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
+// Cover tile of the rich music dialog's grid (YouTube Music): square cover, title,
+// artist · album and the source badge.
+component CoverTile inherits Rectangle {
+    in property <FmRow> fm;
+    in property <length> cover-h;
+    callback clicked();
+    callback activated();
+    border-radius: Metrics.radius-md;
+    background: fm.selected ? Theme.bg-a1 : ta.has-hover ? Theme.bg-a1.mix(Theme.bg-a3, 50%) : transparent;
+    Rectangle {
+        x: 8px; y: 8px; width: parent.width - 16px; height: root.cover-h; border-radius: Metrics.radius-sm; clip: true;
+        background: Theme.accent.with-alpha(0.15);
+        if root.fm.has-cover: Image { width: parent.width; height: parent.height; source: root.fm.cover; image-fit: cover; }
+        if !root.fm.has-cover: TriIcon { x: (parent.width - 32px) / 2; y: (parent.height - 32px) / 2; width: 32px; height: 32px; name: "music"; tint: Theme.accent; }
+        if root.fm.badge != "": Rectangle {
+            x: 6px; y: 6px; width: tb.preferred-width + 12px; height: 18px; border-radius: self.height / 2;
+            background: Theme.bg-a3.with-alpha(0.85);
+            tb := Text { text: root.fm.badge; color: Theme.fg-1; font-size: Metrics.font-micro; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        // Downloaded already (offline copy).
+        if root.fm.saved: Rectangle {
+            x: parent.width - self.width - 6px; y: 6px; width: 22px; height: 22px; border-radius: self.height / 2;
+            background: Theme.bg-a3.with-alpha(0.85);
+            Icon { x: 3px; y: 3px; width: 16px; height: 16px; source: @image-url("../../assets/icons/check-active.svg"); tint: Theme.ok; }
+        }
+    }
+    Text { x: 8px; y: root.cover-h + 14px; width: parent.width - 16px; text: root.fm.title; color: fm.selected ? Theme.accent-bright : Theme.fg-1; font-size: Metrics.font-sm; font-weight: 600; overflow: elide; }
+    Text { x: 8px; y: root.cover-h + 32px; width: parent.width - 16px; text: root.fm.sub; color: Theme.fg-a2; font-size: Metrics.font-micro; overflow: elide; }
+    ta := TouchArea { accessible-role: list-item; accessible-label: root.fm.title + ", " + root.fm.sub + (root.fm.saved ? ", downloaded" : ""); accessible-item-selected: root.fm.selected; accessible-action-default => { root.activated(); } mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.activated(); } }
+}
+
+// List / grid toggle of the plugin dialog: in the modal's title row, or at the end of the
+// search row on a page.
+component ViewToggle inherits HorizontalLayout {
+    in property <bool> grid;
+    callback view(bool);
+    alignment: center; spacing: 2px; padding-right: 8px;
+    VerticalLayout { alignment: center;
+        ViewButton { label: "List view"; active: !root.grid; clicked => { root.view(false); }
+            base: @image-url("../../assets/icons/layers/list-twotone-b.svg"); accent: @image-url("../../assets/icons/layers/list-twotone-a.svg"); dim: @image-url("../../assets/icons/layers/list-twotone-d.svg"); } }
+    VerticalLayout { alignment: center;
+        ViewButton { label: "Grid view"; active: root.grid; clicked => { root.view(true); }
+            base: @image-url("../../assets/icons/layers/grid-twotone-b.svg"); accent: @image-url("../../assets/icons/layers/grid-twotone-a.svg"); dim: @image-url("../../assets/icons/layers/grid-twotone-d.svg"); } }
+}
+
+// Shared dialog body of the music plugins (Auto-tagger, Free Music, Network Streams,
+// package dialogs): optional source dropdown, query + search button, result list, a
+// detail pane (tag diff or licence), status line and two actions. The owner plugin id
+// routes the callbacks (ui/music-pane.slint binds it to MusicDialogState). Shown in a
+// Modal, or as a full-width Library page (`page`, Streams hub #86): no title row (the
+// Library header has the breadcrumb and back arrow), no Close button.
+export component MusicBody inherits Rectangle {
+    in property <bool> page;
+    in property <string> title;
+    in property <[Item]> results;
+    in property <[image]> logos;
+    in property <string> status;
+    in property <bool> busy;
+    in property <string> detail;
+    in property <image> detail-cover;  // optional large cover above the detail text
+    in property <bool> has-detail-cover;
+    in property <string> placeholder;
+    in property <string> search-label: "Search";
+    in property <string> primary-text;
+    in property <string> secondary-text;
+    in property <[string]> sources;
+    in-out property <string> source;
+    in-out property <string> query;
+    in property <[string]> chips;   // optional filter chips (Network Streams groups / categories)
+    in property <string> chip;
+    in property <[string]> actions; // optional extra footer buttons
+    in property <[FmRow]> tracks;     // Free Music rows (replace `results` rendering when set)
+    in property <bool> rich;          // render `tracks` (Free Music)
+    in property <[MdFilter]> filters; // optional dropdown filters under the chips
+    // Info-only plugin dialog (`"info_only": true`): no search row, no per-row play / queue,
+    // Enter / double-click only select, empty footer buttons are hidden.
+    in property <bool> info-only;
+    in property <string> copy-text;   // text the "Copy credit" action puts on the clipboard
+    in property <bool> has-more;      // scrolling to the end asks for more
+    in property <bool> can-grid;      // list / grid toggle in the header (Network Streams)
+    in property <bool> grid;          // results as logo tiles
+    callback view(bool);              // the toggle: true = grid
+    callback chip-clicked(string);
+    callback filter(string, string);
+    callback more();
+    // Rows / tiles on screen (first index, count) of the rich list, so the owner decodes
+    // only their covers; delegates outside it (plus a margin) are not created.
+    callback window(int, int);
+    callback edited();
+    callback action(string, int);
+    callback search();
+    callback select(int);
+    callback primary(int);
+    callback secondary(int);
+    callback close();
+    // Highlighted result. Bound to MusicDialogState.selected, so an owner that re-sorts or
+    // replaces its rows (Free Music) keeps the highlight on the same item, or clears it.
+    in-out property <int> selected: -1;
+    init => { root.selected = -1; }
+    VerticalLayout {
+        // Modal only: on a page the Library header already shows the title (breadcrumb)
+        // and the back arrow, and the list / grid toggle moves into the search row.
+        if !root.page: Rectangle {
+            height: 44px; background: Theme.bg-a3;
+            HorizontalLayout {
+                padding-left: 16px; padding-right: 8px; spacing: 8px;
+                Text { horizontal-stretch: 1; text: root.title; color: Theme.fg-1; font-size: Metrics.font-base; vertical-alignment: center; }
+                if root.can-grid: ViewToggle { grid: root.grid; view(g) => { root.view(g); } }
+                VerticalLayout { alignment: center;
+                    Rectangle { width: 30px; height: 30px; border-radius: Metrics.radius-sm; background: mx.has-hover ? Theme.bg-a1 : transparent;
+                        Icon { width: 16px; height: 16px; source: @image-url("../../assets/icons/close.svg"); }
+                        mx := TouchArea { accessible-role: button; accessible-label: "Close"; mouse-cursor: pointer; clicked => { root.close(); } } } }
+            }
+        }
+        if !root.info-only: HorizontalLayout {
+            padding: 12px; spacing: 8px;
+            if root.sources.length > 0: Dropdown {
+                width: 180px; options: root.sources; value: root.source;
+                selected(i, o) => { root.source = o; }
+            }
+            Rectangle {
+                horizontal-stretch: 1; height: 36px; border-radius: Metrics.radius-md; background: Theme.field;
+                TriIcon { x: 8px; width: 18px; height: 18px; name: "search"; tint: Theme.fg-a3; }
+                TextField {
+                    x: 28px; width: parent.width - 30px; height: parent.height; background: transparent;
+                    text <=> root.query; placeholder: root.placeholder;
+                    accepted => { root.selected = -1; root.search(); }
+                    edited => { root.edited(); }
+                }
+            }
+            FlatButton { height: 36px; text: root.busy ? "…" : root.search-label; enabled: !root.busy; clicked => { root.selected = -1; root.search(); } }
+            if root.page && root.can-grid: ViewToggle { grid: root.grid; view(g) => { root.view(g); } }
+        }
+        if root.info-only: Rectangle { height: 12px; }
+        // Filter chips: one row that scrolls sideways (drag or wheel) with faded edges when
+        // it overflows; long labels elide at 180 px and show in full in a tooltip.
+        if root.chips.length > 0: Rectangle {
+            height: 34px;
+            chip-fl := Flickable {
+                x: 12px; y: 0; width: parent.width - 24px; height: 28px;
+                content-width: max(self.width, chip-row.preferred-width);
+                // The mouse wheel scrolls the row sideways.
+                TouchArea {
+                    x: 0; y: 0; width: chip-fl.content-width; height: chip-fl.height;
+                    scroll-event(e) => {
+                        if chip-fl.content-width <= chip-fl.width { return reject; }
+                        chip-fl.content-x = max(chip-fl.width - chip-fl.content-width, min(0, chip-fl.content-x + (abs(e.delta-y) > abs(e.delta-x) ? e.delta-y : e.delta-x)));
+                        accept
+                    }
+                }
+                chip-row := HorizontalLayout {
+                    x: 0; y: 0; height: 26px; spacing: 6px; alignment: start;
+                    for c in root.chips: Rectangle {
+                        width: min(180px, ct.preferred-width + 20px); height: 26px; border-radius: self.height / 2;
+                        background: c == root.chip ? Theme.accent.with-alpha(0.30) : (cta.has-hover ? Theme.bg-a1 : Theme.bg-a3);
+                        border-width: 1px; border-color: c == root.chip ? Theme.accent : transparent;
+                        ct := Text { x: 10px; width: parent.width - 20px; text: c; color: c == root.chip ? Theme.fg-1 : Theme.fg-a2; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; overflow: elide; }
+                        cta := TouchArea { accessible-role: button; accessible-label: c; accessible-checked: c == root.chip; mouse-cursor: pointer; clicked => { root.selected = -1; root.chip-clicked(c); } }
+                        if ct.preferred-width > ct.width + 1px: Tooltip { text: @markdown("\{c}"); }
+                    }
+                }
+            }
+            EdgeFades { x: 12px; y: 0; width: parent.width - 24px; height: 28px; viewport-x: chip-fl.content-x; viewport-width: chip-fl.content-width; base: Theme.bg-a4; }
+        }
+        if root.filters.length > 0: HorizontalLayout {
+            padding-left: 12px; padding-right: 12px; padding-bottom: 8px; spacing: 8px;
+            for f in root.filters: Dropdown {
+                horizontal-stretch: 1; height: 32px; options: f.options; value: f.value;
+                selected(i, o) => { root.selected = -1; root.filter(f.name, o); }
+            }
+        }
+        HorizontalLayout {
+            vertical-stretch: 1; padding-left: 12px; padding-right: 12px; spacing: 12px;
+            Rectangle {
+                horizontal-stretch: root.rich ? 5 : 3;
+                // Rich rows (Free Music, YouTube Music) or cover tiles (YouTube Music, when the
+                // owner allows a grid). Same keys as below; scrolling near the end loads more.
+                if root.rich: rk := FocusScope {
+                    accessible-role: list;
+                    accessible-label: root.grid ? "Results, grid" : "Results";
+                    property <length> gap: 10px;
+                    property <length> inner: sv.width - 14px;
+                    property <int> cols: max(1, floor((self.inner + self.gap) / (160px + self.gap)));
+                    property <length> tile-w: (self.inner - (self.cols - 1) * self.gap) / self.cols;
+                    property <length> tile-h: self.tile-w - 16px + 60px;
+                    property <length> row-h: root.grid ? self.tile-h : 52px;
+                    property <length> stride: root.grid ? self.tile-h + self.gap : 54px;
+                    property <int> n: root.tracks.length;
+                    property <bool> g: root.grid;
+                    changed g => { self.reveal(root.selected); }
+                    // Virtualized: only rows / tiles near the viewport exist (1000+ liked songs).
+                    property <int> per-line: root.grid ? self.cols : 1;
+                    property <int> win-first: max(0, floor(-sv.content-y / self.stride)) * self.per-line;
+                    property <int> win-count: (ceil(sv.visible-height / self.stride) + 1) * self.per-line;
+                    property <int> lo: self.win-first - 4 * self.per-line;
+                    property <int> hi: self.win-first + self.win-count + 4 * self.per-line;
+                    changed win-first => { root.window(self.win-first, self.win-count); }
+                    changed win-count => { root.window(self.win-first, self.win-count); }
+                    init => { root.window(self.win-first, self.win-count); }
+                    function line(i: int) -> int { return root.grid ? floor(i / self.cols) : i; }
+                    function reveal(i: int) {
+                        if i < 0 { return; }
+                        if self.line(i) * self.stride < -sv.content-y {
+                            sv.content-y = -self.line(i) * self.stride;
+                        } else if self.line(i) * self.stride + self.row-h > -sv.content-y + sv.visible-height {
+                            sv.content-y = -(self.line(i) * self.stride + self.row-h - sv.visible-height);
+                        }
+                    }
+                    function go(i: int) {
+                        root.selected = max(0, min(self.n - 1, i));
+                        root.select(root.selected);
+                        self.reveal(root.selected);
+                    }
+                    key-pressed(e) => {
+                        if self.n == 0 { return reject; }
+                        if e.text == Key.DownArrow { self.go(root.selected < 0 ? 0 : root.selected + (root.grid ? self.cols : 1)); return accept; }
+                        if e.text == Key.UpArrow { self.go(root.selected < 0 ? 0 : root.selected - (root.grid ? self.cols : 1)); return accept; }
+                        if root.grid && e.text == Key.RightArrow { self.go(root.selected + 1); return accept; }
+                        if root.grid && e.text == Key.LeftArrow { self.go(root.selected < 0 ? 0 : root.selected - 1); return accept; }
+                        if e.text == Key.Home { self.go(0); return accept; }
+                        if e.text == Key.End { self.go(self.n - 1); return accept; }
+                        if e.text == Key.Return && root.selected >= 0 && !root.info-only { root.primary(root.selected); return accept; }
+                        reject
+                    }
+                    property <length> content-h: (root.grid
+                        ? max(0, ceil(self.n / self.cols) * self.stride - self.gap)
+                        : max(0, self.n * self.stride - 2px)) + (root.has-more ? 40px : 0);
+                    sv := ScrollView {
+                        content-height: rk.content-h;
+                        changed content-y => {
+                            if root.has-more && self.content-height > self.visible-height
+                                && -self.content-y > self.content-height - self.visible-height - 160px { root.more(); }
+                        }
+                        if !root.grid: Rectangle {
+                            x: 0; y: 0; width: rk.inner; height: rk.content-h;
+                            for r[i] in root.tracks: Rectangle {
+                                x: 0; y: i * rk.stride; width: rk.inner; height: 52px;
+                                if i >= rk.lo && i < rk.hi: TrackRow {
+                                    width: parent.width;
+                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, saved: r.saved, selected: r.selected || i == root.selected, bar: r.bar };
+                                    actions: !root.info-only;
+                                    clicked => { rk.focus(); root.selected = i; root.select(i); }
+                                    activated => { root.selected = i; root.select(i); if !root.info-only { root.primary(i); } }
+                                    play => { root.selected = i; root.select(i); root.primary(i); }
+                                    queue => { root.action("Queue", i); }
+                                    download => { root.selected = i; root.select(i); root.secondary(i); }
+                                }
+                            }
+                            if root.has-more: Rectangle { x: 0; y: rk.content-h - 40px; width: rk.inner; height: 40px;
+                                Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
+                                TouchArea { accessible-role: button; accessible-label: "Load more"; mouse-cursor: pointer; clicked => { root.more(); } }
+                            }
+                        }
+                        if root.grid: Rectangle {
+                            x: 0; y: 0; width: rk.inner; height: rk.content-h;
+                            for r[i] in root.tracks: Rectangle {
+                                x: mod(i, rk.cols) * (rk.tile-w + rk.gap); y: floor(i / rk.cols) * rk.stride;
+                                width: rk.tile-w; height: rk.tile-h;
+                                if i >= rk.lo && i < rk.hi: CoverTile {
+                                    width: parent.width; height: parent.height; cover-h: rk.tile-w - 16px;
+                                    fm: { title: r.title, sub: r.sub, badge: r.badge, lic: r.lic, free: r.free, dur: r.dur, cover: r.cover, has-cover: r.has-cover, dl: r.dl, saved: r.saved, selected: r.selected || i == root.selected, bar: r.bar };
+                                    clicked => { rk.focus(); root.selected = i; root.select(i); }
+                                    activated => { root.selected = i; root.select(i); root.primary(i); }
+                                }
+                            }
+                            if root.has-more: Rectangle { x: 0; y: rk.content-h - 40px; width: rk.inner; height: 40px;
+                                Text { text: "Load more"; color: Theme.accent; font-size: Metrics.font-sm; horizontal-alignment: center; vertical-alignment: center; }
+                                TouchArea { accessible-role: button; accessible-label: "Load more"; mouse-cursor: pointer; clicked => { root.more(); } }
+                            }
+                        }
+                    }
+                    if rk.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: Metrics.radius-md; }
+                }
+                // Rows or tiles. Arrow keys move the selection (in the grid Up / Down move a
+                // row), Home / End jump, Enter plays; the selection is kept in view.
+                if !root.rich: ks := FocusScope {
+                    accessible-role: list;
+                    accessible-label: root.grid ? "Results, grid" : "Results";
+                    property <length> gap: 10px;
+                    property <length> inner: rsv.width - 14px;  // room for the scroll bar
+                    property <int> cols: max(1, floor((self.inner + self.gap) / (150px + self.gap)));
+                    property <length> tile-w: (self.inner - (self.cols - 1) * self.gap) / self.cols;
+                    property <length> logo-h: self.tile-w * 0.62;
+                    property <length> tile-h: self.logo-h + 54px;
+                    property <length> row-h: root.grid ? self.tile-h : 36px;
+                    property <length> stride: root.grid ? self.tile-h + self.gap : 38px;
+                    property <bool> g: root.grid;
+                    changed g => { self.reveal(root.selected); }
+                    function reveal(i: int) {
+                        if i < 0 { return; }
+                        if (root.grid ? floor(i / self.cols) : i) * self.stride < -rsv.content-y {
+                            rsv.content-y = -(root.grid ? floor(i / self.cols) : i) * self.stride;
+                        } else if (root.grid ? floor(i / self.cols) : i) * self.stride + self.row-h > -rsv.content-y + rsv.visible-height {
+                            rsv.content-y = -((root.grid ? floor(i / self.cols) : i) * self.stride + self.row-h - rsv.visible-height);
+                        }
+                    }
+                    function go(i: int) {
+                        root.selected = max(0, min(root.results.length - 1, i));
+                        root.select(root.selected);
+                        self.reveal(root.selected);
+                    }
+                    key-pressed(e) => {
+                        if root.results.length == 0 { return reject; }
+                        if e.text == Key.DownArrow { self.go(root.selected < 0 ? 0 : root.selected + (root.grid ? self.cols : 1)); return accept; }
+                        if e.text == Key.UpArrow { self.go(root.selected < 0 ? 0 : root.selected - (root.grid ? self.cols : 1)); return accept; }
+                        if root.grid && e.text == Key.RightArrow { self.go(root.selected + 1); return accept; }
+                        if root.grid && e.text == Key.LeftArrow { self.go(root.selected < 0 ? 0 : root.selected - 1); return accept; }
+                        if e.text == Key.Home { self.go(0); return accept; }
+                        if e.text == Key.End { self.go(root.results.length - 1); return accept; }
+                        if e.text == Key.Return && root.selected >= 0 { root.primary(root.selected); return accept; }
+                        reject
+                    }
+                    property <length> content-h: root.grid
+                        ? max(0, ceil(root.results.length / self.cols) * self.stride - self.gap)
+                        : max(0, root.results.length * self.stride - 2px);
+                    rsv := ScrollView {
+                        // Set here: the rows / tiles are conditional, so it cannot be inferred.
+                        content-height: ks.content-h;
+                        if !root.grid: VerticalLayout {
+                            spacing: 2px; alignment: start;
+                            for r[i] in root.results: SubRow {
+                                item: { key: r.key, label: r.label, selected: i == root.selected };
+                                icon: "music";
+                                logo: i < root.logos.length ? root.logos[i] : @image-url("");
+                                clicked => { ks.focus(); root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                            }
+                        }
+                        if root.grid: Rectangle {
+                            x: 0; y: 0; width: ks.inner;
+                            height: ks.content-h;
+                            for r[i] in root.results: StationTile {
+                                x: mod(i, ks.cols) * (ks.tile-w + ks.gap); y: floor(i / ks.cols) * ks.stride;
+                                width: ks.tile-w; height: ks.tile-h; logo-h: ks.logo-h;
+                                item: { key: r.key, label: r.label, selected: i == root.selected };
+                                logo: i < root.logos.length ? root.logos[i] : @image-url("");
+                                clicked => { ks.focus(); root.selected = i; root.select(i); }
+                                activated => { root.selected = i; root.select(i); root.primary(i); }
+                            }
+                        }
+                    }
+                    if ks.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: Metrics.radius-md; }
+                }
+            }
+            Rectangle {
+                horizontal-stretch: root.rich ? 2 : 2; max-width: root.rich ? 300px : root.can-grid ? 340px : 2000px; border-radius: Metrics.radius-lg; background: Theme.bg-a3;
+                ScrollView {
+                    VerticalLayout { padding: 12px; alignment: start; spacing: 10px;
+                        if root.has-detail-cover: Rectangle {
+                            height: self.width; border-radius: Metrics.radius-md; clip: true; background: Theme.bg-a4;
+                            Image { width: 100%; height: 100%; source: root.detail-cover; image-fit: cover; }
+                        }
+                        Text { text: root.detail == "" ? "Select a result to see the details." : root.detail; wrap: word-wrap; color: root.detail == "" ? Theme.fg-a3 : Theme.fg-1; font-size: Metrics.font-sm; }
+                    }
+                }
+            }
+        }
+        copier := TextInput { height: 0px; visible: false; text: root.copy-text; read-only: true; }
+        if root.rich: Text { x: 12px; width: parent.width - 24px; height: 18px; text: root.status; color: Theme.fg-a2; font-size: Metrics.font-sm; overflow: elide; }
+        HorizontalLayout {
+            padding: 12px; padding-top: root.rich ? 6px : 12px; spacing: 8px;
+            if !root.rich: Text { horizontal-stretch: 1; text: root.status; color: Theme.fg-a2; font-size: Metrics.font-sm; wrap: word-wrap; vertical-alignment: center; }
+            if root.rich: Rectangle { horizontal-stretch: 1; }
+            if !root.page: FlatButton { text: "Close"; clicked => { root.close(); } }
+            for act in root.actions: FlatButton { text: act; enabled: !root.busy || root.rich; clicked => {
+                if act == "Copy credit" { copier.select-all(); copier.copy(); copier.clear-selection(); }
+                root.action(act, root.selected); } }
+            if !root.info-only || root.secondary-text != "": FlatButton { text: root.secondary-text; enabled: root.info-only || ((!root.busy || root.rich) && root.secondary-text != "Preview only" && (root.secondary-text == "Choose file…" || ((root.selected >= 0 || root.secondary-text == "Write all" || (root.rich && root.detail != "")) && root.results.length > 0))); clicked => { root.secondary(root.selected); } }
+            if !root.info-only || root.primary-text != "": Rectangle {
+                property <bool> on: root.info-only || ((root.selected >= 0 || (root.rich && root.detail != "")) && (!root.busy || root.rich));
+                width: max(96px, pt.preferred-width + 24px); height: 32px; border-radius: Metrics.radius-md;
+                opacity: self.on ? 1 : 0.5;
+                background: Theme.accent;
+                pt := Text { text: root.primary-text; color: Theme.bg-b2; font-weight: 600; font-size: Metrics.font-md; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { enabled: parent.on; accessible-role: button; accessible-label: root.primary-text; mouse-cursor: pointer; clicked => { root.primary(root.selected); } }
+            }
+        }
+    }
+}
+
+// "Now playing" card over the player for audio-only streams (src/streams/nowplaying.rs):
+// station logo or a radio icon, station name, current ICY title and codec / bitrate.
+export component NowPlayingCard inherits Rectangle {
+    in property <string> station;
+    in property <string> track;
+    in property <string> info;
+    in property <image> logo;
+    in property <bool> has-logo;
+    in property <bool> music;
+    height: 120px;
+    border-radius: Metrics.radius-xxl;
+    background: Theme.bg-a4.with-alpha(0.88);
+    border-width: 1px; border-color: Theme.accent.with-alpha(0.45);
+    drop-shadow-blur: 24px; drop-shadow-color: Theme.shadow-soft;
+    HorizontalLayout {
+        padding: 16px; spacing: 16px;
+        Rectangle {
+            width: 88px; height: 88px; border-radius: Metrics.radius-xl; clip: true;
+            background: Theme.accent.with-alpha(0.18);
+            if root.has-logo: Image { width: parent.width; height: parent.height; source: root.logo; image-fit: contain; }
+            if !root.has-logo: TriIcon { x: 22px; y: 22px; width: 44px; height: 44px; name: root.music ? "music" : "streaming"; tint: Theme.accent; }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 4px;
+            Text { text: "NOW PLAYING"; color: Theme.accent; font-size: Metrics.font-xs; font-weight: 700; letter-spacing: 1px; }
+            Text { text: root.station; color: Theme.fg-1; font-size: Metrics.font-h3; font-weight: 600; overflow: elide; }
+            if root.track != "": Text { text: root.track; color: Theme.fg-a2; font-size: Metrics.font-base; overflow: elide; }
+            if root.info != "": Text { text: root.info; color: Theme.fg-a3; font-size: Metrics.font-sm; overflow: elide; }
+        }
+    }
+    // The shared now-playing actions (★, lyrics, record / download; ui/streams.slint).
+    @children
+}

@@ -1,0 +1,32 @@
+// Skip intro / credits pill (src/plugins/skip_intro.rs), bottom right above the controls.
+
+import { Theme, Metrics, Icon, TriIcon } from "../core/theme.slint";
+
+// "Skip intro" / "Skip credits" pill, bottom right above the controls.
+export component SkipButton inherits Rectangle {
+    in property <string> text;
+    // "skip" (next), "undo" (after an automatic skip), "unmute" / mute, "always" (remember).
+    in property <string> icon: "skip";
+    callback clicked();
+    callback dismiss();
+    width: row.preferred-width; height: 44px;
+    border-radius: Metrics.radius-xl;
+    background: ta.has-hover ? Theme.accent : Theme.bar;
+    border-width: 1px; border-color: Theme.accent;
+    row := HorizontalLayout {
+        padding-left: 18px; padding-right: 6px; spacing: 10px;
+        Text { text: root.text; color: ta.has-hover ? Theme.bg-b2 : Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; }
+        TriIcon {
+            y: (parent.height - 18px) / 2; width: 18px; height: 18px;
+            name: root.icon == "undo" ? "replay" : root.icon == "unmute" ? "volume-high" : root.icon == "always" ? "check-active" : "next";
+            tint: ta.has-hover ? Theme.bg-b2 : Theme.accent;
+            accent-tint: ta.has-hover ? Theme.bg-b2 : Theme.accent; dim-tint: ta.has-hover ? Theme.bg-b2 : Theme.accent-dim;
+        }
+        Rectangle {
+            width: 28px;
+            Icon { width: 14px; height: 14px; source: @image-url("../../assets/icons/close.svg"); tint: xa.has-hover ? Theme.fg-1 : Theme.fg-a3; }
+            xa := TouchArea { accessible-role: button; accessible-label: "Dismiss"; mouse-cursor: pointer; clicked => { root.dismiss(); } }
+        }
+    }
+    ta := TouchArea { accessible-role: button; accessible-label: root.text; width: parent.width - 34px; x: 0; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
