@@ -7,6 +7,8 @@ import { Playback } from "../state/playback.slint";
 
 export component LoadingOverlay inherits Rectangle {
     background: transparent;
+    accessible-role: text;
+    accessible-label: (Notices.loading-buffering ? "Buffering. " : "Opening. ") + Notices.loading-name;
     VerticalLayout {
         alignment: center; spacing: 14px;
         HorizontalLayout { alignment: center;
@@ -32,6 +34,7 @@ export component StreamErrorBanner inherits Rectangle {
     x: (root.win-w - self.width) / 2;
     y: root.win-h - root.bar-h - self.height - 16px;
     border-radius: Metrics.radius-xxl; background: Theme.bar;
+    accessible-role: text; accessible-label: Notices.stream-error;
     // Click the message to dismiss it.
     TouchArea { accessible-role: button; accessible-label: "Dismiss: " + Notices.stream-error; clicked => { Notices.stream-error = ""; } }
     HorizontalLayout {
@@ -67,6 +70,7 @@ export component HintToast inherits Rectangle {
     y: root.win-h - root.bar-h - self.height - (Notices.resume-text != "" ? 84px : 40px);
     border-radius: Metrics.radius-xxl;
     background: Theme.bar;
+    accessible-role: text; accessible-label: Notices.hint-text;
     border-width: 1px; border-color: Theme.divider;
     TouchArea { } // keep clicks off the video
     hint := HorizontalLayout {

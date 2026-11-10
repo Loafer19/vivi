@@ -144,6 +144,11 @@ export component SeekBar inherits Rectangle {
         Rectangle { x: 3px; width: 4px; border-radius: self.width / 2; background: ha.has-hover || ha.pressed ? Theme.on-media : Theme.accent-bright; }
         ha := TouchArea {
             mouse-cursor: ew-resize;
+            accessible-role: slider; accessible-label: "Loop start";
+            accessible-value: root.fmt(root.ab-a); accessible-value-minimum: 0;
+            accessible-value-maximum: root.duration; accessible-value-step: 0.5;
+            accessible-action-increment => { root.ab-set(min(root.duration, root.ab-a + 0.5), root.ab-b); }
+            accessible-action-decrement => { root.ab-set(max(0, root.ab-a - 0.5), root.ab-b); }
             moved => {
                 if (self.pressed) {
                     root.ab-set(clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration, root.ab-b);
@@ -156,6 +161,11 @@ export component SeekBar inherits Rectangle {
         Rectangle { x: 3px; width: 4px; border-radius: self.width / 2; background: hb.has-hover || hb.pressed ? Theme.on-media : Theme.accent-bright; }
         hb := TouchArea {
             mouse-cursor: ew-resize;
+            accessible-role: slider; accessible-label: "Loop end";
+            accessible-value: root.fmt(root.ab-b); accessible-value-minimum: 0;
+            accessible-value-maximum: root.duration; accessible-value-step: 0.5;
+            accessible-action-increment => { root.ab-set(root.ab-a, min(root.duration, root.ab-b + 0.5)); }
+            accessible-action-decrement => { root.ab-set(root.ab-a, max(0, root.ab-b - 0.5)); }
             moved => {
                 if (self.pressed) {
                     root.ab-set(root.ab-a, clamp((parent.x + self.mouse-x) / root.width, 0, 1) * root.duration);

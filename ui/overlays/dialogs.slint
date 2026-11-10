@@ -177,6 +177,7 @@ if Overlays.info-open: Modal {
     inset: 48px;
     card-background: Theme.bar-solid;
     bordered: false;
+    accessible-role: text; accessible-label: "Properties: " + Dialogs.info-title;
     dismissed => { Overlays.info-open = false; }
     icol := VerticalLayout {
         padding: 20px; spacing: 10px;
@@ -212,6 +213,7 @@ if Notices.resume-text != "": Rectangle {
     y: root.height - (Playback.has-media ? root.bar-h : 0px) - self.height - 16px;
     border-radius: Metrics.radius-xxl;
     background: Theme.bar;
+    accessible-role: text; accessible-label: Notices.resume-text;
     toast := HorizontalLayout {
         padding-left: 20px; padding-right: 10px; spacing: 24px;
         Text { text: Notices.resume-text; color: Theme.fg-2; font-size: Metrics.font-lg; vertical-alignment: center; }
@@ -244,6 +246,8 @@ if Overlays.palette-open: PaletteDialog {
 }
 
 if Menus.menu-kind != "": TouchArea {
+    accessible-role: button; accessible-label: "Dismiss menu";
+    accessible-action-default => { Menus.menu-kind = ""; Menus.sub-open = ""; }
     clicked => { Menus.menu-kind = ""; Menus.sub-open = ""; }
     pointer-event(e) => {
         if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) { Menus.menu-kind = ""; Menus.sub-open = ""; }

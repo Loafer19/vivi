@@ -84,6 +84,9 @@ export component LyricsView inherits Rectangle {
     in property <bool> backdrop;
     height: self.line-h * self.visible-lines;
     clip: true;
+    accessible-role: text;
+    accessible-label: "Lyrics";
+    accessible-description: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
     if root.backdrop: Rectangle {
         x: (parent.width - self.width) / 2; width: min(parent.width, 760px);
         border-radius: Metrics.radius-xxl; background: Theme.media-chip;
@@ -168,7 +171,20 @@ component KPill inherits Rectangle {
     animate background { duration: 120ms; }
     if root.has-icon: Icon { x: 15px; y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: root.icon; tint: root.primary ? Theme.bg-b2 : Theme.stage-fg.with-alpha(0.8); }
     kt := Text { x: root.has-icon ? 38px : 15px; width: self.preferred-width; height: parent.height; text: root.text; color: root.primary ? Theme.bg-b2 : Theme.stage-fg.with-alpha(0.88); font-size: Metrics.font-md; font-weight: 600; vertical-alignment: center; }
-    ta := TouchArea { enabled: root.enabled; accessible-role: button; accessible-label: root.text; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea {
+        enabled: root.enabled; accessible-role: button; accessible-label: root.text;
+        accessible-enabled: root.enabled; mouse-cursor: pointer;
+        accessible-action-default => { if (root.enabled) { root.clicked(); } }
+        clicked => { root.clicked(); }
+    }
+    kf := FocusScope {
+        enabled: root.enabled; focus-on-click: false;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { if (root.enabled) { root.clicked(); } return accept; }
+            reject
+        }
+    }
+    if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
 }
 
 // Full-screen karaoke: the current line large and centred in the accent colour (with a
@@ -225,6 +241,9 @@ export component KaraokeView inherits Rectangle {
     }
     background: Theme.stage;
     clip: true;
+    accessible-role: text;
+    accessible-label: root.title != "" ? "Karaoke: " + root.title + (root.artist != "" ? ", " + root.artist : "") : "Karaoke";
+    accessible-description: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
     TouchArea {   // swallow clicks on the backdrop; moves show the chrome again
         mouse-cursor: root.chrome ? MouseCursor.default : MouseCursor.none;
         changed mouse-x => { root.activity(); }
@@ -454,6 +473,7 @@ export component LyricsSearchDialog inherits Modal {
     in-out property <int> selected: -1;
     callback cmd(string, string);
     property <bool> ok: root.selected >= 0 && root.selected < root.results.length && !root.busy;
+    accessible-role: text; accessible-label: "Find lyrics";
     card-width: 940px;
     card-height: 660px;
     dismissed => { root.cmd("search-close", ""); }
