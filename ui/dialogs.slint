@@ -78,7 +78,7 @@ export component NetworkStreamDialog inherits Rectangle {
                 box := TextInput {
                     x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px;
                     text <=> root.urls; single-line: false; wrap: word-wrap;
-                    accessible-role: text;
+                    accessible-role: AccessibleRole.text-input;
                     accessible-label: "Network URL";
                     color: Theme.fg-2; font-size: Metrics.font-sm; font-family: "DM Mono";
                     selection-background-color: Theme.accent-bg;

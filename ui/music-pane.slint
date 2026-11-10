@@ -7,7 +7,7 @@ import { MusicDialogState } from "state/music-dialog.slint";
 import { Overlays } from "state/overlays.slint";
 
 export component MusicPane inherits MusicBody {
-    accessible-role: text;
+    accessible-role: AccessibleRole.region;
     accessible-label: MusicDialogState.title;
     callback command(string, string, string);
     // After the dialog closed itself (Close / X): the window takes the focus back.
