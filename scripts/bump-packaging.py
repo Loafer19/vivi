@@ -66,7 +66,8 @@ for f in w.glob("*.yaml"):
     s = re.sub(r"^PackageVersion: .*", f"PackageVersion: {ver}", f.read_text(), flags=re.M)
     s = re.sub(r"v\d+\.\d+\.\d+", f"v{ver}", s)
     s = re.sub(r"^ReleaseDate: .*", f"ReleaseDate: {datetime.date.today()}", s, flags=re.M)
-    s = re.sub(r"^InstallerSha256: .*", f"InstallerSha256: {win.upper()}", s, flags=re.M)
+    # Indented under Installers:, so keep the leading spaces.
+    s = re.sub(r"^([ \t]*)InstallerSha256: .*", f"\\g<1>InstallerSha256: {win.upper()}", s, flags=re.M)
     f.write_text(s)
 sc = P / "scoop/vivi.json"
 s = sc.read_text()
