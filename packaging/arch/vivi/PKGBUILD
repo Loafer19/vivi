@@ -7,9 +7,11 @@ pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Loafer19/vivi"
 license=('MIT')
-depends=('mpv' 'libxkbcommon' 'fontconfig' 'xdg-desktop-portal' 'hicolor-icon-theme')
-optdepends=('ffmpeg: library thumbnails and album covers'
-            'yt-dlp: YouTube and other sites in Open Network Stream')
+# libxkbcommon and the Wayland/X11 libraries are loaded at runtime and come with mpv.
+depends=('mpv' 'fontconfig' 'libgcc' 'glibc' 'hicolor-icon-theme')
+optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
+            'yt-dlp: YouTube and other sites in Open Network Stream'
+            'xdg-desktop-portal: native file and folder dialogs')
 makedepends=('cargo')
 options=('!lto')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
