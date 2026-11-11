@@ -13,7 +13,6 @@ makedepends=('cargo' 'git')
 optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'yt-dlp: YouTube and other sites in Open Network Stream'
             'xdg-desktop-portal: native file and folder dialogs')
-provides=('vivi')
 conflicts=('vivi' 'vivi-bin')
 options=('!lto')
 source=("${pkgname}::git+${url}.git")

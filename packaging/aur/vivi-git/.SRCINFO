@@ -16,7 +16,6 @@ pkgbase = vivi-git
 	optdepends = ffmpeg: library thumbnails, album covers, YouTube plugin merging
 	optdepends = yt-dlp: YouTube and other sites in Open Network Stream
 	optdepends = xdg-desktop-portal: native file and folder dialogs
-	provides = vivi
 	conflicts = vivi
 	conflicts = vivi-bin
 	options = !lto

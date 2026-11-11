@@ -11,7 +11,6 @@ license=('MIT')
 depends=('mpv' 'libxkbcommon' 'fontconfig' 'xdg-desktop-portal' 'hicolor-icon-theme')
 optdepends=('ffmpeg: library thumbnails and album covers'
             'yt-dlp: YouTube and other sites in Open Network Stream')
-provides=('vivi')
 conflicts=('vivi')
 source=("vivi-v${pkgver}-linux-x86_64.tar.gz::${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('SKIP')
