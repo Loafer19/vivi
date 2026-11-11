@@ -9,7 +9,6 @@ pkgbase = vivi-git
 	makedepends = cargo
 	makedepends = git
 	depends = mpv
-	depends = sqlite
 	depends = fontconfig
 	depends = libgcc
 	depends = glibc

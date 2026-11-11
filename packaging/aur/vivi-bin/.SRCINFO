@@ -6,7 +6,6 @@ pkgbase = vivi-bin
 	arch = x86_64
 	license = MIT
 	depends = mpv
-	depends = sqlite
 	depends = fontconfig
 	depends = libgcc
 	depends = glibc
