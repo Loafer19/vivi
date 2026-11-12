@@ -10,6 +10,7 @@ mod downloads;
 mod drawer;
 mod error;
 mod extwin;
+mod filepick;
 mod fx;
 mod images;
 mod ipc;

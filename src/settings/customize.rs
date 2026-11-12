@@ -15,12 +15,18 @@ pub(crate) fn customize(
         let cfg = cfg.clone();
         move |f: &dyn Fn(&mut Vec<String>)| {
             let Some(a) = w.upgrade() else { return };
-            let mut c = cfg.borrow_mut();
-            let mut t = visible_toolbar(&c.interface.toolbar, &plugin_buttons());
-            f(&mut t);
-            c.interface.toolbar = t;
-            c.interface.profile = profile_of(&c.interface);
-            apply_toolbar(&a, &c);
+            // Plugin buttons come from the plugin host, which reads the config: ask
+            // before borrowing it mutably, and apply after the borrow ends (0.16.3
+            // aborted with "RefCell already mutably borrowed" here).
+            let buttons = plugin_buttons();
+            {
+                let mut c = cfg.borrow_mut();
+                let mut t = visible_toolbar(&c.interface.toolbar, &buttons);
+                f(&mut t);
+                c.interface.toolbar = t;
+                c.interface.profile = profile_of(&c.interface);
+            }
+            apply_toolbar(&a, &cfg.borrow());
         }
     };
     {
@@ -72,10 +78,12 @@ pub(crate) fn customize(
         let cfg = cfg.clone();
         app.global::<crate::Customize>().on_style(move |st| {
             let Some(a) = w.upgrade() else { return };
-            let mut c = cfg.borrow_mut();
-            c.interface.bar_style = st.to_string();
-            c.interface.profile = profile_of(&c.interface);
-            apply_toolbar(&a, &c);
+            {
+                let mut c = cfg.borrow_mut();
+                c.interface.bar_style = st.to_string();
+                c.interface.profile = profile_of(&c.interface);
+            }
+            apply_toolbar(&a, &cfg.borrow());
         });
     }
     {
@@ -83,10 +91,12 @@ pub(crate) fn customize(
         let cfg = cfg.clone();
         app.global::<crate::Customize>().on_pick_volume(move |st| {
             let Some(a) = w.upgrade() else { return };
-            let mut c = cfg.borrow_mut();
-            c.interface.volume_style = config::volume_style_name(&st).into();
-            c.interface.profile = profile_of(&c.interface);
-            apply_toolbar(&a, &c);
+            {
+                let mut c = cfg.borrow_mut();
+                c.interface.volume_style = config::volume_style_name(&st).into();
+                c.interface.profile = profile_of(&c.interface);
+            }
+            apply_toolbar(&a, &cfg.borrow());
         });
     }
     app.global::<crate::Customize>()
