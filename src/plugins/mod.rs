@@ -203,7 +203,8 @@ impl Ctx<'_> {
             .scripts
             .iter()
             .find(|s| s.manifest.id == id && s.manifest.origin == Origin::Package)?;
-        is_enabled(&read_cfg(self.cfg)?, &s.manifest)
+        let c = read_cfg(self.cfg)?;
+        is_enabled(&c, &s.manifest)
             .then(|| s.path.file_stem())
             .flatten()
             .map(|n| n.to_string_lossy().replace('-', "_"))
