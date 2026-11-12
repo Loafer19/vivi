@@ -209,11 +209,13 @@ impl Analyzer {
                 // Peak amplitude of a sine with that RMS, like the FFT peak below.
                 m.at((lo * hi).sqrt()) * std::f32::consts::SQRT_2
             } else {
-                let mut peak = 0.0f32;
-                for k in k0.max(1)..k1.max(k0.max(1) + 1).min(n / 2) {
-                    peak = peak.max(self.prev_mag[k]);
-                }
-                peak
+                let (a, e) = (k0.max(1), k1.max(k0.max(1) + 1).min(n / 2));
+                // An empty or reversed range peaks at 0, as the old index loop did.
+                self.prev_mag
+                    .get(a..e)
+                    .unwrap_or(&[])
+                    .iter()
+                    .fold(0.0f32, |p, &m| p.max(m))
             };
             // Gentle tilt so highs are not always flat on music (pink spectrum).
             let tilt = 1.0 + b as f32 / BANDS as f32 * 2.0;
