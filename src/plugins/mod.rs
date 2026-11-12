@@ -203,29 +203,30 @@ impl Ctx<'_> {
             .scripts
             .iter()
             .find(|s| s.manifest.id == id && s.manifest.origin == Origin::Package)?;
-        is_enabled(&self.cfg.borrow(), &s.manifest)
+        is_enabled(&read_cfg(self.cfg)?, &s.manifest)
             .then(|| s.path.file_stem())
             .flatten()
             .map(|n| n.to_string_lossy().replace('-', "_"))
     }
     /// A setting value (or the manifest default).
     pub fn get(&self, key: &str) -> String {
-        setting_value(&self.cfg.borrow(), self.manifest, key)
+        match read_cfg(self.cfg) {
+            Some(c) => setting_value(&c, self.manifest, key),
+            None => setting_value(&Config::default(), self.manifest, key),
+        }
     }
     pub fn flag(&self, key: &str) -> bool {
         self.get(key) == "true"
     }
     /// Change a setting and save the config.
     pub fn set(&self, key: &str, value: &str) {
-        let mut c = self.cfg.borrow_mut();
-        c.plugins
-            .entry(self.id.into())
-            .or_default()
-            .settings
-            .insert(key.into(), value.into());
-        if let Err(e) = c.save() {
-            eprintln!("vivi: save config: {e}");
-        }
+        edit_cfg(self.cfg, |c| {
+            c.plugins
+                .entry(self.id.into())
+                .or_default()
+                .settings
+                .insert(key.into(), value.into());
+        });
     }
     /// Show a short message in the player toast.
     pub fn toast(&self, msg: &str) {
@@ -236,7 +237,10 @@ impl Ctx<'_> {
     /// built-ins; none needs it right now (Free Music's notices come from Downloads).
     #[allow(dead_code)]
     pub fn notify(&self, title: &str, body: &str) {
-        notify_or_toast(self.app, &self.cfg.borrow(), self.manifest, title, body);
+        match read_cfg(self.cfg) {
+            Some(c) => notify_or_toast(self.app, &c, self.manifest, title, body),
+            None => toast(self.app, &crate::notify::toast_text(title, body)),
+        }
     }
     /// Local path of the playing file, if it is a file.
     pub fn local_path(&self) -> Option<std::path::PathBuf> {
@@ -249,7 +253,7 @@ impl Ctx<'_> {
 /// plugin callbacks; inside use [`Ctx::package_script`]).
 pub fn package_script(id: &str) -> Option<String> {
     with(|r| {
-        let c = r.cfg.borrow();
+        let c = read_cfg(&r.cfg)?;
         let name = r
             .scripts
             .iter()
@@ -284,14 +288,17 @@ pub fn active(id: &str) -> bool {
 /// Whether every enabled script that should load on startup has been handed to mpv.
 pub fn startup_scripts_loaded() -> bool {
     with(|r| {
-        let c = r.cfg.borrow();
+        let c = read_cfg(&r.cfg)?;
         if !scripts::load_on_startup(&c) {
-            return true;
+            return Some(true);
         }
-        r.scripts
-            .iter()
-            .all(|s| !is_enabled(&c, &s.manifest) || r.loaded.contains(&s.manifest.id))
+        Some(
+            r.scripts
+                .iter()
+                .all(|s| !is_enabled(&c, &s.manifest) || r.loaded.contains(&s.manifest.id)),
+        )
     })
+    .flatten()
     .unwrap_or(true)
 }
 
@@ -300,12 +307,16 @@ pub fn startup_scripts_loaded() -> bool {
 /// off keeps running in mpv until restart, but counts as off).
 pub fn loaded(id: &str) -> bool {
     with(|r| {
-        let c = r.cfg.borrow();
-        r.entries.iter().any(|e| e.active && e.manifest.id == id)
-            || r.scripts.iter().any(|s| {
-                s.manifest.id == id
-                    && script_running(r.loaded.contains(id), is_enabled(&c, &s.manifest))
-            })
+        if r.entries.iter().any(|e| e.active && e.manifest.id == id) {
+            return true;
+        }
+        let Some(c) = read_cfg(&r.cfg) else {
+            return false;
+        };
+        r.scripts.iter().any(|s| {
+            s.manifest.id == id
+                && script_running(r.loaded.contains(id), is_enabled(&c, &s.manifest))
+        })
     })
     .unwrap_or(false)
 }
@@ -332,7 +343,9 @@ pub fn running(id: &str) -> Running {
         if r.entries.iter().any(|e| e.active && e.manifest.id == id) {
             return Running::Yes;
         }
-        let c = r.cfg.borrow();
+        let Some(c) = read_cfg(&r.cfg) else {
+            return Running::No;
+        };
         r.scripts
             .iter()
             .find(|s| s.manifest.id == id)
@@ -423,6 +436,32 @@ fn with<R>(f: impl FnOnce(&mut Registry) -> R) -> Option<R> {
     REG.with(|r| r.try_borrow_mut().ok()?.as_mut().map(f))
 }
 
+/// Read the shared config without aborting when a caller further up the stack still
+/// holds it mutably (a UI handler mid-edit that asks for the plugin entries again).
+/// `RefCell::borrow` panics there, and with `panic = "abort"` that ends Vivi; here the
+/// read is skipped with a log line and the caller falls back.
+fn read_cfg(cfg: &RefCell<Config>) -> Option<std::cell::Ref<'_, Config>> {
+    let c = cfg.try_borrow().ok();
+    if c.is_none() {
+        eprintln!("vivi: plugins: config read skipped, it is being changed (re-entrant call)");
+    }
+    c
+}
+
+/// Change the shared config and save it; false (with a log line) when it is borrowed
+/// further up the stack. The borrow ends before the save returns, so nothing the
+/// caller runs next can trip over it.
+fn edit_cfg(cfg: &RefCell<Config>, f: impl FnOnce(&mut Config)) -> bool {
+    let Ok(mut c) = cfg.try_borrow_mut() else {
+        eprintln!("vivi: plugins: config change skipped, it is in use (re-entrant call)");
+        return false;
+    };
+    f(&mut c);
+    drop(c);
+    save(cfg);
+    true
+}
+
 macro_rules! ctx {
     ($reg:expr, $a:expr, $e:expr) => {
         Ctx {
@@ -495,17 +534,20 @@ pub fn manifests() -> Vec<Manifest> {
 #[cfg(unix)]
 pub fn states() -> Vec<(Manifest, bool)> {
     with(|r| {
-        let c = r.cfg.borrow();
-        r.entries
-            .iter()
-            .map(|e| (e.manifest.clone(), e.active))
-            .chain(
-                r.scripts
-                    .iter()
-                    .map(|s| (s.manifest.clone(), is_enabled(&c, &s.manifest))),
-            )
-            .collect()
+        let c = read_cfg(&r.cfg)?;
+        Some(
+            r.entries
+                .iter()
+                .map(|e| (e.manifest.clone(), e.active))
+                .chain(
+                    r.scripts
+                        .iter()
+                        .map(|s| (s.manifest.clone(), is_enabled(&c, &s.manifest))),
+                )
+                .collect(),
+        )
     })
+    .flatten()
     .unwrap_or_default()
 }
 
@@ -565,7 +607,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         })
     });
     with(|r| {
-        let c = r.cfg.borrow().clone();
+        let Some(c) = read_cfg(&r.cfg).map(|c| c.clone()) else {
+            return;
+        };
         for e in &mut r.entries {
             e.active = is_enabled(&c, &e.manifest);
             if e.active {
@@ -597,13 +641,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         command(&c.id, &c.name, &c.args);
     });
     let auto = with(|r| {
-        r.cfg
-            .borrow()
+        read_cfg(&r.cfg)?
             .plugins
             .get(packages::GLOBAL_ID)
             .and_then(|s| s.settings.get("autocheck"))
-            .is_none_or(|v| v == "true")
+            .map(|v| v == "true")
     })
+    .flatten()
     .unwrap_or(true);
     packages::setup(app, auto);
     app.global::<crate::Overlays>().on_ui_activity(|| {
@@ -619,7 +663,7 @@ use crate::config;
 pub fn rescan() -> usize {
     let n = with(|r| {
         let new = all_scripts(&r.entries);
-        let c = r.cfg.borrow().clone();
+        let c = read_cfg(&r.cfg).map(|c| c.clone()).unwrap_or_default();
         for s in &new {
             let known = r.scripts.iter().any(|o| o.path == s.path);
             if !known && scripts::load_on_startup(&c) && is_enabled(&c, &s.manifest) {
@@ -753,7 +797,9 @@ impl Registry {
     /// option changes.
     fn hand_secrets(&self, m: &Manifest) {
         let path = secrets_path(&m.id);
-        let json = secrets_json(&self.cfg.borrow(), m);
+        let Some(json) = read_cfg(&self.cfg).map(|c| secrets_json(&c, m)) else {
+            return;
+        };
         if let Some(d) = path.parent() {
             let _ = std::fs::create_dir_all(d);
             host::make_private(d);
@@ -777,7 +823,7 @@ impl Registry {
             return;
         }
         if s.manifest.origin == Origin::Package {
-            let c = self.cfg.borrow().clone();
+            let c = read_cfg(&self.cfg).map(|c| c.clone()).unwrap_or_default();
             for st in &s.manifest.settings {
                 if matches!(st.kind, SettingKind::Action(_))
                     || (s.secrets_file && matches!(st.kind, SettingKind::Secret))
@@ -874,10 +920,10 @@ pub fn client_message(args: &[String]) {
         Some(M::Notify { id, title, body }) => {
             with(|r| {
                 let Some(a) = r.app.upgrade() else { return };
-                let c = r.cfg.borrow();
-                match r.scripts.iter().find(|s| s.manifest.id == id) {
-                    Some(s) => notify_or_toast(&a, &c, &s.manifest, title, body),
-                    None => toast(&a, &crate::notify::toast_text(title, body)),
+                let c = read_cfg(&r.cfg);
+                match (r.scripts.iter().find(|s| s.manifest.id == id), c) {
+                    (Some(s), Some(c)) => notify_or_toast(&a, &c, &s.manifest, title, body),
+                    _ => toast(&a, &crate::notify::toast_text(title, body)),
                 }
             });
         }
@@ -1006,15 +1052,15 @@ fn store_setting(id: &str, key: &str, value: &str) {
             eprintln!("vivi: vivi-setting for unknown setting {id}.{key} ignored");
             return;
         }
-        r.cfg
-            .borrow_mut()
-            .plugins
-            .entry(id.into())
-            .or_default()
-            .settings
-            .insert(key.into(), value.into());
-        save(&r.cfg);
-        r.set_opt(id, key, value);
+        if edit_cfg(&r.cfg, |c| {
+            c.plugins
+                .entry(id.into())
+                .or_default()
+                .settings
+                .insert(key.into(), value.into());
+        }) {
+            r.set_opt(id, key, value);
+        }
     });
     crate::settings::refresh_ui();
 }
@@ -1290,7 +1336,10 @@ pub fn arrange(point: &str, id: &str, what: &str) {
     let mut ids: Vec<String> = contributions_all(point).into_iter().map(|e| e.id).collect();
     ids.dedup();
     with(|r| {
-        let mut c = r.cfg.borrow_mut();
+        let Ok(mut c) = r.cfg.try_borrow_mut() else {
+            eprintln!("vivi: plugins: arrange skipped, the config is in use");
+            return;
+        };
         match what {
             "hide" | "show" => {
                 c.plugins
@@ -1330,8 +1379,10 @@ pub fn arrange_source(id: &str, what: &str) {
 /// Contributions of every enabled plugin at `point`, hidden ones included, in the
 /// user's order (Sources, Home widgets).
 pub fn contributions_all(point: &str) -> Vec<Contributed> {
-    with(|r| {
-        let c = r.cfg.borrow();
+    let fresh = with(|r| {
+        // A caller up the stack may still hold the config mutably (0.16.3 aborted on
+        // `borrow` here when Customize edited the bar): answer with the last list.
+        let c = read_cfg(&r.cfg)?;
         let mut v: Vec<Contributed> = r
             .entries
             .iter()
@@ -1366,9 +1417,29 @@ pub fn contributions_all(point: &str) -> Vec<Contributed> {
             })
             .collect();
         order_by(&order_at(&c, point), &mut v);
-        v
+        Some(v)
     })
-    .unwrap_or_default()
+    .flatten();
+    LAST_CONTRIBUTED.with(|l| {
+        let Ok(mut l) = l.try_borrow_mut() else {
+            return fresh.unwrap_or_default();
+        };
+        match fresh {
+            Some(v) => {
+                if l.get(point) != Some(&v) {
+                    l.insert(point.to_string(), v.clone());
+                }
+                v
+            }
+            None => l.get(point).cloned().unwrap_or_default(),
+        }
+    })
+}
+
+thread_local! {
+    /// The last [`contributions_all`] per point, for a read the config cannot serve.
+    static LAST_CONTRIBUTED: RefCell<std::collections::HashMap<String, Vec<Contributed>>> =
+        RefCell::new(Default::default());
 }
 
 /// What a surface shows at `point` (entries the user hid left out).
@@ -1389,8 +1460,9 @@ pub fn contributions(point: &str) -> Vec<Contributed> {
     }
     if layout(point).is_some() {
         with(|r| {
-            let c = r.cfg.borrow();
-            v.retain(|e| !hidden_at(&c, point, &e.id));
+            if let Some(c) = read_cfg(&r.cfg) {
+                v.retain(|e| !hidden_at(&c, point, &e.id));
+            }
         });
     }
     v
@@ -1585,25 +1657,24 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                     r.player.cmd("script-message-to", &[&name, key]);
                     return None;
                 }
-                r.cfg
-                    .borrow_mut()
-                    .plugins
-                    .entry(id.into())
-                    .or_default()
-                    .settings
-                    .insert(key.into(), value.into());
-                save(&r.cfg);
+                if !edit_cfg(&r.cfg, |c| {
+                    c.plugins
+                        .entry(id.into())
+                        .or_default()
+                        .settings
+                        .insert(key.into(), value.into());
+                }) {
+                    return Some("Settings are busy, try again".into());
+                }
                 r.set_opt(id, key, value);
                 return None;
             }
             let on = value == "true";
-            r.cfg
-                .borrow_mut()
-                .plugins
-                .entry(id.into())
-                .or_default()
-                .enabled = Some(on);
-            save(&r.cfg);
+            if !edit_cfg(&r.cfg, |c| {
+                c.plugins.entry(id.into()).or_default().enabled = Some(on)
+            }) {
+                return Some("Settings are busy, try again".into());
+            }
             return Some(if on {
                 if r.loaded.contains(id) {
                     format!("{} is already running", s.manifest.name)
@@ -1620,13 +1691,11 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
         match key {
             None => {
                 let on = value == "true";
-                r.cfg
-                    .borrow_mut()
-                    .plugins
-                    .entry(id.into())
-                    .or_default()
-                    .enabled = Some(on);
-                save(&r.cfg);
+                if !edit_cfg(&r.cfg, |c| {
+                    c.plugins.entry(id.into()).or_default().enabled = Some(on)
+                }) {
+                    return Some("Settings are busy, try again".into());
+                }
                 if on != e.active {
                     e.active = on;
                     let cx = ctx!(r, a, e);
@@ -1647,14 +1716,15 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                     }
                     return None;
                 }
-                r.cfg
-                    .borrow_mut()
-                    .plugins
-                    .entry(id.into())
-                    .or_default()
-                    .settings
-                    .insert(key.into(), value.into());
-                save(&r.cfg);
+                if !edit_cfg(&r.cfg, |c| {
+                    c.plugins
+                        .entry(id.into())
+                        .or_default()
+                        .settings
+                        .insert(key.into(), value.into());
+                }) {
+                    return Some("Settings are busy, try again".into());
+                }
                 if e.active {
                     e.plugin.setting_changed(&ctx!(r, a, e), key);
                 }
@@ -1671,14 +1741,18 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
 /// its data).
 pub fn forget(id: &str) {
     with(|r| {
-        if r.cfg.borrow_mut().plugins.remove(id).is_some() {
-            save(&r.cfg);
+        let had = read_cfg(&r.cfg).is_some_and(|c| c.plugins.contains_key(id));
+        if had {
+            edit_cfg(&r.cfg, |c| {
+                c.plugins.remove(id);
+            });
         }
     });
 }
 
-fn save(cfg: &Rc<RefCell<Config>>) {
-    if let Err(e) = cfg.borrow().save() {
+fn save(cfg: &RefCell<Config>) {
+    let Some(c) = read_cfg(cfg) else { return };
+    if let Err(e) = c.save() {
         eprintln!("vivi: save config: {e}");
     }
 }
@@ -1686,6 +1760,39 @@ fn save(cfg: &Rc<RefCell<Config>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_access_backs_off_while_it_is_borrowed_mutably() {
+        // 0.16.3 aborted in contributions_all ("RefCell already mutably borrowed") when
+        // Customize asked for the plugin buttons while holding the config mutably.
+        let cfg = RefCell::new(Config::default());
+        {
+            let _held = cfg.borrow_mut();
+            assert!(read_cfg(&cfg).is_none());
+            assert!(!edit_cfg(&cfg, |_| unreachable!(
+                "must not run while borrowed"
+            )));
+            save(&cfg); // a no-op, not a panic
+        }
+        assert!(read_cfg(&cfg).is_some());
+    }
+
+    #[test]
+    fn contributions_fall_back_to_the_last_list() {
+        // No registry on this thread: the read cannot be served, so the last list for
+        // the point comes back instead of a panic or an empty bar.
+        let e = Contributed {
+            id: "p".into(),
+            name: "P".into(),
+            icon: String::new(),
+            label: "P".into(),
+            command: "go".into(),
+            when: Default::default(),
+        };
+        LAST_CONTRIBUTED.with(|l| l.borrow_mut().insert("test.point".into(), vec![e.clone()]));
+        assert_eq!(contributions_all("test.point"), vec![e]);
+        assert!(contributions_all("test.other").is_empty());
+    }
 
     #[test]
     fn installed_or_disabled_scripts_are_not_running() {

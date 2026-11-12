@@ -327,6 +327,27 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 }
                 let mut rescan = false;
                 let mut remote = None;
+                // File dialogs block this thread: pick before borrowing the config, so no
+                // borrow is held across them.
+                let picked = match id.as_str() {
+                    "general.log_file" if v == "::browse" => Some(
+                        rfd::FileDialog::new()
+                            .set_title("Log file")
+                            .set_file_name("vivi.log")
+                            .save_file(),
+                    ),
+                    "video.screenshot_dir" | "recording.dir" if v == "::browse" => Some(
+                        rfd::FileDialog::new()
+                            .set_title("Choose folder")
+                            .pick_folder(),
+                    ),
+                    "library.add" => Some(
+                        rfd::FileDialog::new()
+                            .set_title("Add library folder")
+                            .pick_folder(),
+                    ),
+                    _ => None,
+                };
                 {
                     let mut c = cfg.borrow_mut();
                     match id.as_str() {
@@ -345,17 +366,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         "general.log_file" | "video.screenshot_dir" | "recording.dir" => {
                             let mut val = v.to_string();
                             if v == "::browse" {
-                                let picked = if id.as_str() == "general.log_file" {
-                                    rfd::FileDialog::new()
-                                        .set_title("Log file")
-                                        .set_file_name("vivi.log")
-                                        .save_file()
-                                } else {
-                                    rfd::FileDialog::new()
-                                        .set_title("Choose folder")
-                                        .pick_folder()
-                                };
-                                let Some(d) = picked else { return };
+                                let Some(d) = picked.flatten() else { return };
                                 val = d.to_string_lossy().into_owned();
                             }
                             match id.as_str() {
@@ -417,6 +428,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             }
                         }
                         "privacy.recent" => {
+                            // The library re-renders from the config: let go of it first.
+                            drop(c);
                             a.global::<crate::Library>().invoke_clear_recent();
                             a.global::<crate::Settings>()
                                 .set_status("Recent files cleared".into());
@@ -489,10 +502,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             return;
                         }
                         "library.add" => {
-                            if let Some(d) = rfd::FileDialog::new()
-                                .set_title("Add library folder")
-                                .pick_folder()
-                            {
+                            if let Some(d) = picked.flatten() {
                                 let d = d
                                     .to_string_lossy()
                                     .replace('\\', "/")
