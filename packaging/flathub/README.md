@@ -14,6 +14,27 @@ CI (`.github/workflows/packaging.yml`) runs `flatpak-builder-lint manifest` and
 `appstreamcli validate` on these. The release workflow (job `packaging`) moves the tag,
 commit, cargo sources, screenshot URLs and the new `<release>` here on every release.
 
+## Before submitting (Flathub rules checked 2026-11-12)
+
+- **Generative AI policy**: the Flathub manifest must not contain AI-generated or
+  AI-assisted content, AI agents must not open or write the submission PR, its
+  description or review replies, and AI-generated code in the app must be disclosed
+  in the PR (affected parts and extent). See
+  <https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy>.
+- **Development history**: apps that have existed for a very short time are generally
+  not accepted (the first commit here is from 2026-10-13).
+- **Metainfo upstream**: the metainfo must be installed from the source tree, not shipped
+  as a file in the submission. `packaging/flatpak/io.github.loafer19.vivi.metainfo.xml`
+  is the full one (screenshots, branding, releases), so from the next tag on the manifest
+  can install it from the checkout instead of a `type: file` source.
+- **Latest runtime**: the runtime must be the latest at submission time
+  (org.freedesktop.Platform 26.08; `packaging/flatpak/` already uses it).
+- **PR template**: a short app description, a video of the Flatpak running on Linux,
+  and an explanation of every `finish-args` permission.
+- **Build-time keys**: Flathub builds from source without CI variables, so a Flathub
+  build has no baked-in Jamendo client id or AcoustID key unless the manifest sets them;
+  without them, users enter their own in the Free Music and Auto-tagger plugin settings.
+
 ## Submit (once)
 
 1. Read <https://docs.flathub.org/docs/for-app-authors/submission> and the requirements

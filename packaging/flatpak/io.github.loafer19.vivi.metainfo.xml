@@ -23,16 +23,44 @@
     </ul>
   </description>
   <launchable type="desktop-id">io.github.loafer19.vivi.desktop</launchable>
-  <url type="homepage">https://github.com/Loafer19/vivi</url>
+  <url type="homepage">https://viviplayer.app</url>
   <url type="bugtracker">https://github.com/Loafer19/vivi/issues</url>
+  <url type="contribute">https://github.com/Loafer19/vivi</url>
   <url type="vcs-browser">https://github.com/Loafer19/vivi</url>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/library-home.png</image>
-      <caption>Library home</caption>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/player.png</image>
+      <caption>Video playback with the controls</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/library-home.png</image>
+      <caption>Library home with Continue Watching</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/library-music.png</image>
+      <caption>Music library by albums</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/equalizer-presets.png</image>
+      <caption>Audio equalizer and presets</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/panel-subtitles.png</image>
+      <caption>Subtitle settings</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/extensions.png</image>
+      <caption>Downloadable plugins</caption>
     </screenshot>
   </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#f2e8ff</color>
+    <color type="primary" scheme_preference="dark">#3a2a5c</color>
+  </branding>
   <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
   <supports>
     <control>pointing</control>
     <control>keyboard</control>
@@ -88,14 +116,27 @@
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.10.0</url>
     </release>
     <release version="0.9.1" date="2026-10-15">
+      <description>
+        <p>Discord Rich Presence and Remote Control become downloadable plugins with small native helpers; new YouTube and yt-dlp plugin; MCP server for AI agents; radio lyrics; a visualizer fed by mpv's real output; the Inter font is bundled.</p>
+      </description>
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.9.1</url>
     </release>
     <release version="0.9.0" date="2026-10-15">
+      <description>
+        <p>Network streams (radio now-playing card and visualizer, IPTV, SomaFM, M3U import), physical-key shortcuts, chapter thumbnails, equalizer preset import and export, and downloadable plugins.</p>
+      </description>
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.9.0</url>
     </release>
     <release version="0.8.0" date="2026-10-14">
+      <description>
+        <p>Documentation site, regenerated screenshots and fixes.</p>
+      </description>
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.8.0</url>
     </release>
-    <release version="0.7.0" date="2026-10-14"/>
+    <release version="0.7.0" date="2026-10-14">
+      <description>
+        <p>Packaging and desktop integration: Flatpak, AppImage, desktop file and media keys.</p>
+      </description>
+    </release>
   </releases>
 </component>

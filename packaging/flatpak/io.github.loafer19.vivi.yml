@@ -12,7 +12,7 @@
 # appends to PATH so mpv's ytdl_hook finds it too.
 id: io.github.loafer19.vivi
 runtime: org.freedesktop.Platform
-runtime-version: '25.08'
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable

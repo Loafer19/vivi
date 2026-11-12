@@ -44,9 +44,11 @@ ln -s vivi.png "$APPDIR/.DirIcon"
 # metainfo, launched through this image's desktop id (vivi.desktop).
 install -d "$APPDIR/usr/share/metainfo"
 # The catalog validates with Ubuntu 22.04's appstream 0.15, which predates
-# <developer> and vcs-browser urls, so those become the older forms here.
+# <developer> and vcs-browser/contribute urls, so <developer> becomes the older form and the rest is dropped
+# here, like <branding> (scheme_preference), which only Flathub uses.
 sed -e 's|<launchable type="desktop-id">[^<]*</launchable>|<launchable type="desktop-id">vivi.desktop</launchable>|' \
-  -e '/<url type="vcs-browser">/d' \
+  -e '/<url type="vcs-browser">/d' -e '/<url type="contribute">/d' \
+  -e '/<branding>/,/<\/branding>/d' \
   -e '/<developer id=/,/<\/developer>/c\  <developer_name>Loafer19</developer_name>' \
   "$ROOT/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml" \
   > "$APPDIR/usr/share/metainfo/io.github.loafer19.vivi.appdata.xml"
