@@ -117,7 +117,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/mpv-player/mpv.git
-        tag: v0.40.0
+        tag: v0.41.0
 
   # UI font (ui/app.slint uses Inter). Found through SLINT_FONT_PATH, which vivi sets to
   # <prefix>/share/vivi/fonts at startup, so the host's fonts do not matter.
