@@ -47,24 +47,17 @@ pub(crate) fn wire(
         let p = player.clone();
         let weak = app.as_weak();
         move || {
-            // rfd uses the XDG desktop portal (GTK/KDE/Hyprland portals) on Linux.
-            let file = rfd::FileDialog::new()
-                .set_title("Open media")
-                .add_filter(
-                    "Media",
-                    &[
-                        "mkv", "mp4", "webm", "avi", "mov", "m4v", "ts", "mp3", "flac", "ogg",
-                        "opus", "m4a", "wav",
-                    ],
-                )
-                .add_filter("All files", &["*"])
-                .pick_file();
-            if let Some(f) = file {
-                p.open(&f.to_string_lossy());
-            }
-            if let Some(a) = weak.upgrade() {
-                a.window().request_redraw();
-            }
+            // rfd uses the XDG desktop portal (GTK/KDE/Hyprland portals) on Linux; the
+            // async picker keeps the window answering while it is open.
+            let (p, weak) = (p.clone(), weak.clone());
+            crate::filepick::media("Open media", false, move |files| {
+                if let Some(f) = files.first() {
+                    p.open(&f.to_string_lossy());
+                }
+                if let Some(a) = weak.upgrade() {
+                    a.window().request_redraw();
+                }
+            });
         }
     };
     let of = open_file.clone();
@@ -114,25 +107,28 @@ pub(crate) fn wire(
         });
         let p = player.clone();
         app.global::<crate::Library>().on_open_folder(move || {
-            let Some(d) = rfd::FileDialog::new()
-                .set_title("Open folder")
-                .pick_folder()
-            else {
-                return;
-            };
-            let mut e = crate::store::RecentEntry::new(&d.to_string_lossy());
-            e.kind = crate::store::RecentKind::Folder;
-            crate::store::push_recent_entry(e);
-            let mut files: Vec<String> = walk_media(&d);
-            files.sort();
-            for (i, f) in files.iter().enumerate() {
-                if i == 0 {
-                    p.open(f);
-                } else {
-                    p.enqueue(f);
-                }
-            }
+            let p = p.clone();
+            crate::filepick::folder("Open folder", move |d| {
+                let Some(d) = d else { return };
+                open_folder(&p, &d);
+            });
         });
     }
     (toggle_fs, open_file)
+}
+
+/// Play every media file in folder `d` (sorted), and remember the folder in Recent.
+fn open_folder(p: &Player, d: &std::path::Path) {
+    let mut e = crate::store::RecentEntry::new(&d.to_string_lossy());
+    e.kind = crate::store::RecentKind::Folder;
+    crate::store::push_recent_entry(e);
+    let mut files: Vec<String> = walk_media(d);
+    files.sort();
+    for (i, f) in files.iter().enumerate() {
+        if i == 0 {
+            p.open(f);
+        } else {
+            p.enqueue(f);
+        }
+    }
 }

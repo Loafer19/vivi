@@ -1275,20 +1275,31 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         render();
                     }
                     "add-file" => {
-                        if let Some(files) = rfd::FileDialog::new()
+                        let d = rfd::AsyncFileDialog::new()
                             .set_title("Add files to the queue")
-                            .set_directory(&path)
-                            .pick_files()
-                        {
-                            for (i, f) in files.iter().enumerate() {
-                                let f = f.to_string_lossy();
-                                if i == 0 && !a.global::<crate::Playback>().get_has_media() {
-                                    p.open(&f);
-                                } else {
-                                    p.enqueue(&f);
+                            .set_directory(&path);
+                        let (p, w) = (p.clone(), a.as_weak());
+                        crate::filepick::spawn(
+                            async move {
+                                d.pick_files()
+                                    .await
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .map(|f| f.path().to_path_buf())
+                                    .collect()
+                            },
+                            move |files| {
+                                let Some(a) = w.upgrade() else { return };
+                                for (i, f) in files.iter().enumerate() {
+                                    let f = f.to_string_lossy();
+                                    if i == 0 && !a.global::<crate::Playback>().get_has_media() {
+                                        p.open(&f);
+                                    } else {
+                                        p.enqueue(&f);
+                                    }
                                 }
-                            }
-                        }
+                            },
+                        );
                     }
                     "add-folder" => a.global::<crate::Library>().invoke_add_folder(),
                     "edit-subs" | "edit-audio" => {

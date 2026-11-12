@@ -171,22 +171,12 @@ pub(crate) fn queue_and_resume(app: &AppWindow, player: &Rc<Player>, log: bool) 
         .on_queue_sort(move || p.sort_queue());
     let p = player.clone();
     app.global::<crate::Panel>().on_queue_add(move || {
-        if let Some(files) = rfd::FileDialog::new()
-            .set_title("Add to queue")
-            .add_filter(
-                "Media",
-                &[
-                    "mkv", "mp4", "webm", "avi", "mov", "m4v", "ts", "mp3", "flac", "ogg", "opus",
-                    "m4a", "wav",
-                ],
-            )
-            .add_filter("All files", &["*"])
-            .pick_files()
-        {
+        let p = p.clone();
+        crate::filepick::media("Add to queue", true, move |files| {
             for f in files {
                 p.enqueue(&f.to_string_lossy());
             }
-        }
+        });
     });
     let p = player.clone();
     let weak = app.as_weak();
