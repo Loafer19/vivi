@@ -3,8 +3,6 @@
 use crate::*;
 use std::rc::Rc;
 
-use std::cell::RefCell;
-
 /// Environment and Slint backend; call before any thread or window is created.
 pub(crate) fn init() -> Result<(), slint::PlatformError> {
     // winit 0.30 has no Wayland drag & drop; VIVI_X11=1 runs under XWayland instead,
