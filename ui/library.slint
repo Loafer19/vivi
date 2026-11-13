@@ -404,15 +404,23 @@ component HomeHead inherits HorizontalLayout {
         cta := TouchArea { accessible-role: button; accessible-label: "Show all: " + root.title; mouse-cursor: pointer; clicked => { root.clicked(); } } }
 }
 
-// Home → Continue Watching at size L: the latest unfinished video as a large card.
+// Home → Continue Watching at size L: a large card that fills the row (next to Jump Back In).
+// Portrait or letterboxed thumbs: a zoomed, dimmed copy of the same image fills the sides,
+// and the sharp frame sits on top with contain (pillarbox / letterbox).
 component HomeHero inherits Rectangle {
     in property <LibItem> it;
-    in property <length> tall: 240px;
     callback open();
     callback menu(length, length);
-    height: root.tall; border-radius: Metrics.radius-lg; clip: true;
+    border-radius: Metrics.radius-lg; clip: true;
     background: Theme.bg-a3;
-    if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: cover; }
+    if root.it.has-thumb: Image {
+        // Zoomed cover so pillarbox / letterbox gaps are filled with the same picture.
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        width: parent.width * 140%; height: parent.height * 140%;
+        source: root.it.thumb; image-fit: cover;
+    }
+    if root.it.has-thumb: Rectangle { background: #000000.with-alpha(0.5); }
+    if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: contain; }
     if !root.it.has-thumb: TriIcon { name: Icons.kind-duo(root.it.kind); width: 56px; height: 56px; tint: Theme.fg-a3; }
     Rectangle { background: @linear-gradient(180deg, transparent 35%, Theme.media-chip 100%); }
     Rectangle {
@@ -785,11 +793,12 @@ export component LibraryView inherits Rectangle {
                             width: root.home-w;
                             height: lrow.preferred-height;
                             lrow := HorizontalLayout {
-                                width: parent.width; spacing: 16px;
+                                width: parent.width; height: parent.height; spacing: 16px;
                                 for c in line.cells: VerticalLayout {
                                     // Fraction of the line; explicit width so the ScrollView cannot shrink a ⅓ cell to its content.
                                     property <int> n-cells: line.cells.length;
                                     width: max(80px, (parent.width - 16px * max(0, self.n-cells - 1)) * c.frac);
+                                    height: 100%;
                                     horizontal-stretch: 0;
                                     alignment: start; spacing: 12px;
                                     if root.home-edit: HomeEditBar {
@@ -801,10 +810,15 @@ export component LibraryView inherits Rectangle {
                                     if root.home-edit && !c.on: Text { text: "Hidden. Turn it on to show it here."; color: Theme.fg-a3; font-size: Metrics.font-sm; }
                                     if root.home-edit && c.on && c.empty: Text { text: "Nothing here yet. It fills in as you use Vivi."; color: Theme.fg-a3; font-size: Metrics.font-sm; }
                                     if c.on && !c.empty: VerticalLayout {
+                                        vertical-stretch: 1;
                                         spacing: 14px;
-                                        // Continue Watching
-                                        if c.kind == "continue" && c.size == "l": HomeHero {
-                                            it: root.continue-items[0]; open => { root.go(root.continue-items[0]); } menu(x, y) => { root.item-menu(root.continue-items[0], x, y); }
+                                        // Continue Watching (L hero fills the row next to Jump Back In).
+                                        if c.kind == "continue" && c.size == "l": Rectangle {
+                                            vertical-stretch: 1; min-height: 240px;
+                                            HomeHero {
+                                                width: 100%; height: 100%;
+                                                it: root.continue-items[0]; open => { root.go(root.continue-items[0]); } menu(x, y) => { root.item-menu(root.continue-items[0], x, y); }
+                                            }
                                         }
                                         if c.kind == "continue" && c.size != "l": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.navigate("recent"); } }
                                         if c.kind == "continue" && c.size == "m": Grid { items: root.continue-items; max-rows: 1; open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }

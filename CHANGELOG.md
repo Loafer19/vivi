@@ -8,7 +8,7 @@
 - **Plugin Home widgets** (#87): `home.widget` entries can declare `id`, `sizes`, `span` and `template` (`card`, `tiles`, `list`); `vivi-content` takes `items` with pictures.
 
 ### Fixed
-- **Home** (#87): an empty state with a *Customize Home* button when every widget is hidden; the folder item-count, sort, view and search toolbar no longer appears on Home; the Home title lines up with the back and forward arrows; the header ⋯ menu on Home has *Refresh*, *Customize* and *Reset Home Widgets* (with a confirmation) instead of Grid / List View; shelves can be ⅓ wide so widgets sit side by side; widget heights follow their content; Your Mixes tiles no longer collapse into a sliver; the edit bar no longer repeats the widget title; a drag preview follows the pointer.
+- **Home** (#87): an empty state with a *Customize Home* button when every widget is hidden; the folder item-count, sort, view and search toolbar no longer appears on Home; the Home title lines up with the back and forward arrows; the header ⋯ menu on Home has *Refresh*, *Customize* and *Reset Home Widgets* (with a confirmation) instead of Grid / List View; shelves can be ⅓ wide so widgets sit side by side; widget heights follow their content; Your Mixes tiles no longer collapse into a sliver; the edit bar no longer repeats the widget title; a drag preview follows the pointer; the Continue Watching hero stretches to the row height next to Jump Back In; portrait or letterboxed hero thumbnails fill the side bars with a zoomed, dimmed copy of the same image.
 
 ### Changed
 - **Library in SQLite** (#100): filtering, sorting, search and paging run in the database (400 rows at a time) instead of on a full copy in memory.
