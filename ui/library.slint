@@ -924,7 +924,7 @@ export component LibraryView inherits Rectangle {
     // Drag preview: a compact title chip that follows the pointer.
     if root.dragging && root.drag-title != "": Rectangle {
         x: 70px;
-        y: min(max(root.drag-y - self.absolute-position.y - 17px, 48px), max(48px, root.height - 50px));
+        y: min(max(root.drag-y - root.absolute-position.y - 17px, 48px), max(48px, root.height - 50px));
         width: min(260px, max(140px, root.home-w / 3));
         height: 34px;
         border-radius: Metrics.radius-md;
