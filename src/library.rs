@@ -107,7 +107,12 @@ pub fn open_db(path: &Path) -> rusqlite::Result<Connection> {
             path TEXT PRIMARY KEY, kind TEXT, title TEXT, artist TEXT, album TEXT,
             genre TEXT, track INTEGER, duration REAL, size INTEGER, mtime INTEGER);
          CREATE INDEX IF NOT EXISTS media_kind ON media(kind);
-         CREATE INDEX IF NOT EXISTS media_artist_album ON media(artist, album);",
+         CREATE INDEX IF NOT EXISTS media_artist_album ON media(artist, album);
+         CREATE TABLE IF NOT EXISTS plays(
+            path TEXT NOT NULL, started_at INTEGER NOT NULL, seconds REAL NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0);
+         CREATE INDEX IF NOT EXISTS plays_path ON plays(path, started_at);
+         CREATE INDEX IF NOT EXISTS plays_started ON plays(started_at);",
     )?;
     migrate(&c)?;
     Ok(c)
@@ -343,9 +348,9 @@ pub fn all(conn: &Connection) -> Vec<Media> {
 // ---------- queries (#100) ----------
 
 /// Columns read into a [`Media`], in [`row`] order.
-const COLS: &str = "path,kind,title,artist,album,genre,track,duration,size,mtime";
+pub(crate) const COLS: &str = "path,kind,title,artist,album,genre,track,duration,size,mtime";
 
-fn row(r: &rusqlite::Row) -> rusqlite::Result<Media> {
+pub(crate) fn row(r: &rusqlite::Row) -> rusqlite::Result<Media> {
     Ok(Media {
         path: r.get(0)?,
         kind: r.get::<_, Option<MediaKind>>(1)?.unwrap_or_default(),
@@ -364,7 +369,8 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Media> {
 pub const UNKNOWN: &str = "Unknown";
 
 /// A tag column a music view groups or filters by.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Field {
     Album,
     Artist,
@@ -372,7 +378,7 @@ pub enum Field {
 }
 
 impl Field {
-    fn col(self) -> &'static str {
+    pub(crate) fn col(self) -> &'static str {
         match self {
             Self::Album => "album",
             Self::Artist => "artist",
@@ -513,7 +519,7 @@ pub fn query(conn: &Connection, q: &Query, watched: &dyn Fn(&Media) -> bool) -> 
     select(conn, &sql, &p)
 }
 
-fn select(conn: &Connection, sql: &str, p: &[String]) -> Vec<Media> {
+pub(crate) fn select(conn: &Connection, sql: &str, p: &[String]) -> Vec<Media> {
     let Ok(mut st) = conn.prepare(sql) else {
         return Vec::new();
     };
@@ -956,6 +962,8 @@ mod tests {
                 "media_kind_nal",
                 "media_kind_nar",
                 "media_kind_nt",
+                "plays_path",
+                "plays_started",
             ]
         );
         // The old row was backfilled with its folder and search text.

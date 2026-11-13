@@ -14,6 +14,7 @@ pub(crate) use rows::*;
 
 use crate::app::state::{AppMsg, AppState};
 use crate::config::{self, Config, Preset};
+use crate::library;
 use crate::player::Player;
 use crate::plugins;
 use crate::{store, AppWindow, SettingRow, Theme};
@@ -490,6 +491,39 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
                                             )
                                             .into(),
                                         );
+                                    }
+                                },
+                            );
+                            return;
+                        }
+                        "privacy.plays" => {
+                            let n = library::open_db(&library::db_path())
+                                .map_or(0, |c| crate::smart::play_count(&c));
+                            if n == 0 {
+                                a.global::<crate::Settings>()
+                                    .set_status("The play history is empty".into());
+                                return;
+                            }
+                            let w = a.as_weak();
+                            crate::dialogs::confirm_core(
+                                &a,
+                                "clear-plays",
+                                "Clear play history",
+                                &format!("Forget {n} play{}?", if n == 1 { "" } else { "s" }),
+                                "Top this week, Most played and the other smart playlists start over. Your files and playlists are not touched.",
+                                "Clear",
+                                move || {
+                                    let n = library::open_db(&library::db_path())
+                                        .map_or(0, |c| crate::smart::clear_history(&c));
+                                    if let Some(a) = w.upgrade() {
+                                        a.global::<crate::Settings>().set_status(
+                                            format!(
+                                                "{n} play{} forgotten",
+                                                if n == 1 { "" } else { "s" }
+                                            )
+                                            .into(),
+                                        );
+                                        a.global::<crate::Library>().invoke_refresh();
                                     }
                                 },
                             );

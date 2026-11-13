@@ -384,6 +384,18 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             "Forget where you left off in every file.",
             "Clear",
         )
+        .toggle(
+            "library.history",
+            "Keep a play history",
+            "Count the songs and videos you play, on this computer only. Smart playlists such as Top this week and Most played are built from it.",
+            c.library.history,
+        )
+        .action(
+            "privacy.plays",
+            "Clear play history",
+            "Forget which files you played and how often. Smart playlists start over (asks first).",
+            "Clear",
+        )
         .action(
             "privacy.bookmarks",
             "Clear bookmarks",

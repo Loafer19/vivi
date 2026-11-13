@@ -396,6 +396,30 @@ fn synced_rows(v: &mut Vec<MenuItem>, synced: bool) {
 }
 
 /// Context menu rows for a library item kind.
+/// Library keys of smart playlists and "Similar to" lists (#87).
+fn is_smart_key(key: &str) -> bool {
+    key.starts_with("smart:") || key.starts_with("similar:")
+}
+
+/// A smart playlist's menu; `saved` lists (not a temporary "Similar to") can be deleted.
+fn smart_menu(saved: bool) -> Vec<MenuItem> {
+    let mut v = vec![
+        row("lib:play", "Play", "play", ""),
+        row("lib:shuffle", "Shuffle", "shuffle", ""),
+        row("lib:enqueue", "Add to Queue", "add-to-queue", ""),
+        row("lib:save-m3u", "Save as Playlist", "export-playlist", ""),
+    ];
+    if saved {
+        v.push(div(row(
+            "lib:delete",
+            "Delete Smart Playlist",
+            "remove",
+            "",
+        )));
+    }
+    v
+}
+
 fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<MenuItem> {
     let fav = if pinned {
         "Remove from Favorites"
@@ -486,6 +510,13 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
                     "",
                 ),
             ];
+            // A temporary smart list of songs that share its artist, album or genre (#87).
+            if kind == "audio" {
+                v.insert(
+                    5,
+                    row("lib:similar", "Similar to This Track", "playlist", ""),
+                );
+            }
             if progress {
                 v.push(div(row("lib:forget", "Clear Progress", "remove", "")));
             }
@@ -535,7 +566,11 @@ fn menu_rows(
                 key: g(0).into(),
                 kind: g(1).into(),
             };
-            let mut v = lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1");
+            let mut v = if is_smart_key(g(0)) {
+                smart_menu(g(0).starts_with("smart:"))
+            } else {
+                lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1")
+            };
             // `context.item`: plugin actions for files and folders.
             if matches!(g(1), "audio" | "video" | "folder") {
                 v.extend(grouped(item_rows(contrib::CONTEXT_ITEM, "plugins")));

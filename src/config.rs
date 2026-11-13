@@ -370,6 +370,8 @@ pub struct Library {
     pub thumbnails: bool,
     /// Files marked as watched from the context menu.
     pub watched: Vec<String>,
+    /// Record plays in the local play history (smart playlists, #87).
+    pub history: bool,
 }
 
 impl Default for Library {
@@ -387,6 +389,7 @@ impl Default for Library {
             sort: "name".into(),
             watched: Vec::new(),
             thumbnails: true,
+            history: true,
         }
     }
 }

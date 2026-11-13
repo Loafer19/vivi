@@ -17,6 +17,19 @@ struct Drain {
     load: loading::Loading,
     last_err: String,
     fit: bool,
+    /// Listening of the playing file for the play history (#87).
+    plays: crate::smart::Tracker,
+}
+
+/// Write a play-history change (a few rows per file, so a short-lived connection).
+fn record(t: &mut crate::smart::Tracker, w: Option<crate::smart::Write>) {
+    let Some(w) = w else { return };
+    let res = library::open_db(&library::db_path()).and_then(|c| crate::smart::apply(&c, &w));
+    match res {
+        Ok(Some(id)) => t.written(id),
+        Ok(None) => {}
+        Err(e) => eprintln!("vivi: play history: {e}"),
+    }
 }
 
 thread_local! {
@@ -59,9 +72,12 @@ fn drain() {
                     if d.log {
                         eprintln!("time-pos {t:.2}");
                     }
+                    let w = d.plays.position(t);
+                    record(&mut d.plays, w);
                     a.global::<crate::Playback>().set_position(t as f32)
                 }
                 PlayerEvent::Duration(dur) => {
+                    d.plays.duration(dur);
                     a.global::<crate::Playback>().set_duration(dur as f32)
                 }
                 PlayerEvent::Pause(p) => {
@@ -86,6 +102,17 @@ fn drain() {
                     activity = true;
                     d.fit = true;
                     a.global::<crate::Playback>().set_has_media(true);
+                    {
+                        // Local files only: streams and web videos have no library row.
+                        let w = d.plays.end();
+                        record(&mut d.plays, w);
+                        let path = d.player.get("path").unwrap_or_default();
+                        let dur: f64 = d.player.mpv.get_property("duration").unwrap_or(0.0);
+                        let local =
+                            d.cfg.config().library.history && std::path::Path::new(&path).is_file();
+                        d.plays
+                            .start(if local { &path } else { "" }, dur, crate::smart::now());
+                    }
                     refresh_lists(&a, &d.player, d.log);
                     on_file_loaded(&a, &d.player, d.log);
                     libview::flush_pending(&d.player);
@@ -157,6 +184,8 @@ fn drain() {
                 }
                 PlayerEvent::Buffering(b) => d.load.cache(b),
                 PlayerEvent::EndFile(err) => {
+                    let w = d.plays.end();
+                    record(&mut d.plays, w);
                     hide = true;
                     activity = true;
                     crate::nowplaying::sync();
@@ -274,6 +303,7 @@ pub(crate) fn wire(
             load: loading::Loading::default(),
             last_err: String::new(),
             fit: false,
+            plays: Default::default(),
         });
     });
     // Events queued before wiring stay in the channel until the first wake; take them now.

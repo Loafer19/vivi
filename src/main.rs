@@ -36,6 +36,7 @@ mod render;
 mod scenes;
 mod settings;
 mod sleep;
+mod smart;
 mod status;
 mod store;
 mod streams;

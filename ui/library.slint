@@ -400,6 +400,7 @@ export component LibraryView inherits Rectangle {
     in property <[LibItem]> list-items;
     in property <[LibItem]> artist-items;
     in property <string> nav: "home";
+    in property <bool> smart;
     in property <[string]> crumb-keys;
     in property <[string]> crumb-labels;
     in property <string> sort: "name";
@@ -655,7 +656,13 @@ export component LibraryView inherits Rectangle {
                         primary-text: "Clear search";
                         primary => { root.query = ""; root.search(""); }
                     }
-                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0 && !root.scanning && root.query == "" && root.section == "playlists": EmptyState {
+                    if root.smart && root.items.length == 0 && !root.scanning && root.query == "": EmptyState {
+                        icon: "playlist"; title: "Nothing matches yet";
+                        sentence: "Smart playlists fill themselves from what you play. Play a few songs and come back.";
+                        primary-text: "Open Music";
+                        primary => { root.navigate("music"); }
+                    }
+                    if (root.nav != "home" || root.query != "") && root.nav != "downloads" && root.items.length == 0 && !root.scanning && root.query == "" && root.section == "playlists" && !root.smart: EmptyState {
                         icon: "playlist"; title: "No playlists yet";
                         sentence: "Save the queue from the side panel, or create a playlist to see it here.";
                         primary-text: "New playlist";

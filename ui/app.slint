@@ -338,7 +338,7 @@ export component AppWindow inherits Window {
         height: root.height - 40px - (Playback.has-media ? root.bar-h : 0px);
         items: Library.items; continue-items: Library.continue; recent-items: Library.recent; pinned-items: Library.pinned;
         listen-items: Library.listen; folder-items: Library.folders; list-items: Library.lists; artist-items: Library.artists;
-        nav: Library.nav; crumb-keys: Library.crumb-keys; crumb-labels: Library.crumb-labels;
+        nav: Library.nav; smart: Library.smart; crumb-keys: Library.crumb-keys; crumb-labels: Library.crumb-labels;
         sort: Library.sort; grid: Library.grid; count: Library.count; scanning: Library.scanning; has-media: Playback.has-media;
         can-back: Library.can-back; can-forward: Library.can-forward;
         query <=> Library.query;

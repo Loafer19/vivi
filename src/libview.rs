@@ -155,6 +155,8 @@ enum Nav {
     Downloads,
     Bookmarks,
     Playlists,
+    /// A smart playlist (`smart:<id>`) or a "Similar to" list (`similar:<path>`), #87.
+    Smart,
 }
 
 impl Nav {
@@ -170,6 +172,7 @@ impl Nav {
             "downloads" => Self::Downloads,
             "bookmarks" => Self::Bookmarks,
             "playlists" => Self::Playlists,
+            "smart" | "similar" => Self::Smart,
             _ => Self::Home,
         };
         (s, arg)
@@ -188,6 +191,8 @@ pub struct Lib {
     has_audio: bool,
     /// The rest of the browsed list: its query with the next offset.
     more: Option<library::Query>,
+    /// The page is a smart playlist (the UI shows its own empty state).
+    smart: bool,
     nav: String,
     search: String,
     requested: HashSet<String>,
@@ -422,6 +427,7 @@ impl Lib {
         let (section, arg) = Nav::parse(&nav);
         let sort = cfg.library.sort.as_str();
         self.more = None;
+        self.smart = section == Nav::Smart;
         let base = |kind: Option<MediaKind>| library::Query {
             kind,
             search: self.search.clone(),
@@ -627,11 +633,26 @@ impl Lib {
                     out.push(it);
                 }
             }
+            Nav::Smart => {
+                crumbs.push(("playlists".into(), "Playlists".into()));
+                if let Some(l) = smart_list(&nav) {
+                    crumbs.push((nav.clone(), l.name.clone()));
+                    let rows = self
+                        .db
+                        .as_ref()
+                        .map(|db| crate::smart::evaluate(db, &l, crate::smart::now()))
+                        .unwrap_or_default();
+                    for m in &rows {
+                        out.push(self.item(m, cfg));
+                    }
+                }
+            }
             Nav::Playlists => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
                 let marks = crate::bookmarks::list_all().len();
                 let lists = store::playlists();
-                if !lists.is_empty() || marks > 0 {
+                let smart = crate::smart::load();
+                if !lists.is_empty() || marks > 0 || !smart.is_empty() {
                     out.push(Self::action(
                         "action:create-playlist",
                         "Create playlist",
@@ -641,6 +662,24 @@ impl Lib {
                 if marks > 0 {
                     let mut it = Self::action("bookmarks", "Bookmarks", "bookmark");
                     it.subtitle = format!("{marks} saved").into();
+                    out.push(it);
+                }
+                // Smart playlists (#87): rebuilt from the play history and tags.
+                let now = crate::smart::now();
+                for l in &smart {
+                    let n = self
+                        .db
+                        .as_ref()
+                        .map_or(0, |db| crate::smart::evaluate(db, l, now).len());
+                    let mut it = Self::group(
+                        format!("smart:{}", l.id),
+                        &l.name,
+                        format!("{n} items · {}", crate::smart::describe(l)),
+                        "playlist",
+                        false,
+                    );
+                    it.icon = "playlist".into();
+                    it.badge = "Smart".into();
                     out.push(it);
                 }
                 let names: Vec<(String, String)> = crate::plugins::manifests()
@@ -717,9 +756,18 @@ impl Lib {
             })
     }
 
-    /// Files played lately, newest first.
+    /// Files played lately, newest first: the Recent list, then the play history (#87).
     fn history_paths(&self) -> Vec<String> {
-        store::recent()
+        let mut v = store::recent();
+        if let Some(db) = &self.db {
+            let seen: HashSet<String> = v.iter().cloned().collect();
+            v.extend(
+                crate::smart::recent_paths(db, 500)
+                    .into_iter()
+                    .filter(|p| !seen.contains(p)),
+            );
+        }
+        v
     }
 
     /// The Home sections (built here, shown by [`HomeRows::show`] after the library
@@ -876,6 +924,86 @@ impl Lib {
     }
 }
 
+/// A smart playlist key (`smart:<id>` or `similar:<path>`).
+fn is_smart(key: &str) -> bool {
+    key.starts_with("smart:") || key.starts_with("similar:")
+}
+
+/// The smart list behind a key.
+fn smart_list(key: &str) -> Option<crate::smart::SmartList> {
+    if let Some(p) = key.strip_prefix("similar:") {
+        return Some(crate::smart::similar(p));
+    }
+    let id = key.strip_prefix("smart:")?;
+    crate::smart::load().into_iter().find(|l| l.id == id)
+}
+
+/// Play, shuffle, queue, save as .m3u or delete a smart playlist.
+fn smart_action(a: &AppWindow, p: &Rc<Player>, lib: &Rc<RefCell<Lib>>, key: &str, action: &str) {
+    let Some(list) = smart_list(key) else { return };
+    let note = |t: String| a.global::<crate::Notices>().set_resume_text(t.into());
+    if action == "delete" {
+        let mut all = crate::smart::load();
+        all.retain(|l| l.id != list.id);
+        match crate::smart::save(&all) {
+            Ok(()) => note(format!("Deleted “{}”", list.name)),
+            Err(e) => eprintln!("vivi: smart playlists: {e}"),
+        }
+        return;
+    }
+    let files: Vec<String> = match lib.try_borrow() {
+        Ok(l) => {
+            l.db.as_ref()
+                .map(|db| crate::smart::evaluate(db, &list, crate::smart::now()))
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| m.path)
+                .collect()
+        }
+        Err(_) => return,
+    };
+    if files.is_empty() {
+        note(format!("“{}” is empty", list.name));
+        return;
+    }
+    match action {
+        "save-m3u" => match store::save_playlist(&list.name, &files) {
+            Ok(_) => note(format!("Saved “{}” to Playlists", list.name)),
+            Err(e) => eprintln!("vivi: save playlist: {e}"),
+        },
+        "enqueue" => {
+            let start = !a.global::<crate::Playback>().get_has_media();
+            for (i, f) in files.iter().enumerate() {
+                if i == 0 && start {
+                    p.open(f);
+                } else {
+                    p.enqueue(f);
+                }
+            }
+            note(format!("Added {} items to the queue", files.len()));
+        }
+        // Play / Shuffle: start the list and queue the rest of it.
+        _ => {
+            p.open(&files[0]);
+            for f in &files[1..] {
+                p.enqueue(f);
+            }
+            if action == "shuffle" {
+                let p = p.clone();
+                slint::Timer::single_shot(std::time::Duration::from_millis(400), move || {
+                    p.run("playlist-shuffle")
+                });
+            }
+            if a.global::<crate::Library>().get_full()
+                || !a.global::<crate::Playback>().get_has_media()
+            {
+                a.global::<crate::Overlays>().set_library_open(false);
+            }
+            a.global::<crate::Library>().set_full(false);
+        }
+    }
+}
+
 /// Watched: finished (95 %) or marked watched.
 fn watched(m: &Media, cfg: &Config) -> bool {
     library::progress(m) >= 0.95 || cfg.library.watched.contains(&m.path)
@@ -992,6 +1120,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
         total: 0,
         has_audio: false,
         more: None,
+        smart: false,
         nav: "home".into(),
         search: String::new(),
         requested: HashSet::new(),
@@ -1030,11 +1159,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
             LAZY.set(false);
             let home = l.home(&c);
             let models = l.models.clone();
-            let (nav, total, back, fwd) = (
+            let (nav, total, back, fwd, smart) = (
                 l.nav.clone(),
                 l.total,
                 !l.back.is_empty(),
                 !l.fwd.is_empty(),
+                l.smart,
             );
             drop(l);
             // Figma breadcrumb: long paths keep the last two levels behind "...".
@@ -1051,6 +1181,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
             home.show(&models);
             let g = a.global::<crate::Library>();
             g.set_nav(nav.clone().into());
+            g.set_smart(smart);
             g.set_crumb_keys(strings(crumbs.iter().map(|c| c.0.clone())));
             g.set_crumb_labels(strings(crumbs.into_iter().map(|c| c.1)));
             g.set_sort(c.library.sort.clone().into());
@@ -1216,6 +1347,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
                     k => a.global::<crate::Library>().invoke_navigate(k.into()),
                 },
                 "folder" | "group" => a.global::<crate::Library>().invoke_navigate(key),
+                "playlist" if is_smart(&key) => a.global::<crate::Library>().invoke_navigate(key),
                 "playlist" => a.global::<crate::Panel>().invoke_playlist_load(key),
                 "bookmark" => {
                     if let Some((path, t)) = crate::bookmarks::parse_lib_key(&key) {
@@ -1263,7 +1395,15 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
             .on_menu(move |key, kind, action| {
                 let Some(a) = w.upgrade() else { return };
                 let path = key.strip_prefix("video:").unwrap_or(&key).to_string();
+                if is_smart(&key) {
+                    smart_action(&a, &p, &lib, &key, &action);
+                    render();
+                    return;
+                }
                 match action.as_str() {
+                    "similar" => a
+                        .global::<crate::Library>()
+                        .invoke_navigate(format!("similar:{path}").into()),
                     "play" => a.global::<crate::Library>().invoke_open(key, kind),
                     // remove_at re-renders this page (bookmarks::changed).
                     "delete-bookmark" => {

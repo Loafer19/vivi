@@ -14,6 +14,8 @@ export global Library {
     in-out property <bool> can-forward;
     in-out property <bool> full;
     in-out property <string> nav: "home";
+    // The page is a smart playlist or a "Similar to" list (#87).
+    in-out property <bool> smart;
     in-out property <[string]> crumb-keys;
     in-out property <[string]> crumb-labels;
     in-out property <string> sort: "name";
