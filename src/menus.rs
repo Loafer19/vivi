@@ -518,7 +518,7 @@ fn menu_rows(
     a: &AppWindow,
     p: &Player,
     ctx: &Rc<RefCell<Ctx>>,
-    cfg: &Rc<RefCell<Config>>,
+    cfg: &crate::app::state::AppState,
     kind: &str,
     c: &str,
 ) -> Vec<MenuItem> {
@@ -548,14 +548,14 @@ fn menu_rows(
             v
         }
         "sort" => {
-            let cur = cfg.borrow().library.sort.clone();
+            let cur = cfg.config().library.sort.clone();
             SORTS
                 .iter()
                 .map(|(k, l)| check(&format!("sort:{k}"), l, sort_key(&cur) == *k))
                 .collect()
         }
         "view" => {
-            let grid = cfg.borrow().library.view != "list";
+            let grid = cfg.config().library.view != "list";
             vec![
                 MenuItem {
                     checked: grid,
@@ -598,7 +598,7 @@ fn present_menu(
     }
 }
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState) {
     let items = Rc::new(VecModel::<MenuItem>::default());
     let subs = Rc::new(VecModel::<MenuItem>::default());
     app.global::<crate::Menus>()

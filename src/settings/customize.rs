@@ -5,7 +5,7 @@ use super::*;
 pub(crate) fn customize(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<RefCell<Config>>,
+    cfg: &AppState,
     save: impl Fn() + Clone + 'static,
     log: bool,
 ) {
@@ -19,14 +19,10 @@ pub(crate) fn customize(
             // before borrowing it mutably, and apply after the borrow ends (0.16.3
             // aborted with "RefCell already mutably borrowed" here).
             let buttons = plugin_buttons();
-            {
-                let mut c = cfg.borrow_mut();
-                let mut t = visible_toolbar(&c.interface.toolbar, &buttons);
-                f(&mut t);
-                c.interface.toolbar = t;
-                c.interface.profile = profile_of(&c.interface);
-            }
-            apply_toolbar(&a, &cfg.borrow());
+            let mut t = visible_toolbar(&cfg.config().interface.toolbar, &buttons);
+            f(&mut t);
+            cfg.send(AppMsg::SetToolbar(t));
+            apply_toolbar(&a, &cfg.config());
         }
     };
     {
@@ -37,17 +33,11 @@ pub(crate) fn customize(
             .on_select_profile(move |p| {
                 let Some(a) = w.upgrade() else { return };
                 if !a.global::<crate::Overlays>().get_customize_open() {
-                    *backup.borrow_mut() = Some(cfg.borrow().interface.clone());
+                    *backup.borrow_mut() = Some(cfg.config().interface.clone());
                     a.global::<crate::Overlays>().set_customize_open(true);
                 }
-                if let Some(t) = config::profile_toolbar(&p) {
-                    let mut c = cfg.borrow_mut();
-                    c.interface.toolbar = t;
-                    c.interface.bar_style = config::profile_style(&p).into();
-                    c.interface.volume_style = config::profile_volume(&p).into();
-                    c.interface.profile = p.to_string();
-                }
-                apply_toolbar(&a, &cfg.borrow());
+                cfg.send(AppMsg::SelectProfile(p.to_string()));
+                apply_toolbar(&a, &cfg.config());
             });
     }
     {
@@ -78,12 +68,8 @@ pub(crate) fn customize(
         let cfg = cfg.clone();
         app.global::<crate::Customize>().on_style(move |st| {
             let Some(a) = w.upgrade() else { return };
-            {
-                let mut c = cfg.borrow_mut();
-                c.interface.bar_style = st.to_string();
-                c.interface.profile = profile_of(&c.interface);
-            }
-            apply_toolbar(&a, &cfg.borrow());
+            cfg.send(AppMsg::SetBarStyle(st.to_string()));
+            apply_toolbar(&a, &cfg.config());
         });
     }
     {
@@ -91,12 +77,10 @@ pub(crate) fn customize(
         let cfg = cfg.clone();
         app.global::<crate::Customize>().on_pick_volume(move |st| {
             let Some(a) = w.upgrade() else { return };
-            {
-                let mut c = cfg.borrow_mut();
-                c.interface.volume_style = config::volume_style_name(&st).into();
-                c.interface.profile = profile_of(&c.interface);
-            }
-            apply_toolbar(&a, &cfg.borrow());
+            cfg.send(AppMsg::SetVolumeStyle(
+                config::volume_style_name(&st).into(),
+            ));
+            apply_toolbar(&a, &cfg.config());
         });
     }
     app.global::<crate::Customize>()
@@ -112,12 +96,12 @@ pub(crate) fn customize(
             if keep {
                 save();
                 if log {
-                    eprintln!("toolbar saved: {:?}", cfg.borrow().interface.toolbar);
+                    eprintln!("toolbar saved: {:?}", cfg.config().interface.toolbar);
                 }
             } else if let Some(old) = old {
-                cfg.borrow_mut().interface = old;
+                cfg.send(AppMsg::RestoreInterface(Box::new(old)));
             }
-            apply_toolbar(&a, &cfg.borrow());
+            apply_toolbar(&a, &cfg.config());
         });
         let w = app.as_weak();
         app.global::<crate::Playback>().on_bar_action(move |id| {

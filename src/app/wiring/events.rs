@@ -11,7 +11,7 @@ use std::sync::mpsc::Receiver;
 struct Drain {
     weak: slint::Weak<AppWindow>,
     player: Rc<Player>,
-    cfg: Rc<RefCell<config::Config>>,
+    cfg: crate::app::state::AppState,
     events: Receiver<PlayerEvent>,
     log: bool,
     load: loading::Loading,
@@ -106,7 +106,7 @@ fn drain() {
                     a.global::<crate::Playback>().set_range_a(-1.0);
                     a.global::<crate::Playback>().set_range_b(-1.0);
                     abloop::reset(&a, &d.player);
-                    let c = d.cfg.borrow();
+                    let c = d.cfg.config();
                     let key = settings::apply_preset(&d.player, &c, d.log);
                     settings::sync_panel(&a, &d.player);
                     drop(c);
@@ -152,7 +152,7 @@ fn drain() {
                 PlayerEvent::PlaybackRestart => {
                     d.load.restart();
                     if std::mem::take(&mut d.fit) {
-                        crate::winstate::fit_video(&a, &d.player, &d.cfg.borrow());
+                        crate::winstate::fit_video(&a, &d.player, &d.cfg.config());
                     }
                 }
                 PlayerEvent::Buffering(b) => d.load.cache(b),
@@ -233,7 +233,7 @@ fn drain() {
 pub(crate) fn wire(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<RefCell<config::Config>>,
+    cfg: &crate::app::state::AppState,
     events: Receiver<PlayerEvent>,
     log: bool,
 ) {
@@ -245,7 +245,7 @@ pub(crate) fn wire(
         app.global::<crate::Playback>().on_preview_wanted(move || {
             let Some(a) = w.upgrade() else { return };
             // First hover of this file: Chapter Thumbnails ("On hover") renders its frames.
-            if preview::hovered(&a, &c.borrow()) {
+            if preview::hovered(&a, &c.config()) {
                 p.cmd("script-message", &["vivi-preview-wanted"]);
             }
         });
@@ -260,10 +260,7 @@ pub(crate) fn wire(
         app.global::<crate::Notices>().on_hint_never(move || {
             let Some(a) = w.upgrade() else { return };
             preview::hide_hint(&a);
-            c.borrow_mut().interface.hint_chapter_thumbnails = false;
-            if let Err(e) = c.borrow().save() {
-                eprintln!("vivi: save config: {e}");
-            }
+            c.update_and_save(|c| c.interface.hint_chapter_thumbnails = false);
             settings::refresh_ui();
         });
     }

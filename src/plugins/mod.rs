@@ -37,6 +37,7 @@ pub mod subtitle_search;
 pub mod tagsources;
 pub mod web;
 
+use crate::app::state::{AppMsg, AppState};
 use crate::config::Config;
 use crate::player::Player;
 use crate::AppWindow;
@@ -191,7 +192,7 @@ pub struct Ctx<'a> {
     pub player: &'a Rc<Player>,
     id: &'a str,
     manifest: &'a Manifest,
-    cfg: &'a Rc<RefCell<Config>>,
+    cfg: &'a AppState,
     scripts: &'a [scripts::Script],
 }
 
@@ -203,7 +204,7 @@ impl Ctx<'_> {
             .scripts
             .iter()
             .find(|s| s.manifest.id == id && s.manifest.origin == Origin::Package)?;
-        let c = read_cfg(self.cfg)?;
+        let c = self.cfg.config();
         is_enabled(&c, &s.manifest)
             .then(|| s.path.file_stem())
             .flatten()
@@ -211,23 +212,17 @@ impl Ctx<'_> {
     }
     /// A setting value (or the manifest default).
     pub fn get(&self, key: &str) -> String {
-        match read_cfg(self.cfg) {
-            Some(c) => setting_value(&c, self.manifest, key),
-            None => setting_value(&Config::default(), self.manifest, key),
-        }
+        setting_value(&self.cfg.config(), self.manifest, key)
     }
     pub fn flag(&self, key: &str) -> bool {
         self.get(key) == "true"
     }
     /// Change a setting and save the config.
     pub fn set(&self, key: &str, value: &str) {
-        edit_cfg(self.cfg, |c| {
-            c.plugins
-                .entry(self.id.into())
-                .or_default()
-                .settings
-                .insert(key.into(), value.into());
-        });
+        edit_cfg(
+            self.cfg,
+            AppMsg::SetPluginSetting(self.id.into(), key.into(), value.into()),
+        );
     }
     /// Show a short message in the player toast.
     pub fn toast(&self, msg: &str) {
@@ -238,10 +233,7 @@ impl Ctx<'_> {
     /// built-ins; none needs it right now (Free Music's notices come from Downloads).
     #[allow(dead_code)]
     pub fn notify(&self, title: &str, body: &str) {
-        match read_cfg(self.cfg) {
-            Some(c) => notify_or_toast(self.app, &c, self.manifest, title, body),
-            None => toast(self.app, &crate::notify::toast_text(title, body)),
-        }
+        notify_or_toast(self.app, &self.cfg.config(), self.manifest, title, body)
     }
     /// Local path of the playing file, if it is a file.
     pub fn local_path(&self) -> Option<std::path::PathBuf> {
@@ -254,7 +246,7 @@ impl Ctx<'_> {
 /// plugin callbacks; inside use [`Ctx::package_script`]).
 pub fn package_script(id: &str) -> Option<String> {
     with(|r| {
-        let c = read_cfg(&r.cfg)?;
+        let c = r.cfg.config();
         let name = r
             .scripts
             .iter()
@@ -289,7 +281,7 @@ pub fn active(id: &str) -> bool {
 /// Whether every enabled script that should load on startup has been handed to mpv.
 pub fn startup_scripts_loaded() -> bool {
     with(|r| {
-        let c = read_cfg(&r.cfg)?;
+        let c = r.cfg.config();
         if !scripts::load_on_startup(&c) {
             return Some(true);
         }
@@ -311,9 +303,7 @@ pub fn loaded(id: &str) -> bool {
         if r.entries.iter().any(|e| e.active && e.manifest.id == id) {
             return true;
         }
-        let Some(c) = read_cfg(&r.cfg) else {
-            return false;
-        };
+        let c = r.cfg.config();
         r.scripts.iter().any(|s| {
             s.manifest.id == id
                 && script_running(r.loaded.contains(id), is_enabled(&c, &s.manifest))
@@ -344,9 +334,7 @@ pub fn running(id: &str) -> Running {
         if r.entries.iter().any(|e| e.active && e.manifest.id == id) {
             return Running::Yes;
         }
-        let Some(c) = read_cfg(&r.cfg) else {
-            return Running::No;
-        };
+        let c = r.cfg.config();
         r.scripts
             .iter()
             .find(|s| s.manifest.id == id)
@@ -418,7 +406,7 @@ struct Entry {
 pub struct Registry {
     app: slint::Weak<AppWindow>,
     player: Rc<Player>,
-    cfg: Rc<RefCell<Config>>,
+    cfg: AppState,
     entries: Vec<Entry>,
     scripts: Vec<scripts::Script>,
     /// Ids of scripts mpv has loaded (it cannot unload them).
@@ -437,30 +425,11 @@ fn with<R>(f: impl FnOnce(&mut Registry) -> R) -> Option<R> {
     REG.with(|r| r.try_borrow_mut().ok()?.as_mut().map(f))
 }
 
-/// Read the shared config without aborting when a caller further up the stack still
-/// holds it mutably (a UI handler mid-edit that asks for the plugin entries again).
-/// `RefCell::borrow` panics there, and with `panic = "abort"` that ends Vivi; here the
-/// read is skipped with a log line and the caller falls back.
-fn read_cfg(cfg: &RefCell<Config>) -> Option<std::cell::Ref<'_, Config>> {
-    let c = cfg.try_borrow().ok();
-    if c.is_none() {
-        eprintln!("vivi: plugins: config read skipped, it is being changed (re-entrant call)");
-    }
-    c
-}
-
-/// Change the shared config and save it; false (with a log line) when it is borrowed
-/// further up the stack. The borrow ends before the save returns, so nothing the
-/// caller runs next can trip over it.
-fn edit_cfg(cfg: &RefCell<Config>, f: impl FnOnce(&mut Config)) -> bool {
-    let Ok(mut c) = cfg.try_borrow_mut() else {
-        eprintln!("vivi: plugins: config change skipped, it is in use (re-entrant call)");
-        return false;
-    };
-    f(&mut c);
-    drop(c);
-    save(cfg);
-    true
+/// Change the shared config and save it. Goes through [`AppState`] (#101): a change
+/// asked for while another one runs (a UI handler mid-edit that reaches the plugin host)
+/// is queued and saved after it, never a panic.
+fn edit_cfg(cfg: &AppState, msg: AppMsg) {
+    cfg.send_and_save(msg);
 }
 
 macro_rules! ctx {
@@ -535,7 +504,7 @@ pub fn manifests() -> Vec<Manifest> {
 #[cfg(unix)]
 pub fn states() -> Vec<(Manifest, bool)> {
     with(|r| {
-        let c = read_cfg(&r.cfg)?;
+        let c = r.cfg.config();
         Some(
             r.entries
                 .iter()
@@ -553,7 +522,7 @@ pub fn states() -> Vec<(Manifest, bool)> {
 }
 
 /// Create the registry, enable plugins per config and start the tick timer.
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState) {
     // Packages check this before sending `vivi-playlist` (older Vivi: unset; they write
     // the playlist file themselves).
     if let Err(e) = player.mpv.set_property("user-data/vivi/playlists", 1i64) {
@@ -608,9 +577,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         })
     });
     with(|r| {
-        let Some(c) = read_cfg(&r.cfg).map(|c| c.clone()) else {
-            return;
-        };
+        let c = r.cfg.config();
         for e in &mut r.entries {
             e.active = is_enabled(&c, &e.manifest);
             if e.active {
@@ -642,7 +609,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
         command(&c.id, &c.name, &c.args);
     });
     let auto = with(|r| {
-        read_cfg(&r.cfg)?
+        r.cfg.config()
             .plugins
             .get(packages::GLOBAL_ID)
             .and_then(|s| s.settings.get("autocheck"))
@@ -664,7 +631,7 @@ use crate::config;
 pub fn rescan() -> usize {
     let n = with(|r| {
         let new = all_scripts(&r.entries);
-        let c = read_cfg(&r.cfg).map(|c| c.clone()).unwrap_or_default();
+        let c = r.cfg.config();
         for s in &new {
             let known = r.scripts.iter().any(|o| o.path == s.path);
             if !known && scripts::load_on_startup(&c) && is_enabled(&c, &s.manifest) {
@@ -798,9 +765,7 @@ impl Registry {
     /// option changes.
     fn hand_secrets(&self, m: &Manifest) {
         let path = secrets_path(&m.id);
-        let Some(json) = read_cfg(&self.cfg).map(|c| secrets_json(&c, m)) else {
-            return;
-        };
+        let json = secrets_json(&self.cfg.config(), m);
         if let Some(d) = path.parent() {
             let _ = std::fs::create_dir_all(d);
             host::make_private(d);
@@ -824,7 +789,7 @@ impl Registry {
             return;
         }
         if s.manifest.origin == Origin::Package {
-            let c = read_cfg(&self.cfg).map(|c| c.clone()).unwrap_or_default();
+            let c = self.cfg.config();
             for st in &s.manifest.settings {
                 if matches!(st.kind, SettingKind::Action(_))
                     || (s.secrets_file && matches!(st.kind, SettingKind::Secret))
@@ -921,10 +886,9 @@ pub fn client_message(args: &[String]) {
         Some(M::Notify { id, title, body }) => {
             with(|r| {
                 let Some(a) = r.app.upgrade() else { return };
-                let c = read_cfg(&r.cfg);
-                match (r.scripts.iter().find(|s| s.manifest.id == id), c) {
-                    (Some(s), Some(c)) => notify_or_toast(&a, &c, &s.manifest, title, body),
-                    _ => toast(&a, &crate::notify::toast_text(title, body)),
+                match r.scripts.iter().find(|s| s.manifest.id == id) {
+                    Some(s) => notify_or_toast(&a, &r.cfg.config(), &s.manifest, title, body),
+                    None => toast(&a, &crate::notify::toast_text(title, body)),
                 }
             });
         }
@@ -1053,15 +1017,11 @@ fn store_setting(id: &str, key: &str, value: &str) {
             eprintln!("vivi: vivi-setting for unknown setting {id}.{key} ignored");
             return;
         }
-        if edit_cfg(&r.cfg, |c| {
-            c.plugins
-                .entry(id.into())
-                .or_default()
-                .settings
-                .insert(key.into(), value.into());
-        }) {
-            r.set_opt(id, key, value);
-        }
+        edit_cfg(
+            &r.cfg,
+            AppMsg::SetPluginSetting(id.into(), key.into(), value.into()),
+        );
+        r.set_opt(id, key, value);
     });
     crate::settings::refresh_ui();
 }
@@ -1337,17 +1297,9 @@ pub fn arrange(point: &str, id: &str, what: &str) {
     let mut ids: Vec<String> = contributions_all(point).into_iter().map(|e| e.id).collect();
     ids.dedup();
     with(|r| {
-        let Ok(mut c) = r.cfg.try_borrow_mut() else {
-            eprintln!("vivi: plugins: arrange skipped, the config is in use");
-            return;
-        };
-        match what {
+        let msg = match what {
             "hide" | "show" => {
-                c.plugins
-                    .entry(id.into())
-                    .or_default()
-                    .settings
-                    .insert(key.into(), (what == "hide").to_string());
+                AppMsg::SetPluginSetting(id.into(), key.into(), (what == "hide").to_string())
             }
             "up" | "down" => {
                 let mut order = ids.clone();
@@ -1359,16 +1311,11 @@ pub fn arrange(point: &str, id: &str, what: &str) {
                     };
                     order.swap(i, j);
                 }
-                c.plugins
-                    .entry(entry.into())
-                    .or_default()
-                    .settings
-                    .insert("order".into(), order.join(","));
+                AppMsg::SetPluginSetting(entry.into(), "order".into(), order.join(","))
             }
             _ => return,
-        }
-        drop(c);
-        save(&r.cfg);
+        };
+        edit_cfg(&r.cfg, msg);
     });
 }
 
@@ -1383,7 +1330,7 @@ pub fn contributions_all(point: &str) -> Vec<Contributed> {
     let fresh = with(|r| {
         // A caller up the stack may still hold the config mutably (0.16.3 aborted on
         // `borrow` here when Customize edited the bar): answer with the last list.
-        let c = read_cfg(&r.cfg)?;
+        let c = r.cfg.config();
         let mut v: Vec<Contributed> = r
             .entries
             .iter()
@@ -1461,9 +1408,8 @@ pub fn contributions(point: &str) -> Vec<Contributed> {
     }
     if layout(point).is_some() {
         with(|r| {
-            if let Some(c) = read_cfg(&r.cfg) {
-                v.retain(|e| !hidden_at(&c, point, &e.id));
-            }
+            let c = r.cfg.config();
+            v.retain(|e| !hidden_at(&c, point, &e.id));
         });
     }
     v
@@ -1658,24 +1604,15 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                     r.player.cmd("script-message-to", &[&name, key]);
                     return None;
                 }
-                if !edit_cfg(&r.cfg, |c| {
-                    c.plugins
-                        .entry(id.into())
-                        .or_default()
-                        .settings
-                        .insert(key.into(), value.into());
-                }) {
-                    return Some("Settings are busy, try again".into());
-                }
+                edit_cfg(
+                    &r.cfg,
+                    AppMsg::SetPluginSetting(id.into(), key.into(), value.into()),
+                );
                 r.set_opt(id, key, value);
                 return None;
             }
             let on = value == "true";
-            if !edit_cfg(&r.cfg, |c| {
-                c.plugins.entry(id.into()).or_default().enabled = Some(on)
-            }) {
-                return Some("Settings are busy, try again".into());
-            }
+            edit_cfg(&r.cfg, AppMsg::SetPluginEnabled(id.into(), Some(on)));
             return Some(if on {
                 if r.loaded.contains(id) {
                     format!("{} is already running", s.manifest.name)
@@ -1692,11 +1629,7 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
         match key {
             None => {
                 let on = value == "true";
-                if !edit_cfg(&r.cfg, |c| {
-                    c.plugins.entry(id.into()).or_default().enabled = Some(on)
-                }) {
-                    return Some("Settings are busy, try again".into());
-                }
+                edit_cfg(&r.cfg, AppMsg::SetPluginEnabled(id.into(), Some(on)));
                 if on != e.active {
                     e.active = on;
                     let cx = ctx!(r, a, e);
@@ -1717,15 +1650,10 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
                     }
                     return None;
                 }
-                if !edit_cfg(&r.cfg, |c| {
-                    c.plugins
-                        .entry(id.into())
-                        .or_default()
-                        .settings
-                        .insert(key.into(), value.into());
-                }) {
-                    return Some("Settings are busy, try again".into());
-                }
+                edit_cfg(
+                    &r.cfg,
+                    AppMsg::SetPluginSetting(id.into(), key.into(), value.into()),
+                );
                 if e.active {
                     e.plugin.setting_changed(&ctx!(r, a, e), key);
                 }
@@ -1742,20 +1670,10 @@ pub fn setting_changed(row_id: &str, value: &str) -> Option<String> {
 /// its data).
 pub fn forget(id: &str) {
     with(|r| {
-        let had = read_cfg(&r.cfg).is_some_and(|c| c.plugins.contains_key(id));
-        if had {
-            edit_cfg(&r.cfg, |c| {
-                c.plugins.remove(id);
-            });
+        if r.cfg.config().plugins.contains_key(id) {
+            edit_cfg(&r.cfg, AppMsg::ForgetPlugin(id.into()));
         }
     });
-}
-
-fn save(cfg: &RefCell<Config>) {
-    let Some(c) = read_cfg(cfg) else { return };
-    if let Err(e) = c.save() {
-        eprintln!("vivi: save config: {e}");
-    }
 }
 
 #[cfg(test)]
@@ -1763,19 +1681,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn config_access_backs_off_while_it_is_borrowed_mutably() {
+    fn plugin_config_edit_inside_a_config_change_is_queued() {
         // 0.16.3 aborted in contributions_all ("RefCell already mutably borrowed") when
-        // Customize asked for the plugin buttons while holding the config mutably.
-        let cfg = RefCell::new(Config::default());
-        {
-            let _held = cfg.borrow_mut();
-            assert!(read_cfg(&cfg).is_none());
-            assert!(!edit_cfg(&cfg, |_| unreachable!(
-                "must not run while borrowed"
-            )));
-            save(&cfg); // a no-op, not a panic
-        }
-        assert!(read_cfg(&cfg).is_some());
+        // Customize asked for the plugin buttons while holding the config mutably. With
+        // AppState a plugin edit from inside another change waits for it instead.
+        let cfg = AppState::in_memory(Config::default());
+        let inner = cfg.clone();
+        cfg.update(move |c| {
+            c.interface.profile = "x".into();
+            let _ = inner.config().plugins.len(); // the read that used to abort
+            edit_cfg(&inner, AppMsg::SetPluginEnabled("p".into(), Some(true)));
+        });
+        let c = cfg.config();
+        assert_eq!(c.plugins["p"].enabled, Some(true));
+        assert_eq!(c.interface.profile, "x");
     }
 
     #[test]

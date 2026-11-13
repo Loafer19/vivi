@@ -123,7 +123,7 @@ struct Timer {
     published: Option<i64>,
 }
 
-type Ctx = (slint::Weak<AppWindow>, Rc<Player>, Rc<RefCell<Config>>);
+type Ctx = (slint::Weak<AppWindow>, Rc<Player>, crate::app::state::AppState);
 
 thread_local! {
     static T: RefCell<Timer> = RefCell::new(Timer::default());
@@ -131,7 +131,7 @@ thread_local! {
     static TICK: slint::Timer = slint::Timer::default();
 }
 
-fn ctx() -> Option<(AppWindow, Rc<Player>, Rc<RefCell<Config>>)> {
+fn ctx() -> Option<(AppWindow, Rc<Player>, crate::app::state::AppState)> {
     CTX.with(|c| {
         let c = c.borrow();
         let (w, p, cfg) = c.as_ref()?;
@@ -181,8 +181,8 @@ fn chapter_end(p: &Player) -> Option<f64> {
         .or_else(|| f(p, "duration"))
 }
 
-fn fade_secs(cfg: &RefCell<Config>) -> f64 {
-    cfg.borrow().playback.sleep_fade.clamp(0, 120) as f64
+fn fade_secs(cfg: &crate::app::state::AppState) -> f64 {
+    cfg.config().playback.sleep_fade.clamp(0, 120) as f64
 }
 
 /// Hold the file open at its end (so mpv pauses there) while the timer targets it.
@@ -385,7 +385,7 @@ fn tick() {
     });
 }
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState) {
     CTX.with(|c| *c.borrow_mut() = Some((app.as_weak(), player.clone(), cfg.clone())));
     let g = app.global::<crate::Status>();
     g.set_sleep_fade(fade_secs(&cfg) as i32);
@@ -396,8 +396,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     });
     g.on_sleep_fade_set(move |secs| {
         let Some((a, _, cfg)) = ctx() else { return };
-        cfg.borrow_mut().playback.sleep_fade = secs.clamp(0, 120) as i64;
-        if let Err(e) = cfg.borrow().save() {
+        cfg.update(move |c| c.playback.sleep_fade = secs.clamp(0, 120) as i64);
+        if let Err(e) = cfg.save() {
             eprintln!("sleep: saving the fade failed: {e}");
         }
         a.global::<crate::Status>()

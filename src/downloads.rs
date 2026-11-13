@@ -267,7 +267,7 @@ impl Report {
 struct Ui {
     app: slint::Weak<AppWindow>,
     player: Rc<Player>,
-    cfg: Rc<RefCell<Config>>,
+    cfg: crate::app::state::AppState,
     model: Rc<VecModel<crate::DlJob>>,
 }
 
@@ -714,7 +714,7 @@ fn share(j: &Job) -> f32 {
     }
 }
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState) {
     // Packages check this before handing their queue to the panel (older Vivi: unset).
     // An integer, so `mp.get_property` reads `1` (a string node would read `"1"`, with
     // the quotes, and `== "1"` checks in packages would never see the panel).
@@ -980,7 +980,7 @@ pub fn refresh() {
         } else {
             ("Download failed", format!("{title}: {text}"))
         };
-        if !(crate::notify::enabled(&cfg.borrow()) && crate::notify::send(t, &b)) {
+        if !(crate::notify::enabled(&cfg.config()) && crate::notify::send(t, &b)) {
             crate::plugins::toast(&a, &crate::notify::toast_text(t, &b));
         }
     }

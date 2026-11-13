@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 struct State {
     app: slint::Weak<AppWindow>,
-    cfg: Rc<RefCell<Config>>,
+    cfg: crate::app::state::AppState,
     rows: Rc<VecModel<SettingRow>>,
 }
 
@@ -25,7 +25,7 @@ thread_local! {
     static ST: RefCell<Option<State>> = const { RefCell::new(None) };
 }
 
-pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, cfg: crate::app::state::AppState) {
     let rows: Rc<VecModel<SettingRow>> = Rc::new(VecModel::default());
     let g = app.global::<crate::Extensions>();
     g.set_rows(ModelRc::from(rows.clone()));
@@ -353,7 +353,7 @@ pub fn refresh() {
     }) else {
         return;
     };
-    let c = cfg.borrow().clone();
+    let c = cfg.config();
     let g = a.global::<crate::Extensions>();
     let mut all = plugins::manifests();
     // Sources first (the window lists them in their own group), then features.

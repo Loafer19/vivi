@@ -9,7 +9,7 @@ use std::rc::Rc;
 pub(crate) fn wire(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<std::cell::RefCell<config::Config>>,
+    cfg: &crate::app::state::AppState,
 ) -> (impl Fn() + Clone + 'static, impl Fn() + Clone + 'static) {
     let p = player.clone();
     app.global::<crate::Playback>()
@@ -81,7 +81,7 @@ pub(crate) fn wire(
                 p.set("stream-record", "");
                 format!("Recording stopped · saved to {rec}")
             } else {
-                let set = std::path::PathBuf::from(cfg.borrow().recording.dir.trim());
+                let set = std::path::PathBuf::from(cfg.config().recording.dir.trim());
                 let videos = store::home().join("Videos");
                 let dir = if !set.as_os_str().is_empty() && set.is_dir() {
                     set

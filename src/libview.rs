@@ -787,7 +787,7 @@ impl Lib {
 
 use crate::util::strings;
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState, log: bool) {
     let items = Rc::new(VecModel::default());
     let (cont, recent, pinned) = (
         Rc::new(VecModel::default()),
@@ -823,7 +823,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     app.global::<crate::Library>()
         .set_ytdlp(library::ytdlp_available());
 
-    let thumbs = (cfg.borrow().library.thumbnails && library::ffmpeg_available()).then(|| {
+    let thumbs = (cfg.config().library.thumbnails && library::ffmpeg_available()).then(|| {
         library::thumb_worker(move |path, file| {
             let _ = slint::invoke_from_event_loop(move || {
                 // Decode only when a row near the view shows it; the rest load on scroll.
@@ -880,7 +880,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         Rc::new(move || {
             let Some(a) = w.upgrade() else { return };
-            let c = cfg.borrow();
+            let c = cfg.config();
             let mut l = lib.borrow_mut();
             LAZY.set(true);
             let (v, mut crumbs) = l.build(&c);
@@ -924,8 +924,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let w = app.as_weak();
         let cfg = cfg.clone();
         Rc::new(move |quiet| {
-            let roots = cfg.borrow().library.folders.clone();
-            let hidden = cfg.borrow().stub(crate::config::HIDDEN_FILES);
+            let roots = cfg.config().library.folders.clone();
+            let hidden = cfg.config().stub(crate::config::HIDDEN_FILES);
             if let Some(a) = w.upgrade().filter(|_| !quiet) {
                 a.global::<crate::Library>().set_scanning(true);
             }
@@ -1028,8 +1028,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         let render = render.clone();
         app.global::<crate::Library>().on_set_sort(move |s| {
-            cfg.borrow_mut().library.sort = s.to_string();
-            let _ = cfg.borrow().save();
+            cfg.update(move |c| c.library.sort = s.to_string());
+            let _ = cfg.save();
             render();
         });
     }
@@ -1039,8 +1039,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         app.global::<crate::Library>()
             .on_thumb_window(|lo, hi| thumb_window(lo.max(0) as usize, hi.max(0) as usize));
         app.global::<crate::Library>().on_set_grid(move |g| {
-            cfg.borrow_mut().library.view = if g { "grid" } else { "list" }.into();
-            let _ = cfg.borrow().save();
+            cfg.update(move |c| c.library.view = if g { "grid" } else { "list" }.into());
+            let _ = cfg.save();
             render();
         });
     }
@@ -1127,14 +1127,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         );
                     }
                     "pin" | "unpin" => {
-                        {
-                            let mut c = cfg.borrow_mut();
+                        let pin = action == "pin";
+                        cfg.update(move |c| {
                             c.library.pinned.retain(|x| x != &path);
-                            if action == "pin" {
+                            if pin {
                                 c.library.pinned.push(path);
                             }
-                        }
-                        let _ = cfg.borrow().save();
+                        });
+                        let _ = cfg.save();
                         render();
                     }
                     "forget" => {
@@ -1159,23 +1159,23 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         render();
                     }
                     "watched" => {
-                        let is = cfg.borrow().library.watched.contains(&path)
+                        let is = cfg.config().library.watched.contains(&path)
                             || lib
                                 .borrow()
                                 .media
                                 .iter()
                                 .any(|m| m.path == path && library::progress(m) >= 0.95);
-                        {
-                            let mut c = cfg.borrow_mut();
-                            c.library.watched.retain(|x| x != &path);
+                        let p2 = path.clone();
+                        cfg.update(move |c| {
+                            c.library.watched.retain(|x| x != &p2);
                             if !is {
-                                c.library.watched.push(path.clone());
+                                c.library.watched.push(p2);
                             }
-                        }
+                        });
                         if is {
                             store::forget_position(&path);
                         }
-                        let _ = cfg.borrow().save();
+                        let _ = cfg.save();
                         render();
                     }
                     "reveal" => reveal(&path),
@@ -1406,13 +1406,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 return;
             };
             let d = d.to_string_lossy().replace('\\', "/");
-            {
-                let mut c = cfg.borrow_mut();
+            cfg.update(move |c| {
                 if !c.library.folders.contains(&d) {
                     c.library.folders.push(d);
                 }
-            }
-            let _ = cfg.borrow().save();
+            });
+            let _ = cfg.save();
             rescan();
         });
     }

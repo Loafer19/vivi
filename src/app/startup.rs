@@ -25,7 +25,7 @@ pub(crate) fn init() -> Result<(), slint::PlatformError> {
 pub(crate) fn setup_features(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<RefCell<config::Config>>,
+    cfg: &crate::app::state::AppState,
     log: bool,
 ) {
     settings::setup(app, player, cfg.clone(), log);
@@ -45,7 +45,7 @@ pub(crate) fn setup_features(
     fx::setup(app, player);
     dialogs::setup(app, player);
     ipc::sweep_stale();
-    ipc::setup(app, player, cfg.borrow().general.remote_control);
+    ipc::setup(app, player, cfg.config().general.remote_control);
     crate::bookmarks::setup(app, player, log);
     crate::sleep::setup(app, player, cfg.clone());
     crate::transitions::setup(player, cfg.clone(), log);
