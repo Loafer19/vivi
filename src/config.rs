@@ -18,6 +18,8 @@ pub struct Config {
     pub network: Network,
     pub performance: Performance,
     pub recording: Recording,
+    /// Home widgets: order, on / off, size, width.
+    pub home: crate::home::Home,
     /// Values of settings that started as placeholders, keyed by their `stub.…` setting
     /// id. Some work now (window, autoplay, hidden files; read with [`Config::stub`]),
     /// the others are hidden in Settings; the ids stay so old configs keep their values.

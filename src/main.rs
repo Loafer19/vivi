@@ -12,6 +12,7 @@ mod error;
 mod extwin;
 mod filepick;
 mod fx;
+mod home;
 mod images;
 mod ipc;
 mod keymap;

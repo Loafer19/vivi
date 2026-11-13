@@ -61,6 +61,8 @@ pub enum AppMsg {
     SetPluginSetting(String, String, String),
     /// Drop a plugin's on / off choice and settings.
     ForgetPlugin(String),
+    /// Replace the Home layout (Customize Home, Settings → Interface → Home).
+    SetHome(Box<crate::home::Home>),
 }
 
 /// Apply one message to a config. Pure: no I/O, no UI.
@@ -94,6 +96,7 @@ pub fn reduce(c: &mut Config, msg: AppMsg) {
         AppMsg::ForgetPlugin(id) => {
             c.plugins.remove(&id);
         }
+        AppMsg::SetHome(h) => c.home = *h,
     }
 }
 
