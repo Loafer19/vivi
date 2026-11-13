@@ -88,18 +88,18 @@ pub const BUILTIN: &[Def] = &[
         "continue",
         "Continue Watching",
         "sml",
-        &[2, 3],
+        &[1, 2, 3],
         true,
         "l",
         2,
     ),
     def("jump", "Jump Back In", "sm", &[1, 2], true, "m", 1),
-    def("mixes", "Your Mixes", "sml", &[2, 3], true, "m", 3),
-    def("added", "Recently Added", "sml", &[2, 3], true, "m", 3),
-    def("listen", "Listen Again", "sml", &[2, 3], true, "m", 3),
-    def("favorites", "Favorites", "sml", &[2, 3], true, "m", 3),
-    def("streams", "Streams", "s", &[3], true, "s", 3),
-    def("sources", "Sources", "s", &[3], true, "s", 3),
+    def("mixes", "Your Mixes", "sml", &[1, 2, 3], true, "m", 3),
+    def("added", "Recently Added", "sml", &[1, 2, 3], true, "m", 3),
+    def("listen", "Listen Again", "sml", &[1, 2, 3], true, "m", 3),
+    def("favorites", "Favorites", "sml", &[1, 2, 3], true, "m", 3),
+    def("streams", "Streams", "s", &[1, 2, 3], true, "s", 3),
+    def("sources", "Sources", "s", &[1, 2, 3], true, "s", 3),
     def(
         "folders",
         "Frequently Visited Folders",
@@ -113,7 +113,7 @@ pub const BUILTIN: &[Def] = &[
         "artists",
         "Frequently Listened Artists",
         "sm",
-        &[2, 3],
+        &[1, 2, 3],
         false,
         "m",
         3,
@@ -122,12 +122,12 @@ pub const BUILTIN: &[Def] = &[
         "lists",
         "Frequently Visited Playlists",
         "sm",
-        &[2, 3],
+        &[1, 2, 3],
         false,
         "m",
         3,
     ),
-    def("recent", "Recently Played", "sm", &[2, 3], false, "m", 3),
+    def("recent", "Recently Played", "sm", &[1, 2, 3], false, "m", 3),
 ];
 
 /// A plugin's Home widget, as the host reports it.
@@ -429,7 +429,11 @@ mod tests {
         let v = resolve(&home, &[]);
         assert_eq!(v[0].id, "added");
         assert!(!v[0].on);
-        assert_eq!((v[0].size.as_str(), v[0].span), ("m", 2), "clamped");
+        assert_eq!(
+            (v[0].size.as_str(), v[0].span),
+            ("m", 1),
+            "size clamped, ⅓ kept"
+        );
         let at = |id: &str| v.iter().position(|s| s.id == id).unwrap();
         assert_eq!(
             v[1].id, "listen",
@@ -464,6 +468,21 @@ mod tests {
         assert_eq!(j.span, 2, "jump allows ⅓ and ⅔ only");
         let h3 = apply(&h2, &resolve(&h2, &[]), &Op::Step("recent".into(), -1));
         assert_eq!(h3.widgets[0].id, "recent", "the first one stays first");
+    }
+
+    #[test]
+    fn shelves_allow_one_third_width() {
+        for d in BUILTIN {
+            if d.id == "jump" {
+                assert!(d.spans.contains(&1) && d.spans.contains(&2));
+                continue;
+            }
+            assert!(
+                d.spans.contains(&1) && d.spans.contains(&2) && d.spans.contains(&3),
+                "{} should allow ⅓, ⅔ and Full",
+                d.id
+            );
+        }
     }
 
     #[test]

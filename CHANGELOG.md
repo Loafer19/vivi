@@ -7,6 +7,9 @@
 - **Smart playlists** (#87): a local play history in `library.db` and rule-based lists (Top This Week, Most Played, Not Played for a Month, Never Played, Similar to This Track), shown on Playlists and in *Your Mixes*. Settings → Privacy can turn the history off or clear it.
 - **Plugin Home widgets** (#87): `home.widget` entries can declare `id`, `sizes`, `span` and `template` (`card`, `tiles`, `list`); `vivi-content` takes `items` with pictures.
 
+### Fixed
+- **Home** (#87): an empty state with a *Customize Home* button when every widget is hidden; the folder item-count, sort, view and search toolbar no longer appears on Home; *Customize Home* is a visible header button (also when the library is docked); shelves can be ⅓ wide so widgets sit side by side; widget heights follow their content; Your Mixes tiles no longer collapse into a sliver; the edit bar no longer repeats the widget title; a drag preview follows the pointer.
+
 ### Changed
 - **Library in SQLite** (#100): filtering, sorting, search and paging run in the database (400 rows at a time) instead of on a full copy in memory.
 - **One owner for settings state** (#101): the configuration is read as snapshots and changed through queued messages, so nested changes can no longer panic.

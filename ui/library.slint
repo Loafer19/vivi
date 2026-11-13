@@ -1,9 +1,9 @@
 // Library per the Figma "Library Sidebar" frames (docs/design/frames/library-sidebars.png):
 // 50 px icon rail (#191919, 32 px buttons, gap 14), content #0E0E0E with 20 px padding:
-// back/forward + breadcrumb (Inter 16 #8F8F8F, "▸" separators) + more/open icons, item count
-// with sort/view/search icons, a #222 divider, then 32 px rows (32 px thumbnail, gap 10,
-// Inter 14; watched rows dimmer with an orange progress line; "⋯" on hover). Home shows
-// titled sections of three rows each.
+// back/forward + breadcrumb (Inter 16 #8F8F8F, "▸" separators) + more/open icons; folder views
+// also show the item count with sort/view/search icons, a #222 divider, then 32 px rows
+// (32 px thumbnail, gap 10, Inter 14; watched rows dimmer with an orange progress line;
+// "⋯" on hover). Home is a 3-column widget grid with a Customize Home button in the header.
 import { ScrollView } from "std-widgets.slint";
 import { TextField, Toggle, Segmented } from "core/controls.slint";
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
@@ -151,11 +151,13 @@ component Grid inherits Rectangle {
     callback open(LibItem);
     callback menu(LibItem, length, length);
     callback forget(LibItem);
-    // Grid columns follow the width; very narrow widths fall back to the list view.
-    property <bool> g: grid && self.width >= 400px;
+    // Grid columns follow the width. A ⅓ Home column is often under 400px, so
+    // the fallback only kicks in when even one card no longer fits.
+    property <bool> g: grid && self.width >= 220px;
     property <int> cols: g ? max(1, floor(self.width / 210px)) : 1;
     property <length> cw: self.width / cols;
-    property <length> ch: g ? (cw - 12px) * 9 / 16 + 62px : 66px;
+    // Size M covers are ~130px (design); uncapped 16:9 rows left a tall empty gap.
+    property <length> ch: g ? min((cw - 12px) * 9 / 16, 130px) + 62px : 66px;
     property <int> shown: max-rows > 0 ? min(items.length, max-rows * cols) : items.length;
     // Virtualized: only tiles near the viewport exist (large folders).
     property <int> first: view-h > 0 ? max(0, floor((scroll-y - self.y) / ch)) * cols : 0;
@@ -385,9 +387,12 @@ component HomeHead inherits HorizontalLayout {
     in property <string> title;
     in property <string> action-text;
     in property <bool> link: true;
+    // Hidden in Customize Home: the edit bar already shows the name.
+    in property <bool> show: true;
     callback clicked();
     callback action();
-    height: 24px; spacing: 4px;
+    visible: root.show;
+    height: root.show ? 24px : 0; spacing: 4px;
     Text { text: root.title; color: tta.has-hover && root.link ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-lg; vertical-alignment: center; horizontal-stretch: 1; overflow: elide;
         tta := TouchArea { enabled: root.link; accessible-role: button; accessible-label: root.title; mouse-cursor: pointer; clicked => { root.clicked(); } } }
     if root.action-text != "": Text {
@@ -481,7 +486,7 @@ component MixTile inherits Rectangle {
             x: 12px; y: parent.height - self.height - 12px; width: parent.width - (root.size == "m" ? 60px : 24px);
             text: root.it.title; color: Theme.on-media; font-size: root.size == "l" ? Metrics.font-xl : Metrics.font-lg; font-weight: 700; wrap: word-wrap; overflow: elide;
         }
-        if root.size == "m": Text {
+        if root.size == "m" && root.it.subtitle != "" && root.it.subtitle != ".": Text {
             x: parent.width - self.width - 12px; y: parent.height - self.height - 14px;
             text: root.it.subtitle; color: Theme.on-media; opacity: 0.8; font-size: Metrics.font-sm;
         }
@@ -579,8 +584,11 @@ export component LibraryView inherits Rectangle {
     callback home-narrow(bool);
     property <bool> dragging;
     property <string> drag-id;
+    property <string> drag-title;
     property <length> drag-y;
     property <int> drop-line: -1;
+    // Viewport width for the Home grid (explicit cell widths; stretch inside a ScrollView shrinks to content).
+    property <length> home-w: max(0px, root.width - 50px - 48px);
     property <bool> home-is-narrow: root.sidebar || root.width < 900px;
     changed home-is-narrow => { root.home-narrow(self.home-is-narrow); }
     init => { root.home-narrow(self.home-is-narrow); }
@@ -665,7 +673,7 @@ export component LibraryView inherits Rectangle {
         VerticalLayout {
             padding: 20px; padding-bottom: 0; spacing: 17px;
             HorizontalLayout {
-                height: 24px; spacing: 12px;
+                height: root.nav == "home" && !root.home-edit && !root.hub ? 30px : 24px; spacing: 12px;
                 HeadIcon { label: "Back"; icon: "arrow-left"; enabled: root.can-back; clicked => { root.history(false); } }
                 HeadIcon { label: "Forward"; icon: "arrow-right"; enabled: root.can-forward; clicked => { root.history(true); } }
                 // Breadcrumb ("..." for long paths comes from src/libview.rs).
@@ -684,6 +692,17 @@ export component LibraryView inherits Rectangle {
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
+                // Visible Customize Home control in the header (also when the sidebar is docked).
+                if root.nav == "home" && !root.home-edit && !root.hub: Rectangle {
+                    height: 28px; width: cht.preferred-width + 36px; border-radius: Metrics.radius-md;
+                    background: cta.has-hover ? Theme.divider : Theme.bg-a1;
+                    HorizontalLayout {
+                        padding-left: 8px; padding-right: 10px; spacing: 6px;
+                        VerticalLayout { alignment: center; Icon { source: @image-url("../assets/icons/edit.svg"); width: 14px; height: 14px; tint: Theme.fg-1; } }
+                        cht := Text { text: "Customize Home"; color: Theme.fg-1; font-size: Metrics.font-sm; font-weight: 500; vertical-alignment: center; }
+                    }
+                    cta := TouchArea { accessible-role: button; accessible-label: "Customize Home"; mouse-cursor: pointer; clicked => { root.home-action("edit", "", ""); } }
+                }
                 more := HeadIcon {
                     label: "More"; icon: "more";
                     clicked => {
@@ -697,11 +716,11 @@ export component LibraryView inherits Rectangle {
                 }
                 HeadIcon { label: root.has-media ? "Back to the player" : "Open file"; icon: "open"; clicked => { root.popout(); } }
             }
-            if !root.hub: HorizontalLayout {
+            if !root.hub && (root.nav != "home" || root.query != "" || root.searching): HorizontalLayout {
                 height: 24px; spacing: 12px;
                 Text {
                     horizontal-stretch: 1; vertical-alignment: center; font-size: Metrics.font-base; color: Theme.fg-a3;
-                    text: root.nav == "downloads" ? Downloads.jobs.length + " downloads" : root.scanning ? "Scanning…" : (root.nav == "home" ? root.count : root.items.length) + " items";
+                    text: root.nav == "downloads" ? Downloads.jobs.length + " downloads" : root.scanning ? "Scanning…" : root.items.length + " items";
                 }
                 if root.nav != "downloads": HeadIcon {
                     label: "Sort"; icon: root.sort != "name" && root.sort != "title" ? "sort-active" : "sort";
@@ -758,29 +777,31 @@ export component LibraryView inherits Rectangle {
                                 VerticalLayout { alignment: center; PrimaryButton { text: "Done"; size: ButtonSize.sm; clicked => { root.home-action("done", "", ""); } } }
                             }
                         }
-                        if !root.home-edit && !root.sidebar && root.home-lines.length > 0: HorizontalLayout {
-                            height: 24px;
-                            Rectangle { horizontal-stretch: 1; }
-                            Text {
-                                text: "Customize Home"; color: cha.has-hover ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center;
-                                cha := TouchArea { accessible-role: button; accessible-label: "Customize Home"; mouse-cursor: pointer; clicked => { root.home-action("edit", "", ""); } }
-                            }
+                        if !root.home-edit && root.home-lines.length == 0 && (root.count > 0 || root.recent-items.length > 0): EmptyState {
+                            icon: "home";
+                            title: "Nothing on Home";
+                            sentence: "Turn on some widgets, or play something so they can fill in.";
+                            primary-text: "Customize Home";
+                            primary => { root.home-action("edit", "", ""); }
                         }
                         // The widgets, line by line (src/home.rs packs them into lines of three columns).
                         for line[li] in root.home-lines: Rectangle {
                             property <bool> drop-here: root.dragging && root.drag-y >= self.absolute-position.y - 16px && root.drag-y < self.absolute-position.y + self.height + 16px;
                             changed drop-here => { if (self.drop-here) { root.drop-line = li; } }
+                            width: root.home-w;
                             height: lrow.preferred-height;
                             lrow := HorizontalLayout {
-                                spacing: 16px;
+                                width: parent.width; spacing: 16px;
                                 for c in line.cells: VerticalLayout {
-                                    // Share of the line by stretch (an explicit width would loop with the scroll view).
-                                    horizontal-stretch: c.frac; preferred-width: 1px;
+                                    // Fraction of the line; explicit width so the ScrollView cannot shrink a ⅓ cell to its content.
+                                    property <int> n-cells: line.cells.length;
+                                    width: max(80px, (parent.width - 16px * max(0, self.n-cells - 1)) * c.frac);
+                                    horizontal-stretch: 0;
                                     alignment: start; spacing: 12px;
                                     if root.home-edit: HomeEditBar {
                                         c: c; compact: c.frac < 0.5 || root.home-is-narrow;
                                         act(a, v) => { root.home-action(a, c.id, v); }
-                                        drag(y) => { root.dragging = true; root.drag-id = c.id; root.drag-y = y; }
+                                        drag(y) => { root.dragging = true; root.drag-id = c.id; root.drag-title = c.title; root.drag-y = y; }
                                         dropped => { if (root.dragging) { root.dragging = false; root.home-action("drop", c.id, "\{root.drop-line}"); } }
                                     }
                                     if root.home-edit && !c.on: Text { text: "Hidden. Turn it on to show it here."; color: Theme.fg-a3; font-size: Metrics.font-sm; }
@@ -791,28 +812,31 @@ export component LibraryView inherits Rectangle {
                                         if c.kind == "continue" && c.size == "l": HomeHero {
                                             it: root.continue-items[0]; open => { root.go(root.continue-items[0]); } menu(x, y) => { root.item-menu(root.continue-items[0], x, y); }
                                         }
-                                        if c.kind == "continue" && c.size != "l": HomeHead { title: c.title; clicked => { root.navigate("recent"); } }
+                                        if c.kind == "continue" && c.size != "l": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.navigate("recent"); } }
                                         if c.kind == "continue" && c.size == "m": Grid { items: root.continue-items; max-rows: 1; open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                                         if c.kind == "continue" && c.size == "s": Rows { items: root.continue-items; max: 3; dim: true; open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                                         // Jump Back In: the latest entries of every kind
-                                        if c.kind == "jump": HomeHead { title: c.title; clicked => { root.navigate("recent"); } }
+                                        if c.kind == "jump": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.navigate("recent"); } }
                                         if c.kind == "jump" && c.size == "m": VerticalLayout {
                                             spacing: 8px;
+                                            property <int> shown: min(4, root.recent-items.length);
+                                            // Fixed height so hidden extra rows (height 0) cannot add 8px spacing each.
+                                            height: root.shown * 52px + max(0, root.shown - 1) * 8px;
                                             for it[i] in root.recent-items: JumpCard { visible: i < 4; height: i < 4 ? 52px : 0px; it: it; open => { root.go(it); } menu(x, y) => { root.item-menu(it, x, y); } }
                                         }
                                         if c.kind == "jump" && c.size == "s": Rows { items: root.recent-items; max: 5; dim: true; forget(it) => { root.forget-recent(it); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                                         // Your Mixes: smart playlists
-                                        if c.kind == "mixes": HomeHead { title: c.title; clicked => { root.navigate("playlists"); } }
+                                        if c.kind == "mixes": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.navigate("playlists"); } }
                                         if c.kind == "mixes" && c.size == "s": HorizontalLayout {
                                             spacing: 10px; alignment: start;
-                                            for it[i] in root.mix-items: MixTile { it: it; index: i; size: "s"; height: 36px; width: min(220px, self.preferred-width + 40px); open => { root.go(it); } menu(x, y) => { root.item-menu(it, x, y); } }
+                                            for it[i] in root.mix-items: MixTile { it: it; index: i; size: "s"; height: 36px; width: min(220px, max(88px, self.preferred-width + 40px)); open => { root.go(it); } menu(x, y) => { root.item-menu(it, x, y); } }
                                         }
                                         if c.kind == "mixes" && c.size != "s": Rectangle {
-                                            property <int> cols: max(1, floor((self.width + 14px) / ((c.size == "l" ? 170px : 220px) + 14px)));
-                                            property <length> tw: (self.width - (self.cols - 1) * 14px) / self.cols;
+                                            property <int> cols: max(1, floor((max(self.width, 160px) + 14px) / ((c.size == "l" ? 170px : 220px) + 14px)));
+                                            property <length> tw: max(140px, (self.width - (self.cols - 1) * 14px) / self.cols);
                                             property <length> th: c.size == "l" ? self.tw : 84px;
                                             property <int> n: min(root.mix-items.length, c.size == "l" ? self.cols : self.cols * 2);
-                                            height: ceil(self.n / self.cols) * (self.th + 14px) - 14px;
+                                            height: self.n == 0 ? 0 : ceil(self.n / self.cols) * (self.th + 14px) - 14px;
                                             for it[i] in root.mix-items: MixTile {
                                                 visible: i < parent.n;
                                                 x: mod(i, parent.cols) * (parent.tw + 14px); y: floor(i / parent.cols) * (parent.th + 14px);
@@ -822,7 +846,7 @@ export component LibraryView inherits Rectangle {
                                             }
                                         }
                                         // Library shelves: S rows, M one row of cards, L two rows of cards
-                                        if c.kind == "added" || c.kind == "listen" || c.kind == "favorites" || c.kind == "folders" || c.kind == "artists" || c.kind == "lists" || c.kind == "recent": HomeHead {
+                                        if c.kind == "added" || c.kind == "listen" || c.kind == "favorites" || c.kind == "folders" || c.kind == "artists" || c.kind == "lists" || c.kind == "recent": HomeHead { show: !root.home-edit; 
                                             title: c.title; link: c.kind != "favorites";
                                             action-text: c.kind == "recent" ? "Clear" : "";
                                             action => { root.clear-recent(); }
@@ -834,8 +858,8 @@ export component LibraryView inherits Rectangle {
                                             if c.size == "s": Rows { items: parent.src; max: 4; dim: true; forget(it) => { root.forget-recent(it); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                                         }
                                         // Streams (#86) and plugin sources
-                                        if c.kind == "streams": StreamsRow { open-hub => { root.navigate("streams"); } }
-                                        if c.kind == "sources": HomeHead { title: c.title; action-text: "Manage"; link: false; action => { root.open-extensions(); } }
+                                        if c.kind == "streams": StreamsRow { heading: !root.home-edit; open-hub => { root.navigate("streams"); } }
+                                        if c.kind == "sources": HomeHead { show: !root.home-edit;  title: c.title; action-text: "Manage"; link: false; action => { root.open-extensions(); } }
                                         if c.kind == "sources": HorizontalLayout {
                                             spacing: 10px; alignment: start;
                                             for so in root.sources: SourceChip { label: so.name; icon: Icons.plugin-duo(so.icon); clicked => { root.open-source(so.id); } }
@@ -843,7 +867,7 @@ export component LibraryView inherits Rectangle {
                                         // Plugin widgets (`home.widget`): card, tiles or list
                                         if c.kind == "plugin" && c.template == "card" && !c.live: WidgetCard { label: c.title; info: c.info; icon: Icons.plugin-duo(c.icon); clicked => { root.run-widget(c.plugin, c.command); } }
                                         if c.kind == "plugin" && c.template == "card" && c.live: LiveWidgetCard { label: c.title; info: c.info; icon: Icons.plugin-duo(c.icon); value: c.value; progress: c.progress; rows: c.rows; clicked => { root.run-widget(c.plugin, c.command); } }
-                                        if c.kind == "plugin" && c.template != "card": HomeHead { title: c.title; clicked => { root.run-widget(c.plugin, c.command); } }
+                                        if c.kind == "plugin" && c.template != "card": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.run-widget(c.plugin, c.command); } }
                                         if c.kind == "plugin" && c.template == "tiles": Grid { items: c.items; max-rows: c.size == "l" ? 2 : 1; open(it) => { root.run-widget(c.plugin, c.command + "\n" + it.key); } }
                                         if c.kind == "plugin" && c.template == "list": Rows { items: c.items; max: c.size == "s" ? 3 : (c.size == "l" ? 8 : 5); dim: true; open(it) => { root.run-widget(c.plugin, c.command + "\n" + it.key); } }
                                     }
@@ -895,6 +919,20 @@ export component LibraryView inherits Rectangle {
                     }
                 }
             }
+        }
+    }
+    // Drag preview: a compact title chip that follows the pointer.
+    if root.dragging && root.drag-title != "": Rectangle {
+        x: 70px;
+        y: min(max(root.drag-y - self.absolute-position.y - 17px, 48px), max(48px, root.height - 50px));
+        width: min(260px, max(140px, root.home-w / 3));
+        height: 34px;
+        border-radius: Metrics.radius-md;
+        background: Theme.accent;
+        HorizontalLayout {
+            padding-left: 12px; padding-right: 12px; spacing: 8px;
+            VerticalLayout { alignment: center; TriIcon { name: "list"; width: 16px; height: 16px; tint: Theme.on-media; } }
+            Text { text: root.drag-title; color: Theme.on-media; font-size: Metrics.font-base; font-weight: 600; vertical-alignment: center; overflow: elide; }
         }
     }
 }
