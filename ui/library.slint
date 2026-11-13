@@ -695,13 +695,13 @@ export component LibraryView inherits Rectangle {
                 // Visible Customize Home control in the header (also when the sidebar is docked).
                 if root.nav == "home" && !root.home-edit && !root.hub: Rectangle {
                     height: 28px; width: cht.preferred-width + 36px; border-radius: Metrics.radius-md;
-                    background: cta.has-hover ? Theme.divider : Theme.bg-a1;
+                    background: custa.has-hover ? Theme.divider : Theme.bg-a1;
                     HorizontalLayout {
                         padding-left: 8px; padding-right: 10px; spacing: 6px;
                         VerticalLayout { alignment: center; Icon { source: @image-url("../assets/icons/edit.svg"); width: 14px; height: 14px; tint: Theme.fg-1; } }
                         cht := Text { text: "Customize Home"; color: Theme.fg-1; font-size: Metrics.font-sm; font-weight: 500; vertical-alignment: center; }
                     }
-                    cta := TouchArea { accessible-role: button; accessible-label: "Customize Home"; mouse-cursor: pointer; clicked => { root.home-action("edit", "", ""); } }
+                    custa := TouchArea { accessible-role: button; accessible-label: "Customize Home"; mouse-cursor: pointer; clicked => { root.home-action("edit", "", ""); } }
                 }
                 more := HeadIcon {
                     label: "More"; icon: "more";
@@ -819,9 +819,9 @@ export component LibraryView inherits Rectangle {
                                         if c.kind == "jump": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.navigate("recent"); } }
                                         if c.kind == "jump" && c.size == "m": VerticalLayout {
                                             spacing: 8px;
-                                            property <int> shown: min(4, root.recent-items.length);
+                                            property <int> jump-n: min(4, root.recent-items.length);
                                             // Fixed height so hidden extra rows (height 0) cannot add 8px spacing each.
-                                            height: root.shown * 52px + max(0, root.shown - 1) * 8px;
+                                            height: self.jump-n * 52px + max(0, self.jump-n - 1) * 8px;
                                             for it[i] in root.recent-items: JumpCard { visible: i < 4; height: i < 4 ? 52px : 0px; it: it; open => { root.go(it); } menu(x, y) => { root.item-menu(it, x, y); } }
                                         }
                                         if c.kind == "jump" && c.size == "s": Rows { items: root.recent-items; max: 5; dim: true; forget(it) => { root.forget-recent(it); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
