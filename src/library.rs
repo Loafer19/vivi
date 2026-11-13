@@ -102,13 +102,92 @@ pub fn open_db(path: &Path) -> rusqlite::Result<Connection> {
     c.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA synchronous=NORMAL;
+         PRAGMA busy_timeout=2000;
          CREATE TABLE IF NOT EXISTS media(
             path TEXT PRIMARY KEY, kind TEXT, title TEXT, artist TEXT, album TEXT,
             genre TEXT, track INTEGER, duration REAL, size INTEGER, mtime INTEGER);
          CREATE INDEX IF NOT EXISTS media_kind ON media(kind);
          CREATE INDEX IF NOT EXISTS media_artist_album ON media(artist, album);",
     )?;
+    migrate(&c)?;
     Ok(c)
+}
+
+/// Schema version of the derived columns below (`PRAGMA user_version`).
+const SCHEMA: i64 = 2;
+
+/// Version 2 (#100): the library UI filters, sorts and pages in SQL, so each row also
+/// keeps its folder (`dir`), natural-order sort keys (`nt` title, `nar` artist, `nal`
+/// album, `np` path; "Ep 2" < "Ep 10") and a lowercase search text (`find`). Older
+/// databases get the columns and are backfilled once; no user-visible change.
+fn migrate(c: &Connection) -> rusqlite::Result<()> {
+    let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if v >= SCHEMA {
+        return Ok(());
+    }
+    let have: Vec<String> = c
+        .prepare("PRAGMA table_info(media)")?
+        .query_map([], |r| r.get(1))?
+        .filter_map(Result::ok)
+        .collect();
+    for col in ["dir", "nt", "nar", "nal", "np", "find"] {
+        if !have.iter().any(|h| h == col) {
+            c.execute_batch(&format!("ALTER TABLE media ADD COLUMN {col} TEXT"))?;
+        }
+    }
+    // Backfill in one transaction (a few seconds for 100k rows, once).
+    let rows: Vec<Media> = all(c);
+    c.execute_batch("BEGIN")?;
+    {
+        let mut st = c.prepare(
+            "UPDATE media SET dir=?2, nt=?3, nar=?4, nal=?5, np=?6, find=?7 WHERE path=?1",
+        )?;
+        for m in &rows {
+            let d = Derived::of(m);
+            st.execute(params![m.path, d.dir, d.nt, d.nar, d.nal, d.np, d.find])?;
+        }
+    }
+    c.execute_batch(&format!(
+        "CREATE INDEX IF NOT EXISTS media_dir ON media(dir);
+         CREATE INDEX IF NOT EXISTS media_kind_nt ON media(kind, nt);
+         CREATE INDEX IF NOT EXISTS media_kind_mtime ON media(kind, mtime);
+         CREATE INDEX IF NOT EXISTS media_kind_nar ON media(kind, nar, nt);
+         CREATE INDEX IF NOT EXISTS media_kind_nal ON media(kind, nal, track);
+         CREATE INDEX IF NOT EXISTS media_kind_genre ON media(kind, genre);
+         PRAGMA user_version={SCHEMA};
+         COMMIT;"
+    ))?;
+    Ok(())
+}
+
+/// The derived (query) columns of a row.
+struct Derived {
+    dir: String,
+    nt: String,
+    nar: String,
+    nal: String,
+    np: String,
+    find: String,
+}
+
+impl Derived {
+    fn of(m: &Media) -> Self {
+        Self {
+            dir: m
+                .path
+                .rsplit_once('/')
+                .map_or(String::new(), |(d, _)| d.to_string()),
+            nt: natural(&m.title),
+            nar: natural(&m.artist),
+            nal: natural(&m.album),
+            np: natural(&m.path),
+            find: format!(
+                "{}\n{}\n{}\n{}\n{}",
+                m.title, m.artist, m.album, m.genre, m.path
+            )
+            .to_lowercase(),
+        }
+    }
 }
 
 fn read_tags(path: &Path, m: &mut Media) {
@@ -199,13 +278,7 @@ pub fn scan_changes(
             };
             read_tags(p, &mut m);
             changed += 1;
-            tx.execute(
-                "INSERT OR REPLACE INTO media VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
-                params![
-                    m.path, m.kind, m.title, m.artist, m.album, m.genre, m.track, m.duration,
-                    m.size, m.mtime
-                ],
-            )?;
+            insert(&tx, &m)?;
         }
     }
     // Index paths use forward slashes, so the roots must too: a `C:\Videos` root kept
@@ -226,6 +299,23 @@ pub fn scan_changes(
     Ok((seen.len(), changed))
 }
 
+/// Write one row (and its derived query columns).
+fn insert(c: &Connection, m: &Media) -> rusqlite::Result<()> {
+    let d = Derived::of(m);
+    c.execute(
+        "INSERT OR REPLACE INTO media
+            (path,kind,title,artist,album,genre,track,duration,size,mtime,dir,nt,nar,nal,np,find)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+        params![
+            m.path, m.kind, m.title, m.artist, m.album, m.genre, m.track, m.duration, m.size,
+            m.mtime, d.dir, d.nt, d.nar, d.nal, d.np, d.find
+        ],
+    )?;
+    Ok(())
+}
+
+/// Every row. Only for one-shot tools, the schema migration and tests: the UI pages
+/// through [`query`] instead (#100).
 pub fn all(conn: &Connection) -> Vec<Media> {
     let Ok(mut st) = conn
         .prepare("SELECT path,kind,title,artist,album,genre,track,duration,size,mtime FROM media")
@@ -248,6 +338,306 @@ pub fn all(conn: &Connection) -> Vec<Media> {
     })
     .map(|it| it.filter_map(Result::ok).collect())
     .unwrap_or_default()
+}
+
+// ---------- queries (#100) ----------
+
+/// Columns read into a [`Media`], in [`row`] order.
+const COLS: &str = "path,kind,title,artist,album,genre,track,duration,size,mtime";
+
+fn row(r: &rusqlite::Row) -> rusqlite::Result<Media> {
+    Ok(Media {
+        path: r.get(0)?,
+        kind: r.get::<_, Option<MediaKind>>(1)?.unwrap_or_default(),
+        title: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+        artist: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+        album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+        genre: r.get::<_, Option<String>>(5)?.unwrap_or_default(),
+        track: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
+        duration: r.get::<_, Option<f64>>(7)?.unwrap_or(0.0),
+        size: r.get::<_, Option<i64>>(8)?.unwrap_or(0),
+        mtime: r.get::<_, Option<i64>>(9)?.unwrap_or(0),
+    })
+}
+
+/// The group name of rows without the tag.
+pub const UNKNOWN: &str = "Unknown";
+
+/// A tag column a music view groups or filters by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Field {
+    Album,
+    Artist,
+    Genre,
+}
+
+impl Field {
+    fn col(self) -> &'static str {
+        match self {
+            Self::Album => "album",
+            Self::Artist => "artist",
+            Self::Genre => "genre",
+        }
+    }
+}
+
+/// What a library page shows: a filter, an order and a page. Built by the UI and
+/// turned into one `SELECT … WHERE … ORDER BY … LIMIT … OFFSET …`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Query {
+    pub kind: Option<MediaKind>,
+    /// Words that must all occur in title, artist, album, genre or path (any case).
+    pub search: String,
+    /// Only files directly in this folder.
+    pub dir: Option<String>,
+    /// Only files under this folder (any depth).
+    pub under: Option<String>,
+    /// Only rows whose tag equals the value ("" = no tag, shown as "Unknown").
+    pub field: Option<(Field, String)>,
+    /// A sort key of [`sort_with`] ("title", "newest", "artist-desc", …).
+    pub sort: String,
+    pub offset: usize,
+    /// 0 = no limit.
+    pub limit: usize,
+}
+
+/// `LIKE` pattern matching `s` literally anywhere.
+fn like_any(s: &str) -> String {
+    let mut out = String::from("%");
+    for c in s.chars() {
+        if matches!(c, '%' | '_' | '\\') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('%');
+    out
+}
+
+/// `LIKE` pattern for everything under folder `d`.
+fn like_under(d: &str) -> String {
+    let mut p = like_any(d.trim_end_matches('/'));
+    p.remove(0);
+    p.pop();
+    p + "/%"
+}
+
+impl Query {
+    /// The `WHERE` clause (with a leading space, or empty) and its parameters.
+    fn filter(&self) -> (String, Vec<String>) {
+        let mut w: Vec<String> = Vec::new();
+        let mut p: Vec<String> = Vec::new();
+        if let Some(k) = self.kind {
+            p.push(k.as_str().into());
+            w.push(format!("kind=?{}", p.len()));
+        }
+        for word in self.search.to_lowercase().split_whitespace() {
+            p.push(like_any(word));
+            w.push(format!("find LIKE ?{} ESCAPE '\\'", p.len()));
+        }
+        if let Some(d) = &self.dir {
+            p.push(d.trim_end_matches('/').into());
+            w.push(format!("dir=?{}", p.len()));
+        }
+        if let Some(d) = &self.under {
+            p.push(like_under(d));
+            w.push(format!("path LIKE ?{} ESCAPE '\\'", p.len()));
+        }
+        if let Some((f, v)) = &self.field {
+            // Untagged rows are grouped as "Unknown" (see [`groups`]).
+            p.push(v.clone());
+            if v == UNKNOWN {
+                w.push(format!("IFNULL({},'') IN ('', ?{})", f.col(), p.len()));
+            } else {
+                w.push(format!("{}=?{}", f.col(), p.len()));
+            }
+        }
+        let clause = if w.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", w.join(" AND "))
+        };
+        (clause, p)
+    }
+
+    /// `ORDER BY` for the sort key; `None` for the watched / unwatched orders, which
+    /// depend on resume positions outside the database (sorted in Rust, see [`query`]).
+    fn order(&self) -> Option<&'static str> {
+        let (key, desc) = match self.sort.strip_suffix("-desc") {
+            Some(k) => (k, true),
+            None => (self.sort.as_str(), false),
+        };
+        Some(match (key, desc) {
+            ("watched" | "unwatched", _) => return None,
+            ("newest" | "date", false) | ("oldest", true) => "mtime DESC, nt",
+            ("oldest", false) | ("newest" | "date", true) => "mtime, nt",
+            ("size", false) => "size DESC, nt",
+            ("size", true) => "size, nt",
+            ("artist", false) => "nar, nt",
+            ("artist", true) => "nar DESC, nt DESC",
+            ("album", false) => "nal, track",
+            ("album", true) => "nal DESC, track DESC",
+            ("track", false) => "track, nt",
+            ("track", true) => "track DESC, nt DESC",
+            ("uri", false) => "np",
+            ("uri", true) => "np DESC",
+            (_, false) => "nt, np",
+            (_, true) => "nt DESC, np DESC",
+        })
+    }
+}
+
+/// One page of `q`, already filtered and sorted. `watched` decides the watched /
+/// unwatched orders (resume positions live in mpv's watch-later files, not here).
+pub fn query(conn: &Connection, q: &Query, watched: &dyn Fn(&Media) -> bool) -> Vec<Media> {
+    let (clause, p) = q.filter();
+    let Some(order) = q.order() else {
+        let mut all = q.clone();
+        all.sort = "title".into();
+        all.offset = 0;
+        all.limit = 0;
+        let mut v = query(conn, &all, watched);
+        sort_with(&mut v, &q.sort, watched);
+        let end = if q.limit == 0 {
+            v.len()
+        } else {
+            (q.offset + q.limit).min(v.len())
+        };
+        return v.drain(q.offset.min(end)..end).collect();
+    };
+    let limit = if q.limit == 0 { -1 } else { q.limit as i64 };
+    let sql = format!(
+        "SELECT {COLS} FROM media{clause} ORDER BY {order} LIMIT {limit} OFFSET {}",
+        q.offset
+    );
+    select(conn, &sql, &p)
+}
+
+fn select(conn: &Connection, sql: &str, p: &[String]) -> Vec<Media> {
+    let Ok(mut st) = conn.prepare(sql) else {
+        return Vec::new();
+    };
+    st.query_map(rusqlite::params_from_iter(p), row)
+        .map(|it| it.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+}
+
+/// Rows matching `q` (its sort and page are ignored).
+pub fn count(conn: &Connection, q: &Query) -> usize {
+    let (clause, p) = q.filter();
+    conn.query_row(
+        &format!("SELECT COUNT(*) FROM media{clause}"),
+        rusqlite::params_from_iter(p),
+        |r| r.get::<_, i64>(0),
+    )
+    .map_or(0, |n| n as usize)
+}
+
+/// Tag groups of the rows matching `q`: (value, songs, first path by title), by
+/// natural order of the value. An empty tag is its own group ("").
+pub fn groups(conn: &Connection, q: &Query, f: Field) -> Vec<(String, usize, String)> {
+    let (clause, p) = q.filter();
+    let col = f.col();
+    let sql = format!(
+        "SELECT IFNULL({col},''), COUNT(*), MIN(nt || char(1) || path) FROM media{clause}
+         GROUP BY IFNULL({col},'')"
+    );
+    let Ok(mut st) = conn.prepare(&sql) else {
+        return Vec::new();
+    };
+    let mut v: Vec<(String, usize, String)> = st
+        .query_map(rusqlite::params_from_iter(p), |r| {
+            let first: String = r.get::<_, Option<String>>(2)?.unwrap_or_default();
+            Ok((
+                r.get(0)?,
+                r.get::<_, i64>(1)? as usize,
+                first
+                    .split_once('\u{1}')
+                    .map_or(first.clone(), |(_, p)| p.into()),
+            ))
+        })
+        .map(|it| it.filter_map(Result::ok).collect())
+        .unwrap_or_default();
+    // Untagged rows join an "Unknown" group (and a literal "Unknown" tag).
+    if let Some(i) = v.iter().position(|g| g.0.is_empty()) {
+        let (_, n, first) = v.remove(i);
+        match v.iter_mut().find(|g| g.0 == UNKNOWN) {
+            Some(g) => g.1 += n,
+            None => v.push((UNKNOWN.into(), n, first)),
+        }
+    }
+    v.sort_by_cached_key(|g| natural(&g.0));
+    v
+}
+
+/// Files per folder for the rows matching `q` (folders that hold files directly).
+pub fn dir_counts(conn: &Connection, q: &Query) -> BTreeMap<String, usize> {
+    let (clause, p) = q.filter();
+    let sql = format!("SELECT IFNULL(dir,''), COUNT(*) FROM media{clause} GROUP BY dir");
+    let Ok(mut st) = conn.prepare(&sql) else {
+        return BTreeMap::new();
+    };
+    st.query_map(rusqlite::params_from_iter(p), |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as usize))
+    })
+    .map(|it| it.filter_map(Result::ok).collect())
+    .unwrap_or_default()
+}
+
+/// The sub-folders of `dir` that hold matching files at any depth, with their file
+/// counts, by name.
+pub fn subdirs(conn: &Connection, q: &Query, dir: &str) -> Vec<(String, usize)> {
+    let dir = dir.trim_end_matches('/');
+    let mut under = q.clone();
+    under.dir = None;
+    under.under = Some(dir.into());
+    let mut out: BTreeMap<String, usize> = BTreeMap::new();
+    for (d, n) in dir_counts(conn, &under) {
+        if let Some(rest) = d.strip_prefix(dir).and_then(|r| r.strip_prefix('/')) {
+            let first = rest.split('/').next().unwrap_or(rest);
+            *out.entry(first.to_string()).or_default() += n;
+        }
+    }
+    out.into_iter().collect()
+}
+
+/// Library rows of `paths` (missing ones are skipped), keyed by path.
+pub fn by_paths(conn: &Connection, paths: &[String]) -> std::collections::HashMap<String, Media> {
+    let mut out = std::collections::HashMap::new();
+    for chunk in paths.chunks(500) {
+        let marks = vec!["?"; chunk.len()].join(",");
+        let sql = format!("SELECT {COLS} FROM media WHERE path IN ({marks})");
+        for m in select(conn, &sql, chunk) {
+            out.insert(m.path.clone(), m);
+        }
+    }
+    out
+}
+
+/// Files, total size and total length of the rows matching `q`.
+pub fn totals(conn: &Connection, q: &Query) -> (usize, i64, f64) {
+    let (clause, p) = q.filter();
+    conn.query_row(
+        &format!(
+            "SELECT COUNT(*), IFNULL(SUM(size),0), IFNULL(SUM(duration),0) FROM media{clause}"
+        ),
+        rusqlite::params_from_iter(p),
+        |r| Ok((r.get::<_, i64>(0)? as usize, r.get(1)?, r.get(2)?)),
+    )
+    .unwrap_or((0, 0, 0.0))
+}
+
+/// Artists of the audio files with their song counts (non-empty artists only).
+pub fn artist_counts(conn: &Connection) -> Vec<(String, usize)> {
+    let Ok(mut st) = conn.prepare(
+        "SELECT artist, COUNT(*) FROM media WHERE kind='audio' AND IFNULL(artist,'')<>''
+         GROUP BY artist",
+    ) else {
+        return Vec::new();
+    };
+    st.query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as usize)))
+        .map(|it| it.filter_map(Result::ok).collect())
+        .unwrap_or_default()
 }
 
 /// The library row of `path`, if it is in the library.
@@ -555,7 +945,31 @@ mod tests {
             .unwrap()
             .filter_map(Result::ok)
             .collect();
-        assert_eq!(idx, ["media_artist_album", "media_kind"]);
+        assert_eq!(
+            idx,
+            [
+                "media_artist_album",
+                "media_dir",
+                "media_kind",
+                "media_kind_genre",
+                "media_kind_mtime",
+                "media_kind_nal",
+                "media_kind_nar",
+                "media_kind_nt",
+            ]
+        );
+        // The old row was backfilled with its folder and search text.
+        let (dir, find): (String, String) = c
+            .query_row("SELECT dir, find FROM media", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(dir, "/m");
+        assert!(find.contains('x') && find.contains("/m/a.mp3"));
+        let v: i64 = c
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA);
         let sync: i64 = c.query_row("PRAGMA synchronous", [], |r| r.get(0)).unwrap();
         assert_eq!(sync, 1, "NORMAL");
         assert_eq!(all(&c).len(), 1);
@@ -563,5 +977,184 @@ mod tests {
         // Opening again is a no-op.
         assert_eq!(all(&open_db(&db).unwrap()).len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An in-memory index with `rows` (path, kind, title, artist, album, genre, mtime).
+    fn index(rows: &[(&str, &str, &str, &str, &str, &str, i64)]) -> Connection {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE media(
+                path TEXT PRIMARY KEY, kind TEXT, title TEXT, artist TEXT, album TEXT,
+                genre TEXT, track INTEGER, duration REAL, size INTEGER, mtime INTEGER);",
+        )
+        .unwrap();
+        migrate(&c).unwrap();
+        for (i, r) in rows.iter().enumerate() {
+            let m = Media {
+                path: r.0.into(),
+                kind: MediaKind::parse(r.1).unwrap(),
+                title: r.2.into(),
+                artist: r.3.into(),
+                album: r.4.into(),
+                genre: r.5.into(),
+                track: i as i64 + 1,
+                duration: 60.0,
+                size: 100 * (i as i64 + 1),
+                mtime: r.6,
+            };
+            insert(&c, &m).unwrap();
+        }
+        c
+    }
+
+    fn paths(v: &[Media]) -> Vec<&str> {
+        v.iter().map(|m| m.path.as_str()).collect()
+    }
+
+    #[test]
+    fn queries_filter_sort_and_page_in_sql() {
+        let c = index(&[
+            ("/v/Show/Ep 10.mkv", "video", "Ep 10", "", "", "", 3),
+            ("/v/Show/Ep 2.mkv", "video", "Ep 2", "", "", "", 2),
+            ("/v/Show/S2/Ep 1.mkv", "video", "Ep 1", "", "", "", 1),
+            ("/v/film.mkv", "video", "Film", "", "", "", 4),
+            ("/a/x.mp3", "audio", "Song X", "Band", "LP", "Rock", 5),
+            ("/a/y.mp3", "audio", "Song Y", "", "", "", 6),
+        ]);
+        let no = |_: &Media| false;
+        let videos = Query {
+            kind: Some(MediaKind::Video),
+            sort: "title".into(),
+            ..Default::default()
+        };
+        // Natural order: "Ep 2" before "Ep 10".
+        let v = query(&c, &videos, &no);
+        assert_eq!(
+            paths(&v),
+            [
+                "/v/Show/S2/Ep 1.mkv",
+                "/v/Show/Ep 2.mkv",
+                "/v/Show/Ep 10.mkv",
+                "/v/film.mkv"
+            ]
+        );
+        // A page.
+        let page = Query {
+            offset: 1,
+            limit: 2,
+            ..videos.clone()
+        };
+        assert_eq!(
+            paths(&query(&c, &page, &no)),
+            ["/v/Show/Ep 2.mkv", "/v/Show/Ep 10.mkv"]
+        );
+        assert_eq!(count(&c, &videos), 4);
+        // One folder, its sub-folders, a subtree.
+        let show = Query {
+            dir: Some("/v/Show".into()),
+            ..videos.clone()
+        };
+        assert_eq!(count(&c, &show), 2);
+        assert_eq!(subdirs(&c, &videos, "/v/Show"), [("S2".to_string(), 1)]);
+        assert_eq!(subdirs(&c, &videos, "/v"), [("Show".to_string(), 3)]);
+        let under = Query {
+            under: Some("/v/Show".into()),
+            ..videos.clone()
+        };
+        assert_eq!(count(&c, &under), 3);
+        // Search: every word, any case, LIKE wildcards taken literally.
+        let s = |q: &str| Query {
+            search: q.into(),
+            ..Default::default()
+        };
+        assert_eq!(count(&c, &s("ep SHOW")), 3);
+        assert_eq!(count(&c, &s("rock band")), 1);
+        assert_eq!(count(&c, &s("%")), 0);
+        // Newest first, and the watched order (decided outside the database).
+        let newest = Query {
+            sort: "newest".into(),
+            limit: 2,
+            ..Default::default()
+        };
+        assert_eq!(paths(&query(&c, &newest, &no)), ["/a/y.mp3", "/a/x.mp3"]);
+        let watched = Query {
+            sort: "watched".into(),
+            ..videos.clone()
+        };
+        let film = |m: &Media| m.title == "Film";
+        assert_eq!(query(&c, &watched, &film)[0].title, "Film");
+        // Tag groups, untagged as "Unknown", and filtering by a group.
+        let songs = Query {
+            kind: Some(MediaKind::Audio),
+            ..Default::default()
+        };
+        let g = groups(&c, &songs, Field::Artist);
+        assert_eq!(
+            g,
+            [
+                ("Band".to_string(), 1, "/a/x.mp3".to_string()),
+                (UNKNOWN.to_string(), 1, "/a/y.mp3".to_string())
+            ]
+        );
+        let unknown = Query {
+            field: Some((Field::Artist, UNKNOWN.into())),
+            ..songs.clone()
+        };
+        assert_eq!(paths(&query(&c, &unknown, &no)), ["/a/y.mp3"]);
+        assert_eq!(totals(&c, &under), (3, 600, 180.0));
+        assert_eq!(by_paths(&c, &["/a/x.mp3".into(), "/nope".into()]).len(), 1);
+        assert_eq!(artist_counts(&c), [("Band".to_string(), 1)]);
+    }
+
+    /// `cargo test --release library_query_perf -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn library_query_perf() {
+        const N: usize = 100_000;
+        let c = index(&[]);
+        c.execute_batch("BEGIN").unwrap();
+        for i in 0..N {
+            let m = Media {
+                path: format!("/m/{}/{}/file {i}.mkv", i % 50, i % 7),
+                kind: if i % 3 == 0 {
+                    MediaKind::Audio
+                } else {
+                    MediaKind::Video
+                },
+                title: format!("File {i}"),
+                artist: format!("Artist {}", i % 400),
+                mtime: i as i64,
+                ..Default::default()
+            };
+            insert(&c, &m).unwrap();
+        }
+        c.execute_batch("COMMIT").unwrap();
+        let no = |_: &Media| false;
+        let t = std::time::Instant::now();
+        let q = Query {
+            kind: Some(MediaKind::Video),
+            sort: "title".into(),
+            limit: 400,
+            ..Default::default()
+        };
+        let page = query(&c, &q, &no);
+        let first = t.elapsed();
+        let t = std::time::Instant::now();
+        let dirs = subdirs(&c, &q, "/m/7");
+        let sub = t.elapsed();
+        let t = std::time::Instant::now();
+        let n = count(
+            &c,
+            &Query {
+                search: "file 99".into(),
+                ..q.clone()
+            },
+        );
+        let search = t.elapsed();
+        println!(
+            "{N} rows: first page ({}) {first:?}, sub-folders ({}) {sub:?}, search ({n}) {search:?}",
+            page.len(),
+            dirs.len()
+        );
     }
 }

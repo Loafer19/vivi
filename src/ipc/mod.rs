@@ -40,19 +40,16 @@ fn search(args: &Value) -> Result<Value, String> {
     let limit = args["limit"].as_u64().unwrap_or(25).clamp(1, 500) as usize;
     let kind = args["kind"].as_str().unwrap_or("");
     let conn = crate::library::open_db(&crate::library::db_path()).map_err(|e| e.to_string())?;
-    let words: Vec<&str> = q.split_whitespace().collect();
-    let hits: Vec<Value> = crate::library::all(&conn)
+    // Filtered and limited in SQL (#100), not by loading the whole index.
+    let query = crate::library::Query {
+        kind: crate::library::MediaKind::parse(kind),
+        search: q,
+        sort: "title".into(),
+        limit,
+        ..Default::default()
+    };
+    let hits: Vec<Value> = crate::library::query(&conn, &query, &|_| false)
         .into_iter()
-        .filter(|m| kind.is_empty() || m.kind.as_str() == kind)
-        .filter(|m| {
-            let hay = format!(
-                "{} {} {} {} {}",
-                m.title, m.artist, m.album, m.genre, m.path
-            )
-            .to_lowercase();
-            words.iter().all(|w| hay.contains(w))
-        })
-        .take(limit)
         .map(|m| {
             json!({
                 "path": m.path, "kind": m.kind.as_str(), "title": m.title, "artist": m.artist,
