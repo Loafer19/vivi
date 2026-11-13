@@ -1186,6 +1186,8 @@ pub struct Contributed {
     pub command: String,
     /// When it shows in the player menus (#93); empty = always.
     pub when: contrib::When,
+    /// Home widget layout (`home.widget` only).
+    pub home: contrib::HomeSpec,
 }
 
 impl Contributed {
@@ -1362,6 +1364,7 @@ pub fn contributions_all(point: &str) -> Vec<Contributed> {
                         },
                         command: x.command.clone(),
                         when: x.conditions(),
+                        home: x.home_spec(),
                     })
             })
             .collect();
@@ -1709,6 +1712,7 @@ mod tests {
             label: "P".into(),
             command: "go".into(),
             when: Default::default(),
+            home: Default::default(),
         };
         LAST_CONTRIBUTED.with(|l| l.borrow_mut().insert("test.point".into(), vec![e.clone()]));
         assert_eq!(contributions_all("test.point"), vec![e]);
@@ -1797,6 +1801,7 @@ mod tests {
                 label: String::new(),
                 command: String::new(),
                 when: Default::default(),
+                home: Default::default(),
             })
             .collect();
         order_by(&["c".into(), "a".into()], &mut v);

@@ -733,6 +733,7 @@ mod tests {
             label: label.into(),
             command: cmd.into(),
             when: Default::default(),
+            home: Default::default(),
         };
         let v = plugin_commands(&[
             (
