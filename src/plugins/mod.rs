@@ -609,7 +609,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState) {
         command(&c.id, &c.name, &c.args);
     });
     let auto = with(|r| {
-        r.cfg.config()
+        r.cfg
+            .config()
             .plugins
             .get(packages::GLOBAL_ID)
             .and_then(|s| s.settings.get("autocheck"))

@@ -5,7 +5,6 @@
 //! (`sleep`) and packages (`vivi-sleep <spec>`); its state is published in mpv's
 //! `user-data/vivi/sleep` (once a second while counting down).
 
-use crate::config::Config;
 use crate::player::Player;
 use crate::AppWindow;
 use slint::ComponentHandle;
@@ -123,7 +122,11 @@ struct Timer {
     published: Option<i64>,
 }
 
-type Ctx = (slint::Weak<AppWindow>, Rc<Player>, crate::app::state::AppState);
+type Ctx = (
+    slint::Weak<AppWindow>,
+    Rc<Player>,
+    crate::app::state::AppState,
+);
 
 thread_local! {
     static T: RefCell<Timer> = RefCell::new(Timer::default());

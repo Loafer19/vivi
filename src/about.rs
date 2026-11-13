@@ -1,7 +1,6 @@
 //! Settings → About: version and build info, the GitHub release update check,
 //! install-type detection for the Download button, and the bug-report system info.
 
-use crate::config::Config;
 use crate::player::Player;
 use crate::{About, AppWindow};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};

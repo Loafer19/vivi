@@ -17,7 +17,6 @@
 //!
 //! See docs/plugins-architecture.md, "Downloads".
 
-use crate::config::Config;
 use crate::player::Player;
 use crate::AppWindow;
 use serde::{Deserialize, Serialize};

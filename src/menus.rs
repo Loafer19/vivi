@@ -2,7 +2,6 @@
 //! context menus (file / folder / playlist), and the library sort and view options.
 //! Slint draws them (ui/menu.slint); this module fills the rows and runs the actions.
 
-use crate::config::Config;
 use crate::keymap::{self, Action as A};
 use crate::player::Player;
 use crate::plugins::{self, contrib};

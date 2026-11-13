@@ -3,7 +3,6 @@
 //! (see `ui/app.slint`) and mpv letterboxes, so the video keeps its aspect ratio. The
 //! miniplayer geometry is saved in the config and the full-size geometry restored on exit.
 
-use crate::config::Config;
 use crate::AppWindow;
 use slint::{ComponentHandle, LogicalPosition, LogicalSize};
 use std::cell::{Cell, RefCell};

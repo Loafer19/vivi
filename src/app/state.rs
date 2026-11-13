@@ -59,8 +59,6 @@ pub enum AppMsg {
     SetPluginEnabled(String, Option<bool>),
     /// One plugin setting value.
     SetPluginSetting(String, String, String),
-    /// A placeholder (`stub.…`) setting value.
-    SetStub(String, String),
     /// Drop a plugin's on / off choice and settings.
     ForgetPlugin(String),
 }
@@ -92,9 +90,6 @@ pub fn reduce(c: &mut Config, msg: AppMsg) {
         AppMsg::SetPluginEnabled(id, on) => c.plugins.entry(id).or_default().enabled = on,
         AppMsg::SetPluginSetting(id, k, v) => {
             c.plugins.entry(id).or_default().settings.insert(k, v);
-        }
-        AppMsg::SetStub(k, v) => {
-            c.stubs.insert(k, v);
         }
         AppMsg::ForgetPlugin(id) => {
             c.plugins.remove(&id);
@@ -213,6 +208,7 @@ impl AppState {
     }
 
     /// Number of committed changes so far.
+    #[cfg(test)]
     pub fn version(&self) -> u64 {
         self.0.version.get()
     }
@@ -273,7 +269,9 @@ mod tests {
         let s2 = s.clone();
         s.update(move |c| {
             c.stubs.insert("a".into(), "1".into());
-            s2.send_and_save(AppMsg::SetStub("b".into(), "2".into()));
+            s2.update_and_save(|c| {
+                c.stubs.insert("b".into(), "2".into());
+            });
             // Queued: not visible yet, and nothing was written mid-change.
             assert!(!s2.config().stubs.contains_key("b"));
         });
@@ -299,7 +297,10 @@ mod tests {
     #[test]
     fn reduce_plugin_messages() {
         let mut c = Config::default();
-        reduce(&mut c, AppMsg::SetPluginEnabled("lyrics".into(), Some(false)));
+        reduce(
+            &mut c,
+            AppMsg::SetPluginEnabled("lyrics".into(), Some(false)),
+        );
         reduce(
             &mut c,
             AppMsg::SetPluginSetting("lyrics".into(), "k".into(), "v".into()),

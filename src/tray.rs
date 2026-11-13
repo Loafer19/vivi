@@ -16,7 +16,6 @@
 //!
 //! Windows / macOS: no tray yet; the close button quits.
 
-use crate::config::Config;
 use crate::player::Player;
 use crate::AppWindow;
 use slint::ComponentHandle;
