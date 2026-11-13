@@ -27,6 +27,7 @@ pub(crate) fn setup_features(
     log: bool,
 ) {
     settings::setup(app, player, cfg.clone(), log);
+    crate::homeview::setup(app, cfg.clone());
     libview::setup(app, player, cfg.clone(), log);
     menus::setup(app, player, cfg.clone());
     crate::nowplaying::setup(player);
@@ -38,6 +39,7 @@ pub(crate) fn setup_features(
     crate::extwin::refresh();
     crate::streams::setup(app, player);
     crate::palette::setup(app);
+    crate::homeview::repack();
     crate::drawer::setup(app);
     crate::downloads::setup(app, player, cfg.clone());
     fx::setup(app, player);

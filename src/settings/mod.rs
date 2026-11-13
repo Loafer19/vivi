@@ -241,6 +241,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
                     refresh();
                     return;
                 }
+                if let Some(rest) = id.strip_prefix("home.") {
+                    crate::homeview::setting(rest, v);
+                    refresh();
+                    return;
+                }
                 if let Some(rest) = id.strip_prefix("src.") {
                     crate::extwin::source_setting(rest, v);
                     refresh();

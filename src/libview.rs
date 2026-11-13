@@ -912,7 +912,30 @@ impl Lib {
                 it
             })
             .collect();
+        // "Your Mixes": smart playlists that have something in them (#87).
+        let now = crate::smart::now();
+        let mixes: Vec<LibItem> = crate::smart::load()
+            .iter()
+            .filter_map(|l| {
+                let n = self
+                    .db
+                    .as_ref()
+                    .map_or(0, |db| crate::smart::evaluate(db, l, now).len());
+                (n > 0).then(|| {
+                    let mut it = Self::group(
+                        format!("smart:{}", l.id),
+                        &l.name,
+                        format!("{n}"),
+                        "playlist",
+                        false,
+                    );
+                    it.icon = "playlist".into();
+                    it
+                })
+            })
+            .collect();
         HomeRows {
+            mixes,
             listen,
             folders,
             lists,
@@ -1011,6 +1034,7 @@ fn watched(m: &Media, cfg: &Config) -> bool {
 
 /// The Home sections of one render.
 struct HomeRows {
+    mixes: Vec<LibItem>,
     listen: Vec<LibItem>,
     folders: Vec<LibItem>,
     lists: Vec<LibItem>,
@@ -1032,10 +1056,12 @@ struct Models {
     folders: Rc<VecModel<LibItem>>,
     lists: Rc<VecModel<LibItem>>,
     artists: Rc<VecModel<LibItem>>,
+    mixes: Rc<VecModel<LibItem>>,
 }
 
 impl HomeRows {
     fn show(self, m: &Models) {
+        show(&m.mixes, self.mixes);
         show(&m.listen, self.listen);
         show(&m.folders, self.folders);
         show(&m.lists, self.lists);
@@ -1061,6 +1087,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
         Rc::new(VecModel::default()),
         Rc::new(VecModel::default()),
     );
+    let mixes = Rc::new(VecModel::default());
+    app.global::<crate::Library>()
+        .set_mixes(ModelRc::from(mixes.clone()));
     MODELS.with(|m| {
         m.borrow_mut()
             .extend([&items, &cont, &recent, &pinned, &listen].map(|m| ThumbModel::new(m.clone())))
@@ -1134,6 +1163,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
             folders,
             lists,
             artists,
+            mixes,
         },
         back: Vec::new(),
         fwd: Vec::new(),
@@ -1179,6 +1209,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
             let (lo, hi) = SEEN.get();
             thumb_window(lo, hi);
             home.show(&models);
+            crate::homeview::repack();
             let g = a.global::<crate::Library>();
             g.set_nav(nav.clone().into());
             g.set_smart(smart);

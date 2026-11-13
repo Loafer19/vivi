@@ -1,5 +1,5 @@
 // Library: home sections, the browsed folder / view (path, crumbs, sort, grid), search and scan state, and its actions.
-import { LibItem } from "../library.slint";
+import { LibItem, HomeLine } from "../library.slint";
 import { Item } from "../core/types.slint";
 export global Library {
     in-out property <[LibItem]> items;
@@ -10,6 +10,12 @@ export global Library {
     in-out property <[LibItem]> folders;
     in-out property <[LibItem]> lists;
     in-out property <[LibItem]> artists;
+    // Home widgets (src/homeview.rs) and smart playlists for "Your Mixes".
+    in-out property <[HomeLine]> home;
+    in-out property <[LibItem]> mixes;
+    in-out property <bool> home-edit;
+    callback home-action(string, string, string);
+    callback home-narrow(bool);
     in-out property <bool> can-back;
     in-out property <bool> can-forward;
     in-out property <bool> full;

@@ -354,6 +354,9 @@ export component AppWindow inherits Window {
         open-source(id) => { Extensions.run(id, "::source"); }
         widgets: Extensions.widgets;
         run-widget(id, cmd) => { Extensions.run(id, cmd); }
+        home-lines: Library.home; mix-items: Library.mixes; home-edit: Library.home-edit;
+        home-action(a, id, v) => { Library.home-action(a, id, v); }
+        home-narrow(n) => { Library.home-narrow(n); }
         open-extensions() => { Extensions.select(Extensions.tab, false); }
         add-folders() => { Settings.category = 11; Overlays.settings-open = true; Settings.refresh(11, "", false); }
         create-playlist() => { Library.create-playlist(); }

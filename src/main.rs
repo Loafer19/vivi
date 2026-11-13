@@ -13,6 +13,7 @@ mod extwin;
 mod filepick;
 mod fx;
 mod home;
+mod homeview;
 mod images;
 mod ipc;
 mod keymap;

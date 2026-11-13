@@ -342,6 +342,7 @@ pub fn refresh_widgets() {
     let all = plugins::manifests();
     a.global::<crate::Extensions>()
         .set_widgets(ModelRc::new(VecModel::from(widgets(&all))));
+    crate::homeview::repack();
 }
 
 /// Rebuild tabs, sidebar sources and the selected tab (after any plugin change).
