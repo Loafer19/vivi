@@ -847,8 +847,8 @@ export component LibraryView inherits Rectangle {
                                         if c.kind == "plugin" && c.template == "card" && !c.live: WidgetCard { label: c.title; info: c.info; icon: Icons.plugin-duo(c.icon); clicked => { root.run-widget(c.plugin, c.command); } }
                                         if c.kind == "plugin" && c.template == "card" && c.live: LiveWidgetCard { label: c.title; info: c.info; icon: Icons.plugin-duo(c.icon); value: c.value; progress: c.progress; rows: c.rows; clicked => { root.run-widget(c.plugin, c.command); } }
                                         if c.kind == "plugin" && c.template != "card": HomeHead { title: c.title; clicked => { root.run-widget(c.plugin, c.command); } }
-                                        if c.kind == "plugin" && c.template == "tiles": Grid { items: c.items; max-rows: c.size == "l" ? 2 : 1; open(it) => { root.run-widget(c.plugin, it.key); } }
-                                        if c.kind == "plugin" && c.template == "list": Rows { items: c.items; max: c.size == "s" ? 3 : (c.size == "l" ? 8 : 5); dim: true; open(it) => { root.run-widget(c.plugin, it.key); } }
+                                        if c.kind == "plugin" && c.template == "tiles": Grid { items: c.items; max-rows: c.size == "l" ? 2 : 1; open(it) => { root.run-widget(c.plugin, c.command + "\n" + it.key); } }
+                                        if c.kind == "plugin" && c.template == "list": Rows { items: c.items; max: c.size == "s" ? 3 : (c.size == "l" ? 8 : 5); dim: true; open(it) => { root.run-widget(c.plugin, c.command + "\n" + it.key); } }
                                     }
                                 }
                             }

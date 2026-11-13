@@ -435,6 +435,36 @@ pub fn action(a: &str, id: &str, v: &str) {
     }
 }
 
+/// Ids of plugin `pid`'s Home widgets, in order.
+fn plugin_slots(pid: &str) -> Vec<Slot> {
+    let Some((_, cfg, _, _)) = state() else {
+        return Vec::new();
+    };
+    let prefix = format!("plug:{pid}:");
+    slots(&cfg.config())
+        .0
+        .into_iter()
+        .filter(|s| s.id.starts_with(&prefix))
+        .collect()
+}
+
+/// Whether any Home widget of plugin `pid` is shown (Extensions → *Show on Home*).
+pub fn plugin_on(pid: &str) -> bool {
+    plugin_slots(pid).iter().any(|s| s.on)
+}
+
+/// Extensions → *Show on Home* / *Position on Home* for plugin `pid`.
+pub fn plugin_arrange(pid: &str, what: &str) {
+    for s in plugin_slots(pid) {
+        match what {
+            "show" | "hide" => edit(Op::Toggle(s.id, what == "show")),
+            "up" => edit(Op::Step(s.id, -1)),
+            "down" => edit(Op::Step(s.id, 1)),
+            _ => {}
+        }
+    }
+}
+
 /// A `home.<…>` row of Settings → Interface → Home changed.
 pub fn setting(rest: &str, v: &str) {
     match rest {

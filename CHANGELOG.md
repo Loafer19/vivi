@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- **Configurable Home** (#87): Home is a grid of widgets (Continue Watching hero, Jump Back In, Your Mixes, Recently Added, Listen Again, Favorites, Streams, Sources, frequently visited folders, artists and playlists, Recently Played, plugin widgets). Each has an on / off switch, a position, a size (S, M, L) and a width (⅓, ⅔, full); narrow windows and the docked library use one column. *Customize Home* edits it in place (drag a widget by its handle or use ↑ ↓; Cancel puts the old layout back), Settings → Interface → Home lists the same widgets. Stored in `[home]` of the config.
+- **Smart playlists** (#87): a local play history in `library.db` and rule-based lists (Top This Week, Most Played, Not Played for a Month, Never Played, Similar to This Track), shown on Playlists and in *Your Mixes*. Settings → Privacy can turn the history off or clear it.
+- **Plugin Home widgets** (#87): `home.widget` entries can declare `id`, `sizes`, `span` and `template` (`card`, `tiles`, `list`); `vivi-content` takes `items` with pictures.
+
+### Changed
+- **Library in SQLite** (#100): filtering, sorting, search and paging run in the database (400 rows at a time) instead of on a full copy in memory.
+- **One owner for settings state** (#101): the configuration is read as snapshots and changed through queued messages, so nested changes can no longer panic.
+
 ## [0.16.3] - 2026-11-10
 
 v0.16.2 was tagged but never published: the AppImage failed to link against Ubuntu 22.04's system SQLite (`undefined symbol: sqlite3_error_offset` after rusqlite 0.41.1). This release is everything from that tag, plus SQLite compiled into the binary on every platform.

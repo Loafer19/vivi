@@ -48,7 +48,11 @@ pub fn setup(app: &AppWindow, cfg: crate::app::state::AppState) {
         } else {
             cmd.to_string()
         };
-        plugins::run(&id, &cmd, &[]);
+        // A Home tile or list row: "<command>\n<item id>" sends the item id as argument.
+        match cmd.split_once('\n') {
+            Some((c, item)) => plugins::run(&id, c, &[item.to_string()]),
+            None => plugins::run(&id, &cmd, &[]),
+        };
     });
     let w = app.as_weak();
     g.on_open_replacement(move |r| {
@@ -266,7 +270,7 @@ fn gear_rows(r: &mut Rows, m: &Manifest) {
             &format!("src.{}.home-show", m.id),
             "Show on Home",
             "Show this plugin's widgets on the Home screen.",
-            !plugins::hidden_at(r.c, contrib::HOME_WIDGET, &m.id),
+            crate::homeview::plugin_on(&m.id),
         );
         r.push(
             &format!("src.{}.home", m.id),
@@ -284,9 +288,9 @@ pub fn source_setting(rest: &str, value: &str) {
     let show = if value == "true" { "show" } else { "hide" };
     let mv = if value == "Move up" { "up" } else { "down" };
     if let Some(id) = rest.strip_suffix(".home-show") {
-        plugins::arrange(contrib::HOME_WIDGET, id, show);
+        crate::homeview::plugin_arrange(id, show);
     } else if let Some(id) = rest.strip_suffix(".home") {
-        plugins::arrange(contrib::HOME_WIDGET, id, mv);
+        crate::homeview::plugin_arrange(id, mv);
     } else if let Some(id) = rest.strip_suffix(".show") {
         plugins::arrange_source(id, show);
     } else {
