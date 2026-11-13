@@ -623,6 +623,10 @@ export component LibraryView inherits Rectangle {
     property <string> section: nav == "home" ? "home" : (crumb-keys.length > 0 ? crumb-keys[0] : nav);
     // The Streams hub or a service page fills the content area (#86).
     property <bool> hub: Streams.view != "";
+    // ⋯ on Home (Refresh / Customize / Reset) and in a video subfolder (folder actions).
+    // Elsewhere Grid/List lives only on the toolbar View icon, so ⋯ would be empty and is hidden.
+    property <bool> show-more: (root.nav == "home" && !root.hub)
+        || (root.nav.character-count > 6 && root.crumb-keys.length > 1 && root.section == "video");
     property <bool> show-grid: root.grid && !root.sidebar && root.width >= 520px && root.nav != "home" && root.items.length > 0 && root.items[0].kind != "action";
     property <int> rows-max: root.sidebar ? 3 : 6;
 
@@ -702,17 +706,16 @@ export component LibraryView inherits Rectangle {
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
-                // On Home: Refresh, Customize, Reset Home Widgets (not Grid / List View).
-                more := HeadIcon {
+                // On Home: Refresh, Customize, Reset. In a video subfolder: folder actions.
+                // Hidden when it would only have repeated the toolbar Grid / List control.
+                if root.show-more: HeadIcon {
                     label: "More"; icon: "more";
                     clicked => {
                         if (root.nav == "home" && !root.hub) {
                             root.menu-request("home", self.absolute-position.x, self.absolute-position.y + 28px, "");
-                        } else if (root.nav.character-count > 6 && root.crumb-keys.length > 1 && root.section == "video") {
+                        } else {
                             root.menu-request("lib", self.absolute-position.x, self.absolute-position.y + 28px,
                                 root.nav + "\nfolder\n0\n0\n0");
-                        } else {
-                            root.menu-request("view", self.absolute-position.x, self.absolute-position.y + 28px, "");
                         }
                     }
                 }
