@@ -11,6 +11,7 @@
 - **Home** (#87): an empty state with a *Customize Home* button when every widget is hidden; the folder item-count, sort, view and search toolbar no longer appears on Home; the Home title lines up with the back and forward arrows; the header ⋯ menu on Home has *Refresh*, *Customize* and *Reset Home Widgets* (with a confirmation) instead of Grid / List View; shelves can be ⅓ wide so widgets sit side by side; widget heights follow their content; Your Mixes tiles no longer collapse into a sliver; the edit bar no longer repeats the widget title; a drag preview follows the pointer; the Continue Watching hero stretches to the row height next to Jump Back In; portrait or letterboxed hero thumbnails fill the side bars with a zoomed, dimmed copy of the same image.
 
 ### Changed
+- **Default Home layout** (#87): new installs and *Reset Home Widgets* use Continue Watching ⅔ + Jump Back In ⅓, Your Mixes ⅓ + Recently Added ⅔, then Listen Again full; unplaced plugin widgets append at full width and can be turned off. Saved `[home]` layouts are left as they are.
 - **Library in SQLite** (#100): filtering, sorting, search and paging run in the database (400 rows at a time) instead of on a full copy in memory.
 - **One owner for settings state** (#101): the configuration is read as snapshots and changed through queued messages, so nested changes can no longer panic.
 

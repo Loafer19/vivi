@@ -82,7 +82,7 @@ fn plugin_widgets(c: &crate::config::Config) -> Vec<(PluginDef, plugins::Contrib
                 return None;
             }
             let span = if e.home.span == 0 {
-                1
+                3
             } else {
                 e.home.span.min(3)
             };

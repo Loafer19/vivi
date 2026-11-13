@@ -82,7 +82,9 @@ const fn def(
     }
 }
 
-/// Built-in widgets in their default order (Home "Variant B").
+/// Built-in widgets in their default order: Continue Watching ⅔ + Jump Back In ⅓,
+/// Your Mixes ⅓ + Recently Added ⅔, then Listen Again full. Other shelves start off;
+/// plugin widgets the user never placed are appended at full width.
 pub const BUILTIN: &[Def] = &[
     def(
         "continue",
@@ -94,12 +96,12 @@ pub const BUILTIN: &[Def] = &[
         2,
     ),
     def("jump", "Jump Back In", "sm", &[1, 2], true, "m", 1),
-    def("mixes", "Your Mixes", "sml", &[1, 2, 3], true, "m", 3),
-    def("added", "Recently Added", "sml", &[1, 2, 3], true, "m", 3),
+    def("mixes", "Your Mixes", "sml", &[1, 2, 3], true, "m", 1),
+    def("added", "Recently Added", "sml", &[1, 2, 3], true, "m", 2),
     def("listen", "Listen Again", "sml", &[1, 2, 3], true, "m", 3),
-    def("favorites", "Favorites", "sml", &[1, 2, 3], true, "m", 3),
-    def("streams", "Streams", "s", &[1, 2, 3], true, "s", 3),
-    def("sources", "Sources", "s", &[1, 2, 3], true, "s", 3),
+    def("favorites", "Favorites", "sml", &[1, 2, 3], false, "m", 3),
+    def("streams", "Streams", "s", &[1, 2, 3], false, "s", 3),
+    def("sources", "Sources", "s", &[1, 2, 3], false, "s", 3),
     def(
         "folders",
         "Frequently Visited Folders",
@@ -277,9 +279,10 @@ pub fn resolve(home: &Home, plugins: &[PluginDef]) -> Vec<Slot> {
     }
     for p in plugins {
         if !out.iter().any(|s| s.id == p.id) {
+            // Never placed by the user: append at full width (⅓ / ⅔ if the plugin forbids 3).
             out.push(Slot {
                 size: fit_size(&p.size, &p.sizes),
-                span: fit_span(p.span, &p.spans),
+                span: fit_span(3, &p.spans),
                 ..slot_of_plugin(p)
             });
         }
@@ -393,16 +396,105 @@ mod tests {
     }
 
     #[test]
-    fn defaults_follow_variant_b_and_plugins_go_last() {
+    fn defaults_are_continue_jump_then_mixes_added_then_listen() {
         let v = resolve(&Home::default(), &[plug("stats", true), plug("x", false)]);
         assert_eq!(v[0].id, "continue");
         assert_eq!((v[0].size.as_str(), v[0].span), ("l", 2));
-        assert_eq!(v[1].id, "jump");
-        assert!(!v.iter().find(|s| s.id == "recent").unwrap().on);
+        assert_eq!((v[1].id.as_str(), v[1].span), ("jump", 1));
+        assert_eq!((v[2].id.as_str(), v[2].span), ("mixes", 1));
+        assert_eq!((v[3].id.as_str(), v[3].span), ("added", 2));
+        assert_eq!((v[4].id.as_str(), v[4].span), ("listen", 3));
+        for id in [
+            "favorites",
+            "streams",
+            "sources",
+            "folders",
+            "artists",
+            "lists",
+            "recent",
+        ] {
+            assert!(
+                !v.iter().find(|s| s.id == id).unwrap().on,
+                "{id} starts off"
+            );
+        }
         let n = v.len();
         assert_eq!(v[n - 2].id, "plug:stats:show");
         assert!(v[n - 2].on);
+        assert_eq!(
+            v[n - 2].span,
+            2,
+            "full width if allowed, else the widest the plugin allows"
+        );
         assert!(!v[n - 1].on, "the old hidden flag carries over");
+    }
+
+    #[test]
+    fn unplaced_plugins_append_at_full_width_when_allowed() {
+        let p = PluginDef {
+            id: plugin_id("wide", "show"),
+            title: "wide".into(),
+            sizes: "m".into(),
+            spans: vec![1, 2, 3],
+            size: "m".into(),
+            span: 1,
+            on: true,
+        };
+        let v = resolve(&Home::default(), &[p]);
+        let w = v.iter().find(|s| s.id == "plug:wide:show").unwrap();
+        assert_eq!(w.span, 3);
+    }
+
+    #[test]
+    fn saved_home_layout_is_not_overwritten_by_new_defaults() {
+        // A layout saved before the new template (Mixes and Added full width, Favorites on).
+        let home = Home {
+            version: 1,
+            widgets: vec![
+                HomeWidget {
+                    id: "continue".into(),
+                    on: true,
+                    size: "l".into(),
+                    span: 2,
+                },
+                HomeWidget {
+                    id: "jump".into(),
+                    on: true,
+                    size: "m".into(),
+                    span: 1,
+                },
+                HomeWidget {
+                    id: "mixes".into(),
+                    on: true,
+                    size: "m".into(),
+                    span: 3,
+                },
+                HomeWidget {
+                    id: "added".into(),
+                    on: true,
+                    size: "m".into(),
+                    span: 3,
+                },
+                HomeWidget {
+                    id: "listen".into(),
+                    on: true,
+                    size: "m".into(),
+                    span: 3,
+                },
+                HomeWidget {
+                    id: "favorites".into(),
+                    on: true,
+                    size: "m".into(),
+                    span: 3,
+                },
+            ],
+        };
+        let keep = home.clone();
+        let v = resolve(&home, &[]);
+        assert_eq!(home, keep, "[home] in the config is not rewritten");
+        assert_eq!(v.iter().find(|s| s.id == "mixes").unwrap().span, 3);
+        assert_eq!(v.iter().find(|s| s.id == "added").unwrap().span, 3);
+        assert!(v.iter().find(|s| s.id == "favorites").unwrap().on);
     }
 
     #[test]
