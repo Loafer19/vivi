@@ -673,16 +673,18 @@ export component LibraryView inherits Rectangle {
         VerticalLayout {
             padding: 20px; padding-bottom: 0; spacing: 17px;
             HorizontalLayout {
-                height: root.nav == "home" && !root.home-edit && !root.hub ? 30px : 24px; spacing: 12px;
+                height: 24px; spacing: 12px;
                 HeadIcon { label: "Back"; icon: "arrow-left"; enabled: root.can-back; clicked => { root.history(false); } }
                 HeadIcon { label: "Forward"; icon: "arrow-right"; enabled: root.can-forward; clicked => { root.history(true); } }
-                // Breadcrumb ("..." for long paths comes from src/libview.rs).
+                // Breadcrumb ("..." for long paths comes from src/libview.rs). Title is 24 px
+                // tall like the arrows so "Home" does not sit lower than the chevrons.
                 HorizontalLayout {
                     horizontal-stretch: 1; spacing: 6px;
                     for k[i] in root.crumb-keys: HorizontalLayout {
                         spacing: 6px;
-                        if i > 0: Text { text: "▸"; color: Theme.fg-a2; font-size: Metrics.font-micro; vertical-alignment: center; }
+                        if i > 0: Text { height: 24px; text: "▸"; color: Theme.fg-a2; font-size: Metrics.font-micro; vertical-alignment: center; }
                         Text {
+                            height: 24px;
                             text: root.crumb-labels[i]; font-size: Metrics.font-lg; overflow: elide; vertical-alignment: center;
                             // Docked, long names give way sooner so the row fits the panel.
                             min-width: min(self.preferred-width, root.sidebar ? 56px : 140px);
@@ -692,21 +694,13 @@ export component LibraryView inherits Rectangle {
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
-                // Visible Customize Home control in the header (also when the sidebar is docked).
-                if root.nav == "home" && !root.home-edit && !root.hub: Rectangle {
-                    height: 28px; width: cht.preferred-width + 36px; border-radius: Metrics.radius-md;
-                    background: custa.has-hover ? Theme.divider : Theme.bg-a1;
-                    HorizontalLayout {
-                        padding-left: 8px; padding-right: 10px; spacing: 6px;
-                        VerticalLayout { alignment: center; Icon { source: @image-url("../assets/icons/edit.svg"); width: 14px; height: 14px; tint: Theme.fg-1; } }
-                        cht := Text { text: "Customize Home"; color: Theme.fg-1; font-size: Metrics.font-sm; font-weight: 500; vertical-alignment: center; }
-                    }
-                    custa := TouchArea { accessible-role: button; accessible-label: "Customize Home"; mouse-cursor: pointer; clicked => { root.home-action("edit", "", ""); } }
-                }
+                // On Home: Refresh, Customize, Reset Home Widgets (not Grid / List View).
                 more := HeadIcon {
                     label: "More"; icon: "more";
                     clicked => {
-                        if (root.nav.character-count > 6 && root.crumb-keys.length > 1 && root.section == "video") {
+                        if (root.nav == "home" && !root.hub) {
+                            root.menu-request("home", self.absolute-position.x, self.absolute-position.y + 28px, "");
+                        } else if (root.nav.character-count > 6 && root.crumb-keys.length > 1 && root.section == "video") {
                             root.menu-request("lib", self.absolute-position.x, self.absolute-position.y + 28px,
                                 root.nav + "\nfolder\n0\n0\n0");
                         } else {

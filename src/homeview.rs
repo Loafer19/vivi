@@ -389,6 +389,13 @@ pub fn action(a: &str, id: &str, v: &str) {
     let slot = slots.iter().find(|s| s.id == id);
     match a {
         "edit" => set_editing(true),
+        "refresh" => {
+            if let Some((a, ..)) = state() {
+                crate::extwin::refresh_widgets();
+                a.global::<crate::Library>().invoke_refresh();
+                a.global::<crate::Library>().invoke_rescan();
+            }
+        }
         "done" => set_editing(false),
         "cancel" => {
             let backup = ST.with(|s| s.borrow_mut().as_mut().and_then(|s| s.backup.take()));

@@ -1,5 +1,5 @@
 //! Menus per the Figma frames: the right-click main menu with its submenus, library
-//! context menus (file / folder / playlist), and the library sort and view options.
+//! context menus (file / folder / playlist), the library sort and view options, and the Home ⋯ menu.
 //! Slint draws them (ui/menu.slint); this module fills the rows and runs the actions.
 
 use crate::keymap::{self, Action as A};
@@ -544,6 +544,15 @@ pub fn refresh_open() {
     }
 }
 
+/// Home ⋯ menu: Refresh, Customize, Reset Home Widgets (no Grid / List View).
+fn home_menu() -> Vec<MenuItem> {
+    vec![
+        row("home-refresh", "Refresh", "refresh", ""),
+        row("home-edit", "Customize", "edit", ""),
+        row("home-reset", "Reset Home Widgets", "resync", ""),
+    ]
+}
+
 fn menu_rows(
     a: &AppWindow,
     p: &Player,
@@ -553,6 +562,7 @@ fn menu_rows(
     c: &str,
 ) -> Vec<MenuItem> {
     match kind {
+        "home" => home_menu(),
         "main" => {
             // Player menu: plugin entries get no item argument.
             *ctx.borrow_mut() = Ctx::default();
@@ -809,6 +819,17 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                 }
             }
             "mini" => a.global::<crate::Playback>().invoke_toggle_mini(),
+            "home-edit" => crate::homeview::action("edit", "", ""),
+            "home-refresh" => crate::homeview::action("refresh", "", ""),
+            "home-reset" => crate::dialogs::confirm_core(
+                a,
+                "reset-home",
+                "Reset Home Widgets",
+                "Reset Home widgets to the defaults?",
+                "Your custom layout, sizes and widths go back to the defaults. This cannot be undone.",
+                "Reset",
+                || crate::homeview::action("reset", "", ""),
+            ),
             "customize" => a.global::<crate::Overlays>().set_customize_open(true),
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "extensions" => crate::extwin::open(a, "", false),
@@ -853,6 +874,18 @@ mod tests {
 
     fn ids(v: &[MenuItem]) -> Vec<(String, bool)> {
         v.iter().map(|m| (m.id.to_string(), m.divider)).collect()
+    }
+
+    #[test]
+    fn home_menu_is_refresh_customize_reset() {
+        assert_eq!(
+            ids(&home_menu()),
+            [
+                ("home-refresh".into(), false),
+                ("home-edit".into(), false),
+                ("home-reset".into(), false),
+            ]
+        );
     }
 
     #[test]
