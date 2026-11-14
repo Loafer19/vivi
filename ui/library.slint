@@ -558,7 +558,7 @@ component HomeEditBar inherits Rectangle {
         if !root.compact && root.c.size-opts.length > 1: VerticalLayout { alignment: center; width: 40px * root.c.size-opts.length; Segmented { options: root.c.size-opts; value: root.c.size == "s" ? "S" : (root.c.size == "l" ? "L" : "M"); label: "Size of " + root.c.title; selected(v) => { root.act("size", v); } } }
         if !root.compact && root.c.width-opts.length > 1: Text { text: "Width"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
         if !root.compact && root.c.width-opts.length > 1: VerticalLayout { alignment: center; width: 52px * root.c.width-opts.length; Segmented { options: root.c.width-opts; value: root.c.width; label: "Width of " + root.c.title; selected(v) => { root.act("width", v); } } }
-        // Narrow widgets: one button cycles the size, one the width.
+        // Narrow widgets: one button cycles the size.
         if root.compact && root.c.size-opts.length > 1: VerticalLayout { alignment: center; FlatButton { text: "Size " + (root.c.size == "s" ? "S" : (root.c.size == "l" ? "L" : "M")); size: ButtonSize.sm; clicked => { root.act("size-next", ""); } } }
         if root.compact && root.c.width-opts.length > 1: VerticalLayout { alignment: center; FlatButton { text: root.c.width; size: ButtonSize.sm; clicked => { root.act("width-next", ""); } } }
         VerticalLayout { alignment: center; IconButton { duo: "arrow-up"; size: ButtonSize.sm; tip: "Move " + root.c.title + " up"; clicked => { root.act("up", ""); } } }
@@ -798,7 +798,7 @@ export component LibraryView inherits Rectangle {
                             HorizontalLayout {
                                 padding-left: 14px; padding-right: 10px; spacing: 10px;
                                 Text { text: "Customize Home"; color: Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; }
-                                Text { text: "Drag a widget by its handle or use ↑ ↓ · size and width per widget · the switch hides it"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                Text { text: "Drag a widget by its handle or use ↑ ↓ · size (S ⅓, M ⅔, L full) · the switch hides it"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                                 VerticalLayout { alignment: center; FlatButton { text: "Reset to default"; size: ButtonSize.sm; clicked => { root.home-action("reset", "", ""); } } }
                                 VerticalLayout { alignment: center; SecondaryButton { text: "Cancel"; size: ButtonSize.sm; clicked => { root.home-action("cancel", "", ""); } } }
                                 VerticalLayout { alignment: center; PrimaryButton { text: "Done"; size: ButtonSize.sm; clicked => { root.home-action("done", "", ""); } } }

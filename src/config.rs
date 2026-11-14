@@ -555,6 +555,7 @@ impl Config {
         migrate_toolbar(i);
         migrate_controls(&mut self.controls, &mut self.stubs);
         migrate_audio(&mut self.audio);
+        crate::home::migrate(&mut self.home);
         self
     }
 

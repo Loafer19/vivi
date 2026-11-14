@@ -374,20 +374,19 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             title,
             on,
             size,
-            width,
             sizes,
-            widths,
         } = w;
         r.toggle(&format!("home.{id}.on"), &title, "", on);
         if sizes.len() > 1 {
             let o: Vec<&str> = sizes.iter().map(String::as_str).collect();
-            r.seg(&format!("home.{id}.size"), "Size", "", &size, &o)
-                .depends(on);
-        }
-        if widths.len() > 1 {
-            let o: Vec<&str> = widths.iter().map(String::as_str).collect();
-            r.seg(&format!("home.{id}.width"), "Width", "", &width, &o)
-                .depends(on);
+            r.seg(
+                &format!("home.{id}.size"),
+                "Size",
+                "S is ⅓ of the row, M is ⅔, L is full width.",
+                &size,
+                &o,
+            )
+            .depends(on);
         }
         r.push(
             &format!("home.{id}.move"),

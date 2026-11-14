@@ -1,5 +1,6 @@
 //! Home widgets on screen: packs the [`crate::home`] layout into the Slint grid
 //! (`Library.home`) and runs Customize Home (edit mode, Settings → Interface → Home).
+//! Size is one S/M/L control (width is derived).
 //!
 //! The widget data comes from the Library models libview fills (Continue Watching,
 //! Recently Added, …), the Streams and Sources rows and the plugins' `home.widget`
@@ -81,24 +82,20 @@ fn plugin_widgets(c: &crate::config::Config) -> Vec<(PluginDef, plugins::Contrib
             if !seen.insert(id.clone()) {
                 return None;
             }
-            let span = if e.home.span == 0 {
-                3
-            } else {
-                e.home.span.min(3)
-            };
             let sizes = home::sizes_of(&e.home.sizes);
+            let want = if !e.home.size.is_empty() {
+                e.home.size.to_ascii_lowercase()
+            } else if e.home.span == 0 {
+                "l".into()
+            } else {
+                home::size_of_span(e.home.span.min(3)).into()
+            };
             Some((
                 PluginDef {
                     id,
                     title: e.label.clone(),
-                    size: if sizes.contains('m') {
-                        "m".into()
-                    } else {
-                        sizes[..1].to_string()
-                    },
+                    size: home::fit_size(&want, &sizes),
                     sizes,
-                    spans: vec![1, 2, 3],
-                    span,
                     on: !plugins::hidden_at(c, contrib::HOME_WIDGET, &e.id),
                 },
                 e,
@@ -226,7 +223,8 @@ fn cell(s: &Slot, a: &AppWindow, plugin: Option<&plugins::Contributed>, edit: bo
         size: s.size.as_str().into(),
         width: width_label(s.span).into(),
         size_opts: strs(s.sizes.chars().map(|c| c.to_ascii_uppercase().to_string())),
-        width_opts: strs(s.spans.iter().map(|x| width_label(*x).to_string())),
+        // Width is folded into size (S=⅓, M=⅔, L=full); no separate control.
+        width_opts: strs(std::iter::empty::<String>()),
         on: s.on,
         empty: false,
         progress: -1.0,
@@ -506,10 +504,7 @@ pub struct SettingsRow {
     pub on: bool,
     /// "S" | "M" | "L"
     pub size: String,
-    /// "⅓" | "⅔" | "Full"
-    pub width: String,
     pub sizes: Vec<String>,
-    pub widths: Vec<String>,
 }
 
 /// The widgets for Settings → Interface → Home, in order.
@@ -522,16 +517,10 @@ pub fn rows() -> Vec<SettingsRow> {
         .into_iter()
         .map(|s| SettingsRow {
             size: s.size.to_ascii_uppercase(),
-            width: width_label(s.span).to_string(),
             sizes: s
                 .sizes
                 .chars()
                 .map(|c| c.to_ascii_uppercase().to_string())
-                .collect(),
-            widths: s
-                .spans
-                .iter()
-                .map(|x| width_label(*x).to_string())
                 .collect(),
             id: s.id,
             title: s.title,
