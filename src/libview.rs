@@ -208,6 +208,22 @@ fn name_of(p: &str) -> String {
         .map_or(p.to_string(), |n| n.to_string_lossy().into_owned())
 }
 
+/// Path stored in `[library.pinned]` for a library menu key (`video:` is stripped).
+pub(crate) fn favorite_path(key: &str) -> String {
+    key.strip_prefix("video:").unwrap_or(key).to_string()
+}
+
+/// Apply Favorite (`pin`) or Remove from Favorites (`unpin`). `pin` on a path
+/// that is already favorited unfavorites it: older menus sent `lib:pin` for both.
+pub(crate) fn apply_favorite(pinned: &mut Vec<String>, path: String, action: &str) {
+    let on = pinned.iter().any(|x| x == &path);
+    let want = action != "unpin" && !on;
+    pinned.retain(|x| x != &path);
+    if want {
+        pinned.push(path);
+    }
+}
+
 /// Add the library-root crumb unless its name equals the section (so a root
 /// folder also called "Videos" does not produce "Videos · Videos · Clips").
 fn push_root_crumb(crumbs: &mut Vec<(String, String)>, key: String, label: String) {
@@ -1462,12 +1478,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
                         );
                     }
                     "pin" | "unpin" => {
-                        let pin = action == "pin";
+                        let path = favorite_path(&key);
+                        let act = action.to_string();
                         cfg.update(move |c| {
-                            c.library.pinned.retain(|x| x != &path);
-                            if pin {
-                                c.library.pinned.push(path);
-                            }
+                            apply_favorite(&mut c.library.pinned, path, &act);
                         });
                         let _ = cfg.save();
                         render();
@@ -2119,5 +2133,32 @@ mod tests {
         assert_eq!(Nav::parse("music:artists:A:B"), (Nav::Music, "artists:A:B"));
         assert_eq!(Nav::parse("service:radio"), (Nav::Service, "radio"));
         assert_eq!(Nav::parse("whatever"), (Nav::Home, ""));
+    }
+
+    #[test]
+    fn remove_from_favorites_unpins_in_the_shared_handler() {
+        // The same on_menu arm serves Home widgets, the library grid/list,
+        // and the Favorites view. A file key and a folder key (video: prefix)
+        // must both come off the list.
+        let mut pinned = vec!["/media/Films/a.mkv".into(), "/media/Shows".into()];
+        apply_favorite(&mut pinned, favorite_path("/media/Films/a.mkv"), "unpin");
+        assert_eq!(pinned, vec!["/media/Shows"]);
+        apply_favorite(&mut pinned, favorite_path("video:/media/Shows"), "unpin");
+        assert!(pinned.is_empty(), "folder keys strip the video: prefix");
+
+        // Older menus sent lib:pin for "Remove from Favorites" too; that must
+        // still unfavorite, not push the path back on.
+        let mut pinned = vec!["/media/Films/a.mkv".into()];
+        apply_favorite(&mut pinned, favorite_path("/media/Films/a.mkv"), "pin");
+        assert!(
+            pinned.is_empty(),
+            "pin on an already-favorited path must remove it"
+        );
+
+        let mut pinned = Vec::new();
+        apply_favorite(&mut pinned, favorite_path("video:/media/Shows"), "pin");
+        assert_eq!(pinned, vec!["/media/Shows"]);
+        apply_favorite(&mut pinned, favorite_path("video:/media/Shows"), "pin");
+        assert!(pinned.is_empty());
     }
 }

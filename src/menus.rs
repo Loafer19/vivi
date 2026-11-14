@@ -420,12 +420,15 @@ fn smart_menu(saved: bool) -> Vec<MenuItem> {
     v
 }
 
-fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<MenuItem> {
-    let fav = if pinned {
-        "Remove from Favorites"
+fn favorite_row(pinned: bool) -> MenuItem {
+    if pinned {
+        row("lib:unpin", "Remove from Favorites", "favorite", "")
     } else {
-        "Favorite"
-    };
+        row("lib:pin", "Favorite", "favorite", "")
+    }
+}
+
+fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<MenuItem> {
     match kind {
         "folder" => vec![
             row("lib:play", "Open", "play", ""),
@@ -443,7 +446,7 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
                 "edit-audio-tracks",
                 "",
             ),
-            row("lib:pin", fav, "favorite", ""),
+            favorite_row(pinned),
             row(
                 "lib:reveal",
                 "Show in File Explorer",
@@ -491,7 +494,7 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
                     "mark-as-watched",
                     "",
                 ),
-                row("lib:pin", fav, "favorite", ""),
+                favorite_row(pinned),
                 row("lib:enqueue", "Add to Queue", "add-to-queue", ""),
                 sub("lib:addpl", "Add to Playlist", "add-to-playlist"),
                 row(
@@ -911,5 +914,28 @@ mod tests {
             ids(&plugins_menu(Vec::new(), false, "")),
             [("extensions".to_string(), false)]
         );
+    }
+
+    #[test]
+    fn favorite_menu_sends_unpin_when_already_favorited() {
+        let add = favorite_row(false);
+        assert_eq!(add.id.as_str(), "lib:pin");
+        assert_eq!(add.label.as_str(), "Favorite");
+        let rm = favorite_row(true);
+        assert_eq!(rm.id.as_str(), "lib:unpin");
+        assert_eq!(rm.label.as_str(), "Remove from Favorites");
+
+        let file = lib_menu("video", true, false, false);
+        let folder = lib_menu("folder", true, false, false);
+        assert!(
+            file.iter().any(|m| m.id == "lib:unpin"),
+            "file menu must send unpin, not pin, to remove a favorite"
+        );
+        assert!(folder.iter().any(|m| m.id == "lib:unpin"));
+        assert!(!file.iter().any(|m| m.id == "lib:pin"));
+        assert!(!folder.iter().any(|m| m.id == "lib:pin"));
+        let fresh = lib_menu("audio", false, false, false);
+        assert!(fresh.iter().any(|m| m.id == "lib:pin"));
+        assert!(!fresh.iter().any(|m| m.id == "lib:unpin"));
     }
 }
