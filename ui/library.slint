@@ -542,7 +542,18 @@ component HomeEditBar inherits Rectangle {
                 pointer-event(e) => { if (e.kind == PointerEventKind.up) { root.dropped(); } }
             }
         }
-        Text { text: root.c.title; color: root.c.on ? Theme.fg-1 : Theme.fg-a3; font-size: Metrics.font-base; font-weight: 600; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        Rectangle {
+            horizontal-stretch: 1; height: 100%;
+            // Narrow ⅓ tiles: smaller type so more of the name fits, plus a tooltip
+            // with the full title when it still has to elide.
+            t := Text {
+                width: 100%; height: 100%;
+                text: root.c.title; color: root.c.on ? Theme.fg-1 : Theme.fg-a3;
+                font-size: root.compact ? Metrics.font-sm : Metrics.font-base;
+                font-weight: 600; vertical-alignment: center; overflow: elide;
+            }
+            if root.compact: Tooltip { text: @markdown("\{root.c.title}"); }
+        }
         if !root.compact && root.c.size-opts.length > 1: Text { text: "Size"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
         if !root.compact && root.c.size-opts.length > 1: VerticalLayout { alignment: center; width: 40px * root.c.size-opts.length; Segmented { options: root.c.size-opts; value: root.c.size == "s" ? "S" : (root.c.size == "l" ? "L" : "M"); label: "Size of " + root.c.title; selected(v) => { root.act("size", v); } } }
         if !root.compact && root.c.width-opts.length > 1: Text { text: "Width"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
