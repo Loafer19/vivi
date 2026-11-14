@@ -915,9 +915,15 @@ export component LibraryView inherits Rectangle {
                                         if c.kind == "jump" && c.size == "s": Rows { items: root.recent-items; max: 5; dim: true; forget(it) => { root.forget-recent(it); } open(it) => { root.go(it); } menu(it, x, y) => { root.item-menu(it, x, y); } }
                                         // Your Mixes: smart playlists
                                         if c.kind == "mixes": HomeHead { show: !root.home-edit;  title: c.title; clicked => { root.navigate("playlists"); } }
-                                        if c.kind == "mixes" && c.size == "s": HorizontalLayout {
-                                            spacing: 10px; alignment: start;
-                                            for it[i] in root.mix-items: MixTile { it: it; index: i; size: "s"; height: 36px; width: min(220px, max(88px, self.preferred-width + 40px)); open => { root.go(it); } menu(x, y) => { root.item-menu(it, x, y); } }
+                                        if c.kind == "mixes" && c.size == "s": VerticalLayout {
+                                            // A ⅓ column is too narrow for a horizontal row of chips
+                                            // ("Never Played" became "Ne…"). Stack them full-width.
+                                            spacing: 8px; alignment: start;
+                                            for it[i] in root.mix-items: MixTile {
+                                                visible: i < 5; height: i < 5 ? 36px : 0;
+                                                it: it; index: i; size: "s";
+                                                open => { root.go(it); } menu(x, y) => { root.item-menu(it, x, y); }
+                                            }
                                         }
                                         if c.kind == "mixes" && c.size != "s": Rectangle {
                                             property <int> cols: max(1, floor((max(self.width, 160px) + 14px) / ((c.size == "l" ? 170px : 220px) + 14px)));
