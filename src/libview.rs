@@ -208,6 +208,15 @@ fn name_of(p: &str) -> String {
         .map_or(p.to_string(), |n| n.to_string_lossy().into_owned())
 }
 
+/// Add the library-root crumb unless its name equals the section (so a root
+/// folder also called "Videos" does not produce "Videos · Videos · Clips").
+fn push_root_crumb(crumbs: &mut Vec<(String, String)>, key: String, label: String) {
+    if crumbs.last().is_some_and(|(_, name)| *name == label) {
+        return;
+    }
+    crumbs.push((key, label));
+}
+
 impl Lib {
     fn item(&mut self, m: &Media, cfg: &Config) -> LibItem {
         let pr = library::progress(m);
@@ -480,7 +489,7 @@ impl Lib {
                         .cloned()
                         .unwrap_or_default();
                     let mut acc = root.clone();
-                    crumbs.push((format!("video:{root}"), name_of(&root)));
+                    push_root_crumb(&mut crumbs, format!("video:{root}"), name_of(&root));
                     for part in arg[root.len()..].split('/').filter(|s| !s.is_empty()) {
                         acc = format!("{acc}/{part}");
                         crumbs.push((format!("video:{acc}"), part.to_string()));
@@ -2081,6 +2090,25 @@ mod tests {
         let indexed = t0.elapsed();
         println!(
             "{K} thumbnails over {N} rows: scan {scan:?}, index build {index:?} + lookups {indexed:?}"
+        );
+    }
+
+    #[test]
+    fn breadcrumb_omits_root_when_it_matches_the_section() {
+        let mut crumbs = vec![("video".into(), "Videos".into())];
+        push_root_crumb(&mut crumbs, "video:/media/Videos".into(), "Videos".into());
+        crumbs.push(("video:/media/Videos/Clips".into(), "Clips".into()));
+        assert_eq!(
+            crumbs.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(),
+            ["Videos", "Clips"]
+        );
+
+        let mut crumbs = vec![("video".into(), "Videos".into())];
+        push_root_crumb(&mut crumbs, "video:/media/Shows".into(), "Shows".into());
+        crumbs.push(("video:/media/Shows/Clips".into(), "Clips".into()));
+        assert_eq!(
+            crumbs.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(),
+            ["Videos", "Shows", "Clips"]
         );
     }
 
