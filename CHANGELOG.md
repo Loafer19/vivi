@@ -12,6 +12,7 @@
 - **Menus**: a long menu (Sort, and any plugin-extended list) no longer runs under the title bar or off the bottom of a short window; it stays in the visible area and the rows scroll. A folder menu (and any other panel) grows to fit the longest label, up to a cap, so plugin rows such as Auto-tag are not cut off at 265px.
 - **Customize Home**: on a narrow ⅓ widget the name uses a smaller type and a tooltip with the full title, so it no longer collapses to "…".
 - **Library breadcrumb**: when a library root has the same name as the section, the root is omitted (Videos · Clips, not Videos · Videos · Clips).
+- **Settings**: on a short window the outer inset shrinks from 48px to 16px so more of the card (and fewer sidebar / body rows) sit below the fold.
 - **Library header** (#87): Grid / List View lives only on the toolbar View icon in folder views; the ⋯ menu no longer repeats that toggle and is hidden when it would be empty. Home keeps Refresh / Customize / Reset; a video subfolder still opens the folder actions menu.
 
 ### Changed

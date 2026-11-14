@@ -363,8 +363,13 @@ export component SettingsDialog inherits Modal {
     function go(i: int) { root.search = ""; root.category = i; root.advanced = false; root.refresh(i, "", false); }
 
     card-width: 1048px;
-    card-height: root.narrow ? root.height : 865px;
-    inset: root.narrow ? 16px : 48px;
+    property <length> full-card-h: 865px;
+    property <length> roomy-inset: 48px;
+    property <length> tight-inset: 16px;
+    card-height: root.narrow ? root.height : root.full-card-h;
+    // On a short window the usual 48px inset shrinks the 865px card (712px on
+    // a 760px window) and leaves System / the last rows below the fold.
+    inset: root.narrow || root.height < root.full-card-h + root.roomy-inset ? root.tight-inset : root.roomy-inset;
     dismissed => { root.close(); }
 
     HorizontalLayout {
