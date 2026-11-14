@@ -59,10 +59,13 @@ export component MenuPanel inherits Rectangle {
     // When the menu is taller than the window, cap it and let the rows scroll
     // so the first and last items stay reachable (the Sort menu is 15×48px).
     in property <length> cap-height: 100000px;
+    // Long plugin labels (e.g. Auto-tag…) must fit; cap so a huge label cannot
+    // fill the window.
+    in property <length> cap-width: 420px;
     callback activated(string);
     // row id and its y offset inside the panel (for placing a submenu)
     callback row-hovered(string, length);
-    width: 265px;
+    width: min(root.cap-width, max(265px, col.preferred-width));
     height: min(col.preferred-height, root.cap-height);
     clip: true;
     accessible-role: list;
