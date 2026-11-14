@@ -16,7 +16,7 @@
 - **Library header** (#87): Grid / List View lives only on the toolbar View icon in folder views; the ⋯ menu no longer repeats that toggle and is hidden when it would be empty. Home keeps Refresh / Customize / Reset; a video subfolder still opens the folder actions menu.
 
 ### Changed
-- **Default Home layout** (#87): new installs and *Reset Home Widgets* use Continue Watching M, Jump Back In S, Your Mixes S, Recently Added M, then Listen Again L; unplaced plugin widgets append at L (if they allow it) and can be turned off. Saved `[home]` layouts keep their column widths: a v1 size+width pair is migrated to the nearest new size (⅓→S, ⅔→M, full→L).
+- **Default Home layout** (#87): new installs and *Reset Home Widgets* use Continue Watching M, Jump Back In S, Your Mixes S, Recently Added M, then Listen Again L; unplaced plugin widgets append at L (if they allow it) and can be turned off. Saved `[home]` layouts keep their order and on/off flags; an older size+width pair from earlier builds of this work is ignored and each widget uses its default size.
 - **One size for Home widgets** (#87): S, M and L replace the separate size and width controls. Each widget (built-in and plugin) lists the sizes it supports; Customize and Settings show only those. Width is derived from the size (S=⅓, M=⅔, L=full) and a row still equalizes its height.
 - **Library in SQLite** (#100): filtering, sorting, search and paging run in the database (400 rows at a time) instead of on a full copy in memory.
 - **One owner for settings state** (#101): the configuration is read as snapshots and changed through queued messages, so nested changes can no longer panic.

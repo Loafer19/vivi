@@ -18,7 +18,7 @@ pub struct Config {
     pub network: Network,
     pub performance: Performance,
     pub recording: Recording,
-    /// Home widgets: order, on / off, size, width.
+    /// Home widgets: order, on / off, size.
     pub home: crate::home::Home,
     /// Values of settings that started as placeholders, keyed by their `stub.…` setting
     /// id. Some work now (window, autoplay, hidden files; read with [`Config::stub`]),
@@ -555,7 +555,6 @@ impl Config {
         migrate_toolbar(i);
         migrate_controls(&mut self.controls, &mut self.stubs);
         migrate_audio(&mut self.audio);
-        crate::home::migrate(&mut self.home);
         self
     }
 

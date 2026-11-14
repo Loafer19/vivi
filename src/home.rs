@@ -6,8 +6,9 @@
 //! the full width, each with a matching height. Widgets are laid out in a 3-column grid
 //! ([`pack`]); a row still shares one height. Narrow windows use one column.
 //!
-//! `[home]` version 1 stored size and width separately. [`migrate`] turns a saved width
-//! into the nearest new size so the grid columns do not jump.
+//! Earlier builds of this work stored size and width separately in `[home]`. Those
+//! fields, and any unknown size, are ignored: the widget uses its default size.
+//! The list is not rewritten on load; a later save stores version 2 with one size.
 
 use serde::{Deserialize, Serialize};
 
@@ -143,7 +144,7 @@ pub fn span_of_size(size: &str) -> u8 {
     }
 }
 
-/// Size that preserves a v1 width: 1→S, 2→M, 3→L.
+/// Size for a column span (legacy width control): 1→S, 2→M, 3→L.
 pub fn size_of_span(span: u8) -> &'static str {
     match span {
         1 => "s",
@@ -163,20 +164,6 @@ pub fn spans_of(sizes: &str) -> Vec<u8> {
             _ => None,
         })
         .collect()
-}
-
-/// Rewrite a v1 `[home]` list so the saved width becomes the new size. The
-/// widget order and on/off flags stay put; columns stay the same (a ⅔ widget
-/// becomes M, a full-width widget becomes L). Height follows the new size.
-pub fn migrate(home: &mut Home) {
-    if home.version >= VERSION {
-        return;
-    }
-    for w in &mut home.widgets {
-        w.size = size_of_span(w.span).into();
-        w.span = span_of_size(&w.size);
-    }
-    home.version = VERSION;
 }
 
 /// A widget with its settings checked against what it allows.
@@ -263,12 +250,14 @@ pub fn resolve(home: &Home, plugins: &[PluginDef]) -> Vec<Slot> {
             } else {
                 continue;
             };
-            let size = if home.version < VERSION {
-                // v1: keep the saved width so the grid does not jump.
-                fit_size(size_of_span(w.span), &base.sizes)
-            } else {
-                fit_size(&w.size, &base.sizes)
-            };
+            // v1 stored size and width separately (unreleased test profiles);
+            // ignore both, and any unknown size, and use the widget default.
+            let size =
+                if home.version >= VERSION && w.size.len() == 1 && base.sizes.contains(&w.size) {
+                    w.size.clone()
+                } else {
+                    base.size.clone()
+                };
             let span = span_of_size(&size);
             out.push(Slot {
                 on: w.on,
@@ -516,76 +505,82 @@ mod tests {
         let keep = home.clone();
         let v = resolve(&home, &[]);
         assert_eq!(home, keep, "[home] in the config is not rewritten");
-        assert_eq!(v.iter().find(|s| s.id == "mixes").unwrap().span, 3);
-        assert_eq!(v.iter().find(|s| s.id == "added").unwrap().span, 3);
         assert!(v.iter().find(|s| s.id == "favorites").unwrap().on);
-        // v1 resolve keeps the columns even without migrate().
-        assert_eq!(v.iter().find(|s| s.id == "continue").unwrap().size, "m");
+        // v1 size+width are ignored; each widget uses its default size.
+        assert_eq!(
+            (
+                v.iter().find(|s| s.id == "continue").unwrap().size.as_str(),
+                v.iter().find(|s| s.id == "continue").unwrap().span
+            ),
+            ("m", 2)
+        );
         assert_eq!(v.iter().find(|s| s.id == "jump").unwrap().size, "s");
-        assert_eq!(v.iter().find(|s| s.id == "mixes").unwrap().size, "l");
+        assert_eq!(v.iter().find(|s| s.id == "mixes").unwrap().size, "s");
+        assert_eq!(v.iter().find(|s| s.id == "added").unwrap().size, "m");
+        assert_eq!(v.iter().find(|s| s.id == "listen").unwrap().size, "l");
+        assert_eq!(v.iter().find(|s| s.id == "favorites").unwrap().size, "l");
     }
 
     #[test]
-    fn migrate_turns_v1_width_into_the_nearest_size() {
-        let mut home = Home {
-            version: 1,
-            widgets: vec![
-                HomeWidget {
-                    id: "continue".into(),
-                    on: true,
-                    size: "l".into(),
-                    span: 2,
-                },
-                HomeWidget {
-                    id: "jump".into(),
-                    on: true,
-                    size: "m".into(),
-                    span: 1,
-                },
-                HomeWidget {
-                    id: "mixes".into(),
-                    on: true,
-                    size: "m".into(),
-                    span: 3,
-                },
-                HomeWidget {
-                    id: "added".into(),
-                    on: true,
-                    size: "s".into(),
-                    span: 2,
-                },
-                HomeWidget {
-                    id: "listen".into(),
-                    on: false,
-                    size: "s".into(),
-                    span: 3,
-                },
-            ],
-        };
-        migrate(&mut home);
-        assert_eq!(home.version, VERSION);
-        let at = |id: &str| home.widgets.iter().find(|w| w.id == id).unwrap();
+    fn old_or_unknown_width_and_size_are_ignored() {
+        // Unreleased PR #108 profiles stored size and width separately; a stray
+        // `width` key or an unknown size must not fail the parse or the layout.
+        let home: Home = toml::from_str(
+            r#"
+version = 1
+[[widgets]]
+id = "continue"
+on = true
+size = "l"
+span = 2
+width = "full"
+[[widgets]]
+id = "jump"
+on = true
+size = "xl"
+span = 1
+width = 1
+[[widgets]]
+id = "listen"
+on = false
+size = "s"
+span = 3
+"#,
+        )
+        .expect("unknown width/size fields are ignored");
+        assert_eq!(home.version, 1);
+        let keep = home.clone();
+        let v = resolve(&home, &[]);
+        assert_eq!(home, keep, "[home] in the config is not rewritten");
+        let at = |id: &str| v.iter().find(|s| s.id == id).unwrap();
         assert_eq!(
             (at("continue").size.as_str(), at("continue").span),
-            ("m", 2)
+            ("m", 2),
+            "old width+size fall back to the widget default"
         );
         assert_eq!((at("jump").size.as_str(), at("jump").span), ("s", 1));
-        assert_eq!((at("mixes").size.as_str(), at("mixes").span), ("l", 3));
-        assert_eq!((at("added").size.as_str(), at("added").span), ("m", 2));
         assert_eq!(
             (
                 at("listen").size.as_str(),
                 at("listen").span,
                 at("listen").on
             ),
-            ("l", 3, false)
+            ("l", 3, false),
+            "on/off is kept; size is the default"
         );
-        let keep = home.clone();
-        migrate(&mut home);
-        assert_eq!(home, keep, "a second pass is a no-op");
-        let v = resolve(&home, &[]);
-        assert_eq!(v.iter().find(|s| s.id == "mixes").unwrap().span, 3);
-        assert!(v.iter().find(|s| s.id == "favorites").is_some());
+        // A current layout still honours a saved size; only unknown values fall back.
+        let mut v2 = home.clone();
+        v2.version = VERSION;
+        v2.widgets[0].size = "s".into();
+        let v = resolve(&v2, &[]);
+        assert_eq!(v.iter().find(|s| s.id == "continue").unwrap().size, "s");
+        v2.widgets[0].size = "huge".into();
+        let v = resolve(&v2, &[]);
+        assert_eq!(
+            v.iter().find(|s| s.id == "continue").unwrap().size,
+            "m",
+            "an unknown v2 size uses the widget default"
+        );
     }
 
     #[test]
@@ -614,8 +609,8 @@ mod tests {
         assert!(!v[0].on);
         assert_eq!(
             (v[0].size.as_str(), v[0].span),
-            ("s", 1),
-            "v1 width ⅓ becomes S; the bad size is ignored"
+            ("m", 2),
+            "unknown size and old width are ignored; added uses its default M"
         );
         let at = |id: &str| v.iter().position(|s| s.id == id).unwrap();
         assert_eq!(
