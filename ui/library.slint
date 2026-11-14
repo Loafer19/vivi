@@ -522,13 +522,69 @@ component MixTile inherits Rectangle {
     if ta.has-hover && root.size != "s": Rectangle { border-width: 1px; border-color: Theme.on-media; border-radius: root.border-radius; opacity: 0.4; }
 }
 
-// Customize Home: a widget's header in edit mode (drag handle, name, size, width, ↑ ↓, on / off).
+
+// Compact size menu for Customize Home: a short "S"/"M"/"L" button with a
+// chevron that opens the sizes that widget allows. Works on every width;
+// used on ⅓ tiles and narrow windows where the segmented control does not fit.
+component SizePicker inherits Rectangle {
+    in property <[string]> options;
+    in property <string> value;
+    in property <string> label;
+    callback selected(string);
+    height: 26px; width: 46px;
+    border-radius: Metrics.radius-md;
+    background: ta.has-hover ? Theme.field-raised : Theme.field;
+    HorizontalLayout {
+        padding-left: 7px; padding-right: 2px; spacing: 0;
+        Text { text: root.value; color: Theme.fg-1; font-size: Metrics.font-sm; font-weight: 600; vertical-alignment: center; }
+        Icon { y: (parent.height - 14px) / 2; width: 14px; height: 14px; source: @image-url("../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        accessible-role: combobox; accessible-label: root.label; accessible-value: root.value;
+        accessible-action-default => { pop.show(); }
+        clicked => { pop.show(); }
+    }
+    if ta.has-hover: Tooltip { text: @markdown("\{root.label}"); }
+    pop := PopupWindow {
+        x: 0; y: root.height + 4px;
+        width: 132px;
+        height: root.options.length * 32px + 8px;
+        Rectangle {
+            background: Theme.bar-solid.with-alpha(0.95); border-radius: Metrics.radius-lg;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
+            clip: true;
+            VerticalLayout {
+                padding: 4px; spacing: 0; alignment: start;
+                for o in root.options: Rectangle {
+                    height: 32px; border-radius: Metrics.radius-md;
+                    background: o == root.value ? Theme.popup : (ota.has-hover ? Theme.popup-hover : transparent);
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 8px; spacing: 8px;
+                        Text { text: o; color: Theme.fg-1; font-size: Metrics.font-sm; font-weight: 600; vertical-alignment: center; }
+                        Text { text: o == "S" ? "⅓" : (o == "L" ? "full" : "⅔"); color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; horizontal-stretch: 1; }
+                        if o == root.value: Icon { y: (parent.height - 16px) / 2; width: 16px; height: 16px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; }
+                    }
+                    ota := TouchArea {
+                        mouse-cursor: pointer;
+                        accessible-role: menuitem;
+                        accessible-label: o + " " + (o == "S" ? "⅓" : (o == "L" ? "full" : "⅔"));
+                        accessible-item-selected: o == root.value;
+                        clicked => { root.selected(o); pop.close(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Customize Home: a widget's header in edit mode (drag handle, name, size, ↑ ↓, on / off).
 component HomeEditBar inherits Rectangle {
     in property <HomeCell> c;
     callback act(string, string); // (action, value)
     callback drag(length);        // absolute pointer y while dragging
     callback dropped();
-    in property <bool> compact; // narrow widget: cycle buttons instead of segments
+    in property <bool> compact; // narrow widget: compact size menu instead of segments
     height: 34px; border-radius: Metrics.radius-md; background: Theme.bg-a3;
     HorizontalLayout {
         padding-left: 6px; padding-right: 8px; spacing: 8px;
@@ -556,11 +612,8 @@ component HomeEditBar inherits Rectangle {
         }
         if !root.compact && root.c.size-opts.length > 1: Text { text: "Size"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
         if !root.compact && root.c.size-opts.length > 1: VerticalLayout { alignment: center; width: 40px * root.c.size-opts.length; Segmented { options: root.c.size-opts; value: root.c.size == "s" ? "S" : (root.c.size == "l" ? "L" : "M"); label: "Size of " + root.c.title; selected(v) => { root.act("size", v); } } }
-        if !root.compact && root.c.width-opts.length > 1: Text { text: "Width"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; }
-        if !root.compact && root.c.width-opts.length > 1: VerticalLayout { alignment: center; width: 52px * root.c.width-opts.length; Segmented { options: root.c.width-opts; value: root.c.width; label: "Width of " + root.c.title; selected(v) => { root.act("width", v); } } }
-        // Narrow widgets: one button cycles the size.
-        if root.compact && root.c.size-opts.length > 1: VerticalLayout { alignment: center; FlatButton { text: "Size " + (root.c.size == "s" ? "S" : (root.c.size == "l" ? "L" : "M")); size: ButtonSize.sm; clicked => { root.act("size-next", ""); } } }
-        if root.compact && root.c.width-opts.length > 1: VerticalLayout { alignment: center; FlatButton { text: root.c.width; size: ButtonSize.sm; clicked => { root.act("width-next", ""); } } }
+        // Narrow widgets: a compact menu of the sizes this widget allows (works at every width).
+        if root.compact && root.c.size-opts.length > 1: VerticalLayout { alignment: center; SizePicker { options: root.c.size-opts; value: root.c.size == "s" ? "S" : (root.c.size == "l" ? "L" : "M"); label: "Size of " + root.c.title; selected(v) => { root.act("size", v); } } }
         VerticalLayout { alignment: center; IconButton { duo: "arrow-up"; size: ButtonSize.sm; tip: "Move " + root.c.title + " up"; clicked => { root.act("up", ""); } } }
         VerticalLayout { alignment: center; IconButton { duo: "arrow-down"; size: ButtonSize.sm; tip: "Move " + root.c.title + " down"; clicked => { root.act("down", ""); } } }
         VerticalLayout { alignment: center; Toggle { on: root.c.on; label: (root.c.on ? "Hide " : "Show ") + root.c.title; toggled => { root.act("toggle", root.c.on ? "false" : "true"); } } }
