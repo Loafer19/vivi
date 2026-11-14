@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-11-14
+
+Highlights: a **configurable Home** of widgets with sizes S/M/L and *Customize Home* (#87); **smart playlists** from a local play history (#87); **library filter, sort, search and paging in SQLite** (#100); **one owner for settings state**, so nested changes can no longer panic (#101); **Remove from Favorites** now unfavorites correctly; plus menu, settings and Customize Home polish.
+
 ### Added
 - **Configurable Home** (#87): Home is a grid of widgets (Continue Watching hero, Jump Back In, Your Mixes, Recently Added, Listen Again, Favorites, Streams, Sources, frequently visited folders, artists and playlists, Recently Played, plugin widgets). Each has an on / off switch, a position, and a size (S is ⅓ of the row, M is ⅔, L is full width, each with a matching height); a row still shares one height; narrow windows and the docked library use one column. *Customize Home* edits it in place (drag a widget by its handle or use ↑ ↓; Cancel puts the old layout back), Settings → Interface → Home lists the same widgets. Stored in `[home]` of the config.
 - **Smart playlists** (#87): a local play history in `library.db` and rule-based lists (Top This Week, Most Played, Not Played for a Month, Never Played, Similar to This Track), shown on Playlists and in *Your Mixes*. Settings → Privacy can turn the history off or clear it.
