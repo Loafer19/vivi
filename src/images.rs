@@ -500,7 +500,7 @@ mod tests {
 
     fn rgba(w: u32, h: u32, fill: [u8; 4]) -> Vec<u8> {
         let mut v = vec![0; (w * h * 4) as usize];
-        for px in v.chunks_exact_mut(4) {
+        for px in v.as_chunks_mut::<4>().0 {
             px.copy_from_slice(&fill);
         }
         v
@@ -523,7 +523,11 @@ mod tests {
         }
         let (cw, ch, out) = crop_blank_bars(w, h, px);
         assert_eq!((cw, ch), (80, 180));
-        assert!(out.chunks_exact(4).all(|p| p == [200, 10, 10, 255]));
+        assert!(out
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [200, 10, 10, 255]));
     }
 
     #[test]
