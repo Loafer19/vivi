@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(crate) fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl Fn() + 'static) {
+pub(crate) fn onboarding(app: &AppWindow, cfg: &AppState, save: impl Fn() + 'static) {
     use crate::keymap::Action as A;
     let keys = crate::keymap::rows_of(&[
         A::PlayPause,
@@ -17,7 +17,7 @@ pub(crate) fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl 
     app.global::<crate::Settings>()
         .set_onboarding_keys(strings(keys.iter().map(|k| k.1)));
     app.global::<crate::Overlays>()
-        .set_onboarding_open(!cfg.borrow().interface.onboarded);
+        .set_onboarding_open(!cfg.config().interface.onboarded);
     // The `?` overlay lists the whole keymap.
     let all: Vec<_> = crate::keymap::rows().collect();
     app.global::<crate::Settings>()
@@ -30,7 +30,7 @@ pub(crate) fn onboarding(app: &AppWindow, cfg: &Rc<RefCell<Config>>, save: impl 
         if let Some(a) = w.upgrade() {
             a.global::<crate::Overlays>().set_onboarding_open(false);
         }
-        cfg.borrow_mut().interface.onboarded = true;
+        cfg.update(move |c| c.interface.onboarded = true);
         save();
     });
 }

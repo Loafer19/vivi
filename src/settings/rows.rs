@@ -362,6 +362,42 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .choice(config::FIT, "Resize window to fit video", "When a video starts, size the window to the video (at most 90 % of the screen). Not while full screen or maximized, and not for windows your window manager tiles.", c.fit(), &config::FIT_CHOICES)
         .header("Hints")
         .toggle("interface.hint_chapter_thumbnails", "Suggest seek-bar frame previews", "Frame previews on the seek bar come from the Chapter Thumbnails extension. Without it, the first hover over the seek bar of a video offers to install it (once per session).", c.interface.hint_chapter_thumbnails);
+    // Home widgets (src/homeview.rs): the same list as Customize Home on the Home screen.
+    r.section(
+        "Home",
+        "Widgets on the Home screen, in order. Customize Home on the Home screen edits the same list.",
+        &[("home.customize", "Customize on Home"), ("home.reset", "Reset to default")],
+    );
+    for w in crate::homeview::rows() {
+        let crate::homeview::SettingsRow {
+            id,
+            title,
+            on,
+            size,
+            sizes,
+        } = w;
+        r.toggle(&format!("home.{id}.on"), &title, "", on);
+        if sizes.len() > 1 {
+            let o: Vec<&str> = sizes.iter().map(String::as_str).collect();
+            r.seg(
+                &format!("home.{id}.size"),
+                "Size",
+                "S is ⅓ of the row, M is ⅔, L is full width.",
+                &size,
+                &o,
+            )
+            .depends(on);
+        }
+        r.push(
+            &format!("home.{id}.move"),
+            "Position",
+            "",
+            "buttons",
+            String::new(),
+        );
+        r.last().labels = strs(&["Move up", "Move down"]);
+        r.depends(true);
+    }
 
     // ---------- Privacy ----------
     r.cat("Privacy")
@@ -382,6 +418,18 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             "privacy.watch_later",
             "Clear resume positions",
             "Forget where you left off in every file.",
+            "Clear",
+        )
+        .toggle(
+            "library.history",
+            "Keep a play history",
+            "Count the songs and videos you play, on this computer only. Smart playlists such as Top this week and Most played are built from it.",
+            c.library.history,
+        )
+        .action(
+            "privacy.plays",
+            "Clear play history",
+            "Forget which files you played and how often. Smart playlists start over (asks first).",
             "Clear",
         )
         .action(

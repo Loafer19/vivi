@@ -16,7 +16,6 @@
 //!
 //! Windows / macOS: no tray yet; the close button quits.
 
-use crate::config::Config;
 use crate::player::Player;
 use crate::AppWindow;
 use slint::ComponentHandle;
@@ -178,7 +177,7 @@ pub fn sync() {
 }
 
 /// Hook the close button and start the tray shortly after startup.
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState) {
     let (tx, rx) = std::sync::mpsc::channel();
     UI.with(|u| {
         *u.borrow_mut() = Some(Ui {
@@ -201,7 +200,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
     });
     let w = app.as_weak();
     app.window().on_close_requested(move || {
-        let minimize = cfg.borrow().general.close_button != "Quit";
+        let minimize = cfg.config().general.close_button != "Quit";
         if minimize && active() {
             if let Some(a) = w.upgrade() {
                 hide(&a);

@@ -144,7 +144,7 @@ struct State {
     loading: bool,
 }
 
-type Ctx = (Rc<Player>, Rc<RefCell<Config>>, bool);
+type Ctx = (Rc<Player>, crate::app::state::AppState, bool);
 
 thread_local! {
     static ST: RefCell<State> = RefCell::new(State::default());
@@ -156,7 +156,7 @@ fn ctx() -> Option<Ctx> {
     CTX.with(|c| c.borrow().clone())
 }
 
-pub fn setup(player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
+pub fn setup(player: &Rc<Player>, cfg: crate::app::state::AppState, log: bool) {
     CTX.with(|c| *c.borrow_mut() = Some((player.clone(), cfg, log)));
     TICK.with(|t| {
         t.start(
@@ -264,7 +264,7 @@ fn apply_gapless(p: &Player, c: &Config, st: &mut State, log: bool) {
 
 fn tick() {
     let Some((p, cfg, log)) = ctx() else { return };
-    let c = cfg.borrow();
+    let c = cfg.config();
     ST.with(|st| {
         let mut st = st.borrow_mut();
         let path = p.get("path").filter(|s| !s.is_empty());
@@ -315,7 +315,7 @@ pub fn file_loaded() {
     ST.with(|st| {
         let mut st = st.borrow_mut();
         st.loading = false;
-        apply_gapless(&p, &cfg.borrow(), &mut st, log);
+        apply_gapless(&p, &cfg.config(), &mut st, log);
     });
     tick();
 }

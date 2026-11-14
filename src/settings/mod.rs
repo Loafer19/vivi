@@ -12,7 +12,9 @@ pub(crate) use extensions::*;
 pub(crate) use onboarding::*;
 pub(crate) use rows::*;
 
+use crate::app::state::{AppMsg, AppState};
 use crate::config::{self, Config, Preset};
+use crate::library;
 use crate::player::Player;
 use crate::plugins;
 use crate::{store, AppWindow, SettingRow, Theme};
@@ -125,7 +127,7 @@ fn bar_action(a: &AppWindow, p: &Player, id: &str) {
     }
 }
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
     app.global::<crate::Settings>()
         .set_categories(ModelRc::new(VecModel::from(
             CATEGORIES
@@ -141,10 +143,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         )));
     app.global::<crate::Customize>()
         .set_profiles(strings(config::PROFILES));
-    apply_theme(app, &cfg.borrow());
-    apply_toolbar(app, &cfg.borrow());
-    apply_player(player, &cfg.borrow());
-    player.set_volume(cfg.borrow().audio.startup_volume as f64);
+    apply_theme(app, &cfg.config());
+    apply_toolbar(app, &cfg.config());
+    apply_player(player, &cfg.config());
+    player.set_volume(cfg.config().audio.startup_volume as f64);
     let devices: Rc<Vec<String>> = Rc::new(
         player
             .audio_devices()
@@ -164,7 +166,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let query = query.clone();
         move || {
             let q = query.borrow();
-            let new = filtered(&cfg.borrow(), &devices, q.0, &q.1, q.2);
+            let new = filtered(&cfg.config(), &devices, q.0, &q.1, q.2);
             let same = new.len() == rows.row_count()
                 && new
                     .iter()
@@ -193,7 +195,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let w = app.as_weak();
         let cfg = cfg.clone();
         move || {
-            let res = cfg.borrow().save();
+            let res = cfg.save();
             if let Some(a) = w.upgrade() {
                 a.global::<crate::Settings>().set_status(match res {
                     Ok(()) => format!("Saved to {}", config::path().display()).into(),
@@ -239,6 +241,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     refresh();
                     return;
                 }
+                if let Some(rest) = id.strip_prefix("home.") {
+                    crate::homeview::setting(rest, v);
+                    refresh();
+                    return;
+                }
                 if let Some(rest) = id.strip_prefix("src.") {
                     crate::extwin::source_setting(rest, v);
                     refresh();
@@ -265,12 +272,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         }),
                         "check" => plugins::packages::check(true),
                         "autocheck" | crate::notify::KEY => {
-                            cfg.borrow_mut()
-                                .plugins
-                                .entry(plugins::packages::GLOBAL_ID.into())
-                                .or_default()
-                                .settings
-                                .insert(what.into(), v.into());
+                            cfg.send(AppMsg::SetPluginSetting(
+                                plugins::packages::GLOBAL_ID.into(),
+                                what.into(),
+                                v.into(),
+                            ));
                             save();
                         }
                         _ => {}
@@ -281,12 +287,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 if let Some(what) = id.strip_prefix("scripts.") {
                     match what {
                         "startup" => {
-                            cfg.borrow_mut()
-                                .plugins
-                                .entry(plugins::scripts::GLOBAL_ID.into())
-                                .or_default()
-                                .settings
-                                .insert("startup".into(), v.into());
+                            cfg.send(AppMsg::SetPluginSetting(
+                                plugins::scripts::GLOBAL_ID.into(),
+                                "startup".into(),
+                                v.into(),
+                            ));
                             save();
                         }
                         "folder" => {
@@ -306,7 +311,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     return;
                 }
                 if id.as_str() == REMOTE_CONTROL_ROW {
-                    let action = remote_control_action(&cfg.borrow());
+                    let action = remote_control_action(&cfg.config());
                     match action {
                         Some("Install") => {
                             plugins::packages::install_and_enable(&a, REMOTE_CONTROL)
@@ -349,7 +354,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     _ => None,
                 };
                 {
-                    let mut c = cfg.borrow_mut();
+                    // Edit a private copy and commit it at the end of the block: nothing
+                    // in here holds the shared state while it calls into the UI.
+                    let mut c = Config::clone(&cfg.config());
                     match id.as_str() {
                         "interface.theme" => c.interface.theme = v.to_lowercase(),
                         id if schema::has(id) => {
@@ -494,6 +501,39 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                             );
                             return;
                         }
+                        "privacy.plays" => {
+                            let n = library::open_db(&library::db_path())
+                                .map_or(0, |c| crate::smart::play_count(&c));
+                            if n == 0 {
+                                a.global::<crate::Settings>()
+                                    .set_status("The play history is empty".into());
+                                return;
+                            }
+                            let w = a.as_weak();
+                            crate::dialogs::confirm_core(
+                                &a,
+                                "clear-plays",
+                                "Clear play history",
+                                &format!("Forget {n} play{}?", if n == 1 { "" } else { "s" }),
+                                "Top this week, Most played and the other smart playlists start over. Your files and playlists are not touched.",
+                                "Clear",
+                                move || {
+                                    let n = library::open_db(&library::db_path())
+                                        .map_or(0, |c| crate::smart::clear_history(&c));
+                                    if let Some(a) = w.upgrade() {
+                                        a.global::<crate::Settings>().set_status(
+                                            format!(
+                                                "{n} play{} forgotten",
+                                                if n == 1 { "" } else { "s" }
+                                            )
+                                            .into(),
+                                        );
+                                        a.global::<crate::Library>().invoke_refresh();
+                                    }
+                                },
+                            );
+                            return;
+                        }
                         "privacy.watch_later" => {
                             let _ = std::fs::remove_dir_all(store::watch_later_dir());
                             let _ = std::fs::create_dir_all(store::watch_later_dir());
@@ -532,10 +572,11 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         }
                         _ => return,
                     }
+                    cfg.replace(c);
                 }
-                apply_theme(&a, &cfg.borrow());
-                apply_toolbar(&a, &cfg.borrow());
-                apply_player(&p, &cfg.borrow());
+                apply_theme(&a, &cfg.config());
+                apply_toolbar(&a, &cfg.config());
+                apply_player(&p, &cfg.config());
                 sync_panel(&a, &p);
                 save();
                 refresh();
@@ -560,15 +601,16 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             let Some(a) = w.upgrade() else { return };
             let Some(path) = p.get("path") else { return };
             let key = config::show_key(&path);
-            cfg.borrow_mut()
-                .presets
-                .insert(key.clone(), current_preset(&p));
+            let (k, preset) = (key.clone(), current_preset(&p));
+            cfg.update(move |c| {
+                c.presets.insert(k, preset);
+            });
             save();
             refresh();
             a.global::<crate::Notices>()
                 .set_resume_text(format!("Preset saved for “{key}”").into());
             if log {
-                eprintln!("preset saved: {key} {:?}", cfg.borrow().presets.get(&key));
+                eprintln!("preset saved: {key} {:?}", cfg.config().presets.get(&key));
             }
         });
     }

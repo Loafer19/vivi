@@ -627,6 +627,7 @@ fn refresh(a: &AppWindow) {
     st.set_favorites(ModelRc::new(VecModel::from(fc)));
     st.set_recent(ModelRc::new(VecModel::from(rc)));
     st.set_home(ModelRc::new(VecModel::from(home)));
+    crate::homeview::repack();
     st.set_history(strings(store::urls()));
     let sv: Vec<crate::StreamService> = services()
         .into_iter()

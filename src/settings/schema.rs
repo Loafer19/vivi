@@ -652,6 +652,11 @@ pub(super) const OTHER: &[Field] = &[
         get: None,
         set: |c, v| c.library.thumbnails = v == "true",
     },
+    Field {
+        id: "library.history",
+        get: None,
+        set: |c, v| c.library.history = v == "true",
+    },
 ];
 
 fn field(id: &str) -> Option<&'static Field> {

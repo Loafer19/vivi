@@ -12,6 +12,8 @@ mod error;
 mod extwin;
 mod filepick;
 mod fx;
+mod home;
+mod homeview;
 mod images;
 mod ipc;
 mod keymap;
@@ -36,6 +38,7 @@ mod render;
 mod scenes;
 mod settings;
 mod sleep;
+mod smart;
 mod status;
 mod store;
 mod streams;
@@ -97,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (player, events) = Player::new(app::wiring::events::wake)?;
     let player = Rc::new(player);
-    let cfg = Rc::new(std::cell::RefCell::new(config::Config::load()));
+    let cfg = app::state::AppState::new(config::Config::load());
     app::startup::setup_features(&app, &player, &cfg, log);
 
     // Drain player events on the UI thread.
@@ -110,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let p = player.clone();
     let interop = {
-        let c = cfg.borrow();
+        let c = cfg.config();
         (c.playback.hwdec_interop.clone(), c.playback.hwdec.clone())
     };
     render::attach(&app, player.mpv.clone(), interop)?;
@@ -138,14 +141,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The loop runs until Quit (not until the last window closes), so closing can hide
     // the window to the tray while playback continues (src/tray.rs).
-    winstate::restore(&app, &cfg.borrow());
+    winstate::restore(&app, &cfg.config());
     app.show()?;
-    winstate::shown(&app, &cfg.borrow());
+    winstate::shown(&app, &cfg.config());
     slint::run_event_loop_until_quit()?;
-    if winstate::save(&app, &mut cfg.borrow_mut()) {
-        if let Err(e) = cfg.borrow().save() {
-            eprintln!("vivi: save config: {e}");
-        }
+    if cfg.update_with(|c| winstate::save(&app, c)) == Some(true) {
+        cfg.save_or_log();
     }
     let _ = app.hide();
     player.save_position();
