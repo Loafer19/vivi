@@ -30,6 +30,11 @@ export component OverlayDialogs inherits Rectangle {
     callback plugin-command(string, string, string);
     callback focused();
     background: transparent;
+    // Keep menus below the 40px title bar (and above the player bar when it is
+    // showing) and cap their height so a long list like Sort can scroll.
+    property <length> menu-top: 44px;
+    property <length> menu-bot: 4px + (Playback.has-media ? root.bar-h : 0px);
+    property <length> menu-max-h: max(144px, root.height - menu-top - menu-bot);
 
 // ---------- Network stream ----------
 if Overlays.network-open: NetworkStreamDialog {
@@ -255,8 +260,9 @@ if Menus.menu-kind != "": TouchArea {
 }
 if Menus.menu-kind != "": main-menu := MenuPanel {
     width: Menus.menu-width;
+    cap-height: menu-max-h;
     x: max(4px, min(Menus.menu-x, root.width - self.width - 4px));
-    y: max(4px, min(Menus.menu-y, root.height - self.height - 4px));
+    y: max(menu-top, min(Menus.menu-y, root.height - self.height - menu-bot));
     items: Menus.menu-items;
     open-sub: Menus.sub-open;
     activated(id) => { Menus.menu-activate(id); }
@@ -269,8 +275,9 @@ if Menus.menu-kind != "": main-menu := MenuPanel {
 if Menus.menu-kind != "" && Menus.sub-open != "" && Menus.sub-items.length > 0: MenuPanel {
     property <length> right-x: Menus.menu-x + Menus.menu-width - 4px;
     width: 265px;
+    cap-height: menu-max-h;
     x: self.right-x + self.width > root.width ? max(4px, Menus.menu-x - self.width + 4px) : self.right-x;
-    y: max(4px, min(Menus.sub-y, root.height - self.height - 4px));
+    y: max(menu-top, min(Menus.sub-y, root.height - self.height - menu-bot));
     items: Menus.sub-items;
     activated(id) => { Menus.menu-activate(id); }
 }
