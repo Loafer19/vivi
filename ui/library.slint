@@ -567,7 +567,7 @@ component SizePicker inherits Rectangle {
                     }
                     ota := TouchArea {
                         mouse-cursor: pointer;
-                        accessible-role: menuitem;
+                        accessible-role: list-item;
                         accessible-label: o + " " + (o == "S" ? "⅓" : (o == "L" ? "full" : "⅔"));
                         accessible-item-selected: o == root.value;
                         clicked => { root.selected(o); pop.close(); }
