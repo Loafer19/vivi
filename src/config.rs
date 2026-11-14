@@ -18,6 +18,8 @@ pub struct Config {
     pub network: Network,
     pub performance: Performance,
     pub recording: Recording,
+    /// Home widgets: order, on / off, size, width.
+    pub home: crate::home::Home,
     /// Values of settings that started as placeholders, keyed by their `stub.…` setting
     /// id. Some work now (window, autoplay, hidden files; read with [`Config::stub`]),
     /// the others are hidden in Settings; the ids stay so old configs keep their values.
@@ -370,6 +372,8 @@ pub struct Library {
     pub thumbnails: bool,
     /// Files marked as watched from the context menu.
     pub watched: Vec<String>,
+    /// Record plays in the local play history (smart playlists, #87).
+    pub history: bool,
 }
 
 impl Default for Library {
@@ -387,6 +391,7 @@ impl Default for Library {
             sort: "name".into(),
             watched: Vec::new(),
             thumbnails: true,
+            history: true,
         }
     }
 }
@@ -550,6 +555,7 @@ impl Config {
         migrate_toolbar(i);
         migrate_controls(&mut self.controls, &mut self.stubs);
         migrate_audio(&mut self.audio);
+        crate::home::migrate(&mut self.home);
         self
     }
 

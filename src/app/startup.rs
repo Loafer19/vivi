@@ -3,8 +3,6 @@
 use crate::*;
 use std::rc::Rc;
 
-use std::cell::RefCell;
-
 /// Environment and Slint backend; call before any thread or window is created.
 pub(crate) fn init() -> Result<(), slint::PlatformError> {
     // winit 0.30 has no Wayland drag & drop; VIVI_X11=1 runs under XWayland instead,
@@ -25,10 +23,11 @@ pub(crate) fn init() -> Result<(), slint::PlatformError> {
 pub(crate) fn setup_features(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<RefCell<config::Config>>,
+    cfg: &crate::app::state::AppState,
     log: bool,
 ) {
     settings::setup(app, player, cfg.clone(), log);
+    crate::homeview::setup(app, cfg.clone());
     libview::setup(app, player, cfg.clone(), log);
     menus::setup(app, player, cfg.clone());
     crate::nowplaying::setup(player);
@@ -40,12 +39,13 @@ pub(crate) fn setup_features(
     crate::extwin::refresh();
     crate::streams::setup(app, player);
     crate::palette::setup(app);
+    crate::homeview::repack();
     crate::drawer::setup(app);
     crate::downloads::setup(app, player, cfg.clone());
     fx::setup(app, player);
     dialogs::setup(app, player);
     ipc::sweep_stale();
-    ipc::setup(app, player, cfg.borrow().general.remote_control);
+    ipc::setup(app, player, cfg.config().general.remote_control);
     crate::bookmarks::setup(app, player, log);
     crate::sleep::setup(app, player, cfg.clone());
     crate::transitions::setup(player, cfg.clone(), log);

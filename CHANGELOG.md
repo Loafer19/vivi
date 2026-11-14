@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- **Configurable Home** (#87): Home is a grid of widgets (Continue Watching hero, Jump Back In, Your Mixes, Recently Added, Listen Again, Favorites, Streams, Sources, frequently visited folders, artists and playlists, Recently Played, plugin widgets). Each has an on / off switch, a position, and a size (S is ⅓ of the row, M is ⅔, L is full width, each with a matching height); a row still shares one height; narrow windows and the docked library use one column. *Customize Home* edits it in place (drag a widget by its handle or use ↑ ↓; Cancel puts the old layout back), Settings → Interface → Home lists the same widgets. Stored in `[home]` of the config.
+- **Smart playlists** (#87): a local play history in `library.db` and rule-based lists (Top This Week, Most Played, Not Played for a Month, Never Played, Similar to This Track), shown on Playlists and in *Your Mixes*. Settings → Privacy can turn the history off or clear it.
+- **Plugin Home widgets** (#87): `home.widget` entries can declare `id`, `sizes` (S/M/L, default all three), `size` (default L) and `template` (`card`, `tiles`, `list`); deprecated `span` is read as the default size. `vivi-content` takes `items` with pictures.
+
+### Fixed
+- **Home** (#87): an empty state with a *Customize Home* button when every widget is hidden; the folder item-count, sort, view and search toolbar no longer appears on Home; the Home title lines up with the back and forward arrows; the header ⋯ menu on Home has *Refresh*, *Customize* and *Reset Home Widgets* (with a confirmation) instead of Grid / List View; shelves can be ⅓ wide so widgets sit side by side; widget heights follow their content; Your Mixes tiles no longer collapse into a sliver; the edit bar no longer repeats the widget title; a drag preview follows the pointer; the Continue Watching hero stretches to the exact height of the row next to Jump Back In; portrait or letterboxed hero thumbnails fill the side bars with a 50% dimmed cover of the same image; video thumbs no longer keep the black 320×180 padding, so that picture is visible in the bars.
+- **Menus**: a long menu (Sort, and any plugin-extended list) no longer runs under the title bar or off the bottom of a short window; it stays in the visible area and the rows scroll. A folder menu (and any other panel) grows to fit the longest label, up to a cap, so plugin rows such as Auto-tag are not cut off at 265px.
+- **Customize Home**: on a narrow ⅓ widget the name uses a smaller type and a tooltip with the full title, so it no longer collapses to "…".
+- **Library breadcrumb**: when a library root has the same name as the section, the root is omitted (Videos · Clips, not Videos · Videos · Clips).
+- **Settings**: on a short window the outer inset shrinks from 48px to 16px so more of the card (and fewer sidebar / body rows) sit below the fold.
+- **Library header** (#87): Grid / List View lives only on the toolbar View icon in folder views; the ⋯ menu no longer repeats that toggle and is hidden when it would be empty. Home keeps Refresh / Customize / Reset; a video subfolder still opens the folder actions menu.
+
+### Changed
+- **Default Home layout** (#87): new installs and *Reset Home Widgets* use Continue Watching M, Jump Back In S, Your Mixes S, Recently Added M, then Listen Again L; unplaced plugin widgets append at L (if they allow it) and can be turned off. Saved `[home]` layouts keep their column widths: a v1 size+width pair is migrated to the nearest new size (⅓→S, ⅔→M, full→L).
+- **One size for Home widgets** (#87): S, M and L replace the separate size and width controls. Each widget (built-in and plugin) lists the sizes it supports; Customize and Settings show only those. Width is derived from the size (S=⅓, M=⅔, L=full) and a row still equalizes its height.
+- **Library in SQLite** (#100): filtering, sorting, search and paging run in the database (400 rows at a time) instead of on a full copy in memory.
+- **One owner for settings state** (#101): the configuration is read as snapshots and changed through queued messages, so nested changes can no longer panic.
+
 ## [0.16.3] - 2026-11-10
 
 v0.16.2 was tagged but never published: the AppImage failed to link against Ubuntu 22.04's system SQLite (`undefined symbol: sqlite3_error_offset` after rusqlite 0.41.1). This release is everything from that tag, plus SQLite compiled into the binary on every platform.

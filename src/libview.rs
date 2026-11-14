@@ -75,6 +75,10 @@ fn thumb_rows(v: &[LibItem]) -> std::collections::HashMap<slint::SharedString, V
 
 /// Fill `model` with `v`, keeping the thumbnail index in step when it is one of
 /// the thumbnail models. The model is set outside the `MODELS` borrow.
+///
+/// Incremental (#100): rows that did not change are left alone and the tail is
+/// pushed or cut, so a refresh of the same view (pin, watched, a finished scan) keeps
+/// the scroll position and only repaints what changed.
 fn show(model: &Rc<VecModel<LibItem>>, v: Vec<LibItem>) {
     let rows = thumb_rows(&v);
     MODELS.with(|ms| {
@@ -86,7 +90,56 @@ fn show(model: &Rc<VecModel<LibItem>>, v: Vec<LibItem>) {
             t.rows = rows;
         }
     });
-    model.set_vec(v);
+    let old = model.row_count();
+    // A different list (navigation): replace it in one go.
+    let same_list =
+        old > 0 && !v.is_empty() && model.row_data(0).is_some_and(|r| r.key == v[0].key);
+    if !same_list {
+        model.set_vec(v);
+        return;
+    }
+    let n = v.len();
+    for (i, mut row) in v.into_iter().enumerate() {
+        if i < old {
+            if let Some(cur) = model.row_data(i) {
+                // Keep a picture already shown for the same file.
+                if cur.thumb_key == row.thumb_key && cur.has_thumb && !row.has_thumb {
+                    row.thumb = cur.thumb.clone();
+                    row.has_thumb = true;
+                }
+                if cur != row {
+                    model.set_row_data(i, row);
+                }
+            }
+        } else {
+            model.push(row);
+        }
+    }
+    for i in (n..old).rev() {
+        model.remove(i);
+    }
+}
+
+/// Add `v` after the rows of `model` (the next page of the browsed list).
+fn append(model: &Rc<VecModel<LibItem>>, v: Vec<LibItem>) {
+    let base = model.row_count();
+    MODELS.with(|ms| {
+        if let Some(t) = ms
+            .borrow_mut()
+            .iter_mut()
+            .find(|t| Rc::ptr_eq(&t.model, model))
+        {
+            for (k, idx) in thumb_rows(&v) {
+                t.rows
+                    .entry(k)
+                    .or_default()
+                    .extend(idx.into_iter().map(|i| i + base));
+            }
+        }
+    });
+    for r in v {
+        model.push(r);
+    }
 }
 
 /// The section of a library navigation key (`"<section>"` or `"<section>:<arg>"`, as
@@ -102,6 +155,8 @@ enum Nav {
     Downloads,
     Bookmarks,
     Playlists,
+    /// A smart playlist (`smart:<id>`) or a "Similar to" list (`similar:<path>`), #87.
+    Smart,
 }
 
 impl Nav {
@@ -117,26 +172,32 @@ impl Nav {
             "downloads" => Self::Downloads,
             "bookmarks" => Self::Bookmarks,
             "playlists" => Self::Playlists,
+            "smart" | "similar" => Self::Smart,
             _ => Self::Home,
         };
         (s, arg)
     }
 }
 
+/// Rows of the browsed list fetched per page (#100); more load while scrolling.
+const PAGE: usize = 400;
+
 pub struct Lib {
-    media: Vec<Media>,
+    /// Read connection to the library index (UI thread). Views query it per page
+    /// instead of keeping every row in memory (#100).
+    db: Option<rusqlite::Connection>,
+    /// Indexed files, and whether any is audio (refreshed after each scan).
+    total: usize,
+    has_audio: bool,
+    /// The rest of the browsed list: its query with the next offset.
+    more: Option<library::Query>,
+    /// The page is a smart playlist (the UI shows its own empty state).
+    smart: bool,
     nav: String,
     search: String,
     requested: HashSet<String>,
     thumbs: Option<std::sync::mpsc::Sender<Media>>,
-    items: Rc<VecModel<LibItem>>,
-    cont: Rc<VecModel<LibItem>>,
-    recent: Rc<VecModel<LibItem>>,
-    pinned: Rc<VecModel<LibItem>>,
-    listen: Rc<VecModel<LibItem>>,
-    folders: Rc<VecModel<LibItem>>,
-    lists: Rc<VecModel<LibItem>>,
-    artists: Rc<VecModel<LibItem>>,
+    models: Models,
     back: Vec<String>,
     fwd: Vec<String>,
 }
@@ -145,6 +206,15 @@ fn name_of(p: &str) -> String {
     Path::new(p)
         .file_name()
         .map_or(p.to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+/// Add the library-root crumb unless its name equals the section (so a root
+/// folder also called "Videos" does not produce "Videos · Videos · Clips").
+fn push_root_crumb(crumbs: &mut Vec<(String, String)>, key: String, label: String) {
+    if crumbs.last().is_some_and(|(_, name)| *name == label) {
+        return;
+    }
+    crumbs.push((key, label));
 }
 
 impl Lib {
@@ -307,12 +377,57 @@ impl Lib {
         }
     }
 
-    fn matches(&self, m: &Media) -> bool {
-        let q = self.search.to_lowercase();
-        q.is_empty()
-            || [&m.title, &m.artist, &m.album, &m.genre, &m.path]
-                .iter()
-                .any(|s| s.to_lowercase().contains(&q))
+    /// Run `q` on the index (nothing without one).
+    fn rows(&self, q: &library::Query, cfg: &Config) -> Vec<Media> {
+        let Some(db) = &self.db else {
+            return Vec::new();
+        };
+        library::query(db, q, &|m| watched(m, cfg))
+    }
+
+    fn count(&self, q: &library::Query) -> usize {
+        self.db.as_ref().map_or(0, |db| library::count(db, q))
+    }
+
+    /// Re-read the totals after a scan (the per-folder counts for Settings too).
+    fn reload(&mut self) {
+        let Some(db) = &self.db else { return };
+        self.total = library::count(db, &library::Query::default());
+        self.has_audio = library::count(
+            db,
+            &library::Query {
+                kind: Some(MediaKind::Audio),
+                ..Default::default()
+            },
+        ) > 0;
+        DIRS.with(|x| *x.borrow_mut() = Some(library::dir_counts(db, &Default::default())));
+    }
+
+    /// The browsed list's first page of `q`; the rest loads as it scrolls ([`Lib::more`]).
+    fn page(&mut self, mut q: library::Query, cfg: &Config, out: &mut Vec<LibItem>) {
+        q.offset = 0;
+        q.limit = PAGE;
+        let rows = self.rows(&q, cfg);
+        if rows.len() == PAGE {
+            q.offset = PAGE;
+            self.more = Some(q);
+        }
+        for m in &rows {
+            out.push(self.item(m, cfg));
+        }
+    }
+
+    /// The next page of the browsed list, if there is one.
+    fn next_page(&mut self, cfg: &Config) -> Vec<LibItem> {
+        let Some(mut q) = self.more.take() else {
+            return Vec::new();
+        };
+        let rows = self.rows(&q, cfg);
+        if rows.len() == q.limit {
+            q.offset += q.limit;
+            self.more = Some(q);
+        }
+        rows.iter().map(|m| self.item(m, cfg)).collect()
     }
 
     /// Rebuild the current view. Returns breadcrumb (key, label) pairs.
@@ -320,21 +435,22 @@ impl Lib {
         let nav = self.nav.clone();
         let (section, arg) = Nav::parse(&nav);
         let sort = cfg.library.sort.as_str();
-        let watched =
-            |m: &Media| library::progress(m) >= 0.95 || cfg.library.watched.contains(&m.path);
+        self.more = None;
+        self.smart = section == Nav::Smart;
+        let base = |kind: Option<MediaKind>| library::Query {
+            kind,
+            search: self.search.clone(),
+            sort: sort.into(),
+            ..Default::default()
+        };
         let mut out = Vec::new();
         let mut crumbs = Vec::new();
         match section {
             Nav::Video => {
                 crumbs.push(("video".into(), "Videos".into()));
-                let mut files: Vec<Media> = self
-                    .media
-                    .iter()
-                    .filter(|m| m.kind == MediaKind::Video)
-                    .cloned()
-                    .collect();
+                let videos = base(Some(MediaKind::Video));
                 if !self.search.is_empty() {
-                    files.retain(|m| self.matches(m));
+                    self.page(videos, cfg, &mut out);
                 } else if arg.is_empty() {
                     // Roots. Skip the "Add" row when there are no folders with
                     // videos so the shared empty state can show (#102).
@@ -343,11 +459,11 @@ impl Lib {
                         .folders
                         .iter()
                         .map(|r| {
-                            let n = files
-                                .iter()
-                                .filter(|m| m.path.starts_with(&format!("{r}/")))
-                                .count();
-                            (r, n)
+                            let under = library::Query {
+                                under: Some(r.clone()),
+                                ..videos.clone()
+                            };
+                            (r, self.count(&under))
                         })
                         .filter(|(_, n)| *n > 0)
                         .collect();
@@ -364,7 +480,6 @@ impl Lib {
                             ));
                         }
                     }
-                    files.clear();
                 } else {
                     let root = cfg
                         .library
@@ -374,25 +489,16 @@ impl Lib {
                         .cloned()
                         .unwrap_or_default();
                     let mut acc = root.clone();
-                    crumbs.push((format!("video:{root}"), name_of(&root)));
+                    push_root_crumb(&mut crumbs, format!("video:{root}"), name_of(&root));
                     for part in arg[root.len()..].split('/').filter(|s| !s.is_empty()) {
                         acc = format!("{acc}/{part}");
                         crumbs.push((format!("video:{acc}"), part.to_string()));
                     }
-                    let prefix = format!("{arg}/");
-                    let mut dirs: std::collections::BTreeMap<String, usize> = Default::default();
-                    files.retain(|m| {
-                        let Some(rest) = m.path.strip_prefix(&prefix) else {
-                            return false;
-                        };
-                        match rest.split_once('/') {
-                            Some((d, _)) => {
-                                *dirs.entry(d.to_string()).or_default() += 1;
-                                false
-                            }
-                            None => true,
-                        }
-                    });
+                    let dirs = self
+                        .db
+                        .as_ref()
+                        .map(|db| library::subdirs(db, &videos, arg))
+                        .unwrap_or_default();
                     for (d, n) in dirs {
                         let full = format!("{arg}/{d}");
                         let pin = cfg.library.pinned.contains(&full);
@@ -404,16 +510,17 @@ impl Lib {
                             pin,
                         ));
                     }
-                }
-                library::sort_with(&mut files, sort, &watched);
-                for m in &files {
-                    out.push(self.item(m, cfg));
+                    let files = library::Query {
+                        dir: Some(arg.into()),
+                        ..videos
+                    };
+                    self.page(files, cfg, &mut out);
                 }
             }
             Nav::Music if arg.is_empty() && self.search.is_empty() => {
                 crumbs.push(("music".into(), "Music".into()));
                 // Songs/Albums/… only once there is audio; otherwise EmptyState (#102).
-                if self.media.iter().any(|m| m.kind == MediaKind::Audio) {
+                if self.has_audio {
                     out.push(Self::action("action:add-folder", "Add", "add"));
                     out.push(Self::action("music:songs", "Songs", "songs"));
                     out.push(Self::action("music:albums", "Albums", "album"));
@@ -435,25 +542,14 @@ impl Lib {
             }
             Nav::Music => {
                 crumbs.push(("music".into(), "Music".into()));
-                let mut songs: Vec<Media> = self
-                    .media
-                    .iter()
-                    .filter(|m| m.kind == MediaKind::Audio && self.matches(m))
-                    .cloned()
-                    .collect();
+                let songs = base(Some(MediaKind::Audio));
                 let (tab, val) = arg.split_once(':').unwrap_or((arg, ""));
                 let tab = if tab.is_empty() { "songs" } else { tab };
-                let field = |m: &Media| -> String {
-                    let v = match tab {
-                        "albums" => &m.album,
-                        "artists" => &m.artist,
-                        _ => &m.genre,
-                    };
-                    if v.is_empty() {
-                        "Unknown".into()
-                    } else {
-                        v.clone()
-                    }
+                let field = match tab {
+                    "albums" => Some(library::Field::Album),
+                    "artists" => Some(library::Field::Artist),
+                    "songs" => None,
+                    _ => Some(library::Field::Genre),
                 };
                 let label = match tab {
                     "albums" => "Albums",
@@ -462,41 +558,48 @@ impl Lib {
                     _ => "Songs",
                 };
                 crumbs.push((format!("music:{tab}"), label.into()));
-                if tab != "songs" && val.is_empty() {
-                    let mut groups: std::collections::BTreeMap<String, (usize, String)> =
-                        Default::default();
-                    for m in &songs {
-                        let e = groups.entry(field(m)).or_insert((0, m.path.clone()));
-                        e.0 += 1;
-                    }
-                    for (g, (n, first)) in groups {
-                        let mut it = Self::group(
-                            format!("music:{tab}:{g}"),
-                            &g,
-                            format!("{n} songs"),
-                            "group",
-                            false,
-                        );
-                        // Use the first song's cover as the group thumbnail.
-                        if let Some(m) = songs.iter().find(|m| m.path == first).cloned() {
-                            let t = self.item(&m, cfg);
-                            it.thumb = t.thumb;
-                            it.has_thumb = t.has_thumb;
-                            it.thumb_key = t.thumb_key;
+                match field {
+                    Some(f) if val.is_empty() => {
+                        let groups = self
+                            .db
+                            .as_ref()
+                            .map(|db| library::groups(db, &songs, f))
+                            .unwrap_or_default();
+                        let firsts: Vec<String> = groups.iter().map(|g| g.2.clone()).collect();
+                        let covers = self
+                            .db
+                            .as_ref()
+                            .map(|db| library::by_paths(db, &firsts))
+                            .unwrap_or_default();
+                        for (g, n, first) in groups {
+                            let mut it = Self::group(
+                                format!("music:{tab}:{g}"),
+                                &g,
+                                format!("{n} songs"),
+                                "group",
+                                false,
+                            );
+                            // Use the first song's cover as the group thumbnail.
+                            if let Some(m) = covers.get(&first) {
+                                let t = self.item(m, cfg);
+                                it.thumb = t.thumb;
+                                it.has_thumb = t.has_thumb;
+                                it.thumb_key = t.thumb_key;
+                            }
+                            out.push(it);
                         }
-                        out.push(it);
                     }
-                    songs.clear();
-                } else if tab != "songs" {
-                    songs.retain(|m| field(m) == val);
-                    crumbs.push((nav.clone(), val.into()));
-                }
-                library::sort_with(&mut songs, sort, &watched);
-                if tab == "albums" && sort == "name" {
-                    songs.sort_by_key(|m| m.track);
-                }
-                for m in &songs {
-                    out.push(self.item(m, cfg));
+                    f => {
+                        let mut q = songs;
+                        if let Some(f) = f {
+                            q.field = Some((f, val.into()));
+                            crumbs.push((nav.clone(), val.into()));
+                        }
+                        if tab == "albums" && sort == "name" {
+                            q.sort = "track".into();
+                        }
+                        self.page(q, cfg, &mut out);
+                    }
                 }
             }
             // The shared Downloads panel (ui/downloads.slint) draws its own list.
@@ -539,11 +642,26 @@ impl Lib {
                     out.push(it);
                 }
             }
+            Nav::Smart => {
+                crumbs.push(("playlists".into(), "Playlists".into()));
+                if let Some(l) = smart_list(&nav) {
+                    crumbs.push((nav.clone(), l.name.clone()));
+                    let rows = self
+                        .db
+                        .as_ref()
+                        .map(|db| crate::smart::evaluate(db, &l, crate::smart::now()))
+                        .unwrap_or_default();
+                    for m in &rows {
+                        out.push(self.item(m, cfg));
+                    }
+                }
+            }
             Nav::Playlists => {
                 crumbs.push(("playlists".into(), "Playlists".into()));
                 let marks = crate::bookmarks::list_all().len();
                 let lists = store::playlists();
-                if !lists.is_empty() || marks > 0 {
+                let smart = crate::smart::load();
+                if !lists.is_empty() || marks > 0 || !smart.is_empty() {
                     out.push(Self::action(
                         "action:create-playlist",
                         "Create playlist",
@@ -553,6 +671,24 @@ impl Lib {
                 if marks > 0 {
                     let mut it = Self::action("bookmarks", "Bookmarks", "bookmark");
                     it.subtitle = format!("{marks} saved").into();
+                    out.push(it);
+                }
+                // Smart playlists (#87): rebuilt from the play history and tags.
+                let now = crate::smart::now();
+                for l in &smart {
+                    let n = self
+                        .db
+                        .as_ref()
+                        .map_or(0, |db| crate::smart::evaluate(db, l, now).len());
+                    let mut it = Self::group(
+                        format!("smart:{}", l.id),
+                        &l.name,
+                        format!("{n} items · {}", crate::smart::describe(l)),
+                        "playlist",
+                        false,
+                    );
+                    it.icon = "playlist".into();
+                    it.badge = "Smart".into();
                     out.push(it);
                 }
                 let names: Vec<(String, String)> = crate::plugins::manifests()
@@ -593,22 +729,20 @@ impl Lib {
             _ => {
                 crumbs.push(("home".into(), "Home".into()));
                 if !self.search.is_empty() {
-                    let mut all: Vec<Media> = self
-                        .media
-                        .iter()
-                        .filter(|m| self.matches(m))
-                        .cloned()
-                        .collect();
-                    library::sort_with(&mut all, sort, &watched);
-                    for m in all.iter().take(200) {
-                        out.push(self.item(m, cfg));
+                    let mut q = base(None);
+                    q.limit = 200;
+                    for m in self.rows(&q, cfg) {
+                        out.push(self.item(&m, cfg));
                     }
                 } else {
                     // Recently added
-                    let mut all = self.media.clone();
-                    all.sort_by_key(|m| std::cmp::Reverse(m.mtime));
-                    for m in all.iter().take(12) {
-                        out.push(self.item(m, cfg));
+                    let q = library::Query {
+                        sort: "newest".into(),
+                        limit: 12,
+                        ..Default::default()
+                    };
+                    for m in self.rows(&q, cfg) {
+                        out.push(self.item(&m, cfg));
                     }
                 }
             }
@@ -617,10 +751,9 @@ impl Lib {
     }
 
     fn find(&self, path: &str) -> Media {
-        self.media
-            .iter()
-            .find(|m| m.path == path)
-            .cloned()
+        self.db
+            .as_ref()
+            .and_then(|db| library::by_path(db, path))
             .unwrap_or_else(|| Media {
                 title: Path::new(path)
                     .file_stem()
@@ -632,26 +765,40 @@ impl Lib {
             })
     }
 
-    fn home(&mut self, cfg: &Config) {
-        let mut cont: Vec<Media> = self
-            .media
-            .iter()
-            .filter(|m| m.kind == MediaKind::Video)
-            .filter(|m| {
-                let p = library::progress(m);
-                p > 0.0 && p < 0.95 && !cfg.library.watched.contains(&m.path)
-            })
-            .cloned()
-            .collect();
-        // Files outside the library that were played recently also count.
-        for p in store::recent() {
-            if !cont.iter().any(|m| m.path == p)
-                && library::kind_of(Path::new(&p)) != Some(MediaKind::Audio)
+    /// Files played lately, newest first: the Recent list, then the play history (#87).
+    fn history_paths(&self) -> Vec<String> {
+        let mut v = store::recent();
+        if let Some(db) = &self.db {
+            let seen: HashSet<String> = v.iter().cloned().collect();
+            v.extend(
+                crate::smart::recent_paths(db, 500)
+                    .into_iter()
+                    .filter(|p| !seen.contains(p)),
+            );
+        }
+        v
+    }
+
+    /// The Home sections (built here, shown by [`HomeRows::show`] after the library
+    /// borrow ends).
+    fn home(&mut self, cfg: &Config) -> HomeRows {
+        // "Continue Watching": started, unfinished videos among the files played lately
+        // (the resume positions live in mpv's watch-later files, not in the index).
+        let mut cont: Vec<Media> = Vec::new();
+        for p in self.history_paths() {
+            if cont.len() >= 12 {
+                break;
+            }
+            if library::kind_of(Path::new(&p)) == Some(MediaKind::Video)
                 && !cfg.library.watched.contains(&p)
                 && store::resume_position(&p).is_some()
                 && Path::new(&p).exists()
             {
-                cont.push(self.find(&p));
+                let m = self.find(&p);
+                let pr = library::progress(&m);
+                if pr > 0.0 && pr < 0.95 {
+                    cont.push(m);
+                }
             }
         }
         let cont: Vec<LibItem> = cont.iter().take(12).map(|m| self.item(m, cfg)).collect();
@@ -741,20 +888,19 @@ impl Lib {
             })
             .collect();
         // "Frequently Listened Artists": artists by number of recent plays, then library size.
-        let mut count: std::collections::HashMap<String, usize> = Default::default();
-        for m in self
-            .media
-            .iter()
-            .filter(|m| m.kind == MediaKind::Audio && !m.artist.is_empty())
-        {
-            *count.entry(m.artist.clone()).or_default() += 1;
-        }
-        for p in store::recent() {
-            if let Some(m) = self
-                .media
-                .iter()
-                .find(|m| m.path == p && !m.artist.is_empty())
-            {
+        let mut count: std::collections::HashMap<String, usize> = self
+            .db
+            .as_ref()
+            .map(|db| library::artist_counts(db).into_iter().collect())
+            .unwrap_or_default();
+        let played = store::recent();
+        let known = self
+            .db
+            .as_ref()
+            .map(|db| library::by_paths(db, &played))
+            .unwrap_or_default();
+        for p in &played {
+            if let Some(m) = known.get(p).filter(|m| !m.artist.is_empty()) {
                 *count.entry(m.artist.clone()).or_default() += 1000;
             }
         }
@@ -775,19 +921,169 @@ impl Lib {
                 it
             })
             .collect();
-        show(&self.listen, listen);
-        self.folders.set_vec(folders);
-        self.lists.set_vec(lists);
-        self.artists.set_vec(artists);
-        show(&self.cont, cont);
-        show(&self.recent, recent);
-        show(&self.pinned, pinned);
+        // "Your Mixes": smart playlists that have something in them (#87).
+        let now = crate::smart::now();
+        let mixes: Vec<LibItem> = crate::smart::load()
+            .iter()
+            .filter_map(|l| {
+                let n = self
+                    .db
+                    .as_ref()
+                    .map_or(0, |db| crate::smart::evaluate(db, l, now).len());
+                (n > 0).then(|| {
+                    let mut it = Self::group(
+                        format!("smart:{}", l.id),
+                        &l.name,
+                        format!("{n}"),
+                        "playlist",
+                        false,
+                    );
+                    it.icon = "playlist".into();
+                    it
+                })
+            })
+            .collect();
+        HomeRows {
+            mixes,
+            listen,
+            folders,
+            lists,
+            artists,
+            cont,
+            recent,
+            pinned,
+        }
+    }
+}
+
+/// A smart playlist key (`smart:<id>` or `similar:<path>`).
+fn is_smart(key: &str) -> bool {
+    key.starts_with("smart:") || key.starts_with("similar:")
+}
+
+/// The smart list behind a key.
+fn smart_list(key: &str) -> Option<crate::smart::SmartList> {
+    if let Some(p) = key.strip_prefix("similar:") {
+        return Some(crate::smart::similar(p));
+    }
+    let id = key.strip_prefix("smart:")?;
+    crate::smart::load().into_iter().find(|l| l.id == id)
+}
+
+/// Play, shuffle, queue, save as .m3u or delete a smart playlist.
+fn smart_action(a: &AppWindow, p: &Rc<Player>, lib: &Rc<RefCell<Lib>>, key: &str, action: &str) {
+    let Some(list) = smart_list(key) else { return };
+    let note = |t: String| a.global::<crate::Notices>().set_resume_text(t.into());
+    if action == "delete" {
+        let mut all = crate::smart::load();
+        all.retain(|l| l.id != list.id);
+        match crate::smart::save(&all) {
+            Ok(()) => note(format!("Deleted “{}”", list.name)),
+            Err(e) => eprintln!("vivi: smart playlists: {e}"),
+        }
+        return;
+    }
+    let files: Vec<String> = match lib.try_borrow() {
+        Ok(l) => {
+            l.db.as_ref()
+                .map(|db| crate::smart::evaluate(db, &list, crate::smart::now()))
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| m.path)
+                .collect()
+        }
+        Err(_) => return,
+    };
+    if files.is_empty() {
+        note(format!("“{}” is empty", list.name));
+        return;
+    }
+    match action {
+        "save-m3u" => match store::save_playlist(&list.name, &files) {
+            Ok(_) => note(format!("Saved “{}” to Playlists", list.name)),
+            Err(e) => eprintln!("vivi: save playlist: {e}"),
+        },
+        "enqueue" => {
+            let start = !a.global::<crate::Playback>().get_has_media();
+            for (i, f) in files.iter().enumerate() {
+                if i == 0 && start {
+                    p.open(f);
+                } else {
+                    p.enqueue(f);
+                }
+            }
+            note(format!("Added {} items to the queue", files.len()));
+        }
+        // Play / Shuffle: start the list and queue the rest of it.
+        _ => {
+            p.open(&files[0]);
+            for f in &files[1..] {
+                p.enqueue(f);
+            }
+            if action == "shuffle" {
+                let p = p.clone();
+                slint::Timer::single_shot(std::time::Duration::from_millis(400), move || {
+                    p.run("playlist-shuffle")
+                });
+            }
+            if a.global::<crate::Library>().get_full()
+                || !a.global::<crate::Playback>().get_has_media()
+            {
+                a.global::<crate::Overlays>().set_library_open(false);
+            }
+            a.global::<crate::Library>().set_full(false);
+        }
+    }
+}
+
+/// Watched: finished (95 %) or marked watched.
+fn watched(m: &Media, cfg: &Config) -> bool {
+    library::progress(m) >= 0.95 || cfg.library.watched.contains(&m.path)
+}
+
+/// The Home sections of one render.
+struct HomeRows {
+    mixes: Vec<LibItem>,
+    listen: Vec<LibItem>,
+    folders: Vec<LibItem>,
+    lists: Vec<LibItem>,
+    artists: Vec<LibItem>,
+    cont: Vec<LibItem>,
+    recent: Vec<LibItem>,
+    pinned: Vec<LibItem>,
+}
+
+/// The library's models, cloned out so they are filled after the `Lib` borrow ends
+/// (filling a model runs Slint bindings, which may call back into the library, #101).
+#[derive(Clone)]
+struct Models {
+    items: Rc<VecModel<LibItem>>,
+    cont: Rc<VecModel<LibItem>>,
+    recent: Rc<VecModel<LibItem>>,
+    pinned: Rc<VecModel<LibItem>>,
+    listen: Rc<VecModel<LibItem>>,
+    folders: Rc<VecModel<LibItem>>,
+    lists: Rc<VecModel<LibItem>>,
+    artists: Rc<VecModel<LibItem>>,
+    mixes: Rc<VecModel<LibItem>>,
+}
+
+impl HomeRows {
+    fn show(self, m: &Models) {
+        show(&m.mixes, self.mixes);
+        show(&m.listen, self.listen);
+        show(&m.folders, self.folders);
+        show(&m.lists, self.lists);
+        show(&m.artists, self.artists);
+        show(&m.cont, self.cont);
+        show(&m.recent, self.recent);
+        show(&m.pinned, self.pinned);
     }
 }
 
 use crate::util::strings;
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log: bool) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState, log: bool) {
     let items = Rc::new(VecModel::default());
     let (cont, recent, pinned) = (
         Rc::new(VecModel::default()),
@@ -800,6 +1096,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         Rc::new(VecModel::default()),
         Rc::new(VecModel::default()),
     );
+    let mixes = Rc::new(VecModel::default());
+    app.global::<crate::Library>()
+        .set_mixes(ModelRc::from(mixes.clone()));
     MODELS.with(|m| {
         m.borrow_mut()
             .extend([&items, &cont, &recent, &pinned, &listen].map(|m| ThumbModel::new(m.clone())))
@@ -823,7 +1122,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     app.global::<crate::Library>()
         .set_ytdlp(library::ytdlp_available());
 
-    let thumbs = (cfg.borrow().library.thumbnails && library::ffmpeg_available()).then(|| {
+    let thumbs = (cfg.config().library.thumbnails && library::ffmpeg_available()).then(|| {
         library::thumb_worker(move |path, file| {
             let _ = slint::invoke_from_event_loop(move || {
                 // Decode only when a row near the view shows it; the rest load on scroll.
@@ -852,27 +1151,34 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
     }
 
     let db = library::db_path();
-    let media = library::open_db(&db)
-        .map(|c| library::all(&c))
-        .unwrap_or_default();
-    count_dirs(&media);
-    let lib = Rc::new(RefCell::new(Lib {
-        media,
+    let mut l = Lib {
+        db: library::open_db(&db)
+            .map_err(|e| eprintln!("vivi: library index: {e}"))
+            .ok(),
+        total: 0,
+        has_audio: false,
+        more: None,
+        smart: false,
         nav: "home".into(),
         search: String::new(),
         requested: HashSet::new(),
         thumbs,
-        items,
-        cont,
-        recent,
-        pinned,
-        listen,
-        folders,
-        lists,
-        artists,
+        models: Models {
+            items,
+            cont,
+            recent,
+            pinned,
+            listen,
+            folders,
+            lists,
+            artists,
+            mixes,
+        },
         back: Vec::new(),
         fwd: Vec::new(),
-    }));
+    };
+    l.reload();
+    let lib = Rc::new(RefCell::new(l));
 
     let render: Rc<dyn Fn()> = {
         let w = app.as_weak();
@@ -880,11 +1186,26 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         Rc::new(move || {
             let Some(a) = w.upgrade() else { return };
-            let c = cfg.borrow();
-            let mut l = lib.borrow_mut();
+            let c = cfg.config();
+            // Build under the library borrow, fill the models after it ends: setting a
+            // model runs Slint bindings that may call back in here (#101).
+            let Ok(mut l) = lib.try_borrow_mut() else {
+                eprintln!("vivi: library: nested render skipped");
+                return;
+            };
             LAZY.set(true);
             let (v, mut crumbs) = l.build(&c);
             LAZY.set(false);
+            let home = l.home(&c);
+            let models = l.models.clone();
+            let (nav, total, back, fwd, smart) = (
+                l.nav.clone(),
+                l.total,
+                !l.back.is_empty(),
+                !l.fwd.is_empty(),
+                l.smart,
+            );
+            drop(l);
             // Figma breadcrumb: long paths keep the last two levels behind "...".
             if crumbs.len() > 3 {
                 let keep = crumbs.split_off(crumbs.len() - 2);
@@ -893,26 +1214,21 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     .chain(keep)
                     .collect();
             }
-            show(&l.items, v);
+            show(&models.items, v);
             let (lo, hi) = SEEN.get();
             thumb_window(lo, hi);
-            l.home(&c);
-            a.global::<crate::Library>().set_nav(l.nav.clone().into());
-            a.global::<crate::Library>()
-                .set_crumb_keys(strings(crumbs.iter().map(|c| c.0.clone())));
-            a.global::<crate::Library>()
-                .set_crumb_labels(strings(crumbs.into_iter().map(|c| c.1)));
-            a.global::<crate::Library>()
-                .set_sort(c.library.sort.clone().into());
-            a.global::<crate::Library>()
-                .set_grid(c.library.view != "list");
-            a.global::<crate::Library>().set_count(l.media.len() as i32);
-            a.global::<crate::Library>()
-                .set_can_back(!l.back.is_empty());
-            a.global::<crate::Library>()
-                .set_can_forward(!l.fwd.is_empty());
-            let nav = l.nav.clone();
-            drop(l);
+            home.show(&models);
+            crate::homeview::repack();
+            let g = a.global::<crate::Library>();
+            g.set_nav(nav.clone().into());
+            g.set_smart(smart);
+            g.set_crumb_keys(strings(crumbs.iter().map(|c| c.0.clone())));
+            g.set_crumb_labels(strings(crumbs.into_iter().map(|c| c.1)));
+            g.set_sort(c.library.sort.clone().into());
+            g.set_grid(c.library.view != "list");
+            g.set_count(total as i32);
+            g.set_can_back(back);
+            g.set_can_forward(fwd);
             a.global::<crate::Panel>().invoke_lib_search("".into());
             crate::streams::nav_changed(&a, &nav);
         })
@@ -924,8 +1240,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let w = app.as_weak();
         let cfg = cfg.clone();
         Rc::new(move |quiet| {
-            let roots = cfg.borrow().library.folders.clone();
-            let hidden = cfg.borrow().stub(crate::config::HIDDEN_FILES);
+            let roots = cfg.config().library.folders.clone();
+            let hidden = cfg.config().stub(crate::config::HIDDEN_FILES);
             if let Some(a) = w.upgrade().filter(|_| !quiet) {
                 a.global::<crate::Library>().set_scanning(true);
             }
@@ -934,27 +1250,22 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             std::thread::spawn(move || {
                 let t = std::time::Instant::now();
                 let res = library::open_db(&db).and_then(|mut c| {
-                    library::scan_changes(&mut c, &roots, hidden).map(|(n, changed)| {
-                        (
-                            n,
-                            changed,
-                            (!quiet || changed > 0).then(|| library::all(&c)),
-                        )
-                    })
+                    library::scan_changes(&mut c, &roots, hidden)
+                        .map(|(n, changed)| (n, changed, !quiet || changed > 0))
                 });
                 let _ = slint::invoke_from_event_loop(move || {
                     let Some(a) = w.upgrade() else { return };
                     a.global::<crate::Library>().set_scanning(false);
                     match res {
-                        Ok((n, changed, media)) => {
+                        Ok((n, changed, reload)) => {
                             if log {
                                 eprintln!(
                                     "library scan: {n} files, {changed} changed in {:?}",
                                     t.elapsed()
                                 );
                             }
-                            if let Some(media) = media {
-                                LOADED.with(|l| *l.borrow_mut() = Some(media));
+                            if reload {
+                                RELOAD.set(true);
                                 a.global::<crate::Library>().invoke_refresh();
                             }
                         }
@@ -973,9 +1284,10 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let lib = lib.clone();
         let render = render.clone();
         app.global::<crate::Library>().on_refresh(move || {
-            if let Some(m) = LOADED.with(|l| l.borrow_mut().take()) {
-                count_dirs(&m);
-                lib.borrow_mut().media = m;
+            if RELOAD.take() {
+                if let Ok(mut l) = lib.try_borrow_mut() {
+                    l.reload();
+                }
                 crate::settings::refresh_ui();
             }
             render();
@@ -1028,19 +1340,34 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let cfg = cfg.clone();
         let render = render.clone();
         app.global::<crate::Library>().on_set_sort(move |s| {
-            cfg.borrow_mut().library.sort = s.to_string();
-            let _ = cfg.borrow().save();
+            cfg.update(move |c| c.library.sort = s.to_string());
+            let _ = cfg.save();
             render();
         });
     }
     {
         let cfg = cfg.clone();
         let render = render.clone();
-        app.global::<crate::Library>()
-            .on_thumb_window(|lo, hi| thumb_window(lo.max(0) as usize, hi.max(0) as usize));
+        {
+            // Near the end of the browsed list: append its next page (#100).
+            let (lib, cfg) = (lib.clone(), cfg.clone());
+            app.global::<crate::Library>()
+                .on_thumb_window(move |lo, hi| {
+                    let (lo, hi) = (lo.max(0) as usize, hi.max(0) as usize);
+                    let more = lib.try_borrow_mut().ok().and_then(|mut l| {
+                        let n = l.models.items.row_count();
+                        (l.more.is_some() && hi + WINDOW_MARGIN * 2 >= n)
+                            .then(|| (l.next_page(&cfg.config()), l.models.items.clone()))
+                    });
+                    if let Some((rows, model)) = more.filter(|(r, _)| !r.is_empty()) {
+                        append(&model, rows);
+                    }
+                    thumb_window(lo, hi);
+                });
+        }
         app.global::<crate::Library>().on_set_grid(move |g| {
-            cfg.borrow_mut().library.view = if g { "grid" } else { "list" }.into();
-            let _ = cfg.borrow().save();
+            cfg.update(move |c| c.library.view = if g { "grid" } else { "list" }.into());
+            let _ = cfg.save();
             render();
         });
     }
@@ -1060,6 +1387,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                     k => a.global::<crate::Library>().invoke_navigate(k.into()),
                 },
                 "folder" | "group" => a.global::<crate::Library>().invoke_navigate(key),
+                "playlist" if is_smart(&key) => a.global::<crate::Library>().invoke_navigate(key),
                 "playlist" => a.global::<crate::Panel>().invoke_playlist_load(key),
                 "bookmark" => {
                     if let Some((path, t)) = crate::bookmarks::parse_lib_key(&key) {
@@ -1075,9 +1403,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 _ => {
                     // Play the item and queue the rest of the current list after it.
                     p.open(&key);
-                    let l = lib.borrow();
-                    let rest: Vec<String> = l
-                        .items
+                    let items = lib.borrow().models.items.clone();
+                    let rest: Vec<String> = items
                         .iter()
                         .skip_while(|r| r.key != key)
                         .skip(1)
@@ -1108,7 +1435,15 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
             .on_menu(move |key, kind, action| {
                 let Some(a) = w.upgrade() else { return };
                 let path = key.strip_prefix("video:").unwrap_or(&key).to_string();
+                if is_smart(&key) {
+                    smart_action(&a, &p, &lib, &key, &action);
+                    render();
+                    return;
+                }
                 match action.as_str() {
+                    "similar" => a
+                        .global::<crate::Library>()
+                        .invoke_navigate(format!("similar:{path}").into()),
                     "play" => a.global::<crate::Library>().invoke_open(key, kind),
                     // remove_at re-renders this page (bookmarks::changed).
                     "delete-bookmark" => {
@@ -1127,14 +1462,14 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         );
                     }
                     "pin" | "unpin" => {
-                        {
-                            let mut c = cfg.borrow_mut();
+                        let pin = action == "pin";
+                        cfg.update(move |c| {
                             c.library.pinned.retain(|x| x != &path);
-                            if action == "pin" {
+                            if pin {
                                 c.library.pinned.push(path);
                             }
-                        }
-                        let _ = cfg.borrow().save();
+                        });
+                        let _ = cfg.save();
                         render();
                     }
                     "forget" => {
@@ -1159,23 +1494,21 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                         render();
                     }
                     "watched" => {
-                        let is = cfg.borrow().library.watched.contains(&path)
+                        let is = cfg.config().library.watched.contains(&path)
                             || lib
-                                .borrow()
-                                .media
-                                .iter()
-                                .any(|m| m.path == path && library::progress(m) >= 0.95);
-                        {
-                            let mut c = cfg.borrow_mut();
-                            c.library.watched.retain(|x| x != &path);
+                                .try_borrow()
+                                .is_ok_and(|l| library::progress(&l.find(&path)) >= 0.95);
+                        let p2 = path.clone();
+                        cfg.update(move |c| {
+                            c.library.watched.retain(|x| x != &p2);
                             if !is {
-                                c.library.watched.push(path.clone());
+                                c.library.watched.push(p2);
                             }
-                        }
+                        });
                         if is {
                             store::forget_position(&path);
                         }
-                        let _ = cfg.borrow().save();
+                        let _ = cfg.save();
                         render();
                     }
                     "reveal" => reveal(&path),
@@ -1354,19 +1687,19 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
         let lib = lib.clone();
         app.global::<crate::Panel>().on_lib_search(move |q| {
             let Some(a) = w.upgrade() else { return };
-            let l = lib.borrow();
-            let q = q.to_lowercase();
-            let mut v: Vec<&Media> = l
-                .media
-                .iter()
-                .filter(|m| {
-                    q.is_empty()
-                        || m.title.to_lowercase().contains(&q)
-                        || m.artist.to_lowercase().contains(&q)
-                        || m.path.to_lowercase().contains(&q)
-                })
-                .collect();
-            v.sort_by_key(|m| std::cmp::Reverse(m.mtime));
+            // Newest first; a few pages' worth, the panel shows 60 after de-duplication.
+            let v: Vec<Media> = match lib.try_borrow() {
+                Ok(l) => l.rows(
+                    &library::Query {
+                        search: q.to_string(),
+                        sort: "newest".into(),
+                        limit: 240,
+                        ..Default::default()
+                    },
+                    &Config::default(),
+                ),
+                Err(_) => return,
+            };
             // One row per file: the same file reached twice (symlinked or overlapping
             // library folders) or copied into two folders (same title and size).
             let mut seen_path = HashSet::new();
@@ -1406,13 +1739,12 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>, log
                 return;
             };
             let d = d.to_string_lossy().replace('\\', "/");
-            {
-                let mut c = cfg.borrow_mut();
+            cfg.update(move |c| {
                 if !c.library.folders.contains(&d) {
                     c.library.folders.push(d);
                 }
-            }
-            let _ = cfg.borrow().save();
+            });
+            let _ = cfg.save();
             rescan();
         });
     }
@@ -1496,18 +1828,20 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
     let path = key.strip_prefix("video:").unwrap_or(key);
     match kind {
         "folder" => {
-            let inside: Vec<&Media> = l
-                .media
-                .iter()
-                .filter(|m| m.path.starts_with(&format!("{path}/")))
-                .collect();
-            let size: i64 = inside.iter().map(|m| m.size).sum();
-            let dur: f64 = inside.iter().map(|m| m.duration).sum();
+            let (n, size, dur) = l.db.as_ref().map_or((0, 0, 0.0), |db| {
+                library::totals(
+                    db,
+                    &library::Query {
+                        under: Some(path.into()),
+                        ..Default::default()
+                    },
+                )
+            });
             (
                 name_of(path),
                 vec![
                     ("Location", path.to_string()),
-                    ("Media files", inside.len().to_string()),
+                    ("Media files", n.to_string()),
                     ("Total size", library::human_size(size)),
                     ("Total length", library::human_time(dur)),
                 ],
@@ -1530,18 +1864,16 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
                 parts.get(1).copied().unwrap_or(""),
                 parts.get(2).copied().unwrap_or(""),
             );
-            let n = l
-                .media
-                .iter()
-                .filter(|m| {
-                    m.kind == MediaKind::Audio
-                        && match tab {
-                            "albums" => m.album == val,
-                            "artists" => m.artist == val,
-                            _ => m.genre == val,
-                        }
-                })
-                .count();
+            let field = match tab {
+                "albums" => library::Field::Album,
+                "artists" => library::Field::Artist,
+                _ => library::Field::Genre,
+            };
+            let n = l.count(&library::Query {
+                kind: Some(MediaKind::Audio),
+                field: Some((field, val.into())),
+                ..Default::default()
+            });
             (val.to_string(), vec![("Songs", n.to_string())])
         }
         _ => {
@@ -1578,21 +1910,12 @@ fn info(l: &Lib, key: &str, kind: &str) -> (String, Vec<(&'static str, String)>)
 }
 
 thread_local! {
-    static LOADED: RefCell<Option<Vec<Media>>> = const { RefCell::new(None) };
+    /// A scan changed the index: re-read the totals on the next refresh.
+    static RELOAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Indexed files per directory (`None` until the index is read), for the folder
     /// list on Settings → Library.
     static DIRS: RefCell<Option<std::collections::BTreeMap<String, usize>>> =
         const { RefCell::new(None) };
-}
-
-fn count_dirs(media: &[Media]) {
-    let mut d = std::collections::BTreeMap::new();
-    for m in media {
-        if let Some((dir, _)) = m.path.rsplit_once(['/', '\\']) {
-            *d.entry(dir.to_string()).or_insert(0) += 1;
-        }
-    }
-    DIRS.with(|x| *x.borrow_mut() = Some(d));
 }
 
 /// Indexed files in library folder `folder` and its sub-folders (`None` before the
@@ -1696,16 +2019,12 @@ mod tests {
     #[test]
     fn folder_counts_include_sub_folders() {
         assert_eq!(folder_count("/m"), None);
-        let m = |p: &str| Media {
-            path: p.into(),
-            ..Default::default()
-        };
-        count_dirs(&[
-            m("/m/a.mp3"),
-            m("/m/x/b.mp3"),
-            m("/m2/c.mp3"),
-            m("/mx/d.mp3"),
-        ]);
+        let d: std::collections::BTreeMap<String, usize> =
+            [("/m", 1), ("/m/x", 1), ("/m2", 1), ("/mx", 1)]
+                .into_iter()
+                .map(|(k, n)| (k.to_string(), n))
+                .collect();
+        DIRS.with(|x| *x.borrow_mut() = Some(d));
         assert_eq!(folder_count("/m"), Some(2));
         assert_eq!(folder_count("/m/"), Some(2));
         assert_eq!(folder_count("/m2"), Some(1));
@@ -1771,6 +2090,25 @@ mod tests {
         let indexed = t0.elapsed();
         println!(
             "{K} thumbnails over {N} rows: scan {scan:?}, index build {index:?} + lookups {indexed:?}"
+        );
+    }
+
+    #[test]
+    fn breadcrumb_omits_root_when_it_matches_the_section() {
+        let mut crumbs = vec![("video".into(), "Videos".into())];
+        push_root_crumb(&mut crumbs, "video:/media/Videos".into(), "Videos".into());
+        crumbs.push(("video:/media/Videos/Clips".into(), "Clips".into()));
+        assert_eq!(
+            crumbs.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(),
+            ["Videos", "Clips"]
+        );
+
+        let mut crumbs = vec![("video".into(), "Videos".into())];
+        push_root_crumb(&mut crumbs, "video:/media/Shows".into(), "Shows".into());
+        crumbs.push(("video:/media/Shows/Clips".into(), "Clips".into()));
+        assert_eq!(
+            crumbs.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(),
+            ["Videos", "Shows", "Clips"]
         );
     }
 

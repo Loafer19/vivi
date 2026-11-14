@@ -332,9 +332,11 @@ export component ServicePage inherits VerticalLayout {
 // Home → Streams: favorites and recent streams as cards in one row.
 export component StreamsRow inherits VerticalLayout {
     callback open-hub();
+    // Hidden in Customize Home: the edit bar already shows the name.
+    in property <bool> heading: true;
     spacing: 16px;
     property <int> fit: max(1, floor((self.width + 12px) / (168px + 12px)));
-    HorizontalLayout {
+    if root.heading: HorizontalLayout {
         height: 24px; spacing: 4px;
         Text { text: "Streams"; color: tta.has-hover ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-lg; vertical-alignment: center; horizontal-stretch: 1;
             tta := TouchArea { accessible-role: button; accessible-label: "Streams"; mouse-cursor: pointer; clicked => { root.open-hub(); } } }

@@ -3,7 +3,6 @@
 //! (see `ui/app.slint`) and mpv letterboxes, so the video keeps its aspect ratio. The
 //! miniplayer geometry is saved in the config and the full-size geometry restored on exit.
 
-use crate::config::Config;
 use crate::AppWindow;
 use slint::{ComponentHandle, LogicalPosition, LogicalSize};
 use std::cell::{Cell, RefCell};
@@ -22,7 +21,7 @@ fn geometry(a: &AppWindow) -> Geometry {
     (w.position().to_logical(sf), w.size().to_logical(sf))
 }
 
-pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, cfg: crate::app::state::AppState) {
     let full: Rc<Cell<Option<Geometry>>> = Rc::new(Cell::new(None));
 
     // Remember the miniplayer geometry (video part only) in the config.
@@ -37,9 +36,9 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
                 size.width as i32,
                 h.max(160.0) as i32,
             ];
-            if cfg.borrow().interface.mini_window != Some(g) {
-                cfg.borrow_mut().interface.mini_window = Some(g);
-                let _ = cfg.borrow().save();
+            if cfg.config().interface.mini_window != Some(g) {
+                cfg.update(move |c| c.interface.mini_window = Some(g));
+                let _ = cfg.save();
             }
         }
     };
@@ -63,7 +62,7 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
             a.global::<crate::Overlays>().set_settings_open(false);
             a.global::<crate::Overlays>().set_library_open(false);
             a.set_mini(true);
-            let saved = cfg.borrow().interface.mini_window;
+            let saved = cfg.config().interface.mini_window;
             let (mw, mh) = saved.map_or((W, H), |g| (g[2] as f32, g[3] as f32));
             let extra = if a.get_mini_queue() { QUEUE_H } else { 0.0 };
             w.set_size(LogicalSize::new(mw.max(280.0), mh.max(160.0) + extra));
@@ -75,7 +74,7 @@ pub fn setup(app: &AppWindow, cfg: Rc<RefCell<Config>>) {
             r(&a);
             a.set_mini(false);
             // Back to the normal window: on top only if Settings asks for it.
-            crate::winstate::apply_on_top(&a, cfg.borrow().stub(crate::config::ON_TOP));
+            crate::winstate::apply_on_top(&a, cfg.config().stub(crate::config::ON_TOP));
             if let Some((pos, size)) = full.take() {
                 w.set_size(size);
                 w.set_position(pos);
