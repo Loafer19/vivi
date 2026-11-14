@@ -590,7 +590,7 @@ component HomeEditBar inherits Rectangle {
         padding-left: 6px; padding-right: 8px; spacing: 8px;
         Rectangle {
             width: 22px;
-            TriIcon { name: "list"; width: 16px; height: 16px; tint: hta.has-hover || hta.pressed ? Theme.fg-1 : Theme.fg-a3; }
+            TriIcon { name: "move"; width: 16px; height: 16px; tint: hta.has-hover || hta.pressed ? Theme.fg-1 : Theme.fg-a3; }
             hta := TouchArea {
                 accessible-role: button; accessible-label: "Drag to move " + root.c.title;
                 mouse-cursor: hta.pressed ? MouseCursor.grabbing : MouseCursor.grab;
@@ -851,7 +851,7 @@ export component LibraryView inherits Rectangle {
                             HorizontalLayout {
                                 padding-left: 14px; padding-right: 10px; spacing: 10px;
                                 Text { text: "Customize Home"; color: Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; }
-                                Text { text: "Drag a widget by its handle or use ↑ ↓ · size (S ⅓, M ⅔, L full) · the switch hides it"; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                Text { text: "Drag the handle or use the arrows. The switch hides a widget."; color: Theme.fg-a3; font-size: Metrics.font-sm; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                                 VerticalLayout { alignment: center; FlatButton { text: "Reset to default"; size: ButtonSize.sm; clicked => { root.home-action("reset", "", ""); } } }
                                 VerticalLayout { alignment: center; SecondaryButton { text: "Cancel"; size: ButtonSize.sm; clicked => { root.home-action("cancel", "", ""); } } }
                                 VerticalLayout { alignment: center; PrimaryButton { text: "Done"; size: ButtonSize.sm; clicked => { root.home-action("done", "", ""); } } }
