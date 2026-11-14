@@ -413,14 +413,25 @@ component HomeHero inherits Rectangle {
     callback menu(length, length);
     border-radius: Metrics.radius-lg; clip: true;
     background: Theme.bg-a3;
+    // Intrinsic size of the thumb; used to sit the sharp frame in a contain box so the
+    // dimmed cover behind it stays visible in the leftover pillarbox / letterbox.
+    property <float> tw: root.it.thumb.width;
+    property <float> th: root.it.thumb.height;
+    property <bool> has-size: root.it.has-thumb && root.tw > 0 && root.th > 0;
+    property <float> fit: root.has-size ? min(root.width / (root.tw * 1px), root.height / (root.th * 1px)) : 1;
+    property <length> frame-w: root.has-size ? root.tw * 1px * root.fit : 0;
+    property <length> frame-h: root.has-size ? root.th * 1px * root.fit : 0;
     if root.it.has-thumb: Image {
-        // Zoomed cover so pillarbox / letterbox gaps are filled with the same picture.
-        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-        width: parent.width * 140%; height: parent.height * 140%;
+        // Cover of the (unpadded) thumb fills the card; 50% black lets the sharp frame sit on top.
+        width: 100%; height: 100%;
         source: root.it.thumb; image-fit: cover;
     }
-    if root.it.has-thumb: Rectangle { background: #000000.with-alpha(0.5); }
-    if root.it.has-thumb: Image { width: parent.width; height: parent.height; source: root.it.thumb; image-fit: contain; }
+    if root.it.has-thumb: Rectangle { width: 100%; height: 100%; background: #000000.with-alpha(0.5); }
+    if root.it.has-thumb: Image {
+        x: (parent.width - root.frame-w) / 2; y: (parent.height - root.frame-h) / 2;
+        width: root.frame-w; height: root.frame-h;
+        source: root.it.thumb; image-fit: fill;
+    }
     if !root.it.has-thumb: TriIcon { name: Icons.kind-duo(root.it.kind); width: 56px; height: 56px; tint: Theme.fg-a3; }
     Rectangle { background: @linear-gradient(180deg, transparent 35%, Theme.media-chip 100%); }
     Rectangle {
@@ -803,7 +814,9 @@ export component LibraryView inherits Rectangle {
                                     width: max(80px, (parent.width - 16px * max(0, self.n-cells - 1)) * c.frac);
                                     height: 100%;
                                     horizontal-stretch: 0;
-                                    alignment: start; spacing: 12px;
+                                    // Stretch so the L Continue Watching hero fills the row
+                                    // next to Jump Back In (alignment: start kept it at min 240px).
+                                    alignment: stretch; spacing: 12px;
                                     if root.home-edit: HomeEditBar {
                                         c: c; compact: c.frac < 0.5 || root.home-is-narrow;
                                         act(a, v) => { root.home-action(a, c.id, v); }
