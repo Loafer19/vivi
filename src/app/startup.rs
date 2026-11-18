@@ -11,12 +11,47 @@ pub(crate) fn init() -> Result<(), slint::PlatformError> {
         std::env::remove_var("WAYLAND_DISPLAY");
     }
     bundled_env();
-    // Prefer winit + femtovg (OpenGL): works on Wayland (Hyprland) and X11.
+    // Prefer winit + femtovg (OpenGL): works on Wayland (Hyprland) and X11. Without an
+    // OpenGL 2 driver (Windows in a VM: only GDI's OpenGL 1.1) Slint falls back to its
+    // software renderer by itself; VIVI_RENDERER=software asks for it directly, and
+    // `relaunch_software` restarts with it when OpenGL fails later (Linux: EGL errors).
+    let renderer = if software_forced() {
+        crate::app::fatal::note("renderer: software (VIVI_RENDERER)");
+        "software"
+    } else {
+        "femtovg"
+    };
     slint::BackendSelector::new()
         .backend_name("winit".into())
-        .renderer_name("femtovg".into())
+        .renderer_name(renderer.into())
         .select()?;
     Ok(())
+}
+
+/// `VIVI_RENDERER=software` (or `sw`): use Slint's software renderer, no OpenGL.
+pub(crate) fn software_forced() -> bool {
+    std::env::var("VIVI_RENDERER")
+        .is_ok_and(|v| v.eq_ignore_ascii_case("software") || v.eq_ignore_ascii_case("sw"))
+}
+
+/// Start a new Vivi with the same arguments and `VIVI_RENDERER=software`, after the
+/// OpenGL window could not be created. Returns false when it already ran in software
+/// mode or the new process could not start.
+pub(crate) fn relaunch_software(why: &str) -> bool {
+    if software_forced() {
+        return false;
+    }
+    crate::app::fatal::note(&format!(
+        "OpenGL rendering failed ({why}); restarting with the software renderer"
+    ));
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    std::process::Command::new(exe)
+        .args(std::env::args_os().skip(1))
+        .env("VIVI_RENDERER", "software")
+        .spawn()
+        .is_ok()
 }
 
 /// Per-feature setup (each wires its own globals and callbacks).

@@ -262,6 +262,14 @@ export component AppWindow inherits Window {
     }
     init => { fs.focus(); }
 
+    // Video frame drawn by mpv's software renderer (no OpenGL); with OpenGL mpv draws
+    // directly under the transparent window instead.
+    if Playback.sw-video && Playback.has-media: Image {
+        width: 100%; height: 100%;
+        source: Playback.sw-frame;
+        image-fit: fill;
+    }
+
     // Whole-window activity tracker (mouse moves reset the auto-hide timer).
     main-ta := TouchArea {
         mouse-cursor: root.show-ui || !AutoHide.cursor ? MouseCursor.default : MouseCursor.none;
