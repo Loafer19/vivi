@@ -9,10 +9,12 @@ Icons are Lucide (https://lucide.dev, ISC license) SVGs kept in docs/site/icons/
 Standard library only, so it runs as-is in GitHub Actions.
 """
 import html
+import os
 import re
 import json
 import shutil
 import sys
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -110,6 +112,100 @@ def release_version() -> str:
     return re.search(r"^pkgver=(\S+)$", (ROOT / "packaging/aur/vivi-bin/PKGBUILD").read_text(), re.M).group(1)
 
 
+REPO = "Loafer19/vivi"
+# Release asset per download kind: the current name first, then the name used up to v0.16.4.
+ASSETS = {
+    "appimage_x64": ["vivi-{v}-linux-x64.AppImage", "Vivi-v{v}-x86_64.AppImage"],
+    "appimage_arm64": ["vivi-{v}-linux-arm64.AppImage"],
+    "tar_x64": ["vivi-{v}-linux-x64.tar.gz", "vivi-v{v}-linux-x86_64.tar.gz"],
+    "tar_arm64": ["vivi-{v}-linux-arm64.tar.gz"],
+    "flatpak": ["vivi-{v}-linux-x64.flatpak", "vivi-v{v}-x86_64.flatpak"],
+    "setup_x64": ["vivi-{v}-windows-x64-setup.exe"],
+    "setup_arm64": ["vivi-{v}-windows-arm64-setup.exe"],
+    "portable_x64": ["vivi-{v}-windows-x64-portable.zip", "vivi-v{v}-windows-x86_64.zip"],
+    "portable_arm64": ["vivi-{v}-windows-arm64-portable.zip"],
+    "mac": ["vivi-{v}-macos-arm64.zip", "vivi-v{v}-macos-arm64.zip"],
+}
+
+
+def latest_release() -> tuple[str, set[str] | None]:
+    """(version, asset names) of the latest GitHub release; names are None when offline.
+    VIVI_RELEASE_ASSETS (a JSON file with {"tag_name", "assets": [{"name"}]}) replaces the
+    API call for local previews."""
+    data = None
+    if os.environ.get("VIVI_RELEASE_ASSETS"):
+        data = json.loads(Path(os.environ["VIVI_RELEASE_ASSETS"]).read_text())
+    else:
+        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
+                                     headers={"Accept": "application/vnd.github+json"})
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = json.load(r)
+        except OSError as e:
+            print(f"warning: latest release not readable ({e}); using the vivi-bin pkgver and current asset names")
+    if not data:
+        return release_version(), None
+    return data["tag_name"].removeprefix("v"), {a["name"] for a in data.get("assets", [])}
+
+
+def downloads(version: str, names: set[str] | None) -> dict[str, str]:
+    """Asset file name per kind, for this release; kinds the release lacks are left out."""
+    out = {}
+    for kind, pats in ASSETS.items():
+        cands = [p.format(v=version) for p in pats]
+        found = cands[0] if names is None else next((c for c in cands if c in names), None)
+        if found:
+            out[kind] = found
+    return out
+
+
+def fill_downloads(text: str, version: str, files: dict[str, str]) -> str:
+    """Download placeholders in a page:
+    * @DL@: the release's download URL prefix; @F_<KIND>@: an asset file name, @STEM_<KIND>@:
+      the same without extension (the folder inside a zip/tarball);
+    * @DL_URLS@: JSON {system-arch: URL} for the OS-detecting Download button;
+    * <!--if:kind--> ... <!--/if:kind-->: kept only when the release has that asset;
+    * @PICK_APPIMAGE@ / @PICK_SETUP@ / @PICK_PORTABLE@: shell / PowerShell lines that choose the
+      x64 or arm64 file at run time (only x64 when the release has no arm64 build)."""
+    dl = f"https://github.com/{REPO}/releases/download/v{version}"
+    url = lambda k: f"{dl}/{files[k]}"
+    # Fallbacks for the button: arm64 -> x64, installer -> portable zip.
+    pick = lambda *ks: next((url(k) for k in ks if k in files), f"https://github.com/{REPO}/releases/latest")
+    urls = {
+        "linux-x64": pick("appimage_x64", "tar_x64"),
+        "linux-arm64": pick("appimage_arm64", "tar_arm64", "appimage_x64"),
+        "windows-x64": pick("setup_x64", "portable_x64"),
+        "windows-arm64": pick("setup_arm64", "portable_arm64", "setup_x64", "portable_x64"),
+        "mac": pick("mac"),
+    }
+    cond = re.compile(r"<!--if:([a-z0-9_]+)-->(.*?)<!--/if:\1-->", re.S)
+    while cond.search(text):  # nested blocks: the inner ones are left for the next pass
+        text = cond.sub(lambda m: m.group(2) if m.group(1) in files else "", text)
+
+    def chooser(x64, arm, shell):
+        if x64 not in files:
+            return ""
+        a, b = files[x64], files.get(arm)
+        if shell == "sh":
+            return f"A={a}" + (f'; [ "$(uname -m)" = aarch64 ] &amp;&amp; A={b}' if b else "")
+        return f"$f = '{a}'" + (f"; if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {{ $f = '{b}' }}" if b else "")
+
+    text = text.replace("@PICK_APPIMAGE@", chooser("appimage_x64", "appimage_arm64", "sh"))
+    text = text.replace("@PICK_SETUP@", chooser("setup_x64", "setup_arm64", "ps"))
+    text = text.replace("@PICK_PORTABLE@", chooser("portable_x64", "portable_arm64", "ps"))
+    text = text.replace("@DL_URLS@", html.escape(json.dumps(urls), quote=True)).replace("@DL@", dl)
+    for kind, name in files.items():
+        stem = re.sub(r"\.(tar\.gz|zip|exe|AppImage|flatpak)$", "", name)
+        text = text.replace(f"@F_{kind.upper()}@", name).replace(f"@STEM_{kind.upper()}@", stem)
+    left = sorted(set(re.findall(r"@(?:F|STEM)_[A-Z0-9_]+@", text)))
+    if left:
+        sys.exit(f"release v{version} has no asset for {left} (wrap the use in <!--if:kind-->)")
+    return text
+
+
 def main() -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -123,10 +219,13 @@ def main() -> None:
     # install.sh builds this on Arch (kept at the latest release by the release workflow).
     (OUT / "vivi-bin").mkdir(exist_ok=True)
     shutil.copy(ROOT / "packaging/aur/vivi-bin/PKGBUILD", OUT / "vivi-bin/PKGBUILD")
-    version = release_version()
+    # Download links and commands follow the latest release and its asset names.
+    version, names = latest_release()
+    files = downloads(version, names)
+    print(f"release v{version}: {', '.join(f'{k}={v}' for k, v in files.items())}")
     for page in OUT.glob("*.html"):
-        # @VIVI_VERSION@ in download commands (home page "Get Vivi") follows the latest release.
-        page.write_text(seo(page.name, inline_icons(page.read_text().replace("@VIVI_VERSION@", version))))
+        text = fill_downloads(page.read_text().replace("@VIVI_VERSION@", version), version, files)
+        page.write_text(seo(page.name, inline_icons(text)))
     sitemap(OUT)
     missing = [
         (page.name, ref)
