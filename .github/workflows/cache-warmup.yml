@@ -171,6 +171,10 @@ jobs:
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
+      # Updating a runtime renames its old deployment, which fails with "Invalid cross-device
+      # link" when /var/lib/flatpak sits in a Docker image layer (overlayfs). A volume is not.
+      volumes:
+        - /var/lib/flatpak
     steps:
       - uses: actions/checkout@v7
       - name: Restore flatpak-builder state
