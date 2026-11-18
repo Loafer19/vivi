@@ -225,10 +225,12 @@ jobs:
         run: |
           $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.Substring(1) } else { 'dev' }
           packaging\windows\build-installer.ps1 -Exe target\release\vivi.exe -Mpv mpv\libmpv-2.dll -Version $ver -Arch ${{ matrix.arch }} -OutDir dist
-      - name: vivi --version answers (console attach)
+      - name: vivi --version answers
         shell: pwsh
         run: |
+          Copy-Item mpv\libmpv-2.dll target\release\
           $out = & target\release\vivi.exe --version | Out-String
+          Write-Host "exit code: $LASTEXITCODE"
           Write-Host $out
           if ($out -notmatch '^vivi \d') { throw "vivi --version printed nothing" }
       - uses: actions/upload-artifact@v7

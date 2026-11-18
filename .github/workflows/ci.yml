@@ -85,10 +85,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: packaging\windows\fetch-libmpv.ps1 -Arch ${{ matrix.arch }}
       - run: cargo build --profile ci
-      - name: vivi --version answers (console attach)
+      - name: vivi --version answers
         shell: pwsh
         run: |
+          Copy-Item mpv\libmpv-2.dll target\ci\
           $out = & target\ci\vivi.exe --version | Out-String
+          Write-Host "exit code: $LASTEXITCODE"
           Write-Host $out
           if ($out -notmatch '^vivi \d') { throw "vivi --version printed nothing" }
       - name: Portable zip and installer
