@@ -1,0 +1,3 @@
+// Windows resources linked into vivi.exe by build.rs: the icon Explorer, shortcuts and the
+// taskbar show for the file itself (the window icon comes from ui/app.slint).
+1 ICON "vivi.ico"

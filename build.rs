@@ -47,6 +47,16 @@ fn main() {
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
     println!("cargo:rerun-if-changed=ui");
 
+    // App icon as a Windows resource, so Explorer and shortcuts show it for vivi.exe.
+    #[cfg(windows)]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rerun-if-changed=packaging/windows/vivi.rc");
+        println!("cargo:rerun-if-changed=packaging/windows/vivi.ico");
+        embed_resource::compile("packaging/windows/vivi.rc", embed_resource::NONE)
+            .manifest_optional()
+            .expect("failed to compile packaging/windows/vivi.rc");
+    }
+
     // Dark std-widgets (LineEdit, ScrollView) to match the Figma dark theme.
     // The Slint compiler recurses through long `if` chains (ui/core/duo.slint has one entry per
     // icon); Windows gives the main thread only 1 MB of stack, so compile on a thread with more.
