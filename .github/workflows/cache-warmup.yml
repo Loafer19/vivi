@@ -3,7 +3,7 @@ name: Cache warm-up
 # release.yml only restores caches. This workflow saves them from master, whose caches every
 # ref (tags included) can read. It repeats the cache-relevant part of release.yml with the
 # same cache keys, toolchain, env and cargo profile, and skips everything once a cache is an
-# exact hit. It publishes nothing: no artifacts, releases, tags or commits. Keep it in sync
+# exact hit, for x64 and arm64 alike. It publishes nothing: no artifacts, releases, tags or commits. Keep it in sync
 # with release.yml.
 on:
   push:
@@ -34,14 +34,20 @@ env:
 
 jobs:
   linux:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: ubuntu-24.04, suffix: "" }
+          - { arch: arm64, runner: ubuntu-24.04-arm, suffix: "-arm64" }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         id: rust-cache
         with:
-          shared-key: release-linux
+          shared-key: release-linux${{ matrix.suffix }}
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
         if: steps.rust-cache.outputs.cache-hit != 'true'
@@ -62,20 +68,26 @@ jobs:
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
 
   appimage:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: ubuntu-22.04, suffix: "" }
+          - { arch: arm64, runner: ubuntu-22.04-arm, suffix: "-arm64" }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         id: rust-cache
         with:
-          shared-key: release-appimage-2204
+          shared-key: release-appimage-2204${{ matrix.suffix }}
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: actions/cache/restore@v6
         id: deps
         with:
           path: deps
-          key: libmpv-ubuntu-22.04-${{ hashFiles('packaging/appimage/build-libmpv.sh') }}
+          key: libmpv-ubuntu-22.04${{ matrix.suffix }}-${{ hashFiles('packaging/appimage/build-libmpv.sh') }}
       - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
         if: steps.rust-cache.outputs.cache-hit != 'true'
         run: |
@@ -91,7 +103,7 @@ jobs:
             libva-dev libvdpau-dev libwayland-dev wayland-protocols libx11-dev libxext-dev libxrandr-dev \
             libxss-dev libxpresent-dev libxv-dev libxinerama-dev libegl-dev libgl-dev libuchardet-dev liblua5.2-dev libgnutls28-dev \
             libdav1d-dev libvpx-dev libopus-dev libvorbis-dev libwebp-dev libxml2-dev libbz2-dev liblzma-dev zlib1g-dev \
-            libjpeg-dev liblcms2-dev
+            libjpeg-dev liblcms2-dev libxkbcommon-x11-dev libxcursor-dev libxi-dev
           pip3 install --user 'meson>=1.3,<2'
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build slim libmpv
@@ -110,16 +122,23 @@ jobs:
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
           PKG_CONFIG_PATH: ${{ github.workspace }}/deps/lib/pkgconfig
           LIBRARY_PATH: ${{ github.workspace }}/deps/lib
+          LD_LIBRARY_PATH: ${{ github.workspace }}/deps/lib
 
   windows:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: windows-latest }
+          - { arch: arm64, runner: windows-11-arm }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         id: rust-cache
         with:
-          shared-key: release-windows
+          shared-key: release-windows-${{ matrix.arch }}
           save-if: ${{ github.ref == 'refs/heads/master' }}
       # Same as release.yml: the RUSTFLAGS it exports are part of cargo's fingerprints.
       - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
@@ -127,19 +146,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download -R shinchiro/mpv-winbuild-cmake -p 'mpv-dev-x86_64-2*' -O mpv-dev.7z
-          7z x mpv-dev.7z -ompv | Out-Null
-          Get-ChildItem mpv
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $bin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64" | Select-Object -Last 1).FullName
-          $dll = (Get-ChildItem mpv\libmpv-2.dll).FullName
-          if (-not (Test-Path mpv\mpv.def)) {
-            $names = & "$bin\dumpbin.exe" /exports $dll | ForEach-Object { if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] } }
-            (@('EXPORTS') + $names) | Set-Content mpv\mpv.def
-          }
-          & "$bin\lib.exe" /def:mpv\mpv.def /name:libmpv-2.dll /machine:x64 /out:mpv\mpv.lib
-          "RUSTFLAGS=-L native=$((Resolve-Path mpv).Path)" | Out-File -Append $env:GITHUB_ENV
+        run: packaging\windows\fetch-libmpv.ps1 -Arch ${{ matrix.arch }}
       - run: cargo build --release
         if: steps.rust-cache.outputs.cache-hit != 'true'
         env:
