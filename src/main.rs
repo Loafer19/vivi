@@ -160,7 +160,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let looped = slint::run_event_loop_until_quit();
     // The OpenGL window could not be created (no usable driver): restart in software mode
     // once the player and remote-control socket are shut down below.
-    let relaunch = matches!(&looped, Err(_) if !render::gl_started());
+    let relaunch = looped.is_err() && !render::gl_started();
     if cfg.update_with(|c| winstate::save(&app, c)) == Some(true) {
         cfg.save_or_log();
     }
