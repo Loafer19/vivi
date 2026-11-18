@@ -277,20 +277,14 @@ document.querySelectorAll('.get [data-goto]').forEach(a=>a.addEventListener('cli
 const osb=[...document.querySelectorAll('.get [data-os]')];
 const os=v=>{osb.forEach(x=>x.setAttribute('aria-pressed',x.dataset.os===v));document.querySelectorAll('.get [data-for]').forEach(d=>d.hidden=d.dataset.for!==v)};
 osb.forEach(b=>b.addEventListener('click',()=>os(b.dataset.os)));
-const ua=navigator.userAgent,sys=/Windows/.test(ua)?'windows':/Mac OS X|Macintosh/.test(ua)&&!/Mobile/.test(ua)?'mac':'linux';os(sys);
-document.querySelectorAll('[data-os-goto]').forEach(a=>a.addEventListener('click',()=>os(a.dataset.osGoto)));
-// Download button: the file for this system and CPU (arm64 when the browser says so, else x64).
-const dl=document.getElementById('dl-main'),urls=JSON.parse(dl.dataset.urls||'{}');
-const names={linux:'Linux',windows:'Windows',mac:'macOS'};
-const setDl=arch=>{const k=sys==='mac'?'mac':sys+'-'+arch;if(urls[k])dl.href=urls[k];
-dl.querySelector('span').textContent='Download for '+names[sys]+(arch==='arm64'&&sys!=='mac'?' (Arm)':'');
-document.getElementById('dl-for').textContent=' · '+decodeURIComponent(dl.href.split('/').pop());
-if(arch==='arm64')document.querySelectorAll('#dl-alt [data-arm]').forEach(a=>{if(a.dataset.arm)a.href=a.dataset.arm})};
-setDl(/aarch64|arm64|armv8/i.test(ua)?'arm64':'x64');
-const uad=navigator.userAgentData;
-if(uad&&uad.getHighEntropyValues)uad.getHighEntropyValues(['architecture','bitness']).then(v=>{if(v.architecture==='arm'&&v.bitness!=='32')setDl('arm64')}).catch(()=>{});
+const ua=navigator.userAgent;os(/Windows/.test(ua)?'windows':/Mac OS X|Macintosh/.test(ua)&&!/Mobile/.test(ua)?'mac':'linux');
+// Links that open another system's install instructions (e.g. "AUR", "winget" in the hero).
+for (const link of document.querySelectorAll('[data-os-goto]')) {
+  link.addEventListener('click', () => os(link.dataset.osGoto));
+}
 })();
 </script>
+<script type="module" src="js/download.js"></script>
 <footer><a href="compare.html">Compare players</a> · <a href="ai-agents.html">AI agents</a> · <a href="https://plugins.viviplayer.app/">Plugins</a><br>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 UI design based on the Figma community file “VLC Redesign” by Juxtopposed ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC) ·
