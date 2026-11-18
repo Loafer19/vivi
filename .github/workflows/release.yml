@@ -124,6 +124,9 @@ jobs:
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
           PKG_CONFIG_PATH: ${{ github.workspace }}/deps/lib/pkgconfig
           LIBRARY_PATH: ${{ github.workspace }}/deps/lib
+          # GNU ld (the arm64 linker; x64 uses rust-lld) resolves libmpv's own FFmpeg and
+          # libplacebo dependencies through LD_LIBRARY_PATH, not LIBRARY_PATH.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/deps/lib
       - name: AppImage (bundles the slim libmpv and its libraries)
         run: |
           V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
