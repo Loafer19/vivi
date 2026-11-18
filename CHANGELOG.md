@@ -6,6 +6,7 @@
 - **Windows installer**: `vivi-<version>-windows-x64-setup.exe` (Inno Setup) installs for the current user without admin rights into `%LOCALAPPDATA%\Programs\Vivi`, adds a Start menu shortcut (desktop shortcut optional) and an uninstaller in Settings → Apps, and ships the VC++ runtime DLLs next to `vivi.exe`.
 - **Native arm64 builds**: Windows on Arm (installer and portable zip) and Linux arm64 (AppImage and tarball).
 - **Download button on viviplayer.app** picks the file for your system and CPU (Windows installer, Linux AppImage, macOS zip; arm64 when the browser reports it).
+- **App icon in `vivi.exe`**: Explorer, shortcuts and pinned taskbar entries show the Vivi icon.
 
 ### Fixed
 - **Windows without OpenGL 2** (virtual machines, Remote Desktop, basic display adapters): Vivi starts with Slint's software renderer instead of exiting silently, and plays video through mpv's software renderer. `VIVI_RENDERER=software` forces this mode; on Linux, Vivi restarts in it once if the OpenGL window cannot be created.
@@ -13,6 +14,7 @@
 
 ### Changed
 - **Release file names** carry the version, system and CPU, without a `v` or `x86_64`: `vivi-<version>-linux-x64.AppImage` (+ `.zsync`), `vivi-<version>-linux-x64.tar.gz`, `vivi-<version>-linux-x64.flatpak`, `vivi-<version>-linux-arm64.*`, `vivi-<version>-windows-x64-setup.exe`, `vivi-<version>-windows-x64-portable.zip`, `vivi-<version>-windows-arm64-*`, `vivi-<version>-macos-arm64.zip`. AppImages from 0.16.4 and older still update in place. The release no longer attaches a screenshot or a `PKGBUILD` (it stays in `packaging/aur`), and its notes have a download table with direct links.
+- **viviplayer.app** takes download sizes and the installed size from the latest release when the site is built, so they no longer go stale.
 
 ## [0.16.4] - 2026-11-14
 

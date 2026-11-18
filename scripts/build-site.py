@@ -9,11 +9,13 @@ Icons are Lucide (https://lucide.dev, ISC license) SVGs kept in docs/site/icons/
 Standard library only, so it runs as-is in GitHub Actions.
 """
 import html
+import io
 import os
 import re
 import json
 import shutil
 import sys
+import tarfile
 import urllib.request
 from pathlib import Path
 
@@ -128,27 +130,46 @@ ASSETS = {
 }
 
 
-def latest_release() -> tuple[str, set[str] | None]:
-    """(version, asset names) of the latest GitHub release; names are None when offline.
-    VIVI_RELEASE_ASSETS (a JSON file with {"tag_name", "assets": [{"name"}]}) replaces the
-    API call for local previews."""
-    data = None
+def latest_release() -> dict | None:
+    """The latest GitHub release as the API returns it ({"tag_name", "published_at", "assets":
+    [{"name", "size", "browser_download_url"}]}), or None when offline. VIVI_RELEASE_ASSETS (a
+    JSON file of the same shape; "size" and "published_at" optional) replaces the API call for
+    local previews."""
     if os.environ.get("VIVI_RELEASE_ASSETS"):
-        data = json.loads(Path(os.environ["VIVI_RELEASE_ASSETS"]).read_text())
-    else:
-        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
-                                     headers={"Accept": "application/vnd.github+json"})
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-        if token:
-            req.add_header("Authorization", f"Bearer {token}")
-        try:
-            with urllib.request.urlopen(req, timeout=20) as r:
-                data = json.load(r)
-        except OSError as e:
-            print(f"warning: latest release not readable ({e}); using the vivi-bin pkgver and current asset names")
-    if not data:
-        return release_version(), None
-    return data["tag_name"].removeprefix("v"), {a["name"] for a in data.get("assets", [])}
+        return json.loads(Path(os.environ["VIVI_RELEASE_ASSETS"]).read_text())
+    req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
+                                 headers={"Accept": "application/vnd.github+json"})
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.load(r)
+    except OSError as e:
+        print(f"warning: latest release not readable ({e}); using the vivi-bin pkgver and current asset names")
+        return None
+
+
+# Files of the Linux tarball that an install copies (not README, LICENSE, CHANGELOG).
+DOC_FILES = {"README.md", "LICENSE", "CHANGELOG.md"}
+
+
+def installed_size(url: str) -> int | None:
+    """Bytes an install of the Linux tarball at `url` puts on disk (the files it copies, without
+    the system libmpv), or None when the download fails."""
+    try:
+        with urllib.request.urlopen(url, timeout=120) as r:
+            data = r.read()
+        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+            return sum(m.size for m in tar.getmembers() if m.isfile() and Path(m.name).name not in DOC_FILES)
+    except (OSError, tarfile.TarError) as e:
+        print(f"warning: installed size not measured ({e})")
+        return None
+
+
+def mb(size: int) -> str:
+    """Bytes as decimal megabytes, the way the site states sizes: 20538100 -> "20.5"."""
+    return f"{size / 1e6:.1f}"
 
 
 def downloads(version: str, names: set[str] | None) -> dict[str, str]:
@@ -162,14 +183,17 @@ def downloads(version: str, names: set[str] | None) -> dict[str, str]:
     return out
 
 
-def fill_downloads(text: str, version: str, files: dict[str, str]) -> str:
+def fill_downloads(text: str, version: str, files: dict[str, str], sizes: dict[str, int]) -> str:
     """Download placeholders in a page:
     * @DL@: the release's download URL prefix; @F_<KIND>@: an asset file name, @STEM_<KIND>@:
       the same without extension (the folder inside a zip/tarball);
     * @DL_URLS@: JSON {system-arch: URL} for the OS-detecting Download button;
     * <!--if:kind--> ... <!--/if:kind-->: kept only when the release has that asset;
     * @PICK_APPIMAGE@ / @PICK_SETUP@ / @PICK_PORTABLE@: shell / PowerShell lines that choose the
-      x64 or arm64 file at run time (only x64 when the release has no arm64 build)."""
+      x64 or arm64 file at run time (only x64 when the release has no arm64 build);
+    * sizes, from `sizes` (bytes per kind, plus "installed"): @MB_<KIND>@ ("20.5&amp;nbsp;MB"), @NUM_<KIND>@
+      ("20.5"), @BYTES_<KIND>@ ("20,538,100"); <!--if:size_<kind>--> keeps a block only when that
+      size is known, so pages built offline leave the numbers out instead of showing stale ones."""
     dl = f"https://github.com/{REPO}/releases/download/v{version}"
     url = lambda k: f"{dl}/{files[k]}"
     # Fallbacks for the button: arm64 -> x64, installer -> portable zip.
@@ -181,9 +205,14 @@ def fill_downloads(text: str, version: str, files: dict[str, str]) -> str:
         "windows-arm64": pick("setup_arm64", "portable_arm64", "setup_x64", "portable_x64"),
         "mac": pick("mac"),
     }
+    have = set(files) | {f"size_{k}" for k in sizes}
     cond = re.compile(r"<!--if:([a-z0-9_]+)-->(.*?)<!--/if:\1-->", re.S)
     while cond.search(text):  # nested blocks: the inner ones are left for the next pass
-        text = cond.sub(lambda m: m.group(2) if m.group(1) in files else "", text)
+        text = cond.sub(lambda m: m.group(2) if m.group(1) in have else "", text)
+    for kind, size in sizes.items():
+        k = kind.upper()
+        text = text.replace(f"@MB_{k}@", f"{mb(size)}&nbsp;MB").replace(f"@NUM_{k}@", mb(size))
+        text = text.replace(f"@BYTES_{k}@", f"{size:,}")
 
     def chooser(x64, arm, shell):
         if x64 not in files:
@@ -203,7 +232,24 @@ def fill_downloads(text: str, version: str, files: dict[str, str]) -> str:
     left = sorted(set(re.findall(r"@(?:F|STEM)_[A-Z0-9_]+@", text)))
     if left:
         sys.exit(f"release v{version} has no asset for {left} (wrap the use in <!--if:kind-->)")
-    return text
+    left = sorted(set(re.findall(r"@(?:MB|NUM|BYTES)_[A-Z0-9_]+@", text)))
+    if left:
+        sys.exit(f"no size for {left} (wrap the use in <!--if:size_kind-->)")
+    return scale_charts(text)
+
+
+def scale_charts(text: str) -> str:
+    """Bar widths of every <article class="chart" data-scale>: each bar is its value (the number
+    in its <b>) as a share of the largest value in that chart, as in the hand-made charts."""
+    row = re.compile(r'(<i style="width:)[0-9.]+(%"></i></div><b>)([0-9.]+)(</b>)')
+
+    def scale(m: re.Match) -> str:
+        chart = m.group(0)
+        values = [float(v) for v in re.findall(r'<i style="width:[0-9.]+%"></i></div><b>([0-9.]+)</b>', chart)]
+        top = max(values, default=0) or 1
+        return row.sub(lambda r: f"{r.group(1)}{float(r.group(3)) / top * 100:.2f}{r.group(2)}{r.group(3)}{r.group(4)}", chart)
+
+    return re.sub(r'<article class="chart" data-scale>.*?</article>', scale, text, flags=re.S)
 
 
 def main() -> None:
@@ -220,11 +266,22 @@ def main() -> None:
     (OUT / "vivi-bin").mkdir(exist_ok=True)
     shutil.copy(ROOT / "packaging/aur/vivi-bin/PKGBUILD", OUT / "vivi-bin/PKGBUILD")
     # Download links and commands follow the latest release and its asset names.
-    version, names = latest_release()
-    files = downloads(version, names)
+    release = latest_release()
+    if release:
+        version = release["tag_name"].removeprefix("v")
+        assets = {a["name"]: a for a in release.get("assets", [])}
+        files = downloads(version, set(assets))
+    else:
+        version, assets = release_version(), {}
+        files = downloads(version, None)
+    sizes = {k: assets[f]["size"] for k, f in files.items() if assets.get(f, {}).get("size")}
+    tar = assets.get(files.get("tar_x64"), {}).get("browser_download_url")
+    if tar and (n := installed_size(tar)):
+        sizes["installed"] = n
     print(f"release v{version}: {', '.join(f'{k}={v}' for k, v in files.items())}")
+    print(f"sizes: {', '.join(f'{k}={v:,}' for k, v in sizes.items()) or 'unknown'}")
     for page in OUT.glob("*.html"):
-        text = fill_downloads(page.read_text().replace("@VIVI_VERSION@", version), version, files)
+        text = fill_downloads(page.read_text().replace("@VIVI_VERSION@", version), version, files, sizes)
         page.write_text(seo(page.name, inline_icons(text)))
     sitemap(OUT)
     missing = [
