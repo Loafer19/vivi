@@ -1,7 +1,7 @@
 //! Detect Claude Desktop, Cursor and VS Code and merge a `vivi-mcp` entry into
 //! their MCP JSON config (Settings → Controls → Remotes → Connect to…).
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -406,6 +406,7 @@ pub(crate) fn connect_id(id: &str) -> Result<(Client, PathBuf, Merge), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::fs;
 
     fn cmd() -> CommandSpec {
@@ -607,8 +608,9 @@ mod tests {
     #[test]
     fn sibling_mcp_next_to_vivi() {
         let base = tmp();
-        let vivi = base.join("vivi");
-        let mcp = base.join("vivi-mcp");
+        let exe = std::env::consts::EXE_SUFFIX;
+        let vivi = base.join(format!("vivi{exe}"));
+        let mcp = base.join(format!("vivi-mcp{exe}"));
         fs::write(&vivi, "").unwrap();
         assert!(sibling_mcp(&vivi).is_none());
         fs::write(&mcp, "").unwrap();

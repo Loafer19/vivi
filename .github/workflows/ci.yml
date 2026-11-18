@@ -100,7 +100,7 @@ jobs:
           New-Item -ItemType Directory -Force $name, dist | Out-Null
           Copy-Item target\ci\vivi.exe, mpv\libmpv-2.dll, README.md, LICENSE, CHANGELOG.md $name
           7z a -tzip -mx=5 "dist\$name.zip" $name | Out-Null
-          packaging\windows\build-installer.ps1 -Exe target\ci\vivi.exe -Mpv mpv\libmpv-2.dll -Version dev -Arch ${{ matrix.arch }} -OutDir dist
+          packaging\windows\build-installer.ps1 -Exe target\ci\vivi.exe -Mpv mpv\libmpv-2.dll -Arch ${{ matrix.arch }} -OutDir dist
       - name: Installer installs, registers and uninstalls silently
         shell: pwsh
         run: |
