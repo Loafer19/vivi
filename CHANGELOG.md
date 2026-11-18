@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- **Windows installer**: `vivi-<version>-windows-x64-setup.exe` (Inno Setup) installs for the current user without admin rights into `%LOCALAPPDATA%\Programs\Vivi`, adds a Start menu shortcut (desktop shortcut optional) and an uninstaller in Settings → Apps, and ships the VC++ runtime DLLs next to `vivi.exe`.
+- **Native arm64 builds**: Windows on Arm (installer and portable zip) and Linux arm64 (AppImage and tarball).
+- **Download button on viviplayer.app** picks the file for your system and CPU (Windows installer, Linux AppImage, macOS zip; arm64 when the browser reports it).
+
+### Fixed
+- **Windows without OpenGL 2** (virtual machines, Remote Desktop, basic display adapters): Vivi starts with Slint's software renderer instead of exiting silently, and plays video through mpv's software renderer. `VIVI_RENDERER=software` forces this mode; on Linux, Vivi restarts in it once if the OpenGL window cannot be created.
+- **Windows console output**: `vivi --version`, `--help` and error messages print in the terminal Vivi was started from; a start-up failure shows a message box and is written to `vivi-startup.log` in the cache folder.
+
+### Changed
+- **Release file names** carry the version, system and CPU, without a `v` or `x86_64`: `vivi-<version>-linux-x64.AppImage` (+ `.zsync`), `vivi-<version>-linux-x64.tar.gz`, `vivi-<version>-linux-x64.flatpak`, `vivi-<version>-linux-arm64.*`, `vivi-<version>-windows-x64-setup.exe`, `vivi-<version>-windows-x64-portable.zip`, `vivi-<version>-windows-arm64-*`, `vivi-<version>-macos-arm64.zip`. AppImages from 0.16.4 and older still update in place. The release no longer attaches a screenshot or a `PKGBUILD` (it stays in `packaging/aur`), and its notes have a download table with direct links.
+
 ## [0.16.4] - 2026-11-14
 
 Highlights: a **configurable Home** of widgets with sizes S/M/L and *Customize Home* (#87); **smart playlists** from a local play history (#87); **library filter, sort, search and paging in SQLite** (#100); **one owner for settings state**, so nested changes can no longer panic (#101); **Remove from Favorites** now unfavorites correctly; plus menu, settings and Customize Home polish.

@@ -89,11 +89,12 @@ On Arch and derivatives it builds the `vivi-bin` package with `makepkg -si`; els
 
 | Platform | Package |
 |---|---|
-| Arch / Omarchy | `packaging/arch/vivi-bin` (prebuilt) or `packaging/arch/vivi` (from source): `makepkg -si`. The release also ships a ready `PKGBUILD` with checksums. |
-| Any Linux | `Vivi-<version>-x86_64.AppImage` (slim libmpv bundled, ~45 MB): `chmod +x` and run |
-| Linux Flatpak | `vivi-<version>-x86_64.flatpak`: `flatpak install --user vivi-<version>-x86_64.flatpak` (runtime from Flathub). Build it yourself with `packaging/flatpak/` (see `packaging/README.md`) |
-| Linux tarball | `vivi-<version>-linux-x86_64.tar.gz` (needs system `mpv`) with `.desktop` file and icons |
-| Windows 10/11 | `vivi-<version>-windows-x86_64.zip` — unzip, run `vivi.exe` (`libmpv-2.dll` included) |
+| Arch / Omarchy | `packaging/aur/vivi-bin` (prebuilt, checksum pinned) or `packaging/arch/vivi` (from source): `makepkg -si` |
+| Any Linux | `vivi-<version>-linux-x64.AppImage` or `vivi-<version>-linux-arm64.AppImage` (slim libmpv bundled, ~45 MB): `chmod +x` and run; updates in place through zsync |
+| Linux Flatpak | `vivi-<version>-linux-x64.flatpak`: `flatpak install --user vivi-<version>-linux-x64.flatpak` (runtime from Flathub). Build it yourself with `packaging/flatpak/` (see `packaging/README.md`) |
+| Linux tarball | `vivi-<version>-linux-x64.tar.gz` / `-linux-arm64.tar.gz` (needs system `mpv`) with `.desktop` file and icons |
+| Windows 10/11 | `vivi-<version>-windows-x64-setup.exe` / `-windows-arm64-setup.exe` — per-user installer (no admin) into `%LOCALAPPDATA%\Programs\Vivi`, Start menu shortcut, uninstall from Settings → Apps; VC++ runtime included |
+| Windows portable | `vivi-<version>-windows-x64-portable.zip` / `-windows-arm64-portable.zip` — unzip, run `vivi.exe` (`libmpv-2.dll` included) |
 | macOS (Apple Silicon, best effort) | `vivi-<version>-macos-arm64.zip` — unsigned `Vivi.app`; right-click → Open the first time |
 
 Downloads: [Releases](https://github.com/Loafer19/vivi/releases) (each with `SHA256SUMS`).

@@ -6,6 +6,7 @@
 | `arch/` | `vivi-bin` (prebuilt tarball) and `vivi` (from source) PKGBUILDs |
 | `appimage/build-libmpv.sh` | Builds a slim libmpv into `./deps`: FFmpeg with decoders/demuxers only, mpv without CLI/JS/Blu-ray/DVD/CD/libarchive |
 | `appimage/build-appimage.sh` | Bundles `target/release/vivi` + slim libmpv with linuxdeploy, drops host-provided libraries, packs with zstd -19 |
+| `windows/` | Inno Setup installer (`vivi.iss`, `build-installer.ps1`), libmpv download + MSVC import library (`fetch-libmpv.ps1`), `vivi.ico` |
 | `flatpak/` | Flatpak manifest (`io.github.loafer19.vivi`), AppStream metainfo, generated cargo sources |
 
 ## AppImage
@@ -13,7 +14,7 @@
 ```sh
 packaging/appimage/build-libmpv.sh            # once; ~2 min on 8 cores
 PKG_CONFIG_PATH=$PWD/deps/lib/pkgconfig LIBRARY_PATH=$PWD/deps/lib cargo build --release
-packaging/appimage/build-appimage.sh Vivi-dev-x86_64.AppImage
+packaging/appimage/build-appimage.sh vivi-dev-linux-x64.AppImage   # on x86_64; arm64 on aarch64
 ```
 
 Size history: v0.8.0 was 105.7 MB (Ubuntu's libmpv pulled in x264/x265/SVT-AV1/aom/rav1e

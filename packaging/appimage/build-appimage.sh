@@ -11,10 +11,18 @@ TOOLS=${TOOLS:-$PWD/.appimage-tools}
 APPDIR=${APPDIR:-$PWD/AppDir}
 export APPIMAGE_EXTRACT_AND_RUN=1
 
+# Host architecture: x86_64 or aarch64 (the image is built for the machine it runs on).
+M=$(uname -m)
+case $M in
+  x86_64) LDTAG=x86-64 ;;
+  aarch64) LDTAG=AArch64 ;;
+  *) echo "unsupported architecture $M" >&2; exit 1 ;;
+esac
+TOOLS=$TOOLS/$M
 mkdir -p "$TOOLS"
 fetch() { [ -x "$TOOLS/$1" ] || { curl -fsSLo "$TOOLS/$1" "$2"; chmod +x "$TOOLS/$1"; }; }
-fetch linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-fetch appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+fetch linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$M.AppImage
+fetch appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$M.AppImage
 
 rm -rf "$APPDIR"
 # linuxdeploy resolves libraries (skipping the AppImage excludelist: glibc,
@@ -24,7 +32,7 @@ rm -rf "$APPDIR"
 # libxkbcommon-x11 vivi panics on X11 hosts that lack it, as the catalog test did).
 DLOPEN_LIBS=()
 for lib in libxkbcommon-x11.so.0 libxkbcommon.so.0 libxcb-xkb.so.1 libXcursor.so.1 libXi.so.6 libXrandr.so.2; do
-  path=$(/sbin/ldconfig -p | awk -v n="$lib" '$1 == n && /x86-64/ { print $NF; exit }')
+  path=$(/sbin/ldconfig -p | awk -v n="$lib" -v t="$LDTAG" '$1 == n && index($0, t) { print $NF; exit }')
   [ -n "$path" ] || { echo "$lib not found on the build host" >&2; exit 1; }
   DLOPEN_LIBS+=(--library "$path")
 done
@@ -87,12 +95,12 @@ for f in "$APPDIR"/usr/bin/vivi "$APPDIR"/usr/lib/*.so*; do
 done
 
 du -sh "$APPDIR"
-# UPDATE_INFO (e.g. gh-releases-zsync|owner|repo|latest|Vivi-*x86_64.AppImage.zsync) embeds
+# UPDATE_INFO (e.g. gh-releases-zsync|owner|repo|latest|vivi-*-linux-x64.AppImage.zsync) embeds
 # update information and makes appimagetool write <output>.zsync next to the image.
 UPDATE_ARGS=()
 [ -n "${UPDATE_INFO:-}" ] && UPDATE_ARGS=(-u "$UPDATE_INFO")
 OUT_ABS=$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")
-ARCH=x86_64 "$TOOLS/appimagetool" --comp zstd --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
+ARCH=$M "$TOOLS/appimagetool" --comp zstd --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
   --mksquashfs-opt -b --mksquashfs-opt 1M "${UPDATE_ARGS[@]}" "$APPDIR" "$OUT_ABS"
 # appimagetool writes the .zsync into the current directory.
 Z=$(basename "$OUT").zsync

@@ -6,6 +6,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  # The packaging job starts the Docs site workflow (a push made with GITHUB_TOKEN does not).
+  actions: write
 env:
   CARGO_TERM_COLOR: always
 
@@ -14,10 +16,23 @@ env:
 # cache-warmup.yml (push to master when Cargo.lock, the Flatpak manifest etc. change), or by a
 # manual run of this workflow on master. Cache keys, toolchain, env and cargo profile must stay
 # in sync with cache-warmup.yml.
+#
+# Asset names: vivi-<X.Y.Z>-<system>[-<kind>].<ext>, with "dev" instead of the version on manual
+# runs: vivi-X.Y.Z-linux-{x64,arm64}.AppImage (+ .zsync), vivi-X.Y.Z-linux-{x64,arm64}.tar.gz,
+# vivi-X.Y.Z-linux-x64.flatpak, vivi-X.Y.Z-macos-arm64.zip, vivi-X.Y.Z-windows-{x64,arm64}-portable.zip,
+# vivi-X.Y.Z-windows-{x64,arm64}-setup.exe and SHA256SUMS. scripts/bump-packaging.py, scripts/build-site.py and docs/site/install.sh use them.
 
 jobs:
   linux:
-    runs-on: ubuntu-24.04
+    # arm64 is new: a failing arm64 build must not hold back the release.
+    continue-on-error: ${{ matrix.arch == 'arm64' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: ubuntu-24.04, suffix: "" }
+          - { arch: arm64, runner: ubuntu-24.04-arm, suffix: "-arm64" }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
@@ -32,7 +47,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release-linux
+          shared-key: release-linux${{ matrix.suffix }}
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: cargo build --release
         env:
@@ -40,25 +55,30 @@ jobs:
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
       - name: Tarball
         run: |
-          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
-          NAME=vivi-${VER}-linux-x86_64
+          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          NAME=vivi-${V}-linux-${{ matrix.arch }}
           mkdir -p dist $NAME
           cp target/release/vivi target/release/vivi-mcp README.md LICENSE CHANGELOG.md packaging/vivi.desktop packaging/vivi.svg packaging/vivi.png $NAME/
           tar czf dist/$NAME.tar.gz $NAME
-      - name: PKGBUILD (vivi-bin) with checksum
-        run: |
-          VER=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || VER=0.0.0
-          SUM=$(sha256sum dist/vivi-*-linux-x86_64.tar.gz | cut -d' ' -f1)
-          sed -e "s/^pkgver=.*/pkgver=${VER}/" -e "s/^sha256sums=.*/sha256sums=('${SUM}')/" packaging/arch/vivi-bin/PKGBUILD > dist/PKGBUILD
       - uses: actions/upload-artifact@v7
-        with: { name: linux, path: dist/* }
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
 
   # The AppImage is built on the oldest supported Ubuntu LTS (as the AppImage catalog tests it),
   # so the binary and every bundled library need at most glibc 2.35 and GLIBCXX_3.4.30. The
   # tarball and PKGBUILD stay on ubuntu-24.04 (job linux). Ubuntu 22.04's libplacebo is too old
   # for mpv, so build-libmpv.sh builds it as well (BUILD_LIBPLACEBO=1).
   appimage:
-    runs-on: ubuntu-22.04
+    # arm64 is new: a failing arm64 build must not hold back the release.
+    continue-on-error: ${{ matrix.arch == 'arm64' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: ubuntu-22.04, suffix: "" }
+          - { arch: arm64, runner: ubuntu-22.04-arm, suffix: "-arm64" }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - name: Add swap (the fat-LTO release link of the Slint UI needs more than the runner's RAM)
@@ -81,14 +101,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release-appimage-2204
+          shared-key: release-appimage-2204${{ matrix.suffix }}
           save-if: ${{ github.ref == 'refs/heads/master' }}
       # Slim libmpv (decoders only FFmpeg, no mpv CLI) and libplacebo; cached by script hash.
       - uses: actions/cache/restore@v6
         id: deps
         with:
           path: deps
-          key: libmpv-ubuntu-22.04-${{ hashFiles('packaging/appimage/build-libmpv.sh') }}
+          key: libmpv-ubuntu-22.04${{ matrix.suffix }}-${{ hashFiles('packaging/appimage/build-libmpv.sh') }}
       - name: Build slim libmpv
         if: steps.deps.outputs.cache-hit != 'true'
         run: BUILD_LIBPLACEBO=1 PREFIX=$PWD/deps SRC=$RUNNER_TEMP/deps-src packaging/appimage/build-libmpv.sh
@@ -106,26 +126,32 @@ jobs:
           LIBRARY_PATH: ${{ github.workspace }}/deps/lib
       - name: AppImage (bundles the slim libmpv and its libraries)
         run: |
-          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          A=dist/vivi-${V}-linux-${{ matrix.arch }}.AppImage
           desktop-file-validate packaging/vivi.desktop
           mkdir -p dist
-          UPDATE_INFO="gh-releases-zsync|${GITHUB_REPOSITORY_OWNER}|${GITHUB_REPOSITORY#*/}|latest|Vivi-*x86_64.AppImage.zsync" \
-            DEPS=$PWD/deps packaging/appimage/build-appimage.sh dist/Vivi-${VER}-x86_64.AppImage
+          UPDATE_INFO="gh-releases-zsync|${GITHUB_REPOSITORY_OWNER}|${GITHUB_REPOSITORY#*/}|latest|vivi-*-linux-${{ matrix.arch }}.AppImage.zsync" \
+            DEPS=$PWD/deps packaging/appimage/build-appimage.sh $A
+          test -s $A.zsync
+          # x64 AppImages up to v0.16.4 look for "Vivi-*x86_64.AppImage.zsync" in the latest
+          # release. This copy (same content; its URL points at the new AppImage) keeps their
+          # in-place update working; drop it once those versions are gone.
+          if [ ${{ matrix.arch }} = x64 ]; then cp $A.zsync dist/Vivi-update-x86_64.AppImage.zsync; fi
           ls -la dist
-          test -s dist/Vivi-${VER}-x86_64.AppImage.zsync
           # Smoke test: the extracted image must resolve every library, carry a PNG .DirIcon,
           # valid AppStream metadata, update information and no symbol newer than Ubuntu 22.04.
-          ./dist/Vivi-${VER}-x86_64.AppImage --appimage-extract >/dev/null
+          ./$A --appimage-extract >/dev/null
           ! LD_LIBRARY_PATH=squashfs-root/usr/lib ldd squashfs-root/usr/bin/vivi | grep "not found"
           file -L squashfs-root/.DirIcon | grep -q 'PNG image data'
           appstreamcli validate --no-net --explain squashfs-root/usr/share/metainfo/*.appdata.xml || echo "::warning::appstreamcli reported issues"
-          ./dist/Vivi-${VER}-x86_64.AppImage --appimage-updateinformation | grep -q '^gh-releases-zsync|'
+          ./$A --appimage-updateinformation | grep -q '^gh-releases-zsync|.*|vivi-\*-linux-${{ matrix.arch }}.AppImage.zsync$'
+          grep -q "^URL: vivi-${V}-linux-${{ matrix.arch }}.AppImage$" $A.zsync
           packaging/appimage/check-abi.sh squashfs-root
           rm -rf squashfs-root
       - name: AppImage starts on a bare Ubuntu 22.04 under Xvfb (as the AppImage catalog tests it)
         timeout-minutes: 10
         run: |
-          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
           # Only what every desktop has plus the libraries the AppImage leaves to
           # the host (excludelist, Wayland, D-Bus, sound, libdrm); anything vivi
           # loads at run time beyond that must come from the image itself.
@@ -136,7 +162,7 @@ jobs:
               libxext6 libxrender1 libfontconfig1 libfreetype6 libwayland-client0 libwayland-cursor0 libwayland-egl1 \
               libdbus-1-3 libpulse0 libasound2 libdrm2 libharfbuzz0b libfribidi0 libexpat1 >/dev/null
             T=$(mktemp -d); mkdir -p $T/run; chmod 700 $T/run
-            cp /dist/Vivi-'"$VER"'-x86_64.AppImage $T/vivi.AppImage
+            cp /dist/vivi-'"$V"'-linux-${{ matrix.arch }}.AppImage $T/vivi.AppImage
             cd $T
             # Every linked library must resolve from the image or this host set.
             ./vivi.AppImage --appimage-extract >/dev/null
@@ -155,49 +181,60 @@ jobs:
                 echo window shown"
           '
       - uses: actions/upload-artifact@v7
-        with: { name: appimage, path: dist/* }
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: dist/*
 
   windows:
-    runs-on: windows-latest
+    # arm64 is new: a failing arm64 build must not hold back the release.
+    continue-on-error: ${{ matrix.arch == 'arm64' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: windows-latest }
+          - { arch: arm64, runner: windows-11-arm }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release-windows
+          shared-key: release-windows-${{ matrix.arch }}
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download -R shinchiro/mpv-winbuild-cmake -p 'mpv-dev-x86_64-2*' -O mpv-dev.7z
-          7z x mpv-dev.7z -ompv | Out-Null
-          Get-ChildItem mpv
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $bin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64" | Select-Object -Last 1).FullName
-          $dll = (Get-ChildItem mpv\libmpv-2.dll).FullName
-          if (-not (Test-Path mpv\mpv.def)) {
-            $names = & "$bin\dumpbin.exe" /exports $dll | ForEach-Object { if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] } }
-            (@('EXPORTS') + $names) | Set-Content mpv\mpv.def
-          }
-          & "$bin\lib.exe" /def:mpv\mpv.def /name:libmpv-2.dll /machine:x64 /out:mpv\mpv.lib
-          "RUSTFLAGS=-L native=$((Resolve-Path mpv).Path)" | Out-File -Append $env:GITHUB_ENV
+        run: packaging\windows\fetch-libmpv.ps1 -Arch ${{ matrix.arch }}
       - run: cargo build --release
         env:
           VIVI_JAMENDO_CLIENT_ID: ${{ vars.VIVI_JAMENDO_CLIENT_ID }}
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
-      - name: Zip
+      - name: Portable zip
         shell: pwsh
         run: |
-          $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME } else { 'dev' }
-          $name = "vivi-$ver-windows-x86_64"
+          $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.Substring(1) } else { 'dev' }
+          $name = "vivi-$ver-windows-${{ matrix.arch }}-portable"
           New-Item -ItemType Directory -Force $name, dist | Out-Null
           Copy-Item target\release\vivi.exe, mpv\libmpv-2.dll, README.md, LICENSE, CHANGELOG.md $name
           # 7-Zip's maximum Deflate is ~4 MB smaller than Compress-Archive and still a plain zip.
           7z a -tzip -mx=9 -mfb=258 "dist\$name.zip" $name | Out-Null
+      - name: Installer (Inno Setup, per-user)
+        shell: pwsh
+        run: |
+          $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.Substring(1) } else { 'dev' }
+          packaging\windows\build-installer.ps1 -Exe target\release\vivi.exe -Mpv mpv\libmpv-2.dll -Version $ver -Arch ${{ matrix.arch }} -OutDir dist
+      - name: vivi --version answers (console attach)
+        shell: pwsh
+        run: |
+          $out = & target\release\vivi.exe --version | Out-String
+          Write-Host $out
+          if ($out -notmatch '^vivi \d') { throw "vivi --version printed nothing" }
       - uses: actions/upload-artifact@v7
-        with: { name: windows, path: dist/* }
+        with:
+          name: windows-${{ matrix.arch }}
+          path: dist/*
 
   macos:
     runs-on: macos-15
@@ -218,6 +255,7 @@ jobs:
       - name: Vivi.app
         run: |
           VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
+          V=${VER#v}
           APP=Vivi.app
           mkdir -p $APP/Contents/MacOS $APP/Contents/Resources $APP/Contents/Frameworks dist
           cp target/release/vivi $APP/Contents/MacOS/vivi
@@ -246,7 +284,7 @@ jobs:
           sed -i '' 's/^          //' $APP/Contents/Info.plist
           dylibbundler -od -b -x $APP/Contents/MacOS/vivi -d $APP/Contents/Frameworks -p @executable_path/../Frameworks/
           codesign --force --deep -s - $APP
-          ditto -c -k --keepParent $APP dist/vivi-${VER}-macos-arm64.zip
+          ditto -c -k --keepParent $APP dist/vivi-${V}-macos-arm64.zip
       - uses: actions/upload-artifact@v7
         with: { name: macos, path: dist/* }
 
@@ -305,8 +343,8 @@ jobs:
           key: ${{ steps.fb-cache.outputs.cache-primary-key }}
       - name: Name the bundle
         run: |
-          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
-          mkdir -p dist && mv vivi.flatpak dist/vivi-${VER}-x86_64.flatpak
+          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          mkdir -p dist && mv vivi.flatpak dist/vivi-${V}-linux-x64.flatpak
       - uses: actions/upload-artifact@v7
         with: { name: flatpak, path: dist/* }
 
@@ -329,22 +367,43 @@ jobs:
           awk -v v="$VER" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md > notes.md
           test -s notes.md
           T=${GITHUB_REF_NAME}
+          V=${T#v}
+          DL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${T}"
+          # Release image from the repo at this tag (no screenshot asset is uploaded):
+          # docs/screenshots/release.png when the release has its own, else the Home screenshot.
+          IMG=docs/screenshots/library-home.png
+          [ -f docs/screenshots/release.png ] && IMG=docs/screenshots/release.png
+          has() { [ -f "dist/$1" ]; }
+          link() { has "$2" && printf '[%s](%s/%s)' "$1" "$DL" "$2"; }
+          join() { local out="" x; for x in "$@"; do [ -n "$x" ] && out="${out:+$out · }$x"; done; echo "${out:-—}"; }
           {
             echo
-            echo "![Vivi](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${T}/docs/screenshots/library-home.png)"
+            echo "![Vivi](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${T}/${IMG})"
+            echo
+            echo "Demo media: Blender Foundation and CC-licensed artists (CC BY)"
             echo
             echo "### Downloads"
-            echo "| Platform | File |"
-            echo "|---|---|"
-            echo "| Linux (any distro) | \`Vivi-${T}-x86_64.AppImage\`: \`chmod +x\` and run. libmpv is bundled. |"
-            echo "| Linux tarball | \`vivi-${T}-linux-x86_64.tar.gz\`: needs mpv installed. |"
-            echo "| Arch / Omarchy | \`PKGBUILD\` (vivi-bin): \`makepkg -si\` in a folder with it. |"
-            [ -n "$(ls dist/*.flatpak 2>/dev/null)" ] && echo "| Linux Flatpak | \`vivi-${T}-x86_64.flatpak\`: \`flatpak install --user vivi-${T}-x86_64.flatpak\` (needs the Flathub remote for the runtime). |"
-            [ -n "$(ls dist/*windows* 2>/dev/null)" ] && echo "| Windows x64 | \`vivi-${T}-windows-x86_64.zip\`: unzip and run \`vivi.exe\` (libmpv-2.dll included). |"
-            [ -n "$(ls dist/*macos* 2>/dev/null)" ] && echo "| macOS (Apple Silicon, experimental) | \`vivi-${T}-macos-arm64.zip\`: unsigned; right-click → Open the first time. |"
+            echo "| System | Recommended | Other |"
+            echo "|---|---|---|"
+            for A in x64 arm64; do
+              if has "vivi-${V}-windows-${A}-setup.exe" || has "vivi-${V}-windows-${A}-portable.zip"; then
+                L="Windows 10/11 x64"; [ $A = arm64 ] && L="Windows 11 on Arm (arm64)"
+                echo "| $L | $(join "$(link Installer "vivi-${V}-windows-${A}-setup.exe")") | $(join "$(link 'Portable zip' "vivi-${V}-windows-${A}-portable.zip")") |"
+              fi
+            done
+            AUR="[Arch PKGBUILD](https://github.com/${GITHUB_REPOSITORY}/tree/master/packaging/aur/vivi-bin)"
+            SCRIPT="[install script](https://viviplayer.app/#install)"
+            echo "| Linux x64 | $(join "$(link AppImage "vivi-${V}-linux-x64.AppImage")") | $(join "$(link Flatpak "vivi-${V}-linux-x64.flatpak")" "$(link 'tar.gz (needs mpv)' "vivi-${V}-linux-x64.tar.gz")" "$AUR" "$SCRIPT") |"
+            if has "vivi-${V}-linux-arm64.AppImage" || has "vivi-${V}-linux-arm64.tar.gz"; then
+              echo "| Linux arm64 | $(join "$(link AppImage "vivi-${V}-linux-arm64.AppImage")") | $(join "$(link 'tar.gz (needs mpv)' "vivi-${V}-linux-arm64.tar.gz")" "$SCRIPT") |"
+            fi
+            if has "vivi-${V}-macos-arm64.zip"; then
+              echo "| macOS Apple Silicon (experimental) | $(link 'App zip' "vivi-${V}-macos-arm64.zip") | — |"
+            fi
             echo
-            echo "Checksums: \`SHA256SUMS\`."
+            echo "Checksums: [SHA256SUMS](${DL}/SHA256SUMS)."
           } >> notes.md
+          cat notes.md
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -379,3 +438,9 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "Packaging: AUR, Flathub, winget and Scoop manifests for $GITHUB_REF_NAME"
           git push origin HEAD:master
+      # The site's download links follow the latest release (scripts/build-site.py reads its
+      # assets); a push made with GITHUB_TOKEN does not start the Pages workflow by itself.
+      - name: Rebuild the site for the new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref master -R "$GITHUB_REPOSITORY"
