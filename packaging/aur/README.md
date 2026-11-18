@@ -2,7 +2,7 @@
 
 | Package | Source | Builds |
 |---|---|---|
-| `vivi-bin` | release tarball `vivi-<ver>-linux-x64.tar.gz` (x86_64; `vivi-v<ver>-linux-x86_64.tar.gz` up to 0.16.4) | nothing, installs the prebuilt `vivi` and `vivi-mcp` |
+| `vivi-bin` | release tarballs `vivi-<ver>-linux-x64.tar.gz` (x86_64; `vivi-v<ver>-linux-x86_64.tar.gz` up to 0.16.4) and `vivi-<ver>-linux-arm64.tar.gz` (aarch64) | nothing, installs the prebuilt `vivi` and `vivi-mcp` |
 | `vivi-git` | `master` from git | `cargo build --release` (x86_64, aarch64) |
 
 Both depend on `mpv` (for `libmpv.so`; libxkbcommon and the Wayland/X11 libraries come

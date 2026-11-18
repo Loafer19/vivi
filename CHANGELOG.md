@@ -3,12 +3,17 @@
 ## [Unreleased]
 
 ### Added
+- **Lyrics display modes**: `L` cycles Off (hidden), Text (the in-player overlay) and Karaoke (full-screen). A short toast names the mode; the same Off / Text / Karaoke choice is a *Lyrics* row on the side panel → Subtitles and under Playback → Lyrics. The mode is remembered. `Ctrl+L` still opens Find Lyrics.
+- **One-click vivi-mcp**: *Add to Cursor* and *Add to VS Code* on the AI agents site (official install deeplinks), and *Settings → Controls → Remotes → Connect to…* writes a `vivi-mcp` entry into Claude Desktop, Cursor or VS Code when they are found (`.bak` backup, idempotent).
+- **vivi-bin on aarch64**: the AUR and in-repo `vivi-bin` PKGBUILDs install the `vivi-<ver>-linux-arm64.tar.gz` release tarball (from 0.16.5) as well as the x86_64 one.
 - **Windows installer**: `vivi-<version>-windows-x64-setup.exe` (Inno Setup) installs for the current user without admin rights into `%LOCALAPPDATA%\Programs\Vivi`, adds a Start menu shortcut (desktop shortcut optional) and an uninstaller in Settings → Apps, and ships the VC++ runtime DLLs next to `vivi.exe`.
 - **Native arm64 builds**: Windows on Arm (installer and portable zip) and Linux arm64 (AppImage and tarball).
 - **Download button on viviplayer.app** picks the file for your system and CPU (Windows installer, Linux AppImage, macOS zip; arm64 when the browser reports it).
 - **App icon in `vivi.exe`**: Explorer, shortcuts and pinned taskbar entries show the Vivi icon.
 
 ### Fixed
+- **Karaoke lyrics backdrop**: the accent glow behind the lines covers the full view and fades out (radial gradient), so lines are no longer cut off by a hard-edged middle band.
+- **Windows CI dev builds** no longer show version 0.0.0 in Settings → Apps: non-tag builds use `<Cargo.toml version>-dev.<shortsha>` for names, and a numeric `x.y.z` for Inno `AppVersion` / `VersionInfoVersion`.
 - **Windows without OpenGL 2** (virtual machines, Remote Desktop, basic display adapters): Vivi starts with Slint's software renderer instead of exiting silently, and plays video through mpv's software renderer. `VIVI_RENDERER=software` forces this mode; on Linux, Vivi restarts in it once if the OpenGL window cannot be created.
 - **Windows console output**: `vivi --version`, `--help` and error messages print in the terminal Vivi was started from; a start-up failure shows a message box and is written to `vivi-startup.log` in the cache folder.
 

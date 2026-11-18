@@ -7,7 +7,7 @@
 param(
   [Parameter(Mandatory)] [string] $Exe,
   [Parameter(Mandatory)] [string] $Mpv,
-  [string] $Version = 'dev',
+  [string] $Version = '',
   [ValidateSet('x64', 'arm64')] [string] $Arch = 'x64',
   [string] $OutDir = 'dist'
 )
@@ -17,8 +17,19 @@ $Exe = (Resolve-Path $Exe).Path
 $Mpv = (Resolve-Path $Mpv).Path
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $OutDir = (Resolve-Path $OutDir).Path
-# Inno's VersionInfoVersion must be numeric: "dev" builds get 0.0.0.
-$numeric = if ($Version -match '^\d+\.\d+\.\d+$') { $Version } else { '0.0.0' }
+# Inno AppVersion / VersionInfoVersion must be numeric x.y.z or x.y.z.w.
+# "0.16.4-dev.abc1234" uses 0.16.4 there; the full string stays in NameVersion (filename, AppVerName).
+if (-not $Version) {
+  $verLine = Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^version = "([^"]+)"'
+  $cargo = $verLine.Matches[0].Groups[1].Value
+  $sha = (git -C $root rev-parse --short HEAD 2>$null)
+  $Version = if ($sha) { "$cargo-dev.$sha" } else { "$cargo-dev" }
+}
+if ($Version -match '^(\d+\.\d+\.\d+)') {
+  $numeric = $Matches[1]
+} else {
+  throw "Version '$Version' does not start with x.y.z (needed for Inno AppVersion / VersionInfoVersion)"
+}
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) "vivi-installer-stage-$Arch"
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue

@@ -3,6 +3,7 @@
 mod apply;
 mod customize;
 mod extensions;
+mod mcp_clients;
 mod onboarding;
 mod rows;
 mod schema;
@@ -307,6 +308,20 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
                         "catalog" => open_url(CATALOG_URL),
                         _ => {}
                     }
+                    refresh();
+                    return;
+                }
+                if let Some(client) = id.strip_prefix("mcp.connect.") {
+                    let status = match mcp_clients::connect_id(client) {
+                        Ok((c, path, mcp_clients::Merge::Added)) => {
+                            format!("Connected {} to {}", c.name(), path.display())
+                        }
+                        Ok((c, path, mcp_clients::Merge::AlreadyPresent)) => {
+                            format!("{} already has vivi-mcp ({})", c.name(), path.display())
+                        }
+                        Err(e) => format!("Could not connect: {e}"),
+                    };
+                    a.global::<crate::Settings>().set_status(status.into());
                     refresh();
                     return;
                 }

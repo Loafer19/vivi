@@ -27,6 +27,11 @@ Flatpak to `/app/bin/vivi-mcp`. `vivi-mcp --help` prints the socket path it will
 
 ## 3. Configure your client
 
+The fastest ways, if you already have `vivi-mcp` on your `PATH` (or next to `vivi`):
+
+- On [viviplayer.app/ai-agents.html](https://viviplayer.app/ai-agents.html), use **Add to Cursor** or **Add to VS Code** (official install deeplinks).
+- In Vivi, *Settings → Controls → Remotes → Connect to…* lists Claude Desktop, Cursor and VS Code when their config or install is found. Connect writes a `vivi` stdio entry (a `.bak` backup is kept first); it is idempotent and leaves other servers alone.
+
 **Claude Desktop** (`~/.config/Claude/claude_desktop_config.json`,
 macOS `~/Library/Application Support/Claude/claude_desktop_config.json`):
 

@@ -28,7 +28,7 @@
 AppId={{B9287A0D-104B-47DD-A6DA-D9551641F5A7}
 AppName=Vivi
 AppVersion={#AppVersion}
-AppVerName=Vivi {#AppVersion}
+AppVerName=Vivi {#NameVersion}
 AppPublisher=Popelyshyn Ruslan
 AppPublisherURL=https://viviplayer.app
 AppSupportURL=https://github.com/Loafer19/vivi/issues

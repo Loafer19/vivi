@@ -7,9 +7,11 @@ Updates packaging/aur/*/PKGBUILD + .SRCINFO, packaging/arch/vivi-bin/PKGBUILD, p
 cargo-sources.json, metainfo releases and screenshot URLs), packaging/winget/ and
 packaging/scoop/. The release itself is not touched; nothing is published.
 
-Asset names (since v0.16.5): vivi-X.Y.Z-linux-x64.tar.gz (folder vivi-X.Y.Z-linux-x64 inside) and
+Asset names (since v0.16.5): vivi-X.Y.Z-linux-x64.tar.gz (folder vivi-X.Y.Z-linux-x64 inside),
+vivi-X.Y.Z-linux-arm64.tar.gz (folder vivi-X.Y.Z-linux-arm64), and
 vivi-X.Y.Z-windows-x64-portable.zip (folder vivi-X.Y.Z-windows-x64-portable). Files still on
-the old names (vivi-vX.Y.Z-linux-x86_64..., vivi-vX.Y.Z-windows-x86_64...) are renamed here.
+the old names (vivi-vX.Y.Z-linux-x86_64..., vivi-vX.Y.Z-windows-x86_64...) are renamed here
+(x86_64 only; aarch64 already uses the arm64 name).
 """
 import datetime, hashlib, os, pathlib, re, shutil, sys
 
@@ -21,6 +23,7 @@ for line in (dist / "SHA256SUMS").read_text().splitlines():
     h, name = line.split(maxsplit=1)
     sums[name.lstrip("*")] = h
 tar = sums[f"vivi-{ver}-linux-x64.tar.gz"]
+tar_arm = sums.get(f"vivi-{ver}-linux-arm64.tar.gz")
 win = sums[f"vivi-{ver}-windows-x64-portable.zip"]
 meta_src = pathlib.Path(os.environ.get("META_SRC") or P / "flatpak/io.github.loafer19.vivi.metainfo.xml")
 meta_sha = hashlib.sha256(meta_src.read_bytes()).hexdigest()
@@ -48,12 +51,24 @@ for f in ("PKGBUILD", ".SRCINFO"):
     p = P / "aur/vivi-bin" / f
     s = p.read_text().replace(f"v{old}", f"v{ver}").replace(f"vivi-v{old}-", f"vivi-v{ver}-")
     p.write_text(rename_assets(s))
-pb = (P / "aur/vivi-bin/PKGBUILD").read_text()
-old_meta = re.search(r"^sha256sums=\('([0-9a-f]+)'\)", pb, re.M).group(1)
-old_tar = re.search(r"^sha256sums_x86_64=\('([0-9a-f]+)'\)", pb, re.M).group(1)
+
+def put_sha(s, name, digest):
+    """Replace a sha256sums or sha256sums_<arch> value in a PKGBUILD or .SRCINFO."""
+    s, n = re.subn(rf"^{name}=\('([0-9a-f]+)'\)", f"{name}=('{digest}')", s, flags=re.M)
+    s, m = re.subn(rf"^\t{name} = [0-9a-f]+", f"\t{name} = {digest}", s, flags=re.M)
+    if n + m == 0:
+        sys.exit(f"no {name} checksum to replace")
+    return s
+
 for f in ("PKGBUILD", ".SRCINFO"):
     p = P / "aur/vivi-bin" / f
-    p.write_text(p.read_text().replace(old_meta, meta_sha).replace(old_tar, tar))
+    s = put_sha(p.read_text(), "sha256sums", meta_sha)
+    s = put_sha(s, "sha256sums_x86_64", tar)
+    if tar_arm:
+        s = put_sha(s, "sha256sums_aarch64", tar_arm)
+    elif f == "PKGBUILD":
+        print("warning: no arm64 tarball in SHA256SUMS; sha256sums_aarch64 left unchanged", file=sys.stderr)
+    p.write_text(s)
 sub(P / "aur/vivi-bin/PKGBUILD", [(r"^pkgver=.*", f"pkgver={ver}"), (r"^pkgrel=.*", "pkgrel=1")])
 sub(P / "aur/vivi-bin/.SRCINFO", [(r"^\tpkgver = .*", f"\tpkgver = {ver}"), (r"^\tpkgrel = .*", "\tpkgrel = 1")])
 ab = P / "arch/vivi-bin/PKGBUILD"

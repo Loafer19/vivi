@@ -316,9 +316,10 @@ export component SidePanel inherits Rectangle {
     in property <[string]> viz-modes: ["Disabled"];
     in property <int> viz-mode;
     callback viz-select(int);
-    // Lyrics plugin: karaoke toggle, timing offset, search and save (cmd → plugin-command).
+    // Lyrics plugin: Off / Text / Karaoke display, timing offset, search and save (cmd → plugin-command).
     in property <bool> lyrics-enabled;
     in property <bool> karaoke-open;
+    in property <string> lyrics-display: "Text";
     in property <string> lyrics-source;
     in property <string> lyrics-offset;
     in property <float> lyrics-offset-s;
@@ -460,8 +461,9 @@ export component SidePanel inherits Rectangle {
                             SecondaryButton { size: ButtonSize.sm; width: 110px; text: "Set A / B"; icon: @image-url("../assets/icons/repeat-right.svg"); clicked => { root.run("ab-loop"); } } }
                     }
                     if root.lyrics-enabled: Group { title: "Lyrics";
-                        Line { label: "Karaoke View"; hint: "Full-screen lyrics · L";
-                            Toggle { on: root.karaoke-open; label: "Karaoke View"; toggled => { root.lyrics("karaoke", root.karaoke-open ? "off" : "on"); } } }
+                        Line { label: "Lyrics"; hint: "L cycles Off, Text and Karaoke";
+                            Segmented { width: 200px; options: ["Off", "Text", "Karaoke"]; value: root.lyrics-display; label: "Lyrics";
+                                selected(o) => { root.lyrics("display", o); } } }
                         Line { label: "Timing Offset"; hint: "Saved per track · [ ] ±0.1 s, Shift ±0.5 s";
                             HorizontalLayout { spacing: 4px;
                                 for d in [-0.5, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: oa.has-hover ? Theme.field-raised : Theme.field;
@@ -574,6 +576,11 @@ export component SidePanel inherits Rectangle {
                         }
                         if root.subs-has-pick: Line { label: "OpenSubtitles Pick"; hint: root.subs-pick-label;
                             SecondaryButton { size: ButtonSize.sm; width: 86px; text: "Forget"; icon: @image-url("../assets/icons/close.svg"); clicked => { root.subs("forget", ""); } } }
+                    }
+                    if root.lyrics-enabled: Group { title: "Lyrics";
+                        Line { label: "Lyrics"; hint: "L cycles Off, Text and Karaoke";
+                            Segmented { width: 200px; options: ["Off", "Text", "Karaoke"]; value: root.lyrics-display; label: "Lyrics";
+                                selected(o) => { root.lyrics("display", o); } } }
                     }
                     Group { title: "Offset";
                         Line { label: "Offset"; hint: "Saved per file";

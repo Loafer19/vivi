@@ -17,8 +17,9 @@ env:
 # manual run of this workflow on master. Cache keys, toolchain, env and cargo profile must stay
 # in sync with cache-warmup.yml.
 #
-# Asset names: vivi-<X.Y.Z>-<system>[-<kind>].<ext>, with "dev" instead of the version on manual
-# runs: vivi-X.Y.Z-linux-{x64,arm64}.AppImage (+ .zsync), vivi-X.Y.Z-linux-{x64,arm64}.tar.gz,
+# Asset names: vivi-<X.Y.Z>-<system>[-<kind>].<ext>. Manual (non-tag) runs use
+# <Cargo.toml version>-dev.<shortsha> from scripts/release-version.sh instead of the tag:
+# vivi-X.Y.Z-linux-{x64,arm64}.AppImage (+ .zsync), vivi-X.Y.Z-linux-{x64,arm64}.tar.gz,
 # vivi-X.Y.Z-linux-x64.flatpak, vivi-X.Y.Z-macos-arm64.zip, vivi-X.Y.Z-windows-{x64,arm64}-portable.zip,
 # vivi-X.Y.Z-windows-{x64,arm64}-setup.exe and SHA256SUMS. scripts/bump-packaging.py, scripts/build-site.py and docs/site/install.sh use them.
 
@@ -55,7 +56,7 @@ jobs:
           VIVI_ACOUSTID_KEY: ${{ vars.VIVI_ACOUSTID_KEY }}
       - name: Tarball
         run: |
-          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          V=$(scripts/release-version.sh)
           NAME=vivi-${V}-linux-${{ matrix.arch }}
           mkdir -p dist $NAME
           cp target/release/vivi target/release/vivi-mcp README.md LICENSE CHANGELOG.md packaging/vivi.desktop packaging/vivi.svg packaging/vivi.png $NAME/
@@ -129,7 +130,7 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/deps/lib
       - name: AppImage (bundles the slim libmpv and its libraries)
         run: |
-          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          V=$(scripts/release-version.sh)
           A=dist/vivi-${V}-linux-${{ matrix.arch }}.AppImage
           desktop-file-validate packaging/vivi.desktop
           mkdir -p dist
@@ -154,7 +155,7 @@ jobs:
       - name: AppImage starts on a bare Ubuntu 22.04 under Xvfb (as the AppImage catalog tests it)
         timeout-minutes: 10
         run: |
-          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          V=$(scripts/release-version.sh)
           # Only what every desktop has plus the libraries the AppImage leaves to
           # the host (excludelist, Wayland, D-Bus, sound, libdrm); anything vivi
           # loads at run time beyond that must come from the image itself.
@@ -217,7 +218,7 @@ jobs:
       - name: Portable zip
         shell: pwsh
         run: |
-          $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.Substring(1) } else { 'dev' }
+          $ver = (bash scripts/release-version.sh).Trim()
           $name = "vivi-$ver-windows-${{ matrix.arch }}-portable"
           New-Item -ItemType Directory -Force $name, dist | Out-Null
           Copy-Item target\release\vivi.exe, mpv\libmpv-2.dll, README.md, LICENSE, CHANGELOG.md $name
@@ -226,7 +227,7 @@ jobs:
       - name: Installer (Inno Setup, per-user)
         shell: pwsh
         run: |
-          $ver = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.Substring(1) } else { 'dev' }
+          $ver = (bash scripts/release-version.sh).Trim()
           packaging\windows\build-installer.ps1 -Exe target\release\vivi.exe -Mpv mpv\libmpv-2.dll -Version $ver -Arch ${{ matrix.arch }} -OutDir dist
       - name: vivi --version answers
         shell: pwsh
@@ -259,8 +260,8 @@ jobs:
           LIBRARY_PATH: /opt/homebrew/lib
       - name: Vivi.app
         run: |
-          VER=${GITHUB_REF_NAME}; [[ $VER == v* ]] || VER=dev
-          V=${VER#v}
+          V=$(scripts/release-version.sh)
+          NUM=${V%%-*}
           APP=Vivi.app
           mkdir -p $APP/Contents/MacOS $APP/Contents/Resources $APP/Contents/Frameworks dist
           cp target/release/vivi $APP/Contents/MacOS/vivi
@@ -277,8 +278,8 @@ jobs:
             <key>CFBundleName</key><string>Vivi</string>
             <key>CFBundleDisplayName</key><string>Vivi</string>
             <key>CFBundleIdentifier</key><string>io.github.loafer19.vivi</string>
-            <key>CFBundleVersion</key><string>${VER#v}</string>
-            <key>CFBundleShortVersionString</key><string>${VER#v}</string>
+            <key>CFBundleVersion</key><string>${NUM}</string>
+            <key>CFBundleShortVersionString</key><string>${V}</string>
             <key>CFBundleExecutable</key><string>vivi</string>
             <key>CFBundleIconFile</key><string>vivi</string>
             <key>CFBundlePackageType</key><string>APPL</string>
@@ -352,7 +353,7 @@ jobs:
           key: ${{ steps.fb-cache.outputs.cache-primary-key }}
       - name: Name the bundle
         run: |
-          V=${GITHUB_REF_NAME#v}; [[ $GITHUB_REF_NAME == v* ]] || V=dev
+          V=$(scripts/release-version.sh)
           mkdir -p dist && mv vivi.flatpak dist/vivi-${V}-linux-x64.flatpak
       - uses: actions/upload-artifact@v7
         with: { name: flatpak, path: dist/* }
