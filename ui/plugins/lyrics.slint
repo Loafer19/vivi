@@ -250,10 +250,10 @@ export component KaraokeView inherits Rectangle {
         changed mouse-x => { root.activity(); }
         changed mouse-y => { root.activity(); }
     }
-    // Soft accent glow behind the current line.
+    // Soft accent glow behind the current line: full-view radial fade, no hard edges.
     Rectangle {
-        y: root.height * 0.18; height: root.height * 0.64;
-        background: @radial-gradient(circle, Theme.accent.with-alpha(0.13) 0%, Theme.accent.with-alpha(0.04) 45%, transparent 75%);
+        width: 100%; height: 100%;
+        background: @radial-gradient(circle, Theme.accent.with-alpha(0.13) 0%, Theme.accent.with-alpha(0.04) 40%, transparent 78%);
     }
 
     area := Rectangle {
@@ -426,10 +426,10 @@ export component KaraokeView inherits Rectangle {
     Text {
         visible: root.chrome;
         y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
-        text: root.live && root.plain ? "Click or Enter on the line being sung to sync   ·   L  close   ·   Ctrl L  search"
-            : root.live ? "Click a line to re-sync   ·   [  ]  fine-tune ±0.1 s   ·   Shift  ±0.5 s   ·   L  close"
-            : root.seekable ? "Click a line to jump there   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   L  close   ·   Ctrl L  search"
-            : "L  close   ·   Ctrl L  search";
+        text: root.live && root.plain ? "Click or Enter on the line being sung to sync   ·   L  Off / Text / Karaoke   ·   Ctrl L  search"
+            : root.live ? "Click a line to re-sync   ·   [  ]  fine-tune ±0.1 s   ·   Shift  ±0.5 s   ·   L  Off / Text / Karaoke"
+            : root.seekable ? "Click a line to jump there   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   L  Off / Text / Karaoke   ·   Ctrl L  search"
+            : "L  Off / Text / Karaoke   ·   Ctrl L  search";
         color: Theme.stage-fg.with-alpha(0.33); font-size: Metrics.font-sm;
     }
 }

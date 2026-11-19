@@ -8,6 +8,10 @@ export global Playback {
     in-out property <float> volume: 100;
     in-out property <bool> muted: false;
     in-out property <bool> has-media: false;
+    // No OpenGL (Slint software renderer): mpv renders frames into memory (src/render/sw.rs)
+    // and they are shown as this image under the UI.
+    in-out property <bool> sw-video: false;
+    in-out property <image> sw-frame;
     in-out property <float> volume-max: 150;
     in-out property <bool> repeat-on;
     in-out property <bool> shuffle-on;

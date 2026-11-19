@@ -6,7 +6,7 @@ description = "Fast, lightweight media player inspired by Juxtopposed's VLC rede
 license = "MIT"
 
 [dependencies]
-slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "unstable-winit-030", "accessibility"] }
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "renderer-software", "unstable-winit-030", "accessibility"] }
 libmpv2 = "4.1"
 libmpv2-sys = "4.0"
 rfd = "0.15"
@@ -39,6 +39,9 @@ zbus = { version = "5", default-features = false, features = ["blocking-api", "a
 
 [build-dependencies]
 slint-build = "1.8"
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3"
 
 [profile.release]
 opt-level = 3

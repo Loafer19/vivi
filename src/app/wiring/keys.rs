@@ -120,7 +120,7 @@ pub(crate) fn wire(
             }
             A::SkipSegment => crate::plugins::command(plugins::skip_intro::ID, "key", &[]),
             A::UndoSkip => crate::plugins::command(plugins::skip_intro::ID, "undo", &[]),
-            A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "karaoke", &[]),
+            A::Karaoke => crate::plugins::command(plugins::lyrics::ID, "display", &["next".into()]),
             A::FindLyrics => crate::plugins::command(plugins::lyrics::ID, "search-open", &[]),
             // [ ] lyrics timing offset (Shift or { }: 0.5 s).
             A::LyricsOffset => {

@@ -9,6 +9,8 @@ export global Lyrics {
     in-out property <bool> live;
     in-out property <float> size: 22;
     in-out property <bool> enabled;
+    // Off | Text | Karaoke; L cycles. Text is the in-player overlay.
+    in-out property <string> display: "Text";
     in-out property <[KWord]> words;
     in-out property <int> rows;
     in-out property <string> source;

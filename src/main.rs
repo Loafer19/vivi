@@ -63,7 +63,20 @@ use std::time::Duration;
 
 slint::include_modules!();
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::process::ExitCode {
+    // Windows: --version, --help and errors go to the console vivi was started from.
+    app::fatal::attach_console();
+    app::fatal::install_panic_hook();
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            app::fatal::report(&e.to_string());
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     // NVIDIA-only machines: load just the NVIDIA EGL vendor (no Mesa). Must run before
     // any thread starts, since it sets an environment variable.
     #[cfg(target_os = "linux")]
@@ -144,15 +157,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     winstate::restore(&app, &cfg.config());
     app.show()?;
     winstate::shown(&app, &cfg.config());
-    slint::run_event_loop_until_quit()?;
+    let looped = slint::run_event_loop_until_quit();
+    // The OpenGL window could not be created (no usable driver): restart in software mode
+    // once the player and remote-control socket are shut down below.
+    let relaunch = looped.is_err() && !render::gl_started();
     if cfg.update_with(|c| winstate::save(&app, c)) == Some(true) {
         cfg.save_or_log();
     }
     let _ = app.hide();
+    render::release();
     player.save_position();
     // Scripts get their shutdown event and their download tools are stopped.
     player.shutdown(std::time::Duration::from_secs(3));
     ipc::cleanup();
+    if let Err(e) = looped {
+        if !(relaunch && app::startup::relaunch_software(&e.to_string())) {
+            return Err(e.into());
+        }
+    }
     // mpv waits for every script to finish; one stuck in a loop must not keep Vivi running.
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(5));

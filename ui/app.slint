@@ -262,6 +262,14 @@ export component AppWindow inherits Window {
     }
     init => { fs.focus(); }
 
+    // Video frame drawn by mpv's software renderer (no OpenGL); with OpenGL mpv draws
+    // directly under the transparent window instead.
+    if Playback.sw-video && Playback.has-media: Image {
+        width: 100%; height: 100%;
+        source: Playback.sw-frame;
+        image-fit: fill;
+    }
+
     // Whole-window activity tracker (mouse moves reset the auto-hide timer).
     main-ta := TouchArea {
         mouse-cursor: root.show-ui || !AutoHide.cursor ? MouseCursor.default : MouseCursor.none;
@@ -305,7 +313,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Lyrics overlay (Lyrics plugin) ----------
-    if Playback.has-media && Lyrics.lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
+    if Playback.has-media && Lyrics.display == "Text" && Lyrics.lines.length > 0 && !Overlays.library-open && !root.mini && !Overlays.karaoke-open: LyricsView {
         x: 40px; width: root.width - 80px;
         y: Viz.audio && Viz.mode > 0 ? (root.height - self.height) / 2 + 40px : root.height - root.bar-h - self.height - 60px;
         lines: Lyrics.lines; index: Lyrics.index; size: Lyrics.size * 1px; plain: Lyrics.plain;
@@ -416,7 +424,7 @@ export component AppWindow inherits Window {
         chapter-times: Panel.chapter-times;
         viz-enabled: Viz.enabled; viz-modes: Viz.modes; viz-mode: Viz.mode;
         viz-select(i) => { Viz.select(i); }
-        lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-source: Lyrics.source;
+        lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-display: Lyrics.display; lyrics-source: Lyrics.source;
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
         lyrics-offset: Lyrics.offset-label; lyrics-can-save-lrc: Lyrics.can-save-lrc; lyrics-can-embed: Lyrics.can-embed; lyrics-manual: Lyrics.manual;
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }

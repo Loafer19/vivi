@@ -5,7 +5,7 @@ pkgname=vivi-bin
 pkgver=0.16.4
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
-arch=('x86_64')
+arch=('x86_64' 'aarch64')
 url="https://github.com/Loafer19/vivi"
 license=('MIT')
 # libxkbcommon and the Wayland/X11 libraries are loaded at runtime and come with mpv.
@@ -15,13 +15,22 @@ optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'xdg-desktop-portal: native file and folder dialogs')
 conflicts=('vivi' 'vivi-git')
 options=('!debug' '!strip')
-source_x86_64=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-${CARCH}.tar.gz")
+# x86_64 still uses the 0.16.4 asset name so packaging CI can fetch the current release;
+# scripts/bump-packaging.py rewrites it to vivi-${pkgver}-linux-x64.tar.gz from 0.16.5.
+# aarch64 uses the new name (no arm64 tarball shipped before 0.16.5).
+source_x86_64=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz")
+source_aarch64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-arm64.tar.gz")
 source=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
 sha256sums=('74fc399aae69bef1d547ae575a5ab6455bee55e3f4a855fafaaff6f2cfe1eb09')
 sha256sums_x86_64=('bc6ffd2bb1ad24bbf7e530512dee200091f1a8b041e63e4e9aed8f2eeec43d4a')
+sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
 
 package() {
-  cd "vivi-v${pkgver}-linux-${CARCH}"
+  case $CARCH in
+    x86_64) _dir="vivi-v${pkgver}-linux-x86_64" ;;
+    aarch64) _dir="vivi-${pkgver}-linux-arm64" ;;
+  esac
+  cd "$_dir"
   install -Dm755 vivi "${pkgdir}/usr/bin/vivi"
   install -Dm755 vivi-mcp "${pkgdir}/usr/bin/vivi-mcp"
   install -Dm644 vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"

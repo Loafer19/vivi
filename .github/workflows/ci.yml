@@ -58,21 +58,71 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download -R shinchiro/mpv-winbuild-cmake -p 'mpv-dev-x86_64-2*' -O mpv-dev.7z
-          7z x mpv-dev.7z -ompv | Out-Null
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $bin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64" | Select-Object -Last 1).FullName
-          $dll = (Get-ChildItem mpv\libmpv-2.dll).FullName
-          if (-not (Test-Path mpv\mpv.def)) {
-            $names = & "$bin\dumpbin.exe" /exports $dll | ForEach-Object { if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] } }
-            (@('EXPORTS') + $names) | Set-Content mpv\mpv.def
-          }
-          & "$bin\lib.exe" /def:mpv\mpv.def /name:libmpv-2.dll /machine:x64 /out:mpv\mpv.lib
-          "RUSTFLAGS=-L native=$((Resolve-Path mpv).Path)" | Out-File -Append $env:GITHUB_ENV
-          # The test binaries load libmpv-2.dll at start-up.
-          (Resolve-Path mpv).Path | Out-File -Append $env:GITHUB_PATH
+        # The test binaries load libmpv-2.dll at start-up (-AddToPath).
+        run: packaging\windows\fetch-libmpv.ps1 -Arch x64 -AddToPath
       - run: cargo test
+  # Windows packages as the release builds them (portable zip + Inno Setup installer), x64 and
+  # arm64, with the `ci` profile (no fat LTO). Artifacts: windows-ci-<arch>.
+  package-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: windows-latest }
+          - { arch: arm64, runner: windows-11-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-windows-package-${{ matrix.arch }}
+          cache-on-failure: true
+      - name: libmpv (shinchiro/mpv-winbuild-cmake) and MSVC import library
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: packaging\windows\fetch-libmpv.ps1 -Arch ${{ matrix.arch }}
+      - run: cargo build --profile ci
+      - name: vivi --version answers
+        shell: pwsh
+        run: |
+          Copy-Item mpv\libmpv-2.dll target\ci\
+          $out = & target\ci\vivi.exe --version | Out-String
+          Write-Host "exit code: $LASTEXITCODE"
+          Write-Host $out
+          if ($out -notmatch '^vivi \d') { throw "vivi --version printed nothing" }
+      - name: Portable zip and installer
+        shell: pwsh
+        run: |
+          $name = "vivi-dev-windows-${{ matrix.arch }}-portable"
+          New-Item -ItemType Directory -Force $name, dist | Out-Null
+          Copy-Item target\ci\vivi.exe, mpv\libmpv-2.dll, README.md, LICENSE, CHANGELOG.md $name
+          7z a -tzip -mx=5 "dist\$name.zip" $name | Out-Null
+          packaging\windows\build-installer.ps1 -Exe target\ci\vivi.exe -Mpv mpv\libmpv-2.dll -Arch ${{ matrix.arch }} -OutDir dist
+      - name: Installer installs, registers and uninstalls silently
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist\*-setup.exe).FullName
+          Start-Process $setup -ArgumentList '/VERYSILENT', '/CURRENTUSER', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG=install.log' -Wait
+          $app = "$env:LOCALAPPDATA\Programs\Vivi"
+          foreach ($f in 'vivi.exe', 'libmpv-2.dll', 'vivi.ico', 'unins000.exe') { if (-not (Test-Path "$app\$f")) { Get-Content install.log; throw "$f missing" } }
+          Get-ChildItem $app | Format-Table Name, Length
+          $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Vivi.lnk"
+          if (-not (Test-Path $lnk)) { throw "Start menu shortcut missing" }
+          $key = Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall | Where-Object { $_.GetValue('DisplayName') -eq 'Vivi' }
+          if (-not $key) { throw "uninstaller not registered" }
+          $v = & "$app\vivi.exe" --version | Out-String
+          if ($v -notmatch '^vivi \d') { throw "installed vivi --version printed nothing" }
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          Start-Sleep 3
+          if (Test-Path "$app\vivi.exe") { throw "uninstall left vivi.exe" }
+          if (Test-Path $lnk) { throw "uninstall left the shortcut" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-ci-${{ matrix.arch }}
+          path: dist/*
   test-macos:
     runs-on: macos-15
     # A cold build of the test binary takes over 20 minutes here; no hang.

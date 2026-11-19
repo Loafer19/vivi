@@ -178,7 +178,7 @@ pub const BINDINGS: &[Binding] = &[
         "A-B loop: nudge the last set point by one frame", "Alt+←  Alt+→"),
     b(A::FrameStep, &[T(","), T(".")], Off, Off,
         "One frame back / forward (paused; 1 s while playing)", ",  ."),
-    b(A::Karaoke, &[T("l"), T("L")], Off, Any, "Karaoke lyrics view", "L"),
+    b(A::Karaoke, &[T("l"), T("L")], Off, Any, "Lyrics display: Off / Text / Karaoke", "L"),
     b(A::FindLyrics, &[T("l"), T("L")], On, Any, "Find lyrics", "Ctrl+L"),
     b(A::LyricsOffset, &[T("["), T("]"), T("{"), T("}")], Off, Any,
         "Lyrics timing offset ±0.1 s (Shift: 0.5 s)", "[  ]"),

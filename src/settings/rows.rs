@@ -503,6 +503,29 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .action(REMOTE_CONTROL_ROW, "Phone remote control", rc_info, rc_label)
         .header("AI agents and scripts")
         .toggle("general.remote_control", "Allow AI agents and scripts", "Open a local control socket for vivi-mcp (MCP server for AI agents). Off: agents and scripts are refused at once.", schema::get(c, "general.remote_control") == "true");
+    let found = mcp_clients::detect_here();
+    if found.is_empty() {
+        r.push("", "Connect to…", "Claude Desktop, Cursor and VS Code were not found. Add vivi-mcp by hand from viviplayer.app/ai-agents.html, or with the Add to Cursor / Add to VS Code buttons there.", "info", String::new());
+    } else {
+        r.header("Connect to…");
+        for d in found {
+            let path = d.config.display().to_string();
+            let (info, label) = if d.connected {
+                (format!("vivi-mcp is already in {}.", path), "Connected")
+            } else {
+                (
+                    format!("Add a vivi-mcp entry to {} (a .bak backup is kept).", path),
+                    "Connect",
+                )
+            };
+            r.action(
+                &format!("mcp.connect.{}", d.client.id()),
+                d.client.name(),
+                &info,
+                label,
+            );
+        }
+    }
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
