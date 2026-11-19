@@ -1,18 +1,18 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
 PackageIdentifier: Loafer19.Vivi
-PackageVersion: 0.16.4
+PackageVersion: 0.16.5
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
-  - RelativeFilePath: vivi-v0.16.4-windows-x86_64\vivi.exe
+  - RelativeFilePath: vivi-0.16.5-windows-x64-portable\vivi.exe
     PortableCommandAlias: vivi
 Dependencies:
   PackageDependencies:
     - PackageIdentifier: Microsoft.VCRedist.2015+.x64
-ReleaseDate: 2026-11-14
+ReleaseDate: 2026-11-19
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/Loafer19/vivi/releases/download/v0.16.4/vivi-v0.16.4-windows-x86_64.zip
-    InstallerSha256: EE91820D7ED56BA20C4FE46EA333EEB64BC604B381713B9EBD256E4BAE5AE39C
+    InstallerUrl: https://github.com/Loafer19/vivi/releases/download/v0.16.5/vivi-0.16.5-windows-x64-portable.zip
+    InstallerSha256: A5A97E5D15434104EE8AE6566BA45C0996A8B8AE37559F2567EA478B211246B2
 ManifestType: installer
 ManifestVersion: 1.10.0

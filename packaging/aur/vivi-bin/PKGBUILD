@@ -2,7 +2,7 @@
 # Prebuilt binaries from the GitHub release tarball. pkgver and sha256sums are bumped by
 # the release workflow (.github/workflows/release.yml, job "packaging"); see packaging/aur/README.md.
 pkgname=vivi-bin
-pkgver=0.16.4
+pkgver=0.16.5
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64' 'aarch64')
@@ -18,16 +18,16 @@ options=('!debug' '!strip')
 # x86_64 still uses the 0.16.4 asset name so packaging CI can fetch the current release;
 # scripts/bump-packaging.py rewrites it to vivi-${pkgver}-linux-x64.tar.gz from 0.16.5.
 # aarch64 uses the new name (no arm64 tarball shipped before 0.16.5).
-source_x86_64=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz")
+source_x86_64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-x64.tar.gz")
 source_aarch64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-arm64.tar.gz")
 source=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
-sha256sums=('74fc399aae69bef1d547ae575a5ab6455bee55e3f4a855fafaaff6f2cfe1eb09')
-sha256sums_x86_64=('bc6ffd2bb1ad24bbf7e530512dee200091f1a8b041e63e4e9aed8f2eeec43d4a')
-sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums=('79b19500960a15fd163d81cb39935c0a9f88da662cd2ea51eb5fd54775f83190')
+sha256sums_x86_64=('f202931fc93e7d993453f4a742c9d276dc87d71c07007d816b588fe40c5cbadf')
+sha256sums_aarch64=('62c34136b8ab8b406c7c72d9fbc5597fc2f51af3aadbc82c162506fc4b6f3094')
 
 package() {
   case $CARCH in
-    x86_64) _dir="vivi-v${pkgver}-linux-x86_64" ;;
+    x86_64) _dir="vivi-${pkgver}-linux-x64" ;;
     aarch64) _dir="vivi-${pkgver}-linux-arm64" ;;
   esac
   cd "$_dir"

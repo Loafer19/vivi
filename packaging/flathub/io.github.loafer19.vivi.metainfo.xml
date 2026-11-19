@@ -29,27 +29,27 @@
   <url type="vcs-browser">https://github.com/Loafer19/vivi</url>
   <screenshots>
     <screenshot type="default">
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.4/docs/screenshots/player.png</image>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/player.png</image>
       <caption>Video playback with the controls</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.4/docs/screenshots/library-home.png</image>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/library-home.png</image>
       <caption>Library home with Continue Watching</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.4/docs/screenshots/library-music.png</image>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/library-music.png</image>
       <caption>Music library by albums</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.4/docs/screenshots/equalizer-presets.png</image>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/equalizer-presets.png</image>
       <caption>Audio equalizer and presets</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.4/docs/screenshots/panel-subtitles.png</image>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/panel-subtitles.png</image>
       <caption>Subtitle settings</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.4/docs/screenshots/extensions.png</image>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/extensions.png</image>
       <caption>Downloadable plugins</caption>
     </screenshot>
   </screenshots>
@@ -73,6 +73,12 @@
     <binary>vivi</binary>
   </provides>
   <releases>
+    <release version="0.16.5" date="2026-11-19">
+      <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.5</url>
+      <description>
+        <p>Windows console output and software-renderer fallback, a per-user installer, arm64 builds including vivi-bin aarch64, versioned asset names and a one-click site download, real dev versions, one-click MCP connect, lyrics display modes, and a full-screen karaoke backdrop fade.</p>
+      </description>
+    </release>
     <release version="0.16.4" date="2026-11-14">
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.4</url>
       <description>
