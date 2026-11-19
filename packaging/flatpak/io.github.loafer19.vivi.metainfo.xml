@@ -45,6 +45,12 @@
     <binary>vivi</binary>
   </provides>
   <releases>
+    <release version="0.16.5" date="2026-11-19">
+      <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.5</url>
+      <description>
+        <p>Windows console output and software-renderer fallback, a per-user installer, arm64 builds including vivi-bin aarch64, versioned asset names and a one-click site download, real dev versions, one-click MCP connect, lyrics display modes, and a full-screen karaoke backdrop fade.</p>
+      </description>
+    </release>
     <release version="0.16.4" date="2026-11-14">
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.4</url>
       <description>

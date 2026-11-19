@@ -2,7 +2,7 @@
 # Prebuilt binary from the GitHub release. pkgver and the asset names are bumped by the
 # release workflow (scripts/bump-packaging.py); packaging/aur/vivi-bin pins the checksum.
 pkgname=vivi-bin
-pkgver=0.16.4
+pkgver=0.16.5
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64' 'aarch64')
@@ -15,17 +15,17 @@ optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'xdg-desktop-portal: native file and folder dialogs')
 conflicts=('vivi')
 # The release workflow fills in only sha256sums / sha256sums_<arch> on the AUR package;
-# this in-repo copy keeps SKIP and is rewritten onto the new asset names at 0.16.5.
+# this in-repo copy keeps SKIP and uses the versioned asset names from 0.16.5.
 source=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
 sha256sums=('SKIP')
-source_x86_64=("${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz")
+source_x86_64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-x64.tar.gz")
 sha256sums_x86_64=('SKIP')
 source_aarch64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-arm64.tar.gz")
 sha256sums_aarch64=('SKIP')
 
 package() {
   case $CARCH in
-    x86_64) _dir="vivi-v${pkgver}-linux-x86_64" ;;
+    x86_64) _dir="vivi-${pkgver}-linux-x64" ;;
     aarch64) _dir="vivi-${pkgver}-linux-arm64" ;;
   esac
   cd "$_dir"

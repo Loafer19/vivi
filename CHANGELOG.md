@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-11-19
+
+Highlights: **Windows** starts without OpenGL 2 (software-renderer fallback and console output) and has a **per-user installer**; **native arm64 builds** including vivi-bin on aarch64; **versioned asset names** and a **one-click download** on the site; **real dev versions**; **one-click MCP connect** (site and Settings); **lyrics display modes** (`L` cycles Off / Text / Karaoke, also in the Subtitles panel); the **full-screen karaoke backdrop** now fades across the view.
+
 ### Added
 - **Lyrics display modes**: `L` cycles Off (hidden), Text (the in-player overlay) and Karaoke (full-screen). A short toast names the mode; the same Off / Text / Karaoke choice is a *Lyrics* row on the side panel → Subtitles and under Playback → Lyrics. The mode is remembered. `Ctrl+L` still opens Find Lyrics.
 - **One-click vivi-mcp**: *Add to Cursor* and *Add to VS Code* on the AI agents site (official install deeplinks), and *Settings → Controls → Remotes → Connect to…* writes a `vivi-mcp` entry into Claude Desktop, Cursor or VS Code when they are found (`.bak` backup, idempotent).
