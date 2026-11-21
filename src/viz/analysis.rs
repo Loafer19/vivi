@@ -69,6 +69,8 @@ pub struct Analyzer {
     flux_hist: [f32; 43],
     flux_i: usize,
     since_onset: f32,
+    /// Linear input gain from the *Sensitivity* setting (1 = Normal).
+    pub gain: f32,
     pub f: Features,
 }
 
@@ -96,6 +98,7 @@ impl Analyzer {
             flux_hist: [0.0; 43],
             flux_i: 0,
             since_onset: 1.0,
+            gain: 1.0,
             fft,
             f: Features {
                 bands: [0.0; BANDS],
@@ -145,7 +148,7 @@ impl Analyzer {
         f.time += dt;
         f.wave.copy_from_slice(samples);
         let rms = (samples.iter().map(|s| s * s).sum::<f32>() / n as f32).sqrt();
-        let lvl = (rms * 2.5).min(1.0);
+        let lvl = (rms * 2.5 * self.gain).min(1.0);
         f.level = if lvl > f.level {
             lvl
         } else {
@@ -219,7 +222,7 @@ impl Analyzer {
             };
             // Gentle tilt so highs are not always flat on music (pink spectrum).
             let tilt = 1.0 + b as f32 / BANDS as f32 * 2.0;
-            let db = 20.0 * (peak * tilt + 1e-9).log10();
+            let db = 20.0 * (peak * tilt * self.gain + 1e-9).log10();
             let v = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
             f.raw[b] = v;
             let s = &mut f.bands[b];

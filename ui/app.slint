@@ -298,6 +298,8 @@ export component AppWindow inherits Window {
     // ---------- Music visualizer (audio-only media) ----------
     if Playback.has-media && Viz.audio && Viz.mode > 0: VizView {
         frame: Viz.frame; note: Viz.note;
+        cover: Viz.cover; has-cover: Viz.has-cover; cover-size: Viz.cover-size;
+        wake => { Viz.wake(); }
     }
 
     // ---------- Now playing card (audio-only network streams) ----------
@@ -392,6 +394,7 @@ export component AppWindow inherits Window {
     if !root.mini && Playback.has-media && Viz.audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || topbar.strip-hover): VizDropdown {
         x: 12px; y: 50px;
         modes: Viz.modes; mode: Viz.mode;
+        max-popup: root.height - 50px - 36px - root.bar-h - 12px;
         select(i) => { Viz.select(i); }
     }
 

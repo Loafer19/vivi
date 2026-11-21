@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- **Music Visualizer: five new modes**: **Cover** (the album cover large and round in the middle, pulsing on the bass, with bars all around; a vinyl disc when there is no cover), **Mountain** (a smooth filled spectrum with a gradient, a glowing ridge and a slower range behind it), **Classic** (Winamp-style segmented LED bars, green → yellow → red, with peak holds), **VU Meter** (a retro needle meter with VU ballistics, a red zone and a peak lamp; mono, like the tap) and **Dots** (a minimal row of dots that swell with their band). They are in the dropdown, the side panel, the `V` / `Shift+V` cycle, the command palette's next / previous and `set_visualizer`.
+- **Music Visualizer settings**: *Colors* gains *Frequency* (a hue per frequency) and *Album art* now uses up to five colors of the cover as a gradient (one color when the cover has one); *Sensitivity* (Low / Normal / High), *Bar density* (Fewer / Normal / More), *Waterfall speed* (Spectrometer) and *LED peak caps* (Spectrum).
+
+### Changed
+- **Music Visualizer polish**: Spectrum bars are smoothed, coloured by the palette and get a clearer fading mirror (optional LED caps); the Spectrometer interpolates between bands (no visible steps), blends new columns and uses a multi-stop colour map; Radial shows the album cover in its core, pulsing on beats; Pitch draws petals instead of sticks; Scope has a soft glow and no longer blows quiet passages up to full height; Particles take the palette colours.
+- **Visualizer mode *Waveform* is now *Envelope*** (it is a scrolling loudness envelope, not a waveform). A saved *Waveform* choice and `set_visualizer` / IPC `waveform` still select it; mode names also ignore case, spaces and dashes (`vu-meter`).
+- **Sharper visualizer on HiDPI and large windows**: the canvas follows the window's physical resolution (up to 960 × the scale factor, at most 2×, and ~1.6 Mpx) instead of a fixed ~800 px, and line widths scale with it; the album cover is drawn by Slint at full resolution.
+- **Visualizer mode list scrolls** when it is taller than the window.
+
+### Fixed
+- **Paused visualizer no longer wakes 30 times a second**: once the paused frame has settled, the frame timer stops until playback resumes, a seek, a mode or setting change, a resize or a theme change redraws it.
+
 ## [0.16.5] - 2026-11-19
 
 Highlights: **Windows** starts without OpenGL 2 (software-renderer fallback and console output) and has a **per-user installer**; **native arm64 builds** including vivi-bin on aarch64; **versioned asset names** and a **one-click download** on the site; **real dev versions**; **one-click MCP connect** (site and Settings); **lyrics display modes** (`L` cycles Off / Text / Karaoke, also in the Subtitles panel); the **full-screen karaoke backdrop** now fades across the view.

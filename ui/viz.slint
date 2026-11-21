@@ -1,6 +1,6 @@
 // Music visualizer overlay (src/viz). The frame is rendered in Rust into `frame`;
 // this file only shows it and offers the Figma "Disabled / Spectrometer / Scope /
-// Spectrum / Waveform" dropdown (components-dropdowns-filters frame), plus our extra modes.
+// Spectrum / Waveform (now Envelope)" dropdown (components-dropdowns-filters frame), plus our extra modes.
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { ListRow } from "core/rows.slint";
@@ -24,6 +24,8 @@ component VizRow inherits ListRow {
 export component VizDropdown inherits Rectangle {
     in property <[string]> modes;
     in property <int> mode;
+    // Tallest the list may get (the window below the button); it scrolls beyond that.
+    in property <length> max-popup: 600px;
     callback select(int);
     width: 180px; height: 32px; border-radius: Metrics.radius-md;
     background: ta.has-hover ? Theme.popup-hover : Theme.bar;
@@ -36,29 +38,57 @@ export component VizDropdown inherits Rectangle {
     pop := PopupWindow {
         x: 0; y: root.height + 4px;
         width: root.width;
-        height: root.modes.length * 40px + 8px;
+        height: min(root.modes.length * 40px + 8px, max(root.max-popup, 168px));
         Rectangle {
             background: Theme.bar-solid.with-alpha(0.97); border-radius: Metrics.radius-lg;
             drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
-            VerticalLayout {
-                padding: 4px; alignment: start;
-                for m[i] in root.modes: VizRow {
-                    index: i; text: m; selected: i == root.mode;
-                    clicked => { root.select(i); pop.close(); }
+            Flickable {
+                content-height: root.modes.length * 40px + 8px;
+                VerticalLayout {
+                    padding: 4px; alignment: start;
+                    for m[i] in root.modes: VizRow {
+                        index: i; text: m; selected: i == root.mode;
+                        clicked => { root.select(i); pop.close(); }
+                    }
                 }
             }
         }
     }
 }
 
-// Full-window visualizer image; sits above the (empty) video underlay.
+// Full-window visualizer image; sits above the (empty) video underlay. Modes with a
+// cover slot get the album cover on top, sharp at any DPI, sized (and pulsing) from Rust.
 export component VizView inherits Rectangle {
     in property <image> frame;
     in property <string> note; // dominant pitch name (Pitch mode), "" = none
+    in property <image> cover;
+    in property <bool> has-cover;
+    in property <float> cover-size; // diameter / shorter side, 0 = hidden
+    // A settled paused frame is not redrawn by itself: ask for one when it would go stale.
+    callback wake();
+    property <color> accent: Theme.accent;
+    property <color> bg: Theme.bg-b1;
+    changed width => { root.wake(); }
+    changed height => { root.wake(); }
+    changed accent => { root.wake(); }
+    changed bg => { root.wake(); }
     accessible-role: AccessibleRole.image;
     accessible-label: root.note != "" ? "Audio visualizer, " + root.note : "Audio visualizer";
     background: Theme.bg-b1;
     Image { width: 100%; height: 100%; source: root.frame; image-fit: fill; }
+    if root.has-cover && root.cover-size > 0: Rectangle {
+        property <length> d: min(root.width, root.height) * root.cover-size;
+        x: (root.width - self.d) / 2; y: (root.height - self.d) / 2;
+        width: self.d; height: self.d;
+        border-radius: self.d / 2;
+        background: Theme.bg-b1;
+        drop-shadow-blur: 24px; drop-shadow-color: Theme.shadow-soft;
+        Rectangle {
+            border-radius: parent.d / 2;
+            clip: true;
+            Image { width: 100%; height: 100%; source: root.cover; image-fit: ImageFit.cover; }
+        }
+    }
     if root.note != "": Text {
         text: root.note; font-size: min(root.width, root.height) * 0.09; font-weight: 600;
         color: Theme.fg-1.with-alpha(0.85);
