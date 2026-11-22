@@ -1,6 +1,9 @@
 //! mpv render API (OpenGL) drawn as an underlay beneath the Slint scene.
 //! Slint (femtovg) renders into the default framebuffer; in `BeforeRendering` we let mpv
 //! draw the current video frame into FBO 0, then Slint paints the (transparent) UI on top.
+//! Without OpenGL (Slint's software renderer) mpv draws into memory instead, see [`sw`].
+
+mod sw;
 
 use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
 use libmpv2::Mpv;
@@ -157,6 +160,19 @@ fn gl_strings(gpa: ProcFn) -> (String, String) {
 // interop (on NVIDIA: libcuda and the CUDA driver), which cost tens of MB while vivi
 // sits idle with nothing open.
 
+/// The OpenGL rendering notifier ran its setup (a GL context existed at least once).
+static GL_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Whether OpenGL rendering ever started; false after the window failed to get a context.
+pub fn gl_started() -> bool {
+    GL_STARTED.load(Ordering::Acquire)
+}
+
+/// Free the software-mode render context; call before the player (mpv core) goes away.
+pub fn release() {
+    sw::release();
+}
+
 /// Set once anything asked for playback; from then on the context is (re)created as
 /// soon as the window has a GL context.
 static WANTED: AtomicBool = AtomicBool::new(false);
@@ -213,7 +229,8 @@ pub fn attach(
     WINDOW.with(|w| *w.borrow_mut() = Some(weak.clone()));
     let mut ctx: Option<RenderContext> = None;
     let mut gl: Option<GlReset> = None;
-    app.window().set_rendering_notifier(move |state, api| {
+    let mpv_sw = mpv.clone();
+    let notifier = app.window().set_rendering_notifier(move |state, api| {
         let GraphicsAPI::NativeOpenGL {
             get_proc_address: gpa,
         } = api
@@ -226,6 +243,7 @@ pub fn attach(
         let gpa: ProcFn = gpa;
         match state {
             RenderingState::RenderingSetup => {
+                GL_STARTED.store(true, Ordering::Release);
                 gl = GlReset::load(gpa);
                 let (vendor, renderer) = gl_strings(gpa);
                 if let Some(i) = pick_interop(&interop.0, &interop.1, &vendor, &renderer) {
@@ -263,7 +281,19 @@ pub fn attach(
             }
             _ => {}
         }
-    })
+    });
+    match notifier {
+        // Slint's software renderer has no rendering notifier: mpv renders into memory.
+        Err(slint::SetRenderingNotifierError::Unsupported) => {
+            crate::app::fatal::note("renderer: software (no OpenGL 2 driver or VIVI_RENDERER)");
+            sw::attach(app, mpv_sw);
+            if READY.load(Ordering::Acquire) {
+                slint::Timer::single_shot(std::time::Duration::ZERO, run_waiting);
+            }
+            Ok(())
+        }
+        r => r,
+    }
 }
 
 /// Create the render context (GL context current) and run the waiting jobs after this

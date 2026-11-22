@@ -2,7 +2,7 @@
 //! Music covers, chapter thumbnails, playlist covers).
 //!
 //! * Every picture is decoded once per size on a worker thread, shrunk to fit `size` px
-//!   (vivi's own 320×180 video thumbnails are used as they are).
+//!   (vivi's 320×180 video thumbnails have any black or transparent letterbox/pillarbox padding cropped so the picture keeps its real aspect).
 //! * Decoded images live in an in-memory LRU with a byte budget ([`MEMORY_BUDGET`]).
 //! * Shrunk copies are written to `~/.cache/vivi/thumbs/pics/` (PNG), so the next start
 //!   reads a small file instead of decoding the original again.
@@ -166,10 +166,13 @@ fn decode_in(pics: &Path, src: &Path, size: u32) -> Option<Decoded> {
         return src.is_file().then(|| Decoded::Svg(src.to_path_buf()));
     }
     if ext == "rgba" {
-        // Video thumbnails made by vivi: already small, used as they are.
+        // Video thumbnails made by vivi: 320×180, often padded with black by ffmpeg.
         let (w, h) = (crate::library::THUMB_W, crate::library::THUMB_H);
         let b = std::fs::read(src).ok()?;
-        return (b.len() == (w * h * 4) as usize).then_some(Decoded::Pixels(w, h, b));
+        return (b.len() == (w * h * 4) as usize).then(|| {
+            let (w, h, b) = crop_blank_bars(w, h, b);
+            Decoded::Pixels(w, h, b)
+        });
     }
     let t = thumb_in(pics, src, size);
     if let (Some(a), Some(b)) = (mtime(&t), mtime(src)) {
@@ -214,6 +217,48 @@ fn decode_in(pics: &Path, src: &Path, size: u32) -> Option<Decoded> {
         let _ = std::fs::rename(&tmp, &t);
     }
     Some(pixels(small))
+}
+
+/// Crop uniform black or transparent bars that ffmpeg pads onto 320×180 video thumbs
+/// (`force_original_aspect_ratio=decrease` + `pad`). A portrait or letterboxed picture
+/// then keeps its real aspect, so a Home hero can fill the side bars with the same image.
+fn crop_blank_bars(w: u32, h: u32, px: Vec<u8>) -> (u32, u32, Vec<u8>) {
+    if w == 0 || h == 0 || px.len() != (w * h * 4) as usize {
+        return (w, h, px);
+    }
+    let is_pad = |i: usize| {
+        let a = px[i + 3];
+        a == 0 || (px[i] == 0 && px[i + 1] == 0 && px[i + 2] == 0)
+    };
+    let col_pad = |x: u32| (0..h).all(|y| is_pad(((y * w + x) * 4) as usize));
+    let row_pad = |y: u32| (0..w).all(|x| is_pad(((y * w + x) * 4) as usize));
+    let mut left = 0u32;
+    while left + 1 < w && col_pad(left) {
+        left += 1;
+    }
+    let mut right = w;
+    while right > left + 1 && col_pad(right - 1) {
+        right -= 1;
+    }
+    let mut top = 0u32;
+    while top + 1 < h && row_pad(top) {
+        top += 1;
+    }
+    let mut bottom = h;
+    while bottom > top + 1 && row_pad(bottom - 1) {
+        bottom -= 1;
+    }
+    let nw = right - left;
+    let nh = bottom - top;
+    if nw == w && nh == h {
+        return (w, h, px);
+    }
+    let mut out = Vec::with_capacity((nw * nh * 4) as usize);
+    for y in top..bottom {
+        let s = ((y * w + left) * 4) as usize;
+        out.extend_from_slice(&px[s..s + (nw * 4) as usize]);
+    }
+    (nw, nh, out)
 }
 
 fn pixels(img: image::RgbaImage) -> Decoded {
@@ -451,5 +496,54 @@ mod tests {
         assert!(decode_in(&dir.join("pics"), &bad, ROW).is_none());
         assert!(decode_in(&dir.join("pics"), &bad, TILE).is_none());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn rgba(w: u32, h: u32, fill: [u8; 4]) -> Vec<u8> {
+        let mut v = vec![0; (w * h * 4) as usize];
+        for px in v.as_chunks_mut::<4>().0 {
+            px.copy_from_slice(&fill);
+        }
+        v
+    }
+
+    fn put(buf: &mut [u8], w: u32, x: u32, y: u32, c: [u8; 4]) {
+        let i = ((y * w + x) * 4) as usize;
+        buf[i..i + 4].copy_from_slice(&c);
+    }
+
+    #[test]
+    fn crop_blank_bars_takes_pillarbox_off_a_portrait_thumb() {
+        // 320×180 with a 80×180 red picture in the middle (120 px of black on each side).
+        let (w, h) = (320u32, 180u32);
+        let mut px = rgba(w, h, [0, 0, 0, 255]);
+        for y in 0..h {
+            for x in 120..200 {
+                put(&mut px, w, x, y, [200, 10, 10, 255]);
+            }
+        }
+        let (cw, ch, out) = crop_blank_bars(w, h, px);
+        assert_eq!((cw, ch), (80, 180));
+        assert!(out
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [200, 10, 10, 255]));
+    }
+
+    #[test]
+    fn crop_blank_bars_takes_letterbox_off_and_leaves_a_full_frame() {
+        let (w, h) = (320u32, 180u32);
+        let mut px = rgba(w, h, [0, 0, 0, 255]);
+        for y in 20..160 {
+            for x in 0..w {
+                put(&mut px, w, x, y, [10, 200, 10, 255]);
+            }
+        }
+        let (cw, ch, _) = crop_blank_bars(w, h, px);
+        assert_eq!((cw, ch), (320, 140));
+        // A 16:9 frame with no padding stays as it is (a single black corner is not a bar).
+        let mut full = rgba(w, h, [10, 20, 200, 255]);
+        put(&mut full, w, 0, 0, [0, 0, 0, 255]);
+        assert_eq!(crop_blank_bars(w, h, full.clone()), (w, h, full));
     }
 }

@@ -61,6 +61,22 @@ verify() {
   say "Checksum OK: $2"
 }
 
+# tarball_stem: file name without .tar.gz (also the folder inside), as listed in SHA256SUMS:
+# vivi-X.Y.Z-linux-{x64,arm64} since v0.16.5, vivi-vX.Y.Z-linux-x86_64 (x64 only) before.
+tarball_stem() {
+  case $(uname -m) in
+    x86_64) set -- "vivi-$VER-linux-x64" "vivi-v$VER-linux-x86_64" ;;
+    aarch64|arm64) set -- "vivi-$VER-linux-arm64" ;;
+    *) die "release builds are for x86_64 and aarch64 only; build from source: $GH#build-from-source-arch--omarchy" ;;
+  esac
+  for n in "$@"; do
+    if awk -v n="$n.tar.gz" '$2 == n || $2 == "*" n { f = 1 } END { exit !f }' "$TMP/SHA256SUMS"; then
+      printf '%s\n' "$n"; return 0
+    fi
+  done
+  die "no Linux $(uname -m) tarball for $VER in SHA256SUMS; build from source: $GH#build-from-source-arch--omarchy"
+}
+
 latest_version() {
   # The app release is the repository's "latest" (plugin releases never are).
   url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$GH/releases/latest") || die "cannot reach GitHub"
@@ -76,13 +92,17 @@ install_arch() {
   # The vivi-bin PKGBUILD from packaging/aur, pinned to the release tarball's sha256, which
   # must match the release SHA256SUMS (makepkg then checks the download against it).
   fetch "$SITE/vivi-bin/PKGBUILD" "$TMP/PKGBUILD"
-  name=vivi-v$VER-linux-x86_64.tar.gz
+  name=$(tarball_stem).tar.gz || exit 1
   want=$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }' "$TMP/SHA256SUMS")
   [ -n "$want" ] || die "$name is not listed in SHA256SUMS"
   pkgver=$(sed -n 's/^pkgver=//p' "$TMP/PKGBUILD")
   if [ "$pkgver" != "$VER" ]; then
     # Another release than the PKGBUILD's: its metainfo checksum is unknown here.
-    sed -e "s/^pkgver=.*/pkgver=$VER/" -e "s/^sha256sums=.*/sha256sums=('SKIP')/" \
+    # Same for the asset name scheme: rename the tarball when the release uses the new one.
+    rename=""
+    # shellcheck disable=SC2016 # literal ${pkgver} / ${CARCH} in the PKGBUILD
+    case $name in vivi-v*) ;; *) rename='s/vivi-v\${pkgver}-linux-\${CARCH}/vivi-${pkgver}-linux-x64/g' ;; esac
+    sed -e "s/^pkgver=.*/pkgver=$VER/" -e "s/^sha256sums=.*/sha256sums=('SKIP')/" -e "${rename:-s/^//}" \
       -e "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('$want')/" "$TMP/PKGBUILD" > "$TMP/PKGBUILD.new"
     mv "$TMP/PKGBUILD.new" "$TMP/PKGBUILD"
   fi
@@ -105,11 +125,7 @@ check_deps() {
 }
 
 install_local() {
-  case $(uname -m) in
-    x86_64) ;;
-    *) die "release builds are x86_64 only; build from source: $GH#build-from-source-arch--omarchy" ;;
-  esac
-  name=vivi-v$VER-linux-x86_64
+  name=$(tarball_stem) || exit 1
   say "Installing Vivi $VER into $PREFIX"
   fetch "$BASE/$name.tar.gz" "$TMP/$name.tar.gz"
   verify "$TMP" "$name.tar.gz"

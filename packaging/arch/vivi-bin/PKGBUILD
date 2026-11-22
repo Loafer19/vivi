@@ -1,11 +1,11 @@
 # Maintainer: Loafer19 <https://github.com/Loafer19>
-# Prebuilt binary from the GitHub release. The release workflow also attaches this file
-# with the version and checksum filled in (asset "PKGBUILD").
+# Prebuilt binary from the GitHub release. pkgver and the asset names are bumped by the
+# release workflow (scripts/bump-packaging.py); packaging/aur/vivi-bin pins the checksum.
 pkgname=vivi-bin
-pkgver=0.16.3
+pkgver=0.16.5
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
-arch=('x86_64')
+arch=('x86_64' 'aarch64')
 url="https://github.com/Loafer19/vivi"
 license=('MIT')
 # libxkbcommon and the Wayland/X11 libraries are loaded at runtime and come with mpv.
@@ -14,15 +14,21 @@ optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'yt-dlp: YouTube and other sites in Open Network Stream'
             'xdg-desktop-portal: native file and folder dialogs')
 conflicts=('vivi')
-source=("vivi-v${pkgver}-linux-x86_64.tar.gz::${url}/releases/download/v${pkgver}/vivi-v${pkgver}-linux-x86_64.tar.gz")
+# The release workflow fills in only sha256sums / sha256sums_<arch> on the AUR package;
+# this in-repo copy keeps SKIP and uses the versioned asset names from 0.16.5.
+source=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
 sha256sums=('SKIP')
-# The release workflow fills in only sha256sums= (the tarball), so the AppStream metainfo,
-# which is not in the tarball, goes in the x86_64 array with its own (unpinned) checksum.
-source_x86_64=("io.github.loafer19.vivi.metainfo.xml::${url}/raw/v${pkgver}/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml")
+source_x86_64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-x64.tar.gz")
 sha256sums_x86_64=('SKIP')
+source_aarch64=("${url}/releases/download/v${pkgver}/vivi-${pkgver}-linux-arm64.tar.gz")
+sha256sums_aarch64=('SKIP')
 
 package() {
-  cd "vivi-v${pkgver}-linux-x86_64"
+  case $CARCH in
+    x86_64) _dir="vivi-${pkgver}-linux-x64" ;;
+    aarch64) _dir="vivi-${pkgver}-linux-arm64" ;;
+  esac
+  cd "$_dir"
   install -Dm755 vivi "${pkgdir}/usr/bin/vivi"
   install -Dm755 vivi-mcp "${pkgdir}/usr/bin/vivi-mcp"
   install -Dm644 vivi.desktop "${pkgdir}/usr/share/applications/vivi.desktop"

@@ -11,12 +11,25 @@ use std::sync::mpsc::Receiver;
 struct Drain {
     weak: slint::Weak<AppWindow>,
     player: Rc<Player>,
-    cfg: Rc<RefCell<config::Config>>,
+    cfg: crate::app::state::AppState,
     events: Receiver<PlayerEvent>,
     log: bool,
     load: loading::Loading,
     last_err: String,
     fit: bool,
+    /// Listening of the playing file for the play history (#87).
+    plays: crate::smart::Tracker,
+}
+
+/// Write a play-history change (a few rows per file, so a short-lived connection).
+fn record(t: &mut crate::smart::Tracker, w: Option<crate::smart::Write>) {
+    let Some(w) = w else { return };
+    let res = library::open_db(&library::db_path()).and_then(|c| crate::smart::apply(&c, &w));
+    match res {
+        Ok(Some(id)) => t.written(id),
+        Ok(None) => {}
+        Err(e) => eprintln!("vivi: play history: {e}"),
+    }
 }
 
 thread_local! {
@@ -59,9 +72,12 @@ fn drain() {
                     if d.log {
                         eprintln!("time-pos {t:.2}");
                     }
+                    let w = d.plays.position(t);
+                    record(&mut d.plays, w);
                     a.global::<crate::Playback>().set_position(t as f32)
                 }
                 PlayerEvent::Duration(dur) => {
+                    d.plays.duration(dur);
                     a.global::<crate::Playback>().set_duration(dur as f32)
                 }
                 PlayerEvent::Pause(p) => {
@@ -86,6 +102,17 @@ fn drain() {
                     activity = true;
                     d.fit = true;
                     a.global::<crate::Playback>().set_has_media(true);
+                    {
+                        // Local files only: streams and web videos have no library row.
+                        let w = d.plays.end();
+                        record(&mut d.plays, w);
+                        let path = d.player.get("path").unwrap_or_default();
+                        let dur: f64 = d.player.mpv.get_property("duration").unwrap_or(0.0);
+                        let local =
+                            d.cfg.config().library.history && std::path::Path::new(&path).is_file();
+                        d.plays
+                            .start(if local { &path } else { "" }, dur, crate::smart::now());
+                    }
                     refresh_lists(&a, &d.player, d.log);
                     on_file_loaded(&a, &d.player, d.log);
                     libview::flush_pending(&d.player);
@@ -106,7 +133,7 @@ fn drain() {
                     a.global::<crate::Playback>().set_range_a(-1.0);
                     a.global::<crate::Playback>().set_range_b(-1.0);
                     abloop::reset(&a, &d.player);
-                    let c = d.cfg.borrow();
+                    let c = d.cfg.config();
                     let key = settings::apply_preset(&d.player, &c, d.log);
                     settings::sync_panel(&a, &d.player);
                     drop(c);
@@ -152,11 +179,13 @@ fn drain() {
                 PlayerEvent::PlaybackRestart => {
                     d.load.restart();
                     if std::mem::take(&mut d.fit) {
-                        crate::winstate::fit_video(&a, &d.player, &d.cfg.borrow());
+                        crate::winstate::fit_video(&a, &d.player, &d.cfg.config());
                     }
                 }
                 PlayerEvent::Buffering(b) => d.load.cache(b),
                 PlayerEvent::EndFile(err) => {
+                    let w = d.plays.end();
+                    record(&mut d.plays, w);
                     hide = true;
                     activity = true;
                     crate::nowplaying::sync();
@@ -233,7 +262,7 @@ fn drain() {
 pub(crate) fn wire(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<RefCell<config::Config>>,
+    cfg: &crate::app::state::AppState,
     events: Receiver<PlayerEvent>,
     log: bool,
 ) {
@@ -245,7 +274,7 @@ pub(crate) fn wire(
         app.global::<crate::Playback>().on_preview_wanted(move || {
             let Some(a) = w.upgrade() else { return };
             // First hover of this file: Chapter Thumbnails ("On hover") renders its frames.
-            if preview::hovered(&a, &c.borrow()) {
+            if preview::hovered(&a, &c.config()) {
                 p.cmd("script-message", &["vivi-preview-wanted"]);
             }
         });
@@ -260,10 +289,7 @@ pub(crate) fn wire(
         app.global::<crate::Notices>().on_hint_never(move || {
             let Some(a) = w.upgrade() else { return };
             preview::hide_hint(&a);
-            c.borrow_mut().interface.hint_chapter_thumbnails = false;
-            if let Err(e) = c.borrow().save() {
-                eprintln!("vivi: save config: {e}");
-            }
+            c.update_and_save(|c| c.interface.hint_chapter_thumbnails = false);
             settings::refresh_ui();
         });
     }
@@ -277,6 +303,7 @@ pub(crate) fn wire(
             load: loading::Loading::default(),
             last_err: String::new(),
             fit: false,
+            plays: Default::default(),
         });
     });
     // Events queued before wiring stay in the channel until the first wake; take them now.

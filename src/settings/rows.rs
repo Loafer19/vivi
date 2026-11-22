@@ -362,6 +362,42 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .choice(config::FIT, "Resize window to fit video", "When a video starts, size the window to the video (at most 90 % of the screen). Not while full screen or maximized, and not for windows your window manager tiles.", c.fit(), &config::FIT_CHOICES)
         .header("Hints")
         .toggle("interface.hint_chapter_thumbnails", "Suggest seek-bar frame previews", "Frame previews on the seek bar come from the Chapter Thumbnails extension. Without it, the first hover over the seek bar of a video offers to install it (once per session).", c.interface.hint_chapter_thumbnails);
+    // Home widgets (src/homeview.rs): the same list as Customize Home on the Home screen.
+    r.section(
+        "Home",
+        "Widgets on the Home screen, in order. Customize Home on the Home screen edits the same list.",
+        &[("home.customize", "Customize on Home"), ("home.reset", "Reset to default")],
+    );
+    for w in crate::homeview::rows() {
+        let crate::homeview::SettingsRow {
+            id,
+            title,
+            on,
+            size,
+            sizes,
+        } = w;
+        r.toggle(&format!("home.{id}.on"), &title, "", on);
+        if sizes.len() > 1 {
+            let o: Vec<&str> = sizes.iter().map(String::as_str).collect();
+            r.seg(
+                &format!("home.{id}.size"),
+                "Size",
+                "S is ⅓ of the row, M is ⅔, L is full width.",
+                &size,
+                &o,
+            )
+            .depends(on);
+        }
+        r.push(
+            &format!("home.{id}.move"),
+            "Position",
+            "",
+            "buttons",
+            String::new(),
+        );
+        r.last().labels = strs(&["Move up", "Move down"]);
+        r.depends(true);
+    }
 
     // ---------- Privacy ----------
     r.cat("Privacy")
@@ -382,6 +418,18 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
             "privacy.watch_later",
             "Clear resume positions",
             "Forget where you left off in every file.",
+            "Clear",
+        )
+        .toggle(
+            "library.history",
+            "Keep a play history",
+            "Count the songs and videos you play, on this computer only. Smart playlists such as Top this week and Most played are built from it.",
+            c.library.history,
+        )
+        .action(
+            "privacy.plays",
+            "Clear play history",
+            "Forget which files you played and how often. Smart playlists start over (asks first).",
             "Clear",
         )
         .action(
@@ -455,6 +503,29 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .action(REMOTE_CONTROL_ROW, "Phone remote control", rc_info, rc_label)
         .header("AI agents and scripts")
         .toggle("general.remote_control", "Allow AI agents and scripts", "Open a local control socket for vivi-mcp (MCP server for AI agents). Off: agents and scripts are refused at once.", schema::get(c, "general.remote_control") == "true");
+    let found = mcp_clients::detect_here();
+    if found.is_empty() {
+        r.push("", "Connect to…", "Claude Desktop, Cursor and VS Code were not found. Add vivi-mcp by hand from viviplayer.app/ai-agents.html, or with the Add to Cursor / Add to VS Code buttons there.", "info", String::new());
+    } else {
+        r.header("Connect to…");
+        for d in found {
+            let path = d.config.display().to_string();
+            let (info, label) = if d.connected {
+                (format!("vivi-mcp is already in {}.", path), "Connected")
+            } else {
+                (
+                    format!("Add a vivi-mcp entry to {} (a .bak backup is kept).", path),
+                    "Connect",
+                )
+            };
+            r.action(
+                &format!("mcp.connect.{}", d.client.id()),
+                d.client.name(),
+                &info,
+                label,
+            );
+        }
+    }
 
     // ---------- Playback ----------
     let speed_labels = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];

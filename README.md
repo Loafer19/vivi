@@ -29,11 +29,12 @@ Or grab a file from [Releases](https://github.com/Loafer19/vivi/releases/latest)
 
 | Platform | Asset |
 |---|---|
-| Arch / Omarchy | `PKGBUILD` → `makepkg -si` (or `packaging/arch/`) |
-| Any Linux | `Vivi-<version>-x86_64.AppImage` → `chmod +x` and run |
-| Flatpak | `vivi-<version>-x86_64.flatpak` → `flatpak install --user <file>` |
-| Linux tarball | `vivi-<version>-linux-x86_64.tar.gz` (needs system mpv) |
-| Windows 10/11 | `vivi-<version>-windows-x86_64.zip` → run `vivi.exe` |
+| Windows 10/11 | `vivi-<version>-windows-x64-setup.exe` (or `-arm64-`): per-user installer, Start menu shortcut |
+| Windows portable | `vivi-<version>-windows-x64-portable.zip` (or `-arm64-`) → run `vivi.exe` |
+| Any Linux | `vivi-<version>-linux-x64.AppImage` (or `-arm64`) → `chmod +x` and run |
+| Flatpak | `vivi-<version>-linux-x64.flatpak` → `flatpak install --user <file>` |
+| Linux tarball | `vivi-<version>-linux-x64.tar.gz` (or `-arm64`; needs system mpv) |
+| Arch / Omarchy | `packaging/aur/vivi-bin` → `makepkg -si` (or the install script above) |
 | macOS (Apple Silicon) | `vivi-<version>-macos-arm64.zip` → unsigned, right-click → Open first time |
 
 Build from source: `cargo build --release` (needs libmpv; see [docs/features.md](docs/features.md#build-from-source-arch--omarchy)).

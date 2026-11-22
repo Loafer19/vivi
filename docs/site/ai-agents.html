@@ -77,6 +77,8 @@ section[id]{scroll-margin-top:120px}
   <p><code>vivi-mcp</code> is a tiny <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server: ask Claude, Cursor
   or any MCP client to play, search, queue, subtitle, bookmark, loop and inspect media in a running Vivi.</p>
   <div class="cta"><a class="btn primary" href="#setup"><i data-lucide="terminal"></i>Set it up</a>
+  <a class="btn ghost" data-mcp="cursor" href="cursor://anysphere.cursor-deeplink/mcp/install"><i data-lucide="sparkles"></i>Add to Cursor</a>
+  <a class="btn ghost" data-mcp="vscode" href="vscode:mcp/install"><i data-lucide="code-xml"></i>Add to VS Code</a>
   <a class="btn ghost" href="#tools"><i data-lucide="wrench"></i>All 58 tools</a></div>
 </section>
 <nav class="pnav" aria-label="On this page">
@@ -95,7 +97,7 @@ section[id]{scroll-margin-top:120px}
 <div class="steps">
   <div class="step"><h3>Enable remote control</h3><p>Off by default. Turn on <em>Settings → Controls → Remotes → Allow AI agents and scripts</em> (<em>General → Remote control</em> before 0.15); since 0.16 it applies at once, before that restart Vivi. Or run <code>VIVI_IPC=1 vivi</code> once.</p></div>
   <div class="step"><h3>Get <code>vivi-mcp</code></h3><p>It ships with Vivi: Arch installs <code>/usr/bin/vivi-mcp</code>, Flatpak <code>/app/bin/vivi-mcp</code>, <code>cargo build --release</code> gives <code>target/release/vivi-mcp</code>.</p></div>
-  <div class="step"><h3>Add it to your client</h3><p>Paste the config below and restart the client. <code>vivi-mcp --help</code> prints the socket path it uses.</p></div>
+  <div class="step"><h3>Add it to your client</h3><p>Use <em>Add to Cursor</em> or <em>Add to VS Code</em> above, or in Vivi <em>Settings → Controls → Remotes → Connect to…</em>. Or paste the config below and restart the client. <code>vivi-mcp --help</code> prints the socket path it uses.</p></div>
 </div>
 </section>
 
@@ -120,6 +122,7 @@ section[id]{scroll-margin-top:120px}
   <p>Restart Claude Desktop; the vivi tools appear in the tools menu. Windows is not supported yet (Vivi's control socket is a Unix socket).</p>
 </div>
 <div class="panel" role="tabpanel" id="t-cur" aria-labelledby="b-cur" hidden>
+  <p><a class="btn primary" data-mcp="cursor" href="cursor://anysphere.cursor-deeplink/mcp/install"><i data-lucide="sparkles"></i>Add to Cursor</a></p>
   <p><code>~/.cursor/mcp.json</code> (global, Linux and macOS) or <code>.cursor/mcp.json</code> in a project</p>
   <div class="code"><button type="button" class="copy" data-target="c-cur">Copy</button><pre><code id="c-cur">{
   &quot;mcpServers&quot;: {
@@ -132,7 +135,8 @@ section[id]{scroll-margin-top:120px}
   <div class="code"><button type="button" class="copy" data-target="c-cc">Copy</button><pre><code id="c-cc">claude mcp add vivi -- /usr/bin/vivi-mcp</code></pre></div>
 </div>
 <div class="panel" role="tabpanel" id="t-vs" aria-labelledby="b-vs" hidden>
-  <p><code>.vscode/mcp.json</code> in your workspace</p>
+  <p><a class="btn primary" data-mcp="vscode" href="vscode:mcp/install"><i data-lucide="code-xml"></i>Add to VS Code</a></p>
+  <p><code>.vscode/mcp.json</code> in your workspace, or the user profile <code>mcp.json</code></p>
   <div class="code"><button type="button" class="copy" data-target="c-vs">Copy</button><pre><code id="c-vs">{
   &quot;servers&quot;: {
     &quot;vivi&quot;: { &quot;type&quot;: &quot;stdio&quot;, &quot;command&quot;: &quot;/usr/bin/vivi-mcp&quot; }
@@ -305,6 +309,7 @@ const links=[...document.querySelectorAll('.pnav a')],secs=links.map(a=>document
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id))}}),{rootMargin:'-40% 0px -55% 0px'});secs.forEach(s=>s&&io.observe(s));
 })();
 </script>
+<script type="module" src="js/mcp-install.js"></script>
 <footer><a href="compare.html">Compare players</a> · <a href="https://plugins.viviplayer.app/">Plugins</a><br>Vivi is <a href="https://github.com/Loafer19/vivi/blob/master/LICENSE">MIT licensed</a> ·
 site icons from <a href="https://lucide.dev">Lucide</a> (ISC)</footer>
 </body>

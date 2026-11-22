@@ -44,6 +44,15 @@ mod radio_view;
 
 pub const ID: &str = "lyrics";
 
+/// L cycles Off → Text → Karaoke → Off.
+pub(crate) fn next_display(mode: &str) -> &'static str {
+    match mode {
+        "Off" => "Text",
+        "Text" => "Karaoke",
+        _ => "Off",
+    }
+}
+
 /// Rows of the words of a line for the karaoke view, at most `cols` characters each.
 pub fn wrap_rows(words: &[&str], cols: usize) -> Vec<i32> {
     let mut rows = Vec::with_capacity(words.len());
@@ -314,6 +323,27 @@ impl Lyrics {
                 "Large" => 30.0,
                 _ => 22.0,
             });
+    }
+
+    /// Apply the persisted Off / Text / Karaoke mode to the overlay and karaoke view.
+    fn apply_display(&self, cx: &Ctx, toast: bool) {
+        self.set_display(cx, &cx.get("display"), toast);
+    }
+
+    fn set_display(&self, cx: &Ctx, mode: &str, toast: bool) {
+        let mode = match mode {
+            "Off" | "Text" | "Karaoke" => mode,
+            _ => "Text",
+        };
+        if cx.get("display") != mode {
+            cx.set("display", mode);
+        }
+        cx.app.global::<crate::Lyrics>().set_display(mode.into());
+        let karaoke = mode == "Karaoke" && cx.app.global::<crate::Playback>().get_has_media();
+        cx.app.global::<crate::Overlays>().set_karaoke_open(karaoke);
+        if toast {
+            cx.toast(&format!("Lyrics: {mode}"));
+        }
     }
 
     fn set_key(&mut self, cx: &Ctx, key: String) {

@@ -40,6 +40,12 @@ impl Plugin for Lyrics {
             "",
             &["Medium", "Small", "Large"],
         ))
+        .setting(SettingSpec::choice(
+            "display",
+            "Lyrics display",
+            "Off hides lyrics, Text is the overlay on the player, Karaoke is the full-screen view. L cycles the three.",
+            &["Text", "Off", "Karaoke"],
+        ))
         .setting(SettingSpec::action(
             "clear-cache",
             "Downloaded lyrics",
@@ -54,6 +60,7 @@ impl Plugin for Lyrics {
             .global::<crate::Lyrics>()
             .on_cmd(|n, a| crate::plugins::command(ID, &n, &[a.to_string()]));
         self.apply_size(cx);
+        self.apply_display(cx, false);
         if cx.app.global::<crate::Playback>().get_has_media() {
             self.load(cx);
         }
@@ -67,10 +74,12 @@ impl Plugin for Lyrics {
     }
     fn file_loaded(&mut self, cx: &Ctx) {
         self.load(cx);
+        self.apply_display(cx, false);
     }
     fn setting_changed(&mut self, cx: &Ctx, key: &str) {
         match key {
             "size" => self.apply_size(cx),
+            "display" => self.apply_display(cx, false),
             "online" | "radio-mode" => self.load(cx),
             _ => {}
         }
@@ -84,16 +93,22 @@ impl Plugin for Lyrics {
                 cx.toast("Lyrics cache cleared");
                 self.load(cx);
             }
+            "display" => {
+                let mode = match arg {
+                    "Off" | "Text" | "Karaoke" => arg,
+                    "next" | "cycle" | "" => next_display(&cx.get("display")),
+                    _ => return,
+                };
+                self.set_display(cx, mode, true);
+            }
             "karaoke" => {
+                // Bar / Esc / MCP: open karaoke, or leave it for the Text overlay.
                 let on = match arg {
                     "on" => true,
                     "off" => false,
                     _ => !cx.app.global::<crate::Overlays>().get_karaoke_open(),
                 };
-                cx.app
-                    .global::<crate::Overlays>()
-                    .set_karaoke_open(on && cx.app.global::<crate::Playback>().get_has_media());
-                self.word_line = None;
+                self.set_display(cx, if on { "Karaoke" } else { "Text" }, false);
             }
             "offset" => match arg {
                 "reset" => self.set_offset(cx, 0.0),

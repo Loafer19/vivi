@@ -1,7 +1,6 @@
 //! Settings → About: version and build info, the GitHub release update check,
 //! install-type detection for the Download button, and the bug-report system info.
 
-use crate::config::Config;
 use crate::player::Player;
 use crate::{About, AppWindow};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
@@ -288,7 +287,7 @@ pub fn excerpt(notes: &str) -> String {
 pub fn setup(
     app: &AppWindow,
     player: &Rc<Player>,
-    cfg: &Rc<RefCell<Config>>,
+    cfg: &crate::app::state::AppState,
     save: impl Fn() + 'static,
 ) {
     let mpv = player
@@ -308,7 +307,7 @@ pub fn setup(
     g.set_build_values(s(rows.iter().map(|r| r.1.clone()).collect()));
     g.set_license("MIT License".into());
     g.set_sysinfo(system_info(&build).into());
-    g.set_auto_check(cfg.borrow().general.check_updates);
+    g.set_auto_check(cfg.config().general.check_updates);
     g.set_message(format!("Installed: v{VERSION} ({})", detect_install().name()).into());
 
     TARGET.with(|t| *t.borrow_mut() = format!("{REPO}/releases/latest"));
@@ -383,11 +382,11 @@ pub fn setup(
     {
         let cfg = cfg.clone();
         g.on_auto_toggled(move |on| {
-            cfg.borrow_mut().general.check_updates = on;
+            cfg.update(move |c| c.general.check_updates = on);
             save();
         });
     }
-    if cfg.borrow().general.check_updates {
+    if cfg.config().general.check_updates {
         check(true);
     }
 }

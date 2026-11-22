@@ -1,8 +1,7 @@
 //! Menus per the Figma frames: the right-click main menu with its submenus, library
-//! context menus (file / folder / playlist), and the library sort and view options.
+//! context menus (file / folder / playlist), the library sort and view options, and the Home ⋯ menu.
 //! Slint draws them (ui/menu.slint); this module fills the rows and runs the actions.
 
-use crate::config::Config;
 use crate::keymap::{self, Action as A};
 use crate::player::Player;
 use crate::plugins::{self, contrib};
@@ -397,12 +396,39 @@ fn synced_rows(v: &mut Vec<MenuItem>, synced: bool) {
 }
 
 /// Context menu rows for a library item kind.
-fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<MenuItem> {
-    let fav = if pinned {
-        "Remove from Favorites"
+/// Library keys of smart playlists and "Similar to" lists (#87).
+fn is_smart_key(key: &str) -> bool {
+    key.starts_with("smart:") || key.starts_with("similar:")
+}
+
+/// A smart playlist's menu; `saved` lists (not a temporary "Similar to") can be deleted.
+fn smart_menu(saved: bool) -> Vec<MenuItem> {
+    let mut v = vec![
+        row("lib:play", "Play", "play", ""),
+        row("lib:shuffle", "Shuffle", "shuffle", ""),
+        row("lib:enqueue", "Add to Queue", "add-to-queue", ""),
+        row("lib:save-m3u", "Save as Playlist", "export-playlist", ""),
+    ];
+    if saved {
+        v.push(div(row(
+            "lib:delete",
+            "Delete Smart Playlist",
+            "remove",
+            "",
+        )));
+    }
+    v
+}
+
+fn favorite_row(pinned: bool) -> MenuItem {
+    if pinned {
+        row("lib:unpin", "Remove from Favorites", "favorite", "")
     } else {
-        "Favorite"
-    };
+        row("lib:pin", "Favorite", "favorite", "")
+    }
+}
+
+fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<MenuItem> {
     match kind {
         "folder" => vec![
             row("lib:play", "Open", "play", ""),
@@ -420,7 +446,7 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
                 "edit-audio-tracks",
                 "",
             ),
-            row("lib:pin", fav, "favorite", ""),
+            favorite_row(pinned),
             row(
                 "lib:reveal",
                 "Show in File Explorer",
@@ -468,7 +494,7 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
                     "mark-as-watched",
                     "",
                 ),
-                row("lib:pin", fav, "favorite", ""),
+                favorite_row(pinned),
                 row("lib:enqueue", "Add to Queue", "add-to-queue", ""),
                 sub("lib:addpl", "Add to Playlist", "add-to-playlist"),
                 row(
@@ -487,6 +513,13 @@ fn lib_menu(kind: &str, pinned: bool, watched: bool, progress: bool) -> Vec<Menu
                     "",
                 ),
             ];
+            // A temporary smart list of songs that share its artist, album or genre (#87).
+            if kind == "audio" {
+                v.insert(
+                    5,
+                    row("lib:similar", "Similar to This Track", "playlist", ""),
+                );
+            }
             if progress {
                 v.push(div(row("lib:forget", "Clear Progress", "remove", "")));
             }
@@ -514,15 +547,25 @@ pub fn refresh_open() {
     }
 }
 
+/// Home ⋯ menu: Refresh, Customize, Reset Home Widgets (no Grid / List View).
+fn home_menu() -> Vec<MenuItem> {
+    vec![
+        row("home-refresh", "Refresh", "refresh", ""),
+        row("home-edit", "Customize", "edit", ""),
+        row("home-reset", "Reset Home Widgets", "resync", ""),
+    ]
+}
+
 fn menu_rows(
     a: &AppWindow,
     p: &Player,
     ctx: &Rc<RefCell<Ctx>>,
-    cfg: &Rc<RefCell<Config>>,
+    cfg: &crate::app::state::AppState,
     kind: &str,
     c: &str,
 ) -> Vec<MenuItem> {
     match kind {
+        "home" => home_menu(),
         "main" => {
             // Player menu: plugin entries get no item argument.
             *ctx.borrow_mut() = Ctx::default();
@@ -536,7 +579,11 @@ fn menu_rows(
                 key: g(0).into(),
                 kind: g(1).into(),
             };
-            let mut v = lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1");
+            let mut v = if is_smart_key(g(0)) {
+                smart_menu(g(0).starts_with("smart:"))
+            } else {
+                lib_menu_for(g(1), g(2) == "1", g(3) == "1", g(4) == "1", g(5) == "1")
+            };
             // `context.item`: plugin actions for files and folders.
             if matches!(g(1), "audio" | "video" | "folder") {
                 v.extend(grouped(item_rows(contrib::CONTEXT_ITEM, "plugins")));
@@ -548,14 +595,14 @@ fn menu_rows(
             v
         }
         "sort" => {
-            let cur = cfg.borrow().library.sort.clone();
+            let cur = cfg.config().library.sort.clone();
             SORTS
                 .iter()
                 .map(|(k, l)| check(&format!("sort:{k}"), l, sort_key(&cur) == *k))
                 .collect()
         }
         "view" => {
-            let grid = cfg.borrow().library.view != "list";
+            let grid = cfg.config().library.view != "list";
             vec![
                 MenuItem {
                     checked: grid,
@@ -598,7 +645,7 @@ fn present_menu(
     }
 }
 
-pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: Rc<RefCell<Config>>) {
+pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppState) {
     let items = Rc::new(VecModel::<MenuItem>::default());
     let subs = Rc::new(VecModel::<MenuItem>::default());
     app.global::<crate::Menus>()
@@ -775,6 +822,17 @@ fn activate(a: &AppWindow, p: &Player, ctx: &Ctx, id: &str) {
                 }
             }
             "mini" => a.global::<crate::Playback>().invoke_toggle_mini(),
+            "home-edit" => crate::homeview::action("edit", "", ""),
+            "home-refresh" => crate::homeview::action("refresh", "", ""),
+            "home-reset" => crate::dialogs::confirm_core(
+                a,
+                "reset-home",
+                "Reset Home Widgets",
+                "Reset Home widgets to the defaults?",
+                "Your custom layout, sizes and widths go back to the defaults. This cannot be undone.",
+                "Reset",
+                || crate::homeview::action("reset", "", ""),
+            ),
             "customize" => a.global::<crate::Overlays>().set_customize_open(true),
             "shortcuts" => a.global::<crate::Overlays>().set_shortcuts_open(true),
             "extensions" => crate::extwin::open(a, "", false),
@@ -822,6 +880,18 @@ mod tests {
     }
 
     #[test]
+    fn home_menu_is_refresh_customize_reset() {
+        assert_eq!(
+            ids(&home_menu()),
+            [
+                ("home-refresh".into(), false),
+                ("home-edit".into(), false),
+                ("home-reset".into(), false),
+            ]
+        );
+    }
+
+    #[test]
     fn plugins_menu_keeps_drawer_and_extensions() {
         let act = vec![row("plug:a|x", "Do X", "plugins", "")];
         assert_eq!(
@@ -844,5 +914,28 @@ mod tests {
             ids(&plugins_menu(Vec::new(), false, "")),
             [("extensions".to_string(), false)]
         );
+    }
+
+    #[test]
+    fn favorite_menu_sends_unpin_when_already_favorited() {
+        let add = favorite_row(false);
+        assert_eq!(add.id.as_str(), "lib:pin");
+        assert_eq!(add.label.as_str(), "Favorite");
+        let rm = favorite_row(true);
+        assert_eq!(rm.id.as_str(), "lib:unpin");
+        assert_eq!(rm.label.as_str(), "Remove from Favorites");
+
+        let file = lib_menu("video", true, false, false);
+        let folder = lib_menu("folder", true, false, false);
+        assert!(
+            file.iter().any(|m| m.id == "lib:unpin"),
+            "file menu must send unpin, not pin, to remove a favorite"
+        );
+        assert!(folder.iter().any(|m| m.id == "lib:unpin"));
+        assert!(!file.iter().any(|m| m.id == "lib:pin"));
+        assert!(!folder.iter().any(|m| m.id == "lib:pin"));
+        let fresh = lib_menu("audio", false, false, false);
+        assert!(fresh.iter().any(|m| m.id == "lib:pin"));
+        assert!(!fresh.iter().any(|m| m.id == "lib:unpin"));
     }
 }

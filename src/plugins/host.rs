@@ -764,7 +764,7 @@ pub fn data_dir(id: &str) -> PathBuf {
 }
 
 /// `path` when it is inside `root` (no `..` escapes, symlinks resolved).
-fn inside(root: &Path, path: &str) -> Option<PathBuf> {
+pub(crate) fn inside(root: &Path, path: &str) -> Option<PathBuf> {
     let p = Path::new(path);
     let canon = p.canonicalize().ok()?;
     let root = root.canonicalize().ok()?;

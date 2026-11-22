@@ -52,6 +52,21 @@ pub struct LiveRow {
     pub heading: bool,
 }
 
+/// A tile or list entry of a Home widget (`tiles` / `list` templates). Clicking it
+/// sends the widget's command with `id` appended. `image`: a file in the plugin's data
+/// folder or an `https://` picture (downloaded into the image cache, 2 MB at most).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LiveItem {
+    pub id: String,
+    pub title: String,
+    pub sub: String,
+    pub image: String,
+}
+
+/// Items kept per widget.
+pub const MAX_ITEMS: usize = 12;
+
 /// `vivi-content` payload: every field optional; only the given ones change.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
@@ -65,6 +80,8 @@ pub struct ContentUpdate {
     /// A progress bar under the value (0–1); a negative number removes it.
     pub progress: Option<f64>,
     pub rows: Option<Vec<LiveRow>>,
+    /// Tiles / list entries of a Home widget.
+    pub items: Option<Vec<LiveItem>>,
     /// Start from empty content instead of merging into the previous one.
     pub replace: bool,
 }
@@ -78,6 +95,7 @@ pub struct Content {
     /// 0–1, or `None` for no progress bar.
     pub progress: Option<f32>,
     pub rows: Vec<LiveRow>,
+    pub items: Vec<LiveItem>,
 }
 
 /// A bar / progress value clamped to 0–1; negative, NaN or missing → none.
@@ -109,6 +127,10 @@ impl Content {
                 r.bar = fraction(r.bar).map(f64::from);
             }
             self.rows = rows;
+        }
+        if let Some(mut items) = u.items {
+            items.truncate(MAX_ITEMS);
+            self.items = items;
         }
     }
 

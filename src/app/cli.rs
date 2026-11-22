@@ -17,6 +17,8 @@ Environment:
   VIVI_X11=1        Run under XWayland on Wayland (file drag and drop works there)
   VIVI_LOG=1        Log player events to stderr
   VIVI_MPV_DEBUG=1  Verbose mpv log on the terminal
+  VIVI_RENDERER=software  Draw without OpenGL (slower; used automatically when
+                    no OpenGL 2 driver is available)
 ";
 
 /// `vivi 0.11.1 (commit abc1234, built 2026-10-18)`; the commit part is left out when

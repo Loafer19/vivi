@@ -118,9 +118,49 @@ pub struct Contribution {
     /// only the plugin knows, e.g. "Undo skip" right after a skip). Reset per file.
     #[serde(default)]
     pub hidden: bool,
+    /// Home widgets (`home.widget`): the widget's own id (more than one per plugin;
+    /// default: `command`), allowed sizes (`s`, `m`, `l`; default all three), default
+    /// size (`s` / `m` / `l`, default `l`; S is ⅓, M is ⅔, L is full width) and
+    /// template (`card`, `tiles` or `list`). Deprecated `span` (1–3) is the default
+    /// size when `size` is omitted (1=S, 2=M, 3=L).
+    #[serde(default, rename = "id")]
+    pub widget: String,
+    #[serde(default)]
+    pub sizes: Vec<String>,
+    #[serde(default)]
+    pub size: String,
+    #[serde(default)]
+    pub span: u8,
+    #[serde(default)]
+    pub template: String,
+}
+
+/// How a plugin's Home widget may be laid out (from its `home.widget` entry).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HomeSpec {
+    pub widget: String,
+    pub sizes: Vec<String>,
+    pub size: String,
+    pub span: u8,
+    pub template: String,
 }
 
 impl Contribution {
+    /// The Home layout fields of this entry.
+    pub fn home_spec(&self) -> HomeSpec {
+        HomeSpec {
+            widget: if self.widget.is_empty() {
+                self.command.clone()
+            } else {
+                self.widget.clone()
+            },
+            sizes: self.sizes.clone(),
+            size: self.size.clone(),
+            span: self.span,
+            template: self.template.clone(),
+        }
+    }
+
     pub fn new(point: &str, label: &str, command: &str) -> Self {
         Self {
             point: point.into(),

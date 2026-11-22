@@ -336,3 +336,11 @@ fn lrclib_radio_live() {
     // Swapped "Title - Artist" still found through search.
     assert!(fetch_radio("Get Lucky", "Daft Punk").unwrap().is_some());
 }
+
+#[test]
+fn display_cycles_off_text_karaoke() {
+    assert_eq!(super::next_display("Off"), "Text");
+    assert_eq!(super::next_display("Text"), "Karaoke");
+    assert_eq!(super::next_display("Karaoke"), "Off");
+    assert_eq!(super::next_display(""), "Off");
+}
