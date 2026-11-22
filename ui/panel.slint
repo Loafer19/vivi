@@ -315,7 +315,10 @@ export component SidePanel inherits Rectangle {
     in property <bool> viz-enabled: true;
     in property <[string]> viz-modes: ["Disabled"];
     in property <int> viz-mode;
+    in property <[string]> viz-styles;
+    in property <int> viz-style;
     callback viz-select(int);
+    callback viz-select-style(int);
     // Lyrics plugin: Off / Text / Karaoke display, timing offset, search and save (cmd → plugin-command).
     in property <bool> lyrics-enabled;
     in property <bool> karaoke-open;
@@ -436,6 +439,8 @@ export component SidePanel inherits Rectangle {
                             Toggle { on: root.sub-timeline; enabled: false; label: "Subtitle Timeline on Seekbar"; toggled => { root.sub-timeline = !root.sub-timeline; } } }
                         if root.viz-enabled: Line { label: "Audio Visualizer"; hint: "Music and radio (no video)";
                             Dropdown { width: 170px; options: root.viz-modes; value: root.viz-modes.length > root.viz-mode ? root.viz-modes[root.viz-mode] : ""; label: "Audio Visualizer"; selected(i, o) => { root.viz-select(i); } } }
+                        if root.viz-enabled && root.viz-styles.length > 0: Line { label: "Style"; hint: "Look of the current mode";
+                            Dropdown { width: 170px; options: root.viz-styles; value: root.viz-styles.length > root.viz-style ? root.viz-styles[root.viz-style] : ""; label: "Visualizer style"; selected(i, o) => { root.viz-select-style(i); } } }
                     }
                     Group { title: "Control";
                         Line { label: "Reverse"; hint: "Play backwards (mpv play-direction)";

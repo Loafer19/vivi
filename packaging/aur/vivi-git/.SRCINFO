@@ -19,6 +19,7 @@ pkgbase = vivi-git
 	conflicts = vivi
 	conflicts = vivi-bin
 	options = !lto
+	options = !debug
 	source = vivi-git::git+https://github.com/Loafer19/vivi.git
 	sha256sums = SKIP
 

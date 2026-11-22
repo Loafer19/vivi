@@ -178,6 +178,8 @@ fn drain() {
                 }
                 PlayerEvent::PlaybackRestart => {
                     d.load.restart();
+                    // A seek while paused: redraw the visualizer's settled frame.
+                    crate::viz::wake();
                     if std::mem::take(&mut d.fit) {
                         crate::winstate::fit_video(&a, &d.player, &d.cfg.config());
                     }

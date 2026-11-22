@@ -1,5 +1,9 @@
 // Music visualizer (src/viz): shown for audio-only media; frame, note, mode (0 = Disabled) and the mode list.
+// `style` / `styles`: look of the current mode (Spectrum or Radial); empty when that mode has none.
 // `enabled`: the plugin is on (Settings → Extensions); `audio`: it is on and the media has no video.
+// `cover` / `has-cover` / `cover-size`: the album cover drawn sharp over the frame by modes with a
+// cover slot (diameter as a fraction of the shorter side, 0 = hidden); `wake` redraws a settled
+// paused frame (resize, theme change).
 export global Viz {
     in-out property <bool> enabled: true;
     in-out property <bool> audio;
@@ -7,5 +11,12 @@ export global Viz {
     in-out property <string> note;
     in-out property <int> mode;
     in-out property <[string]> modes: ["Disabled"];
+    in-out property <int> style;
+    in-out property <[string]> styles;
+    in-out property <image> cover;
+    in-out property <bool> has-cover;
+    in-out property <float> cover-size;
     callback select(int);
+    callback select-style(int);
+    callback wake();
 }

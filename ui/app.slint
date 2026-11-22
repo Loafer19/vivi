@@ -298,6 +298,8 @@ export component AppWindow inherits Window {
     // ---------- Music visualizer (audio-only media) ----------
     if Playback.has-media && Viz.audio && Viz.mode > 0: VizView {
         frame: Viz.frame; note: Viz.note;
+        cover: Viz.cover; has-cover: Viz.has-cover; cover-size: Viz.cover-size;
+        wake => { Viz.wake(); }
     }
 
     // ---------- Now playing card (audio-only network streams) ----------
@@ -392,7 +394,16 @@ export component AppWindow inherits Window {
     if !root.mini && Playback.has-media && Viz.audio && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || topbar.strip-hover): VizDropdown {
         x: 12px; y: 50px;
         modes: Viz.modes; mode: Viz.mode;
+        box-width: 180px;
+        max-popup: root.height - 50px - 36px - root.bar-h - 12px;
         select(i) => { Viz.select(i); }
+    }
+    if !root.mini && Playback.has-media && Viz.audio && Viz.styles.length > 0 && !Overlays.library-open && !Overlays.karaoke-open && (root.show-ui || topbar.strip-hover): VizDropdown {
+        x: 200px; y: 50px;
+        modes: Viz.styles; mode: Viz.style;
+        box-width: 140px; show-icons: false; accessible-name: "Style";
+        max-popup: root.height - 50px - 36px - root.bar-h - 12px;
+        select(i) => { Viz.select-style(i); }
     }
 
     // ---------- Plugin side drawer (src/drawer.rs); hides with the controls ----------
@@ -423,7 +434,9 @@ export component AppWindow inherits Window {
         seek-to(k) => { Playback.seek(k.to-float()); }
         chapter-times: Panel.chapter-times;
         viz-enabled: Viz.enabled; viz-modes: Viz.modes; viz-mode: Viz.mode;
+        viz-styles: Viz.styles; viz-style: Viz.style;
         viz-select(i) => { Viz.select(i); }
+        viz-select-style(i) => { Viz.select-style(i); }
         lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-display: Lyrics.display; lyrics-source: Lyrics.source;
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
         lyrics-offset: Lyrics.offset-label; lyrics-can-save-lrc: Lyrics.can-save-lrc; lyrics-can-embed: Lyrics.can-embed; lyrics-manual: Lyrics.manual;

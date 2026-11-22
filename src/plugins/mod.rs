@@ -90,6 +90,18 @@ impl SettingSpec {
         let o = options.iter().map(|s| s.to_string()).collect();
         Self::new(key, title, info, SettingKind::Choice(o), options[0])
     }
+    /// A choice whose default is `default` (one of `options`) instead of the first.
+    pub fn choice_default(
+        key: &str,
+        title: &str,
+        info: &str,
+        options: &[&str],
+        default: &str,
+    ) -> Self {
+        debug_assert!(options.contains(&default));
+        let o = options.iter().map(|s| s.to_string()).collect();
+        Self::new(key, title, info, SettingKind::Choice(o), default)
+    }
     pub fn text(key: &str, title: &str, info: &str, placeholder: &str, default: &str) -> Self {
         Self::new(
             key,

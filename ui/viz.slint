@@ -1,6 +1,6 @@
 // Music visualizer overlay (src/viz). The frame is rendered in Rust into `frame`;
-// this file only shows it and offers the Figma "Disabled / Spectrometer / Scope /
-// Spectrum / Waveform" dropdown (components-dropdowns-filters frame), plus our extra modes.
+// this file only shows it and offers the mode dropdown (and a style dropdown when
+// the mode has styles: Spectrum and Radial).
 import { Theme, Metrics, Icon, TriIcon } from "core/theme.slint";
 import { Icons } from "core/icons.slint";
 import { ListRow } from "core/rows.slint";
@@ -10,55 +10,89 @@ import { ListRow } from "core/rows.slint";
 component VizRow inherits ListRow {
     in property <int> index;
     in property <string> text;
+    in property <bool> show-icon: true;
     label: root.text;
     row-height: 40px; radius: Metrics.radius-md;
     hover-bg: Theme.popup; selected-bg: Theme.popup;
-    if root.index > 0: TriIcon {
+    if root.show-icon && root.index > 0: TriIcon {
         x: 12px; y: (parent.height - 20px) / 2; width: 20px; height: 20px;
         base: Icons.viz(root.index); accent: Icons.viz-accent(root.index); dim: Icons.viz-dim(root.index);
     }
-    Text { x: 42px; width: parent.width - 42px - 40px; text: root.text; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
+    Text { x: root.show-icon ? 42px : 12px; width: parent.width - (root.show-icon ? 42px : 12px) - 40px; text: root.text; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; overflow: elide; }
     if root.selected: Icon { x: parent.width - 10px - 20px; y: (parent.height - 20px) / 2; width: 20px; height: 20px; source: @image-url("../assets/icons/check-active.svg"); tint: Theme.accent; }
 }
 
 export component VizDropdown inherits Rectangle {
     in property <[string]> modes;
     in property <int> mode;
+    // Tallest the list may get (the window below the button); it scrolls beyond that.
+    in property <length> max-popup: 600px;
+    in property <length> box-width: 180px;
+    in property <string> accessible-name: "Visualizer";
+    in property <bool> show-icons: true;
     callback select(int);
-    width: 180px; height: 32px; border-radius: Metrics.radius-md;
+    width: box-width; height: 32px; border-radius: Metrics.radius-md;
     background: ta.has-hover ? Theme.popup-hover : Theme.bar;
     HorizontalLayout {
         padding-left: 12px; padding-right: 8px; spacing: 6px;
-        Text { text: root.modes[root.mode]; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        Text { text: (root.modes.length > 0 && root.mode >= 0 && root.mode < root.modes.length) ? root.modes[root.mode] : ""; color: Theme.fg-a2; font-size: Metrics.font-md; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Icon { y: (parent.height - 18px) / 2; width: 18px; height: 18px; source: @image-url("../assets/icons/chevron-down.svg"); tint: Theme.fg-a2; }
     }
-    ta := TouchArea { accessible-role: combobox; accessible-label: "Visualizer"; accessible-value: root.modes[root.mode]; accessible-action-default => { pop.show(); } mouse-cursor: pointer; clicked => { pop.show(); } }
+    ta := TouchArea { accessible-role: combobox; accessible-label: root.accessible-name; accessible-value: (root.modes.length > 0 && root.mode >= 0 && root.mode < root.modes.length) ? root.modes[root.mode] : ""; accessible-action-default => { pop.show(); } mouse-cursor: pointer; clicked => { pop.show(); } }
     pop := PopupWindow {
         x: 0; y: root.height + 4px;
         width: root.width;
-        height: root.modes.length * 40px + 8px;
+        height: min(root.modes.length * 40px + 8px, max(root.max-popup, 168px));
         Rectangle {
             background: Theme.bar-solid.with-alpha(0.97); border-radius: Metrics.radius-lg;
             drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
-            VerticalLayout {
-                padding: 4px; alignment: start;
-                for m[i] in root.modes: VizRow {
-                    index: i; text: m; selected: i == root.mode;
-                    clicked => { root.select(i); pop.close(); }
+            Flickable {
+                content-height: root.modes.length * 40px + 8px;
+                VerticalLayout {
+                    padding: 4px; alignment: start;
+                    for m[i] in root.modes: VizRow {
+                        index: i; text: m; selected: i == root.mode; show-icon: root.show-icons;
+                        clicked => { root.select(i); pop.close(); }
+                    }
                 }
             }
         }
     }
 }
 
-// Full-window visualizer image; sits above the (empty) video underlay.
+// Full-window visualizer image; sits above the (empty) video underlay. Modes with a
+// cover slot get the album cover on top, sharp at any DPI, sized (and pulsing) from Rust.
 export component VizView inherits Rectangle {
     in property <image> frame;
     in property <string> note; // dominant pitch name (Pitch mode), "" = none
+    in property <image> cover;
+    in property <bool> has-cover;
+    in property <float> cover-size; // diameter / shorter side, 0 = hidden
+    // A settled paused frame is not redrawn by itself: ask for one when it would go stale.
+    callback wake();
+    property <color> accent: Theme.accent;
+    property <color> bg: Theme.bg-b1;
+    changed width => { root.wake(); }
+    changed height => { root.wake(); }
+    changed accent => { root.wake(); }
+    changed bg => { root.wake(); }
     accessible-role: AccessibleRole.image;
     accessible-label: root.note != "" ? "Audio visualizer, " + root.note : "Audio visualizer";
     background: Theme.bg-b1;
     Image { width: 100%; height: 100%; source: root.frame; image-fit: fill; }
+    if root.has-cover && root.cover-size > 0: Rectangle {
+        property <length> d: min(root.width, root.height) * root.cover-size;
+        x: (root.width - self.d) / 2; y: (root.height - self.d) / 2;
+        width: self.d; height: self.d;
+        border-radius: self.d / 2;
+        background: Theme.bg-b1;
+        drop-shadow-blur: 24px; drop-shadow-color: Theme.shadow-soft;
+        Rectangle {
+            border-radius: parent.d / 2;
+            clip: true;
+            Image { width: 100%; height: 100%; source: root.cover; image-fit: ImageFit.cover; }
+        }
+    }
     if root.note != "": Text {
         text: root.note; font-size: min(root.width, root.height) * 0.09; font-weight: 600;
         color: Theme.fg-1.with-alpha(0.85);

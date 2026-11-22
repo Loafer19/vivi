@@ -7,10 +7,14 @@
 //!   so [`analysis`] can keep deriving features (FFT bands, loudness, onsets/beats,
 //!   chroma/dominant pitch) and the modes stay unchanged.
 //! * [`modes`] holds the visual modes behind the [`modes::Visual`] trait; they draw
-//!   into a small software [`canvas`] that Slint scales to the window.
-//! * [`art`] picks the colour of the playing song's cover for *Colors → Album art*.
+//!   into a software [`canvas`] sized to the window's physical pixels (capped, see
+//!   [`canvas_size`]) that Slint scales to the window. Radial (Rays and Cover styles)
+//!   gets the album cover drawn sharp on top by Slint (`VizView`).
+//! * [`art`] decodes the playing song's cover: its palette for *Colors → Album art*
+//!   and the picture for the cover slot.
 //!
-//! It only runs while audio-only media is playing and a mode is selected.
+//! It only runs while audio-only media is playing and a mode is selected; once a
+//! paused frame has settled the frame task stops until [`wake`] or [`arm`].
 
 mod analysis;
 mod art;
@@ -22,7 +26,7 @@ use crate::player::Player;
 use crate::plugins::{contrib, SettingSpec};
 use crate::{AppWindow, Theme};
 use analysis::Analyzer;
-use canvas::{Canvas, Palette, Rgb};
+use canvas::{Canvas, ColorMode, Palette, Rgb, STOPS};
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -31,7 +35,66 @@ use std::time::{Duration, Instant};
 
 const FRAME: Duration = Duration::from_millis(33); // ~30 fps
 /// Options of the *Colors* setting.
-const COLORS: [&str; 2] = ["Theme accent", "Album art"];
+const COLORS: [&str; 3] = ["Theme accent", "Album art", "Frequency"];
+/// Options of *Sensitivity*, *Bar density* and *Waterfall speed* (the middle one is the default).
+const SENSITIVITY: [&str; 3] = ["Low", "Normal", "High"];
+const DENSITY: [&str; 3] = ["Fewer", "Normal", "More"];
+const SPEED: [&str; 3] = ["Slow", "Normal", "Fast"];
+
+/// The plugin settings the frame task reads.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Settings {
+    color: ColorMode,
+    /// Linear input gain (Sensitivity: Low −6 dB, High +6 dB).
+    gain: f32,
+    bars: usize,
+    scroll: f32,
+    led: bool,
+}
+
+impl Settings {
+    const DEFAULT: Self = Self {
+        color: ColorMode::Accent,
+        gain: 1.0,
+        bars: 64,
+        scroll: 2.0,
+        led: false,
+    };
+    fn read(cx: &crate::plugins::Ctx) -> Self {
+        Self::from_values(
+            &cx.get("colors"),
+            &cx.get("sensitivity"),
+            &cx.get("bars"),
+            &cx.get("speed"),
+            cx.flag("led_caps"),
+        )
+    }
+    fn from_values(colors: &str, sens: &str, bars: &str, speed: &str, led: bool) -> Self {
+        Self {
+            color: match colors {
+                "Album art" => ColorMode::Art,
+                "Frequency" => ColorMode::Frequency,
+                _ => ColorMode::Accent,
+            },
+            gain: match sens {
+                "Low" => 0.5,
+                "High" => 2.0,
+                _ => 1.0,
+            },
+            bars: match bars {
+                "Fewer" => 32,
+                "More" => 96,
+                _ => 64,
+            },
+            scroll: match speed {
+                "Slow" => 1.0,
+                "Fast" => 4.0,
+                _ => 2.0,
+            },
+            led,
+        }
+    }
+}
 const NOTES: [&str; 12] = [
     "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B",
 ];
@@ -54,14 +117,22 @@ struct Viz {
     synth: Resynth,
     /// Palette of the last frame drawn (a change redraws a paused frame).
     pal: Option<Palette>,
-    art: ArtColor,
+    art: Art,
+    /// [`Art::gen`] of the cover image handed to Slint.
+    cover_gen: u32,
+    /// Cover slot size last sent to Slint (0 = hidden).
+    cover_size: f32,
+    spectrum: modes::SpectrumStyle,
+    radial: modes::RadialStyle,
 }
 
 thread_local! {
     /// Toggled by the plugin registry (Settings → Extensions).
     static ENABLED: Cell<bool> = const { Cell::new(true) };
-    /// Setting *Colors* is *Album art*.
-    static ART_COLORS: Cell<bool> = const { Cell::new(false) };
+    /// The plugin settings (Settings → Extensions → Music Visualizer).
+    static SETTINGS: Cell<Settings> = const { Cell::new(Settings::DEFAULT) };
+    /// Redraw requested while a paused frame had settled (see [`wake`]).
+    static WAKE: Cell<bool> = const { Cell::new(false) };
     static TICK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
     static CTX: RefCell<Option<Ctx>> = const { RefCell::new(None) };
 }
@@ -81,7 +152,7 @@ impl crate::plugins::Plugin for VizPlugin {
         crate::plugins::Manifest::builtin(
             "visualizer",
             "Music Visualizer",
-            "Spectrum, scope, waveform, radial, particles and pitch visuals for music and radio (anything without video), drawn from what mpv plays, so the equalizer shows. Pick a mode with the dropdown or V (Shift+V goes back); colors follow the theme accent or the song's album art.",
+            "Eight visualizer modes for music and radio (anything without video), drawn from what mpv plays, so the equalizer shows: Spectrometer, Scope, Spectrum (Bars, LED, Mountain, Dots), Envelope, Radial (Rays, Cover), Particles, Pitch and VU Meter. Pick a mode with the dropdown or V (Shift+V goes back); Spectrum and Radial have a style picker. Colors follow the theme accent, the song's album art or the frequency.",
             "visualizer",
         )
         .contribute(contrib::PALETTE_COMMAND, "Next visualizer mode", "next")
@@ -89,13 +160,40 @@ impl crate::plugins::Plugin for VizPlugin {
         .setting(SettingSpec::choice(
             "colors",
             "Colors",
-            "Album art: the visuals take the main color of the playing song's cover, made readable on the theme. Covers without a clear color (black and white, grey) keep the theme accent.",
+            "Album art: the visuals take up to five main colors of the playing song's cover (a gradient from bass to treble), made readable on the theme; a cover with one clear color gives that color, and covers without one (black and white, grey) keep the theme accent. Frequency: a hue per frequency, warm bass to cool treble.",
             &COLORS,
+        ))
+        .setting(SettingSpec::choice_default(
+            "sensitivity",
+            "Sensitivity",
+            "How strongly the visuals react to the level: Low for loud masters, High for quiet recordings.",
+            &SENSITIVITY,
+            "Normal",
+        ))
+        .setting(SettingSpec::choice_default(
+            "bars",
+            "Bar density",
+            "How many bars or dots the Spectrum styles draw across the window.",
+            &DENSITY,
+            "Normal",
+        ))
+        .setting(SettingSpec::choice_default(
+            "speed",
+            "Waterfall speed",
+            "How fast the Spectrometer scrolls.",
+            &SPEED,
+            "Normal",
+        ))
+        .setting(SettingSpec::toggle(
+            "led_caps",
+            "LED peak caps",
+            "Spectrum, Bars style: the falling peak caps as glowing LED blocks instead of thin lines.",
+            false,
         ))
     }
     fn enable(&mut self, cx: &crate::plugins::Ctx) {
         ENABLED.with(|e| e.set(true));
-        ART_COLORS.with(|e| e.set(cx.get("colors") == COLORS[1]));
+        SETTINGS.with(|e| e.set(Settings::read(cx)));
         cx.app.global::<crate::Viz>().set_enabled(true);
         cx.app
             .global::<crate::Viz>()
@@ -108,10 +206,9 @@ impl crate::plugins::Plugin for VizPlugin {
         cx.app.global::<crate::Viz>().set_audio(false);
         let _ = run();
     }
-    fn setting_changed(&mut self, cx: &crate::plugins::Ctx, key: &str) {
-        if key == "colors" {
-            ART_COLORS.with(|e| e.set(cx.get("colors") == COLORS[1]));
-        }
+    fn setting_changed(&mut self, cx: &crate::plugins::Ctx, _key: &str) {
+        SETTINGS.with(|e| e.set(Settings::read(cx)));
+        wake();
     }
     fn command(&mut self, cx: &crate::plugins::Ctx, name: &str, _args: &[String]) {
         let d = match name {
@@ -143,39 +240,231 @@ pub fn step(a: &AppWindow, d: i32) -> bool {
 
 /// Select a mode by name (case-insensitive) or index; the saved choice also applies
 /// when nothing is playing. Err while the plugin is off or for an unknown mode.
+/// Old names (Classic, Cover, Waveform, …) and bare style names (LED, Bars, Rays)
+/// set the matching mode and style.
 pub fn select(a: &AppWindow, mode: &str) -> Result<(), String> {
     if !enabled() {
         return Err("the Music Visualizer is turned off (Settings → Extensions)".into());
     }
     let v = a.global::<crate::Viz>();
     let names: Vec<String> = v.get_modes().iter().map(|m| m.to_string()).collect();
-    let i = names
-        .iter()
-        .position(|n| n.eq_ignore_ascii_case(mode.trim()))
+    let i = mode_index(&names, mode)
         .or_else(|| {
             mode.trim()
                 .parse::<usize>()
                 .ok()
                 .filter(|&i| i < names.len())
         })
-        .ok_or_else(|| format!("unknown mode {mode:?}; one of: {}", names.join(", ")))?;
+        .ok_or_else(|| {
+            format!(
+                "unknown mode {mode:?}; one of: {} (old names Classic, Mountain, Dots, Cover and Waveform still work)",
+                names.join(", ")
+            )
+        })?;
+    if let Some(r) = modes::resolve(mode) {
+        set_pending_styles(r);
+    }
     v.invoke_select(i as i32);
     Ok(())
 }
 
-/// Current mode name, all names, and whether the visualizer is on screen now.
-pub fn state(a: &AppWindow) -> (String, Vec<String>, bool) {
+/// Select a style of the current mode (Bars / LED / Mountain / Dots, or Rays / Cover).
+pub fn select_style(a: &AppWindow, style: &str) -> Result<(), String> {
+    if !enabled() {
+        return Err("the Music Visualizer is turned off (Settings → Extensions)".into());
+    }
     let v = a.global::<crate::Viz>();
     let names: Vec<String> = v.get_modes().iter().map(|m| m.to_string()).collect();
     let mode = names
         .get(v.get_mode() as usize)
         .cloned()
         .unwrap_or_default();
+    let styles = modes::styles_for(&mode);
+    if styles.is_empty() {
+        return Err(format!("{mode} has no styles"));
+    }
+    let want = modes::norm(style);
+    let i = styles
+        .iter()
+        .position(|s| modes::norm(s) == want)
+        .ok_or_else(|| {
+            format!(
+                "unknown style {style:?} for {mode}; one of: {}",
+                styles.join(", ")
+            )
+        })?;
+    v.invoke_select_style(i as i32);
+    Ok(())
+}
+
+/// Snapshot of the visualizer for IPC / MCP.
+#[derive(Clone, Debug)]
+pub struct State {
+    pub mode: String,
+    pub modes: Vec<String>,
+    pub style: String,
+    pub styles: Vec<String>,
+    pub showing: bool,
+}
+
+/// Current mode, style, the lists, and whether the visualizer is on screen now.
+pub fn state(a: &AppWindow) -> State {
+    let v = a.global::<crate::Viz>();
+    let names: Vec<String> = v.get_modes().iter().map(|m| m.to_string()).collect();
+    let mode = names
+        .get(v.get_mode() as usize)
+        .cloned()
+        .unwrap_or_default();
+    let styles: Vec<String> = v.get_styles().iter().map(|s| s.to_string()).collect();
+    let style = styles
+        .get(v.get_style() as usize)
+        .cloned()
+        .unwrap_or_default();
     let showing = enabled()
         && v.get_audio()
         && v.get_mode() > 0
         && a.global::<crate::Playback>().get_has_media();
-    (mode, names, showing)
+    State {
+        mode,
+        modes: names,
+        style,
+        styles,
+        showing,
+    }
+}
+
+/// Index of mode `name` in `names`: case, spaces and dashes do not matter ("vu-meter"
+/// is VU Meter) and old names still work ([`modes::ALIASES`]: Waveform is Envelope,
+/// Classic is Spectrum / LED, Cover is Radial / Cover).
+fn mode_index(names: &[impl AsRef<str>], name: &str) -> Option<usize> {
+    let want = if let Some(r) = modes::resolve(name) {
+        modes::norm(r.mode)
+    } else {
+        modes::norm(name)
+    };
+    if want.is_empty() {
+        return None;
+    }
+    names.iter().position(|n| modes::norm(n.as_ref()) == want)
+}
+
+fn set_pending_styles(r: modes::Resolved) {
+    CTX.with(|c| {
+        if let Some((_, _, viz)) = c.borrow().as_ref() {
+            let mut v = viz.borrow_mut();
+            if let Some(s) = r.spectrum {
+                v.spectrum = s;
+            }
+            if let Some(s) = r.radial {
+                v.radial = s;
+            }
+        }
+    });
+}
+
+struct Choice {
+    mode: usize,
+    spectrum: modes::SpectrumStyle,
+    radial: modes::RadialStyle,
+}
+
+/// First line is the mode (aliases work). Later lines are the remembered Spectrum
+/// and Radial styles (`LED`, `Cover`, or `spectrum:LED` / `radial:Cover`).
+fn load_choice(text: &str, names: &[impl AsRef<str>]) -> Choice {
+    let mut spectrum = modes::SpectrumStyle::Bars;
+    let mut radial = modes::RadialStyle::Rays;
+    let mut mode = mode_index(names, "Spectrum").unwrap_or(3);
+    let mut lines = text.lines().map(str::trim).filter(|s| !s.is_empty());
+    if let Some(first) = lines.next() {
+        if let Some(r) = modes::resolve(first) {
+            if let Some(i) = mode_index(names, r.mode) {
+                mode = i;
+            }
+            if let Some(s) = r.spectrum {
+                spectrum = s;
+            }
+            if let Some(s) = r.radial {
+                radial = s;
+            }
+        } else if let Some(i) = mode_index(names, first) {
+            mode = i;
+        }
+    }
+    for line in lines {
+        let (key, val) = line
+            .split_once(':')
+            .map(|(k, v)| (k.trim(), v.trim()))
+            .unwrap_or(("", line));
+        let token = if key.is_empty() { line } else { val };
+        if key.is_empty() || modes::norm(key) == "spectrum" {
+            if let Some(s) = modes::SpectrumStyle::parse(token) {
+                spectrum = s;
+                continue;
+            }
+        }
+        if key.is_empty() || modes::norm(key) == "radial" {
+            if let Some(s) = modes::RadialStyle::parse(token) {
+                radial = s;
+            }
+        }
+    }
+    Choice {
+        mode,
+        spectrum,
+        radial,
+    }
+}
+
+fn save_choice(mode: &str, spectrum: modes::SpectrumStyle, radial: modes::RadialStyle) {
+    let _ = std::fs::create_dir_all(crate::store::state_dir());
+    let _ = std::fs::write(
+        mode_file(),
+        format!(
+            "{mode}
+{}
+{}
+",
+            spectrum.name(),
+            radial.name()
+        ),
+    );
+}
+
+fn sync_style_ui(
+    a: &AppWindow,
+    mode: &str,
+    spectrum: modes::SpectrumStyle,
+    radial: modes::RadialStyle,
+) {
+    let list: Vec<SharedString> = modes::styles_for(mode)
+        .iter()
+        .map(|s| SharedString::from(*s))
+        .collect();
+    let i = match modes::norm(mode).as_str() {
+        "spectrum" => spectrum as usize,
+        "radial" => radial as usize,
+        _ => 0,
+    };
+    let v = a.global::<crate::Viz>();
+    v.set_styles(ModelRc::new(VecModel::from(list)));
+    v.set_style(i as i32);
+}
+
+/// Redraw the visualizer even if its paused frame had settled and the frame task was
+/// stopped: a seek, a window resize, a theme, cover or setting change.
+pub fn wake() {
+    WAKE.with(|w| w.set(true));
+    arm();
+}
+
+/// Canvas size for a window of `w`×`h` physical pixels at `scale`: the window's own
+/// resolution, capped at 960 × scale (≤ 2×) on the longer side and ~1.6 Mpx, so HiDPI
+/// screens get a sharper canvas without unbounded per-pixel work.
+fn canvas_size(w: u32, h: u32, scale: f32) -> (usize, usize) {
+    let cap = 960.0 * scale.clamp(1.0, 2.0);
+    let (wf, hf) = (w.max(1) as f32, h.max(1) as f32);
+    let d = (wf.max(hf) / cap).max((wf * hf / 1.6e6).sqrt()).max(1.0);
+    (((wf / d) as usize).max(16), ((hf / d) as usize).max(16))
 }
 
 fn mode_file() -> std::path::PathBuf {
@@ -187,11 +476,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     let mut names: Vec<SharedString> = vec!["Disabled".into()];
     names.extend(modes.iter().map(|m| SharedString::from(m.name())));
     let saved = std::fs::read_to_string(mode_file()).unwrap_or_default();
-    let saved = saved.trim();
-    let mode = names.iter().position(|n| n.as_str() == saved).unwrap_or(3); // Spectrum
+    let choice = load_choice(&saved, &names);
+    let mode = choice.mode;
     app.global::<crate::Viz>()
-        .set_modes(ModelRc::new(VecModel::from(names)));
+        .set_modes(ModelRc::new(VecModel::from(names.clone())));
     app.global::<crate::Viz>().set_mode(mode as i32);
+    let mode_name = names.get(mode).map(|s| s.as_str()).unwrap_or("Spectrum");
+    sync_style_ui(app, mode_name, choice.spectrum, choice.radial);
 
     let viz = Rc::new(RefCell::new(Viz {
         tap: tap::Tap::new(),
@@ -209,15 +500,20 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         tick: 0,
         synth: Resynth::default(),
         pal: None,
-        art: ArtColor::default(),
+        art: Art::default(),
+        cover_gen: 0,
+        cover_size: 0.0,
+        spectrum: choice.spectrum,
+        radial: choice.radial,
     }));
+    app.global::<crate::Viz>().on_wake(wake);
 
     let (w, v) = (app.as_weak(), viz.clone());
     app.global::<crate::Viz>().on_select(move |i| {
         let Some(a) = w.upgrade() else { return };
         let n = a.global::<crate::Viz>().get_modes().row_count();
         let i = (i.max(0) as usize).min(n.saturating_sub(1));
-        {
+        let (spectrum, radial) = {
             let mut v = v.borrow_mut();
             if v.mode != i {
                 // Start the new mode on a clean canvas (no trails of the old one), and
@@ -226,13 +522,52 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                 v.paused_for = 0.0;
             }
             v.mode = i;
-        }
+            (v.spectrum, v.radial)
+        };
         a.global::<crate::Viz>().set_mode(i as i32);
         a.global::<crate::Viz>().set_note("".into());
         if let Some(name) = a.global::<crate::Viz>().get_modes().row_data(i) {
-            let _ = std::fs::create_dir_all(crate::store::state_dir());
-            let _ = std::fs::write(mode_file(), name.as_str());
+            sync_style_ui(&a, name.as_str(), spectrum, radial);
+            save_choice(name.as_str(), spectrum, radial);
         }
+        arm();
+    });
+
+    let (w, v) = (app.as_weak(), viz.clone());
+    app.global::<crate::Viz>().on_select_style(move |i| {
+        let Some(a) = w.upgrade() else { return };
+        let n = a.global::<crate::Viz>().get_styles().row_count();
+        if n == 0 {
+            return;
+        }
+        let i = (i.max(0) as usize).min(n.saturating_sub(1));
+        let Some(style) = a.global::<crate::Viz>().get_styles().row_data(i) else {
+            return;
+        };
+        let mode_name = a
+            .global::<crate::Viz>()
+            .get_modes()
+            .row_data(a.global::<crate::Viz>().get_mode() as usize)
+            .unwrap_or_default();
+        {
+            let mut v = v.borrow_mut();
+            if let Some(s) = modes::SpectrumStyle::parse(style.as_str()) {
+                if modes::norm(mode_name.as_str()) == "spectrum" && v.spectrum != s {
+                    v.spectrum = s;
+                    v.canvas = Canvas::new(1, 1);
+                    v.paused_for = 0.0;
+                }
+            }
+            if let Some(s) = modes::RadialStyle::parse(style.as_str()) {
+                if modes::norm(mode_name.as_str()) == "radial" && v.radial != s {
+                    v.radial = s;
+                    v.canvas = Canvas::new(1, 1);
+                    v.paused_for = 0.0;
+                }
+            }
+            save_choice(mode_name.as_str(), v.spectrum, v.radial);
+        }
+        a.global::<crate::Viz>().set_style(i as i32);
         arm();
     });
 
@@ -271,70 +606,102 @@ pub fn arm() {
     }
 }
 
-/// The playing song's cover colour for *Colors → Album art*: looked up on a worker
-/// thread whenever the shared now-playing cover changes, then eased in.
+/// What the worker sends back for a cover: the picture for the cover slot and its palette.
+type Decoded = Option<(SharedPixelBuffer<slint::Rgba8Pixel>, Vec<Rgb>)>;
+
+/// The playing song's cover for *Colors → Album art* and the cover slot: decoded on a
+/// worker thread whenever the shared now-playing cover changes (only while needed), its
+/// palette then eased in.
 #[derive(Default)]
-struct ArtColor {
+struct Art {
     /// Now-playing change counter seen last.
     np_id: i64,
     cover: String,
-    rx: Option<Receiver<Option<Rgb>>>,
-    /// Dominant colour of `cover` (None: none / not known yet).
-    color: Option<Rgb>,
-    /// Accent shown now, moving towards the target.
-    shown: Option<Rgb>,
+    rx: Option<Receiver<Decoded>>,
+    /// The cover picture (None: none / not known yet).
+    image: Option<SharedPixelBuffer<slint::Rgba8Pixel>>,
+    /// Bumped whenever `image` changes.
+    gen: u32,
+    /// Raw palette of `cover`, main colour first (empty: none / not known yet).
+    colors: Vec<Rgb>,
+    /// Stops shown now, moving towards the target.
+    shown: Option<[Rgb; STOPS]>,
 }
 
-impl ArtColor {
-    /// The accent to draw with: the cover colour when wanted and known, else `theme`.
-    fn accent(&mut self, want: bool, path: Option<&str>, theme: Rgb, dark: bool, dt: f32) -> Rgb {
-        if want {
-            let id = crate::nowplaying::current_id();
-            if id != self.np_id {
-                self.np_id = id;
-                let t = crate::nowplaying::current();
-                let cover = if path == Some(t.path.as_str()) {
-                    t.cover
-                } else {
-                    String::new()
-                };
-                if cover != self.cover {
-                    self.cover = cover.clone();
-                    self.color = None;
-                    self.rx = None;
-                    if !cover.is_empty() {
-                        let (tx, rx) = channel();
-                        self.rx = Some(rx);
-                        let _ = std::thread::Builder::new()
-                            .name("vivi-viz-art".into())
-                            .spawn(move || {
-                                let c = crate::plugins::host::fetch_cover(&cover)
-                                    .and_then(|p| art::dominant(&p));
-                                let _ = tx.send(c);
-                            });
-                    }
+impl Art {
+    /// Follow the playing song's cover while `need` (Album art colours or a cover mode).
+    fn update(&mut self, need: bool, path: Option<&str>) {
+        if !need {
+            self.np_id = -1; // look again when needed
+            return;
+        }
+        let id = crate::nowplaying::current_id();
+        if id != self.np_id {
+            self.np_id = id;
+            let t = crate::nowplaying::current();
+            let cover = if path == Some(t.path.as_str()) {
+                t.cover
+            } else {
+                String::new()
+            };
+            if cover != self.cover {
+                self.cover = cover.clone();
+                self.colors.clear();
+                if self.image.take().is_some() {
+                    self.gen = self.gen.wrapping_add(1);
+                }
+                self.rx = None;
+                if !cover.is_empty() {
+                    let (tx, rx) = channel();
+                    self.rx = Some(rx);
+                    let _ = std::thread::Builder::new()
+                        .name("vivi-viz-art".into())
+                        .spawn(move || {
+                            let d = crate::plugins::host::fetch_cover(&cover)
+                                .and_then(|p| art::decode(&p));
+                            let _ = tx.send(d);
+                            // Show it even on a settled paused frame.
+                            let _ = slint::invoke_from_event_loop(wake);
+                        });
                 }
             }
-            if let Some(c) = self.rx.as_ref().and_then(|r| r.try_recv().ok()) {
-                self.color = c;
-                self.rx = None;
-            }
-        } else {
-            self.np_id = -1; // look again when switched back on
         }
-        let target = match (want, self.color) {
-            (true, Some(c)) => art::usable(c, dark),
-            _ => theme,
+        if let Some(d) = self.rx.as_ref().and_then(|r| r.try_recv().ok()) {
+            self.rx = None;
+            let (img, colors) = d.map_or((None, Vec::new()), |(i, c)| (Some(i), c));
+            self.colors = colors;
+            self.image = img;
+            self.gen = self.gen.wrapping_add(1);
+        }
+    }
+
+    /// Palette stops to draw with: the cover's colours (Album art) or the theme accent,
+    /// eased towards the target in ~0.4 s (song changes, switching the setting).
+    fn stops(&mut self, art: bool, theme: Rgb, dark: bool, dt: f32) -> ([Rgb; STOPS], usize) {
+        let mut target = [theme; STOPS];
+        let n = if art && !self.colors.is_empty() {
+            for (t, c) in target.iter_mut().zip(&self.colors) {
+                *t = art::usable(*c, dark);
+            }
+            self.colors.len().min(STOPS)
+        } else {
+            1
         };
-        // Ease towards the target in ~0.4 s (song changes, switching the setting).
-        let now = self
-            .shown
-            .unwrap_or(target)
-            .lerp(target, (dt * 8.0).min(1.0));
-        let close = (now.0 - target.0).abs() + (now.1 - target.1).abs() + (now.2 - target.2).abs();
-        let now = if close < 0.01 { target } else { now };
+        // Unused stops repeat the last colour, so a change of count eases smoothly.
+        let last = target[n - 1];
+        target[n..].fill(last);
+        let k = (dt * 8.0).min(1.0);
+        let mut now = self.shown.unwrap_or(target);
+        let mut far = 0.0;
+        for (c, t) in now.iter_mut().zip(&target) {
+            *c = c.lerp(*t, k);
+            far += (c.0 - t.0).abs() + (c.1 - t.1).abs() + (c.2 - t.2).abs();
+        }
+        if far < 0.01 * STOPS as f32 {
+            now = target;
+        }
         self.shown = Some(now);
-        now
+        (now, n)
     }
 }
 
@@ -500,6 +867,7 @@ impl Viz {
             if path != self.path {
                 self.tap.clear();
                 self.an = None;
+                self.paused_for = 0.0;
             }
             self.path = path;
             self.track_count = tc;
@@ -530,18 +898,37 @@ impl Viz {
             )
         };
         let dark = th.get_dark();
-        let want_art = ART_COLORS.with(|e| e.get());
-        let accent = self.art.accent(
-            want_art,
-            self.path.as_deref(),
-            col(th.get_accent()),
-            dark,
-            dt,
-        );
+        let set = SETTINGS.with(|e| e.get());
+        let shows_cover = self
+            .modes
+            .get(self.mode - 1)
+            .is_some_and(|m| m.shows_cover());
+        let want_art = set.color == ColorMode::Art;
+        self.art
+            .update(want_art || shows_cover, self.path.as_deref());
+        if self.art.gen != self.cover_gen {
+            self.cover_gen = self.art.gen;
+            let v = a.global::<crate::Viz>();
+            match &self.art.image {
+                Some(buf) => {
+                    v.set_cover(slint::Image::from_rgba8(buf.clone()));
+                    v.set_has_cover(true);
+                }
+                None => {
+                    v.set_has_cover(false);
+                    v.set_cover(slint::Image::default());
+                }
+            }
+        }
+        let theme = col(th.get_accent());
+        let (stops, n) = self.art.stops(want_art, theme, dark, dt);
         let pal = Palette {
-            accent,
+            accent: if want_art { stops[0] } else { theme },
             bg: col(th.get_bg_b1()),
             dark,
+            mode: set.color,
+            stops,
+            n,
         };
         let pal_changed = self.pal != Some(pal);
         if self.pal.is_some_and(|o| o.bg != pal.bg) {
@@ -549,6 +936,9 @@ impl Viz {
         }
         self.pal = Some(pal);
 
+        if WAKE.with(|w| w.replace(false)) {
+            self.paused_for = self.paused_for.min(1.0); // redraw a few frames
+        }
         let paused = p.mpv.get_property::<bool>("pause").unwrap_or(true);
         self.paused_for = if !paused {
             0.0
@@ -558,7 +948,10 @@ impl Viz {
             self.paused_for + dt
         };
         if self.paused_for > 1.5 && self.canvas.w > 1 {
-            return true; // settled; keep the last frame and save CPU
+            // Settled: keep the last frame and stop the frame task until play, a seek,
+            // a mode / setting / theme change or a resize wakes it ([`wake`], [`arm`]).
+            TICK.with(crate::ticker::clear);
+            return false;
         }
 
         // Analysis
@@ -579,6 +972,7 @@ impl Viz {
             None
         };
         let an = self.an.get_or_insert_with(|| Analyzer::new(48_000));
+        an.gain = set.gain;
         if let Some((fr, t)) = &frame {
             let m = analysis::Measured {
                 levels: &fr.bands,
@@ -591,13 +985,8 @@ impl Viz {
             an.idle(dt);
         }
 
-        // Canvas sized to the window, downscaled so the longer side stays ≤ ~800 px.
         let size = a.window().size();
-        let s = (size.width.max(size.height) as f32 / 800.0).ceil().max(1.0) as u32;
-        let (cw, ch) = (
-            (size.width / s).max(16) as usize,
-            (size.height / s).max(16) as usize,
-        );
+        let (cw, ch) = canvas_size(size.width, size.height, a.window().scale_factor());
         if self.canvas.w != cw || self.canvas.h != ch {
             self.canvas = Canvas::new(cw, ch);
             self.canvas.clear(pal.bg);
@@ -605,7 +994,25 @@ impl Viz {
         let Some(m) = self.modes.get_mut(self.mode - 1) else {
             return true;
         };
-        m.draw(&mut self.canvas, &an.f, &pal);
+        let has_cover = shows_cover && self.art.image.is_some();
+        let opts = modes::Opts {
+            bars: set.bars,
+            scroll: set.scroll,
+            led: set.led,
+            cover: has_cover,
+            spectrum: self.spectrum,
+            radial: self.radial,
+        };
+        m.draw(&mut self.canvas, &an.f, &pal, &opts);
+        let slot = if has_cover {
+            m.cover(&an.f, &opts).unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        if (slot - self.cover_size).abs() > 0.001 {
+            self.cover_size = slot;
+            a.global::<crate::Viz>().set_cover_size(slot);
+        }
         let note = if m.name() == "Pitch" && an.f.pitch_conf > 0.15 {
             NOTES[an.f.pitch]
         } else {
@@ -625,6 +1032,91 @@ impl Viz {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mode_names_are_loose_and_old_names_work() {
+        let names = ["Disabled", "Spectrum", "Envelope", "VU Meter"];
+        assert_eq!(mode_index(&names, "spectrum"), Some(1));
+        assert_eq!(mode_index(&names, "Waveform"), Some(2));
+        assert_eq!(mode_index(&names, "waveform"), Some(2));
+        assert_eq!(mode_index(&names, "vu-meter"), Some(3));
+        assert_eq!(mode_index(&names, " VU meter "), Some(3));
+        assert_eq!(mode_index(&names, "Classic"), Some(1));
+        assert_eq!(mode_index(&names, ""), None);
+        assert_eq!(mode_index(&names, "nope"), None);
+        let names = [
+            "Disabled",
+            "Spectrometer",
+            "Scope",
+            "Spectrum",
+            "Envelope",
+            "Radial",
+            "Particles",
+            "Pitch",
+            "VU Meter",
+        ];
+        assert_eq!(mode_index(&names, "Cover"), Some(5));
+        assert_eq!(mode_index(&names, "Mountain"), Some(3));
+        assert_eq!(mode_index(&names, "Dots"), Some(3));
+        assert_eq!(mode_index(&names, "LED"), Some(3));
+        assert_eq!(mode_index(&names, "Classic"), Some(3));
+    }
+
+    #[test]
+    fn load_choice_migrates_old_mode_names_and_keeps_styles() {
+        let names = [
+            "Disabled",
+            "Spectrometer",
+            "Scope",
+            "Spectrum",
+            "Envelope",
+            "Radial",
+            "Particles",
+            "Pitch",
+            "VU Meter",
+        ];
+        let c = load_choice("Classic", &names);
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Led);
+        let c = load_choice("Cover\n", &names);
+        assert_eq!(c.mode, 5);
+        assert_eq!(c.radial, modes::RadialStyle::Cover);
+        let c = load_choice("Waveform", &names);
+        assert_eq!(c.mode, 4);
+        let c = load_choice("Spectrum\nLED\nCover\n", &names);
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Led);
+        assert_eq!(c.radial, modes::RadialStyle::Cover);
+        let c = load_choice("Radial\nspectrum:Dots\nradial:Rays\n", &names);
+        assert_eq!(c.mode, 5);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Dots);
+        assert_eq!(c.radial, modes::RadialStyle::Rays);
+        let c = load_choice("", &names);
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Bars);
+        assert_eq!(c.radial, modes::RadialStyle::Rays);
+    }
+
+    #[test]
+    fn canvas_follows_the_window_up_to_a_cap() {
+        assert_eq!(canvas_size(800, 600, 1.0), (800, 600));
+        assert_eq!(canvas_size(1920, 1080, 1.0), (960, 540));
+        // HiDPI: sharper, but bounded by the pixel budget.
+        let (w, h) = canvas_size(3840, 2160, 2.0);
+        assert!(w > 1600 && w <= 1920 && (w * h) as f32 <= 1.61e6, "{w}x{h}");
+        assert_eq!(canvas_size(0, 0, 1.0), (16, 16));
+    }
+
+    #[test]
+    fn settings_parse() {
+        let s = Settings::from_values("Album art", "High", "More", "Fast", true);
+        assert_eq!(s.color, ColorMode::Art);
+        assert!(s.gain > 1.0 && s.bars == 96 && s.scroll > 2.0 && s.led);
+        assert_eq!(
+            Settings::from_values("", "", "", "", false),
+            Settings::DEFAULT
+        );
+    }
 
     /// Dominant pitch class the analyser finds in `fr` after resynthesis.
     pub(super) fn pitch_of(fr: &tap::Frame) -> usize {
