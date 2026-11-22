@@ -129,7 +129,23 @@ fn spline(pts: &[(f32, f32)], seg: usize) -> Vec<(f32, f32)> {
 
 /// Average level of the lowest bands (kick drum, bass).
 fn bass(f: &Features) -> f32 {
-    f.bands[..8].iter().sum::<f32>() / 8.0
+    f.bands[..8].iter().map(|&b| f.shown(b)).sum::<f32>() / 8.0
+}
+
+/// `n` display levels: resampled bands after [`Features::shown`].
+fn levels(f: &Features, n: usize) -> Vec<f32> {
+    let mut v = resample(&f.bands, n);
+    for x in &mut v {
+        *x = f.shown(*x);
+    }
+    v
+}
+
+/// Spectrogram intensity: stay near the background until a bin is clearly
+/// above the floor, and reach the palette colour only near full scale.
+fn spec_v(v: f32) -> f32 {
+    let t = ((v - 0.18) / 0.82).clamp(0.0, 1.0);
+    t * t
 }
 
 /// Scrolling spectrogram (time → x, frequency → y, intensity → a multi-stop colour map).
@@ -165,16 +181,16 @@ impl Visual for Spectrometer {
             let i = (x as usize).min(BANDS - 2);
             let fr = x - i as f32;
             let mix = |a: &[f32; BANDS]| a[i] + (a[i + 1] - a[i]) * fr;
-            let v = (mix(&f.raw) * 0.65 + mix(&f.bands) * 0.35)
-                .clamp(0.0, 1.0)
-                .powf(1.5);
+            // Untilted `raw` dominates so a loud, dense mix does not light
+            // every row; a little smoothing just knocks the flicker down.
+            let v = spec_v((mix(&f.raw) * 0.85 + mix(&f.bands) * 0.15).clamp(0.0, 1.0));
             let base = p.at(ft);
             let stops = [
                 p.bg,
-                p.bg.lerp(base, 0.4),
+                p.bg.lerp(base, 0.10),
+                p.bg.lerp(base, 0.40),
                 base,
-                p.lift(base, 0.45),
-                p.lift(base, 0.85),
+                p.lift(base, 0.65),
             ];
             let col = ramp(&stops, v);
             let prev = self.last[y];
@@ -235,7 +251,7 @@ impl Visual for Spectrum {
     }
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
         c.clear(p.bg);
-        let mut v = resample(&f.bands, o.bars);
+        let mut v = levels(f, o.bars);
         smooth3(&mut v);
         let n = v.len();
         self.peaks.resize(n, (0.0, 0.0));
@@ -288,6 +304,9 @@ impl Visual for Spectrum {
 #[derive(Default)]
 struct Envelope {
     hist: Vec<(f32, f32)>,
+    /// Slow peak of the resynth window, so a dense mix that sums past 1.0
+    /// still shows an envelope instead of a solid block.
+    ceil: f32,
 }
 impl Visual for Envelope {
     fn name(&self) -> &'static str {
@@ -296,42 +315,45 @@ impl Visual for Envelope {
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, _o: &Opts) {
         c.clear(p.bg);
         let k = c.k;
-        let colw = 3.0 * k;
-        let cols = ((c.w as f32 / colw) as usize).max(1);
+        let w = c.w as f32;
+        // Columns tile [0, w) exactly: `k` only picks how many there are, so a
+        // HiDPI cap can never leave a stale strip of midline on the right.
+        let cols = ((w / (3.0 * k)).round() as usize).max(1);
         let peak = f.wave.iter().fold(0.0f32, |a, s| a.max(s.abs()));
-        let rms = f.level;
-        self.hist.push((peak.min(1.0), rms));
+        self.ceil = if peak > self.ceil {
+            peak
+        } else {
+            self.ceil * 0.992 + peak * 0.008
+        };
+        let pk = (peak / self.ceil.max(0.35)).clamp(0.0, 1.0);
+        let rms = f.level.clamp(0.0, 1.0);
+        self.hist.push((pk, rms));
         if self.hist.len() > cols {
             let d = self.hist.len() - cols;
             self.hist.drain(..d);
         }
         let h = c.h as f32;
         let mid = h / 2.0;
-        let off = cols - self.hist.len();
+        let pad = cols - self.hist.len();
+        let gap = k.min(w / cols as f32 * 0.25);
         for (i, &(pk, r)) in self.hist.iter().enumerate() {
-            let x = (off + i) as f32 * colw;
-            let age = (off + i) as f32 / cols as f32;
+            let x0 = (pad + i) as f32 * w / cols as f32;
+            let x1 = (pad + i + 1) as f32 * w / cols as f32;
+            let age = (pad + i) as f32 / cols as f32;
             let a = 0.25 + 0.75 * age;
             let col = p.at(pk);
             c.rect(
-                x,
+                x0,
                 mid - pk * h * 0.45,
-                x + colw - k,
+                x1 - gap,
                 mid + pk * h * 0.45,
                 col,
                 a * 0.45,
             );
             let g = p.lift(col, r * 0.6);
-            c.rect(
-                x,
-                mid - r * h * 0.45,
-                x + colw - k,
-                mid + r * h * 0.45,
-                g,
-                a,
-            );
+            c.rect(x0, mid - r * h * 0.45, x1 - gap, mid + r * h * 0.45, g, a);
         }
-        c.rect(0.0, mid - 0.5 * k, c.w as f32, mid + 0.5 * k, p.accent, 0.3);
+        c.rect(0.0, mid - 0.5 * k, w, mid + 0.5 * k, p.accent, 0.3);
     }
 }
 
@@ -377,7 +399,7 @@ impl Visual for Radial {
         let rot = f.time * 0.05;
         for i in 0..n {
             let b = if i < BANDS { i } else { n - 1 - i };
-            let v = f.bands[b];
+            let v = f.shown(f.bands[b]);
             let ang = rot + i as f32 / n as f32 * TAU - TAU / 4.0;
             let (s, co) = ang.sin_cos();
             let len = v * m * 0.55;
@@ -583,7 +605,7 @@ impl Visual for Cover {
             0.5 + f.beat * 0.4,
         );
         let half = (o.bars / 2).clamp(24, 64);
-        let v = resample(&f.bands, half);
+        let v = levels(f, half);
         let n = half * 2;
         let r0 = r + 6.0 * k;
         let wid = (TAU * r0 / n as f32 * 0.5).clamp(1.5 * k, 6.0 * k);
@@ -624,7 +646,7 @@ impl Visual for Mountain {
         let (w, h) = (c.w as f32, c.h as f32);
         let base = h * 0.92;
         let span = h * 0.74;
-        let mut v = f.bands.to_vec();
+        let mut v: Vec<f32> = f.bands.iter().map(|&b| f.shown(b)).collect();
         smooth3(&mut v);
         self.back.resize(BANDS, 0.0);
         for (b, &x) in self.back.iter_mut().zip(&v) {
@@ -665,7 +687,7 @@ impl Visual for Classic {
         c.clear(p.bg);
         let k = c.k;
         let n = (o.bars / 2).clamp(16, 48);
-        let v = resample(&f.bands, n);
+        let v = levels(f, n);
         self.peaks.resize(n, (0.0, 0));
         let (w, h) = (c.w as f32, c.h as f32);
         let seg = 6.0 * k;
@@ -819,7 +841,7 @@ impl Visual for Dots {
         c.fade(p.bg, 0.35);
         let k = c.k;
         let n = (o.bars / 3).clamp(12, 40);
-        let v = resample(&f.bands, n);
+        let v = levels(f, n);
         let (w, h) = (c.w as f32, c.h as f32);
         let slot = w / n as f32;
         let cy = h / 2.0;
@@ -915,5 +937,106 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn luma(q: Rgb) -> f32 {
+        q.0 * 0.3 + q.1 * 0.59 + q.2 * 0.11
+    }
+
+    /// History columns tile the full canvas width, including HiDPI sizes where
+    /// `k` is not 1 (a `3*k` vs `3` mismatch left a stale strip on the right).
+    #[test]
+    fn envelope_history_spans_full_width() {
+        let mut f = super::super::analysis::Analyzer::new(48_000).f;
+        for s in &mut f.wave {
+            *s = 0.5;
+        }
+        f.level = 0.4;
+        let p = Palette::plain(Rgb(0.9, 0.5, 0.1), Rgb(0.05, 0.05, 0.05), true);
+        let bg = luma(p.bg);
+        for (w, h) in [(1536, 960), (1200, 800), (800, 600)] {
+            let mut m = Envelope::default();
+            let mut c = Canvas::new(w, h);
+            for _ in 0..(w + 80) {
+                m.draw(&mut c, &f, &p, &Opts::default());
+            }
+            // Midline is only a couple of pixels; sample well into the envelope.
+            let y = (h / 2).saturating_sub((h / 6).max(8));
+            let lit = |x: usize| (luma(c.px[y * w + x]) - bg).abs() > 0.04;
+            assert!(lit(1), "left edge empty at {w}×{h}");
+            assert!(lit(w / 2), "centre empty at {w}×{h}");
+            assert!(lit(w - 2), "right edge empty at {w}×{h}");
+        }
+    }
+
+    /// A loud, flat (music-like) spectrum must not paint every spectrogram row
+    /// at full intensity — that looked like a wall of gold vertical stripes.
+    #[test]
+    fn spectrometer_stays_dark_on_loud_broadband() {
+        let mut f = super::super::analysis::Analyzer::new(48_000).f;
+        for b in f.bands.iter_mut().chain(f.raw.iter_mut()) {
+            *b = 0.85;
+        }
+        f.ceil = 0.85;
+        let p = Palette::plain(Rgb(0.9, 0.7, 0.2), Rgb(0.05, 0.05, 0.05), true);
+        let mut m = Spectrometer::default();
+        let (w, h) = (320, 180);
+        let mut c = Canvas::new(w, h);
+        c.clear(p.bg);
+        let o = Opts {
+            scroll: 4.0,
+            ..Opts::default()
+        };
+        for _ in 0..100 {
+            m.draw(&mut c, &f, &p, &o);
+        }
+        let x = w - 1;
+        let mut hot = 0;
+        let mut sum = 0.0;
+        for y in 0..h {
+            let l = luma(c.px[y * w + x]);
+            sum += l;
+            // Top of the colour map (lifted gold / near-white), not mid-gold.
+            if l > 0.75 {
+                hot += 1;
+            }
+        }
+        let mean = sum / h as f32;
+        assert!(
+            hot * 4 < h && mean < 0.65,
+            "spectrogram column saturated: {hot}/{h} rows hot, mean luma {mean:.3}"
+        );
+
+        // A single full-scale band still lights its rows, with the rest dark.
+        for b in f.bands.iter_mut().chain(f.raw.iter_mut()) {
+            *b = 0.0;
+        }
+        f.raw[8] = 1.0;
+        f.bands[8] = 1.0;
+        f.ceil = 1.0;
+        let mut m = Spectrometer::default();
+        let mut c = Canvas::new(w, h);
+        c.clear(p.bg);
+        for _ in 0..100 {
+            m.draw(&mut c, &f, &p, &o);
+        }
+        let mut hot = 0;
+        let mut dark = 0;
+        let bg = luma(p.bg);
+        for y in 0..h {
+            let l = luma(c.px[y * w + x]);
+            if l > 0.35 {
+                hot += 1;
+            }
+            if (l - bg).abs() < 0.08 {
+                dark += 1;
+            }
+        }
+        // A single band is only a few rows after the steep intensity curve.
+        assert!(hot >= 1, "peaked band did not light any rows: {hot}");
+        assert!(
+            dark * 2 > h && hot * 4 < h,
+            "peaked spectrogram lost contrast: {hot} hot / {dark} dark of {h}"
+        );
     }
 }
