@@ -1224,9 +1224,9 @@ mod tests {
         // and a too-narrow spike would vanish on small widths.
         f.wave.fill(0.0);
         f.wave[0] = -0.05;
-        for i in 1..span {
+        for (i, v) in f.wave.iter_mut().enumerate().take(span).skip(1) {
             let t = i as f32 / span as f32;
-            f.wave[i] = if (0.80..0.95).contains(&t) { 0.9 } else { 0.05 };
+            *v = if (0.80..0.95).contains(&t) { 0.9 } else { 0.05 };
         }
         f.level = 0.5;
         f.level_avg = 0.3;
