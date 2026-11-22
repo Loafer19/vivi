@@ -487,7 +487,7 @@ impl Spectrum {
 }
 
 /// Scrolling loudness envelope (mirrored peak and RMS), the newest audio on the right.
-/// Called "Waveform" before 0.17.
+/// Called "Waveform" before 0.16.6.
 #[derive(Default)]
 struct Envelope {
     hist: Vec<(f32, f32)>,

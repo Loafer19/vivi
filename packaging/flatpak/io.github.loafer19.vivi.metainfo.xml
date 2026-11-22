@@ -45,6 +45,12 @@
     <binary>vivi</binary>
   </provides>
   <releases>
+    <release version="0.16.6" date="2026-11-22">
+      <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.6</url>
+      <description>
+        <p>Eight visualizer modes with Spectrum and Radial styles, Scope, Envelope and Spectrometer fixes, a NixOS flake, an AppStream Home screenshot, the url bump for RUSTSEC-2026-0592, and a vivi-git packaging fix so fat LTO no longer OOMs the build.</p>
+      </description>
+    </release>
     <release version="0.16.5" date="2026-11-19">
       <url type="details">https://github.com/Loafer19/vivi/releases/tag/v0.16.5</url>
       <description>

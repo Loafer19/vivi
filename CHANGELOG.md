@@ -2,15 +2,21 @@
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-11-22
+
+Highlights: the **Music Visualizer** consolidates to **eight modes**, with styles on **Spectrum** (Bars, LED, Mountain, Dots) and **Radial** (Rays, Cover); **Scope**, **Envelope** and **Spectrometer** fixes on loud music and wide or HiDPI windows; a **NixOS flake** (#113); an **AppStream Home screenshot** from the configurable widget layout (#112); the **url** crate bump for [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592); and a **vivi-git** packaging fix so fat LTO no longer OOMs the build.
+
 ### Added
 - **Music Visualizer: VU Meter and new Spectrum / Radial styles**: **VU Meter** is its own mode (a retro needle meter with VU ballistics, a red zone and a peak lamp; mono, like the tap). Spectrum gains styles **Bars**, **LED** (Winamp-style segmented green → yellow → red bars with peak holds; was *Classic*), **Mountain** (a smooth filled spectrum with a gradient, a glowing ridge and a slower range behind it) and **Dots** (a minimal row of dots that swell with their band). Radial gains styles **Rays** (the original circular spectrum) and **Cover** (the album cover large and round in the middle, pulsing on the bass, with bars all around; a vinyl disc when there is no cover).
 - **Music Visualizer settings**: *Colors* gains *Frequency* (a hue per frequency) and *Album art* now uses up to five colors of the cover as a gradient (one color when the cover has one); *Sensitivity* (Low / Normal / High), *Bar density* (Fewer / Normal / More, Spectrum styles), *Waterfall speed* (Spectrometer) and *LED peak caps* (Spectrum, Bars style).
+- **NixOS flake** (#113): `nix build` / `nix run` from the repo, a devShell, the PNG icon and AppStream metainfo, and a wrapper that puts the GUI libraries (libGL, Wayland, libxkbcommon, fontconfig, Vulkan, X11) on the runtime path. libmpv comes from `mpv-unwrapped`. ffmpeg and yt-dlp stay optional and unwrapped.
 
 ### Changed
 - **Music Visualizer polish**: Spectrum bars are smoothed, coloured by the palette and get a clearer fading mirror (optional LED caps); the Spectrometer interpolates between bands (no visible steps), blends new columns and uses a multi-stop colour map; Radial shows the album cover in its core, pulsing on beats; Pitch draws petals instead of sticks; Scope has a soft glow and no longer blows quiet passages up to full height; Particles take the palette colours.
 - **Visualizer modes consolidated to eight**, with a style picker on Spectrum and Radial only. `V` / `Shift+V` and the command palette's next / previous cycle the eight modes and Disabled, not every style. A saved *Classic*, *Mountain*, *Dots* or *Cover* choice, and `set_visualizer` / IPC with those names, still open the matching mode and style; *Waveform* is still Envelope. Mode names also ignore case, spaces and dashes (`vu-meter`).
 - **Sharper visualizer on HiDPI and large windows**: the canvas follows the window's physical resolution (up to 960 × the scale factor, at most 2×, and ~1.6 Mpx) instead of a fixed ~800 px, and line widths scale with it; the album cover is drawn by Slint at full resolution.
 - **Visualizer mode list scrolls** when it is taller than the window.
+- **AppStream Home screenshot** (#112): `docs/screenshots/library-home.png` is now the configurable Home (the 0.16.4 widget layout already used on the site), without the old pre-widget layout or a desktop notification. The AppImage and Flatpak metainfo keep the same master URL.
 
 ### Fixed
 - **Scope now spans the full window on HiDPI and large canvases**: the trace is mapped across the whole width instead of one sample per pixel, so a 1024-sample window no longer goes flat (a horizontal hold of the last sample) on the right third of a 1024-wide window.
@@ -18,6 +24,8 @@
 - **Envelope history now spans the full canvas width**: columns tile `[0, width)` exactly, so a HiDPI canvas (`k` ≠ 1) can no longer leave a stale strip of the mid-line on the right.
 - **Spectrometer no longer saturates on loud music**: the scrolling spectrogram uses untilted band levels, a later colour map and a steeper intensity curve, so quiet frequency bins stay dark instead of painting every column as a full-height gold stripe. Spectrum styles and Radial (including Cover) use a slow peak tracker so a dense master still has shape.
 - **Paused visualizer no longer wakes 30 times a second**: once the paused frame has settled, the frame timer stops until playback resumes, a seek, a mode or setting change, a resize or a theme change redraws it.
+- **url 2.5.9** for [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592): `Url::origin` no longer overflows the stack on nested `blob:` URLs (`form_urlencoded` 1.2.3 as well).
+- **AUR `vivi-git` no longer OOMs** the packaging runner: `options=('!lto')` only cleared C/C++ flags, while Cargo still used fat LTO and debuginfo=2. The PKGBUILD now exports `CARGO_PROFILE_RELEASE_LTO=off` and `CARGO_PROFILE_RELEASE_DEBUG=0`, and adds `!debug`.
 
 ## [0.16.5] - 2026-11-19
 

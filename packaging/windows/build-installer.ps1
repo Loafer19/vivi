@@ -1,6 +1,6 @@
 # Builds the Inno Setup installer vivi-<Version>-windows-<Arch>-setup.exe.
 #   pwsh packaging/windows/build-installer.ps1 -Exe target\release\vivi.exe -Mpv mpv\libmpv-2.dll `
-#        -Version 0.17.0 -Arch x64 -OutDir dist
+#        -Version 0.16.6 -Arch x64 -OutDir dist
 # Stages vivi.exe, libmpv-2.dll, the VC++ runtime DLLs vivi.exe imports (copied app-local from
 # the Visual Studio redist folder, so no separate VC++ Redistributable is needed), the icon and
 # the docs, then runs ISCC (Inno Setup 6; installed with Chocolatey when missing).

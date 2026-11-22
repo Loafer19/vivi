@@ -2,7 +2,7 @@
 # Prebuilt binary from the GitHub release. pkgver and the asset names are bumped by the
 # release workflow (scripts/bump-packaging.py); packaging/aur/vivi-bin pins the checksum.
 pkgname=vivi-bin
-pkgver=0.16.5
+pkgver=0.16.6
 pkgrel=1
 pkgdesc="Fast, minimal media player built on mpv (Slint UI)"
 arch=('x86_64' 'aarch64')
