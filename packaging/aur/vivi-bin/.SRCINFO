@@ -1,6 +1,6 @@
 pkgbase = vivi-bin
 	pkgdesc = Fast, minimal media player built on mpv (Slint UI)
-	pkgver = 0.16.5
+	pkgver = 0.16.6
 	pkgrel = 1
 	url = https://github.com/Loafer19/vivi
 	arch = x86_64
@@ -18,11 +18,11 @@ pkgbase = vivi-bin
 	conflicts = vivi-git
 	options = !debug
 	options = !strip
-	source = io.github.loafer19.vivi.metainfo.xml::https://github.com/Loafer19/vivi/raw/v0.16.5/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml
-	sha256sums = 79b19500960a15fd163d81cb39935c0a9f88da662cd2ea51eb5fd54775f83190
-	source_x86_64 = https://github.com/Loafer19/vivi/releases/download/v0.16.5/vivi-0.16.5-linux-x64.tar.gz
-	sha256sums_x86_64 = f202931fc93e7d993453f4a742c9d276dc87d71c07007d816b588fe40c5cbadf
-	source_aarch64 = https://github.com/Loafer19/vivi/releases/download/v0.16.5/vivi-0.16.5-linux-arm64.tar.gz
-	sha256sums_aarch64 = 62c34136b8ab8b406c7c72d9fbc5597fc2f51af3aadbc82c162506fc4b6f3094
+	source = io.github.loafer19.vivi.metainfo.xml::https://github.com/Loafer19/vivi/raw/v0.16.6/packaging/flatpak/io.github.loafer19.vivi.metainfo.xml
+	sha256sums = 11c66bb41eabe79ce6743b452f5758e751e4780c53917f8131b7dba6f05c0bd2
+	source_x86_64 = https://github.com/Loafer19/vivi/releases/download/v0.16.6/vivi-0.16.6-linux-x64.tar.gz
+	sha256sums_x86_64 = bcf2c29f0a996665ef2c0aca6259ccc5a280a4d6c79b5552b1cfeb060ce35a33
+	source_aarch64 = https://github.com/Loafer19/vivi/releases/download/v0.16.6/vivi-0.16.6-linux-arm64.tar.gz
+	sha256sums_aarch64 = 71c2c57287aa1284ac3511af1a719850af5bb21ef15ecb76a61fb3cf8fb5f7a1
 
 pkgname = vivi-bin
