@@ -14,7 +14,11 @@ optdepends=('ffmpeg: library thumbnails, album covers, YouTube plugin merging'
             'yt-dlp: YouTube and other sites in Open Network Stream'
             'xdg-desktop-portal: native file and folder dialogs')
 conflicts=('vivi' 'vivi-bin')
-options=('!lto')
+# !lto only clears C/C++ flags. Cargo.toml [profile.release] still uses fat LTO,
+# which SIGKILLs rustc on the packaging runner (even with 10G of swap). !debug
+# drops Arch DEBUG_RUSTFLAGS (-C debuginfo=2). The build() exports turn the
+# Cargo profile itself down to match [profile.ci].
+options=('!lto' '!debug')
 source=("${pkgname}::git+${url}.git")
 sha256sums=('SKIP')
 
@@ -32,6 +36,8 @@ prepare() {
 build() {
   cd "${pkgname}"
   export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  export CARGO_PROFILE_RELEASE_LTO=off
+  export CARGO_PROFILE_RELEASE_DEBUG=0
   cargo build --frozen --release
 }
 
