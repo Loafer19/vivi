@@ -163,7 +163,7 @@ fix. Results always carry `structuredContent`; list tools take `offset` / `limit
 | `get_lyrics` | – | Lines shown by the Lyrics plugin, `synced`, `current_line`, `source`, `offset_seconds`, `karaoke` |
 | `set_lyrics_offset` | `seconds` *or* `delta` *or* `reset` | Synced-lyrics timing (±30 s), saved per track |
 | `set_karaoke` | `enabled` | Open or close the karaoke view |
-| `set_visualizer` | `mode` (name, `next` or `prev`; optional) | Music visualizer mode (remembered); returns `mode`, `modes` and `showing` (music or radio without video is playing) |
+| `set_visualizer` | `mode` (name, `next` or `prev`; optional), `style` (optional) | Music visualizer mode and style (remembered); returns `mode`, `modes`, `style`, `styles` and `showing` (music or radio without video is playing). Spectrum styles: Bars, LED, Mountain, Dots; Radial: Rays, Cover. Old names still work |
 | `screenshot` | `mode` (`subtitles`/`video`/`window`), `path`, `overwrite`, `save`, `image` | Captures the frame and returns it as **image content** (≤ 4 MB) plus the saved path; `save: false` keeps no file. `path` must be an absolute `.png`/`.jpg`/`.webp` that does not exist (unless `overwrite`). Errors on audio-only items |
 
 **Plugins**

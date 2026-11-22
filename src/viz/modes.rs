@@ -12,11 +12,15 @@ pub struct Opts {
     pub bars: usize,
     /// Spectrometer scroll in design pixels per frame (setting *Waterfall speed*).
     pub scroll: f32,
-    /// Spectrum peak caps as LED blocks (setting *LED peak caps*).
+    /// Spectrum peak caps as LED blocks (setting *LED peak caps*, Bars style only).
     pub led: bool,
     /// The album cover is shown in this mode's [`Visual::cover`] slot (Slint draws it
     /// sharp on top of the canvas).
     pub cover: bool,
+    /// Spectrum visual style (Bars / LED / Mountain / Dots).
+    pub spectrum: SpectrumStyle,
+    /// Radial visual style (Rays / Cover).
+    pub radial: RadialStyle,
 }
 
 impl Default for Opts {
@@ -26,8 +30,150 @@ impl Default for Opts {
             scroll: 2.0,
             led: false,
             cover: false,
+            spectrum: SpectrumStyle::Bars,
+            radial: RadialStyle::Rays,
         }
     }
+}
+
+/// Spectrum styles: the four looks that used to be separate modes (Classic is LED).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SpectrumStyle {
+    #[default]
+    Bars,
+    Led,
+    Mountain,
+    Dots,
+}
+
+impl SpectrumStyle {
+    pub const NAMES: [&'static str; 4] = ["Bars", "LED", "Mountain", "Dots"];
+    pub fn name(self) -> &'static str {
+        Self::NAMES[self as usize]
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match norm(s).as_str() {
+            "bars" | "bar" => Self::Bars,
+            "led" | "classic" => Self::Led,
+            "mountain" => Self::Mountain,
+            "dots" | "dot" => Self::Dots,
+            _ => return None,
+        })
+    }
+}
+
+/// Radial styles: Rays is the original circular spectrum; Cover is the large album art.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RadialStyle {
+    #[default]
+    Rays,
+    Cover,
+}
+
+impl RadialStyle {
+    pub const NAMES: [&'static str; 2] = ["Rays", "Cover"];
+    pub fn name(self) -> &'static str {
+        Self::NAMES[self as usize]
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match norm(s).as_str() {
+            "rays" | "ray" | "radial" => Self::Rays,
+            "cover" => Self::Cover,
+            _ => return None,
+        })
+    }
+}
+
+/// Style names for a mode's picker, or empty when that mode has none.
+pub fn styles_for(mode: &str) -> &'static [&'static str] {
+    match norm(mode).as_str() {
+        "spectrum" => &SpectrumStyle::NAMES,
+        "radial" => &RadialStyle::NAMES,
+        _ => &[],
+    }
+}
+
+/// Compare mode / style names ignoring case, spaces and dashes.
+pub fn norm(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// A saved or IPC name: the current mode, and a style if the name was an old mode
+/// (Classic, Cover, …) or an explicit style.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Resolved {
+    pub mode: &'static str,
+    pub spectrum: Option<SpectrumStyle>,
+    pub radial: Option<RadialStyle>,
+}
+
+/// Look up `name` as a current mode, an [`ALIASES`] entry, or a style (LED, Mountain,
+/// Cover, …) that implies its parent mode.
+pub fn resolve(name: &str) -> Option<Resolved> {
+    let want = norm(name);
+    if want.is_empty() {
+        return None;
+    }
+    for (old, mode, style) in ALIASES {
+        if norm(old) == want {
+            return Some(with_style(mode, style));
+        }
+    }
+    for &mode in &[
+        "Disabled",
+        "Spectrometer",
+        "Scope",
+        "Spectrum",
+        "Envelope",
+        "Radial",
+        "Particles",
+        "Pitch",
+        "VU Meter",
+    ] {
+        if norm(mode) == want {
+            return Some(Resolved {
+                mode,
+                spectrum: None,
+                radial: None,
+            });
+        }
+    }
+    // A bare style name still works: "LED" / "Bars" → Spectrum, "Rays" → Radial.
+    // "Cover", "Mountain", "Dots" and "Classic" are already aliases above.
+    if let Some(s) = SpectrumStyle::parse(&want) {
+        return Some(Resolved {
+            mode: "Spectrum",
+            spectrum: Some(s),
+            radial: None,
+        });
+    }
+    if let Some(s) = RadialStyle::parse(&want) {
+        return Some(Resolved {
+            mode: "Radial",
+            spectrum: None,
+            radial: Some(s),
+        });
+    }
+    None
+}
+
+fn with_style(mode: &'static str, style: Option<&str>) -> Resolved {
+    let mut r = Resolved {
+        mode,
+        spectrum: None,
+        radial: None,
+    };
+    if let Some(s) = style {
+        if mode == "Spectrum" {
+            r.spectrum = SpectrumStyle::parse(s);
+        } else if mode == "Radial" {
+            r.radial = RadialStyle::parse(s);
+        }
+    }
+    r
 }
 
 pub trait Visual {
@@ -42,13 +188,14 @@ pub trait Visual {
     }
     /// Diameter of the centred album-cover slot as a fraction of the window's shorter
     /// side (None: no cover).
-    fn cover(&self, _f: &Features) -> Option<f32> {
+    fn cover(&self, _f: &Features, _o: &Opts) -> Option<f32> {
         None
     }
 }
 
-/// Registered modes, in dropdown order (after "Disabled"). Saved choices and IPC use the
-/// names; new modes go at the end so indices of the old ones stay put.
+/// Registered modes, in dropdown order (after "Disabled"). The first seven names keep
+/// their old indices; VU Meter follows Pitch (Cover / Mountain / Classic / Dots are now
+/// styles of Spectrum or Radial).
 pub fn all() -> Vec<Box<dyn Visual>> {
     vec![
         Box::new(Spectrometer::default()),
@@ -58,16 +205,18 @@ pub fn all() -> Vec<Box<dyn Visual>> {
         Box::new(Radial),
         Box::new(Particles::default()),
         Box::new(Pitch),
-        Box::new(Cover),
-        Box::new(Mountain::default()),
-        Box::new(Classic::default()),
         Box::new(Vu::default()),
-        Box::new(Dots),
     ]
 }
 
-/// Old mode names still accepted (saved choice, IPC): (old, new).
-pub const ALIASES: [(&str, &str); 1] = [("Waveform", "Envelope")];
+/// Old mode names still accepted (saved choice, IPC): (old name, current mode, style).
+pub const ALIASES: [(&str, &str, Option<&str>); 5] = [
+    ("Waveform", "Envelope", None),
+    ("Classic", "Spectrum", Some("LED")),
+    ("Mountain", "Spectrum", Some("Mountain")),
+    ("Dots", "Spectrum", Some("Dots")),
+    ("Cover", "Radial", Some("Cover")),
+];
 
 /// Hue for a pitch class: C = accent hue, then around the colour wheel.
 fn pitch_color(p: &Palette, pc: usize, v: f32) -> Rgb {
@@ -238,18 +387,30 @@ impl Visual for Scope {
     }
 }
 
-/// Classic spectrum bars: smoothed, colour by frequency / palette, falling peak caps
-/// (thin lines or LED blocks) and a fading mirror.
+/// Spectrum mode: Bars (with optional LED caps), LED (Classic Winamp look), Mountain, Dots.
 #[derive(Default)]
 struct Spectrum {
-    /// Peak cap height and its falling speed per bar.
+    /// Peak cap height and its falling speed per bar (Bars style).
     peaks: Vec<(f32, f32)>,
+    mountain: Mountain,
+    classic: Classic,
 }
 impl Visual for Spectrum {
     fn name(&self) -> &'static str {
         "Spectrum"
     }
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
+        match o.spectrum {
+            SpectrumStyle::Bars => self.draw_bars(c, f, p, o),
+            SpectrumStyle::Led => self.classic.draw(c, f, p, o),
+            SpectrumStyle::Mountain => self.mountain.draw(c, f, p, o),
+            SpectrumStyle::Dots => Dots.draw(c, f, p, o),
+        }
+    }
+}
+
+impl Spectrum {
+    fn draw_bars(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
         c.clear(p.bg);
         let mut v = levels(f, o.bars);
         smooth3(&mut v);
@@ -371,10 +532,22 @@ impl Visual for Radial {
     fn shows_cover(&self) -> bool {
         true
     }
-    fn cover(&self, f: &Features) -> Option<f32> {
-        Some(radial_core(f))
+    fn cover(&self, f: &Features, o: &Opts) -> Option<f32> {
+        Some(match o.radial {
+            RadialStyle::Rays => radial_core(f),
+            RadialStyle::Cover => cover_core(f),
+        })
     }
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
+        match o.radial {
+            RadialStyle::Rays => self.draw_rays(c, f, p, o),
+            RadialStyle::Cover => Cover.draw(c, f, p, o),
+        }
+    }
+}
+
+impl Radial {
+    fn draw_rays(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
         c.fade(p.bg, 0.35);
         let k = c.k;
         let (cx, cy) = (c.w as f32 / 2.0, c.h as f32 / 2.0);
@@ -563,17 +736,8 @@ fn cover_core(f: &Features) -> f32 {
 /// The album cover, large and centred, pulsing on the bass, with bars all around.
 /// Without a cover a vinyl-like disc takes its place.
 struct Cover;
-impl Visual for Cover {
-    fn name(&self) -> &'static str {
-        "Cover"
-    }
-    fn shows_cover(&self) -> bool {
-        true
-    }
-    fn cover(&self, f: &Features) -> Option<f32> {
-        Some(cover_core(f))
-    }
-    fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
+impl Cover {
+    fn draw(&self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
         let k = c.k;
         c.fade(p.bg.lerp(p.at(0.2), 0.03), 0.3);
         let (cx, cy) = (c.w as f32 / 2.0, c.h as f32 / 2.0);
@@ -636,10 +800,7 @@ impl Visual for Cover {
 struct Mountain {
     back: Vec<f32>,
 }
-impl Visual for Mountain {
-    fn name(&self) -> &'static str {
-        "Mountain"
-    }
+impl Mountain {
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, _o: &Opts) {
         c.clear(p.bg);
         let k = c.k;
@@ -679,10 +840,7 @@ struct Classic {
     /// Peak segment (fractional) and hold frames left, per bar.
     peaks: Vec<(f32, u32)>,
 }
-impl Visual for Classic {
-    fn name(&self) -> &'static str {
-        "Classic"
-    }
+impl Classic {
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
         c.clear(p.bg);
         let k = c.k;
@@ -833,11 +991,8 @@ impl Visual for Vu {
 
 /// Minimal: a quiet row of dots that swell with their band.
 struct Dots;
-impl Visual for Dots {
-    fn name(&self) -> &'static str {
-        "Dots"
-    }
-    fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
+impl Dots {
+    fn draw(&self, c: &mut Canvas, f: &Features, p: &Palette, o: &Opts) {
         c.fade(p.bg, 0.35);
         let k = c.k;
         let n = (o.bars / 3).clamp(12, 40);
@@ -882,9 +1037,8 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted.len(), names.len());
-        // Old indices stay put (saved index / dropdown order).
         assert_eq!(
-            &names[..7],
+            names,
             &[
                 "Spectrometer",
                 "Scope",
@@ -892,12 +1046,47 @@ mod tests {
                 "Envelope",
                 "Radial",
                 "Particles",
-                "Pitch"
+                "Pitch",
+                "VU Meter",
             ]
         );
-        for (_, new) in ALIASES {
-            assert!(names.contains(&new));
+        for &(_, mode, _) in &ALIASES {
+            assert!(names.contains(&mode), "{mode}");
         }
+    }
+
+    #[test]
+    fn aliases_resolve_to_mode_and_style() {
+        let r = resolve("Classic").unwrap();
+        assert_eq!(r.mode, "Spectrum");
+        assert_eq!(r.spectrum, Some(SpectrumStyle::Led));
+        let r = resolve("LED").unwrap();
+        assert_eq!(r.mode, "Spectrum");
+        assert_eq!(r.spectrum, Some(SpectrumStyle::Led));
+        let r = resolve("Mountain").unwrap();
+        assert_eq!(
+            (r.mode, r.spectrum),
+            ("Spectrum", Some(SpectrumStyle::Mountain))
+        );
+        let r = resolve("Dots").unwrap();
+        assert_eq!(
+            (r.mode, r.spectrum),
+            ("Spectrum", Some(SpectrumStyle::Dots))
+        );
+        let r = resolve("Cover").unwrap();
+        assert_eq!((r.mode, r.radial), ("Radial", Some(RadialStyle::Cover)));
+        let r = resolve("Waveform").unwrap();
+        assert_eq!((r.mode, r.spectrum, r.radial), ("Envelope", None, None));
+        let r = resolve("Bars").unwrap();
+        assert_eq!(r.spectrum, Some(SpectrumStyle::Bars));
+        let r = resolve("Rays").unwrap();
+        assert_eq!((r.mode, r.radial), ("Radial", Some(RadialStyle::Rays)));
+        let r = resolve("Spectrum").unwrap();
+        assert_eq!((r.mode, r.spectrum, r.radial), ("Spectrum", None, None));
+        assert!(resolve("").is_none() && resolve("nope").is_none());
+        assert_eq!(styles_for("Spectrum"), &SpectrumStyle::NAMES);
+        assert_eq!(styles_for("Radial"), &RadialStyle::NAMES);
+        assert!(styles_for("Scope").is_empty());
     }
 
     /// Every mode draws on silence, on a loud frame and after a resize without
@@ -923,12 +1112,22 @@ mod tests {
                     f.onset = loud;
                     f.time += 0.033;
                     for cover in [false, true] {
-                        let o = Opts {
-                            cover,
-                            led: loud,
-                            ..Opts::default()
-                        };
-                        m.draw(&mut c, &f, &p, &o);
+                        let styles = styles_for(m.name());
+                        let styles: &[&str] = if styles.is_empty() { &[""] } else { styles };
+                        for &style in styles {
+                            let mut o = Opts {
+                                cover,
+                                led: loud,
+                                ..Opts::default()
+                            };
+                            if let Some(s) = SpectrumStyle::parse(style) {
+                                o.spectrum = s;
+                            }
+                            if let Some(s) = RadialStyle::parse(style) {
+                                o.radial = s;
+                            }
+                            m.draw(&mut c, &f, &p, &o);
+                        }
                     }
                     assert!(c
                         .px

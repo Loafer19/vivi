@@ -164,6 +164,19 @@ pub(super) fn visualizer(a: &AppWindow, _p: &Player, args: &Value) -> Result<Val
         }
         Some(m) => crate::viz::select(a, m)?,
     }
-    let (mode, modes, showing) = crate::viz::state(a);
-    Ok(json!({ "mode": mode, "modes": modes, "showing": showing }))
+    if let Some(s) = args["style"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        crate::viz::select_style(a, s)?;
+    }
+    let st = crate::viz::state(a);
+    Ok(json!({
+        "mode": st.mode,
+        "modes": st.modes,
+        "style": st.style,
+        "styles": st.styles,
+        "showing": st.showing
+    }))
 }

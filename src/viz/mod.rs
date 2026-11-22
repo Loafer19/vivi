@@ -8,8 +8,8 @@
 //!   chroma/dominant pitch) and the modes stay unchanged.
 //! * [`modes`] holds the visual modes behind the [`modes::Visual`] trait; they draw
 //!   into a software [`canvas`] sized to the window's physical pixels (capped, see
-//!   [`canvas_size`]) that Slint scales to the window. Modes with a cover slot (Radial,
-//!   Cover) get the album cover drawn sharp on top by Slint (`VizView`).
+//!   [`canvas_size`]) that Slint scales to the window. Radial (Rays and Cover styles)
+//!   gets the album cover drawn sharp on top by Slint (`VizView`).
 //! * [`art`] decodes the playing song's cover: its palette for *Colors → Album art*
 //!   and the picture for the cover slot.
 //!
@@ -122,6 +122,8 @@ struct Viz {
     cover_gen: u32,
     /// Cover slot size last sent to Slint (0 = hidden).
     cover_size: f32,
+    spectrum: modes::SpectrumStyle,
+    radial: modes::RadialStyle,
 }
 
 thread_local! {
@@ -150,7 +152,7 @@ impl crate::plugins::Plugin for VizPlugin {
         crate::plugins::Manifest::builtin(
             "visualizer",
             "Music Visualizer",
-            "Spectrum, mountain, LED bars, VU meter, scope, spectrogram, envelope, radial, album cover, particles, pitch and dots visuals for music and radio (anything without video), drawn from what mpv plays, so the equalizer shows. Pick a mode with the dropdown or V (Shift+V goes back); colors follow the theme accent, the song's album art or the frequency.",
+            "Eight visualizer modes for music and radio (anything without video), drawn from what mpv plays, so the equalizer shows: Spectrometer, Scope, Spectrum (Bars, LED, Mountain, Dots), Envelope, Radial (Rays, Cover), Particles, Pitch and VU Meter. Pick a mode with the dropdown or V (Shift+V goes back); Spectrum and Radial have a style picker. Colors follow the theme accent, the song's album art or the frequency.",
             "visualizer",
         )
         .contribute(contrib::PALETTE_COMMAND, "Next visualizer mode", "next")
@@ -171,7 +173,7 @@ impl crate::plugins::Plugin for VizPlugin {
         .setting(SettingSpec::choice_default(
             "bars",
             "Bar density",
-            "How many bars or dots the bar modes draw across the window.",
+            "How many bars or dots the Spectrum styles draw across the window.",
             &DENSITY,
             "Normal",
         ))
@@ -185,7 +187,7 @@ impl crate::plugins::Plugin for VizPlugin {
         .setting(SettingSpec::toggle(
             "led_caps",
             "LED peak caps",
-            "Spectrum: the falling peak caps as glowing LED blocks instead of thin lines.",
+            "Spectrum, Bars style: the falling peak caps as glowing LED blocks instead of thin lines.",
             false,
         ))
     }
@@ -238,6 +240,8 @@ pub fn step(a: &AppWindow, d: i32) -> bool {
 
 /// Select a mode by name (case-insensitive) or index; the saved choice also applies
 /// when nothing is playing. Err while the plugin is off or for an unknown mode.
+/// Old names (Classic, Cover, Waveform, …) and bare style names (LED, Bars, Rays)
+/// set the matching mode and style.
 pub fn select(a: &AppWindow, mode: &str) -> Result<(), String> {
     if !enabled() {
         return Err("the Music Visualizer is turned off (Settings → Extensions)".into());
@@ -251,45 +255,199 @@ pub fn select(a: &AppWindow, mode: &str) -> Result<(), String> {
                 .ok()
                 .filter(|&i| i < names.len())
         })
-        .ok_or_else(|| format!("unknown mode {mode:?}; one of: {}", names.join(", ")))?;
+        .ok_or_else(|| {
+            format!(
+                "unknown mode {mode:?}; one of: {} (old names Classic, Mountain, Dots, Cover and Waveform still work)",
+                names.join(", ")
+            )
+        })?;
+    if let Some(r) = modes::resolve(mode) {
+        set_pending_styles(r);
+    }
     v.invoke_select(i as i32);
     Ok(())
 }
 
-/// Current mode name, all names, and whether the visualizer is on screen now.
-pub fn state(a: &AppWindow) -> (String, Vec<String>, bool) {
+/// Select a style of the current mode (Bars / LED / Mountain / Dots, or Rays / Cover).
+pub fn select_style(a: &AppWindow, style: &str) -> Result<(), String> {
+    if !enabled() {
+        return Err("the Music Visualizer is turned off (Settings → Extensions)".into());
+    }
     let v = a.global::<crate::Viz>();
     let names: Vec<String> = v.get_modes().iter().map(|m| m.to_string()).collect();
     let mode = names
         .get(v.get_mode() as usize)
         .cloned()
         .unwrap_or_default();
+    let styles = modes::styles_for(&mode);
+    if styles.is_empty() {
+        return Err(format!("{mode} has no styles"));
+    }
+    let want = modes::norm(style);
+    let i = styles
+        .iter()
+        .position(|s| modes::norm(s) == want)
+        .ok_or_else(|| {
+            format!(
+                "unknown style {style:?} for {mode}; one of: {}",
+                styles.join(", ")
+            )
+        })?;
+    v.invoke_select_style(i as i32);
+    Ok(())
+}
+
+/// Snapshot of the visualizer for IPC / MCP.
+#[derive(Clone, Debug)]
+pub struct State {
+    pub mode: String,
+    pub modes: Vec<String>,
+    pub style: String,
+    pub styles: Vec<String>,
+    pub showing: bool,
+}
+
+/// Current mode, style, the lists, and whether the visualizer is on screen now.
+pub fn state(a: &AppWindow) -> State {
+    let v = a.global::<crate::Viz>();
+    let names: Vec<String> = v.get_modes().iter().map(|m| m.to_string()).collect();
+    let mode = names
+        .get(v.get_mode() as usize)
+        .cloned()
+        .unwrap_or_default();
+    let styles: Vec<String> = v.get_styles().iter().map(|s| s.to_string()).collect();
+    let style = styles
+        .get(v.get_style() as usize)
+        .cloned()
+        .unwrap_or_default();
     let showing = enabled()
         && v.get_audio()
         && v.get_mode() > 0
         && a.global::<crate::Playback>().get_has_media();
-    (mode, names, showing)
+    State {
+        mode,
+        modes: names,
+        style,
+        styles,
+        showing,
+    }
 }
 
 /// Index of mode `name` in `names`: case, spaces and dashes do not matter ("vu-meter"
-/// is VU Meter) and old names still work ([`modes::ALIASES`]: Waveform is Envelope).
+/// is VU Meter) and old names still work ([`modes::ALIASES`]: Waveform is Envelope,
+/// Classic is Spectrum / LED, Cover is Radial / Cover).
 fn mode_index(names: &[impl AsRef<str>], name: &str) -> Option<usize> {
-    let key = |s: &str| {
-        s.chars()
-            .filter(|c| c.is_alphanumeric())
-            .flat_map(char::to_lowercase)
-            .collect::<String>()
+    let want = if let Some(r) = modes::resolve(name) {
+        modes::norm(r.mode)
+    } else {
+        modes::norm(name)
     };
-    let want = key(name);
-    let want = modes::ALIASES
-        .iter()
-        .find(|(old, _)| key(old) == want)
-        .map(|(_, new)| key(new))
-        .unwrap_or(want);
     if want.is_empty() {
         return None;
     }
-    names.iter().position(|n| key(n.as_ref()) == want)
+    names.iter().position(|n| modes::norm(n.as_ref()) == want)
+}
+
+fn set_pending_styles(r: modes::Resolved) {
+    CTX.with(|c| {
+        if let Some((_, _, viz)) = c.borrow().as_ref() {
+            let mut v = viz.borrow_mut();
+            if let Some(s) = r.spectrum {
+                v.spectrum = s;
+            }
+            if let Some(s) = r.radial {
+                v.radial = s;
+            }
+        }
+    });
+}
+
+struct Choice {
+    mode: usize,
+    spectrum: modes::SpectrumStyle,
+    radial: modes::RadialStyle,
+}
+
+/// First line is the mode (aliases work). Later lines are the remembered Spectrum
+/// and Radial styles (`LED`, `Cover`, or `spectrum:LED` / `radial:Cover`).
+fn load_choice(text: &str, names: &[impl AsRef<str>]) -> Choice {
+    let mut spectrum = modes::SpectrumStyle::Bars;
+    let mut radial = modes::RadialStyle::Rays;
+    let mut mode = mode_index(names, "Spectrum").unwrap_or(3);
+    let mut lines = text.lines().map(str::trim).filter(|s| !s.is_empty());
+    if let Some(first) = lines.next() {
+        if let Some(r) = modes::resolve(first) {
+            if let Some(i) = mode_index(names, r.mode) {
+                mode = i;
+            }
+            if let Some(s) = r.spectrum {
+                spectrum = s;
+            }
+            if let Some(s) = r.radial {
+                radial = s;
+            }
+        } else if let Some(i) = mode_index(names, first) {
+            mode = i;
+        }
+    }
+    for line in lines {
+        let (key, val) = line
+            .split_once(':')
+            .map(|(k, v)| (k.trim(), v.trim()))
+            .unwrap_or(("", line));
+        let token = if key.is_empty() { line } else { val };
+        if key.is_empty() || modes::norm(key) == "spectrum" {
+            if let Some(s) = modes::SpectrumStyle::parse(token) {
+                spectrum = s;
+                continue;
+            }
+        }
+        if key.is_empty() || modes::norm(key) == "radial" {
+            if let Some(s) = modes::RadialStyle::parse(token) {
+                radial = s;
+            }
+        }
+    }
+    Choice {
+        mode,
+        spectrum,
+        radial,
+    }
+}
+
+fn save_choice(mode: &str, spectrum: modes::SpectrumStyle, radial: modes::RadialStyle) {
+    let _ = std::fs::create_dir_all(crate::store::state_dir());
+    let _ = std::fs::write(
+        mode_file(),
+        format!(
+            "{mode}
+{}
+{}
+",
+            spectrum.name(),
+            radial.name()
+        ),
+    );
+}
+
+fn sync_style_ui(
+    a: &AppWindow,
+    mode: &str,
+    spectrum: modes::SpectrumStyle,
+    radial: modes::RadialStyle,
+) {
+    let list: Vec<SharedString> = modes::styles_for(mode)
+        .iter()
+        .map(|s| SharedString::from(*s))
+        .collect();
+    let i = match modes::norm(mode).as_str() {
+        "spectrum" => spectrum as usize,
+        "radial" => radial as usize,
+        _ => 0,
+    };
+    let v = a.global::<crate::Viz>();
+    v.set_styles(ModelRc::new(VecModel::from(list)));
+    v.set_style(i as i32);
 }
 
 /// Redraw the visualizer even if its paused frame had settled and the frame task was
@@ -318,11 +476,13 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
     let mut names: Vec<SharedString> = vec!["Disabled".into()];
     names.extend(modes.iter().map(|m| SharedString::from(m.name())));
     let saved = std::fs::read_to_string(mode_file()).unwrap_or_default();
-    let saved = saved.trim();
-    let mode = mode_index(&names, saved).unwrap_or(3); // Spectrum
+    let choice = load_choice(&saved, &names);
+    let mode = choice.mode;
     app.global::<crate::Viz>()
-        .set_modes(ModelRc::new(VecModel::from(names)));
+        .set_modes(ModelRc::new(VecModel::from(names.clone())));
     app.global::<crate::Viz>().set_mode(mode as i32);
+    let mode_name = names.get(mode).map(|s| s.as_str()).unwrap_or("Spectrum");
+    sync_style_ui(app, mode_name, choice.spectrum, choice.radial);
 
     let viz = Rc::new(RefCell::new(Viz {
         tap: tap::Tap::new(),
@@ -343,6 +503,8 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         art: Art::default(),
         cover_gen: 0,
         cover_size: 0.0,
+        spectrum: choice.spectrum,
+        radial: choice.radial,
     }));
     app.global::<crate::Viz>().on_wake(wake);
 
@@ -351,7 +513,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         let Some(a) = w.upgrade() else { return };
         let n = a.global::<crate::Viz>().get_modes().row_count();
         let i = (i.max(0) as usize).min(n.saturating_sub(1));
-        {
+        let (spectrum, radial) = {
             let mut v = v.borrow_mut();
             if v.mode != i {
                 // Start the new mode on a clean canvas (no trails of the old one), and
@@ -360,13 +522,52 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
                 v.paused_for = 0.0;
             }
             v.mode = i;
-        }
+            (v.spectrum, v.radial)
+        };
         a.global::<crate::Viz>().set_mode(i as i32);
         a.global::<crate::Viz>().set_note("".into());
         if let Some(name) = a.global::<crate::Viz>().get_modes().row_data(i) {
-            let _ = std::fs::create_dir_all(crate::store::state_dir());
-            let _ = std::fs::write(mode_file(), name.as_str());
+            sync_style_ui(&a, name.as_str(), spectrum, radial);
+            save_choice(name.as_str(), spectrum, radial);
         }
+        arm();
+    });
+
+    let (w, v) = (app.as_weak(), viz.clone());
+    app.global::<crate::Viz>().on_select_style(move |i| {
+        let Some(a) = w.upgrade() else { return };
+        let n = a.global::<crate::Viz>().get_styles().row_count();
+        if n == 0 {
+            return;
+        }
+        let i = (i.max(0) as usize).min(n.saturating_sub(1));
+        let Some(style) = a.global::<crate::Viz>().get_styles().row_data(i) else {
+            return;
+        };
+        let mode_name = a
+            .global::<crate::Viz>()
+            .get_modes()
+            .row_data(a.global::<crate::Viz>().get_mode() as usize)
+            .unwrap_or_default();
+        {
+            let mut v = v.borrow_mut();
+            if let Some(s) = modes::SpectrumStyle::parse(style.as_str()) {
+                if modes::norm(mode_name.as_str()) == "spectrum" && v.spectrum != s {
+                    v.spectrum = s;
+                    v.canvas = Canvas::new(1, 1);
+                    v.paused_for = 0.0;
+                }
+            }
+            if let Some(s) = modes::RadialStyle::parse(style.as_str()) {
+                if modes::norm(mode_name.as_str()) == "radial" && v.radial != s {
+                    v.radial = s;
+                    v.canvas = Canvas::new(1, 1);
+                    v.paused_for = 0.0;
+                }
+            }
+            save_choice(mode_name.as_str(), v.spectrum, v.radial);
+        }
+        a.global::<crate::Viz>().set_style(i as i32);
         arm();
     });
 
@@ -799,10 +1000,12 @@ impl Viz {
             scroll: set.scroll,
             led: set.led,
             cover: has_cover,
+            spectrum: self.spectrum,
+            radial: self.radial,
         };
         m.draw(&mut self.canvas, &an.f, &pal, &opts);
         let slot = if has_cover {
-            m.cover(&an.f).unwrap_or(0.0)
+            m.cover(&an.f, &opts).unwrap_or(0.0)
         } else {
             0.0
         };
@@ -838,8 +1041,60 @@ mod tests {
         assert_eq!(mode_index(&names, "waveform"), Some(2));
         assert_eq!(mode_index(&names, "vu-meter"), Some(3));
         assert_eq!(mode_index(&names, " VU meter "), Some(3));
+        assert_eq!(mode_index(&names, "Classic"), Some(1));
         assert_eq!(mode_index(&names, ""), None);
         assert_eq!(mode_index(&names, "nope"), None);
+        let names = [
+            "Disabled",
+            "Spectrometer",
+            "Scope",
+            "Spectrum",
+            "Envelope",
+            "Radial",
+            "Particles",
+            "Pitch",
+            "VU Meter",
+        ];
+        assert_eq!(mode_index(&names, "Cover"), Some(5));
+        assert_eq!(mode_index(&names, "Mountain"), Some(3));
+        assert_eq!(mode_index(&names, "Dots"), Some(3));
+        assert_eq!(mode_index(&names, "LED"), Some(3));
+        assert_eq!(mode_index(&names, "Classic"), Some(3));
+    }
+
+    #[test]
+    fn load_choice_migrates_old_mode_names_and_keeps_styles() {
+        let names = [
+            "Disabled",
+            "Spectrometer",
+            "Scope",
+            "Spectrum",
+            "Envelope",
+            "Radial",
+            "Particles",
+            "Pitch",
+            "VU Meter",
+        ];
+        let c = load_choice("Classic", &names);
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Led);
+        let c = load_choice("Cover\n", &names);
+        assert_eq!(c.mode, 5);
+        assert_eq!(c.radial, modes::RadialStyle::Cover);
+        let c = load_choice("Waveform", &names);
+        assert_eq!(c.mode, 4);
+        let c = load_choice("Spectrum\nLED\nCover\n", &names);
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Led);
+        assert_eq!(c.radial, modes::RadialStyle::Cover);
+        let c = load_choice("Radial\nspectrum:Dots\nradial:Rays\n", &names);
+        assert_eq!(c.mode, 5);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Dots);
+        assert_eq!(c.radial, modes::RadialStyle::Rays);
+        let c = load_choice("", &names);
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.spectrum, modes::SpectrumStyle::Bars);
+        assert_eq!(c.radial, modes::RadialStyle::Rays);
     }
 
     #[test]
