@@ -29,12 +29,12 @@
   <url type="vcs-browser">https://github.com/Loafer19/vivi</url>
   <screenshots>
     <screenshot type="default">
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/player.png</image>
-      <caption>Video playback with the controls</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/Loafer19/vivi/master/docs/screenshots/library-home.png</image>
+      <caption>Home with Continue Watching and widgets</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/library-home.png</image>
-      <caption>Library home with Continue Watching</caption>
+      <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/player.png</image>
+      <caption>Video playback with the controls</caption>
     </screenshot>
     <screenshot>
       <image type="source" width="1280" height="720">https://raw.githubusercontent.com/Loafer19/vivi/v0.16.5/docs/screenshots/library-music.png</image>

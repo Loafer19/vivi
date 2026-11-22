@@ -8,7 +8,7 @@ Files for the `io.github.loafer19.vivi` repo on Flathub:
 - `cargo-sources.json`: the cargo crates for that tag (flatpak-cargo-generator output,
   copied from `packaging/flatpak/` at the tag).
 - `io.github.loafer19.vivi.metainfo.xml`: passes `appstreamcli validate --pedantic`;
-  six 1280×720 screenshots pinned to the tag, release notes, branding colors.
+  six screenshots (Home is 1280×800 on master, the rest 1280×720 pinned to the tag), release notes, branding colors.
 
 CI (`.github/workflows/packaging.yml`) runs `flatpak-builder-lint manifest` and
 `appstreamcli validate` on these. The release workflow (job `packaging`) moves the tag,
