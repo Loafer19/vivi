@@ -13,6 +13,8 @@
 - **Visualizer mode list scrolls** when it is taller than the window.
 
 ### Fixed
+- **Scope now spans the full window on HiDPI and large canvases**: the trace is mapped across the whole width instead of one sample per pixel, so a 1024-sample window no longer goes flat (a horizontal hold of the last sample) on the right third of a 1024-wide window.
+- **Envelope is a proper amplitude envelope again on loud music**: short hops of the newest samples, not one peak of the whole window plus the already-clipped loudness, so a dense master is not a wall of full-height columns. Columns also tile the width in integer pixels, with no rounding gaps.
 - **Envelope history now spans the full canvas width**: columns tile `[0, width)` exactly, so a HiDPI canvas (`k` ≠ 1) can no longer leave a stale strip of the mid-line on the right.
 - **Spectrometer no longer saturates on loud music**: the scrolling spectrogram uses untilted band levels, a later colour map and a steeper intensity curve, so quiet frequency bins stay dark instead of painting every column as a full-height gold stripe. Spectrum styles and Radial (including Cover) use a slow peak tracker so a dense master still has shape.
 - **Paused visualizer no longer wakes 30 times a second**: once the paused frame has settled, the frame timer stops until playback resumes, a seek, a mode or setting change, a resize or a theme change redraws it.

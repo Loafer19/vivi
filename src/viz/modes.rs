@@ -281,6 +281,22 @@ fn bass(f: &Features) -> f32 {
     f.bands[..8].iter().map(|&b| f.shown(b)).sum::<f32>() / 8.0
 }
 
+/// Pixel range `[x0, x1)` of column `i` of `n` that tiles `[0, w)` with no gaps
+/// or overlaps, even when `w` is not a multiple of `n`.
+fn col_span(i: usize, n: usize, w: usize) -> (usize, usize) {
+    let n = n.max(1);
+    (i * w / n, (i + 1) * w / n)
+}
+
+/// Inset a `[x0, x1)` column by `gap` pixels, split left/right, still in integer
+/// pixels. A slot narrower than the gap keeps a 1-pixel bar.
+fn col_inset(x0: usize, x1: usize, gap: usize) -> (f32, f32) {
+    let w = x1.saturating_sub(x0);
+    let g = gap.min(w.saturating_sub(1));
+    let left = g / 2;
+    ((x0 + left) as f32, (x1 - (g - left)) as f32)
+}
+
 /// `n` display levels: resampled bands after [`Features::shown`].
 fn levels(f: &Features, n: usize) -> Vec<f32> {
     let mut v = resample(&f.bands, n);
@@ -371,15 +387,26 @@ impl Visual for Scope {
         // fades the trace out near silence instead of amplifying noise.
         let quiet = (f.level / 0.04).clamp(0.0, 1.0);
         let gain = h * 0.126 / f.level_avg.clamp(0.15, 0.6) * quiet;
-        let n = span.min(wv.len() - start);
-        let step = (n as f32 / w).max(1.0);
-        let dx = 2.0 * c.k;
-        let mut pts = Vec::with_capacity((w / dx) as usize + 2);
+        let n = span.min(wv.len().saturating_sub(start)).max(1);
+        // Map the triggered span across the full width, including canvases wider
+        // than the window (HiDPI). Clamping the step to 1 left a flat hold of the
+        // last sample on the right (~2/3 of a 1024-wide window at 1.5–2×).
+        let last = (w - 1.0).max(0.0);
+        let dx = (2.0 * c.k).max(1.0);
+        let mut pts = Vec::with_capacity((last / dx) as usize + 3);
         let mut x = 0.0;
-        while x < w {
-            let i = start + ((x * step) as usize).min(n - 1);
+        loop {
+            let t = if last <= 0.0 {
+                0.0
+            } else {
+                (x / last).clamp(0.0, 1.0)
+            };
+            let i = start + ((t * (n - 1) as f32).round() as usize).min(n - 1);
             pts.push((x, (mid - wv[i] * gain).clamp(0.0, h - 1.0)));
-            x += dx;
+            if x >= last {
+                break;
+            }
+            x = (x + dx).min(last);
         }
         let base = p.at(0.3);
         let core = p.lift(base, 0.25 + f.beat * 0.4);
@@ -416,9 +443,7 @@ impl Spectrum {
         smooth3(&mut v);
         let n = v.len();
         self.peaks.resize(n, (0.0, 0.0));
-        let (w, h, k) = (c.w as f32, c.h as f32, c.k);
-        let slot = w / n as f32;
-        let gap = (slot * 0.22).max(1.0);
+        let (h, k) = (c.h as f32, c.k);
         let base = h * 0.84;
         let span = h * 0.76;
         for (i, &x) in v.iter().enumerate() {
@@ -426,8 +451,9 @@ impl Spectrum {
             let col = p.at(t);
             let top = p.lift(col, 0.3 + f.beat * 0.25);
             let bh = x * span;
-            let x0 = i as f32 * slot + gap / 2.0;
-            let x1 = x0 + slot - gap;
+            let (a, b) = col_span(i, n, c.w);
+            let gap = ((((b - a) as f32) * 0.22).round() as usize).max(1);
+            let (x0, x1) = col_inset(a, b, gap);
             c.bar(x0, x1, base - bh, base, col.lerp(p.bg, 0.3), top);
             // Mirror: a short reflection fading out downwards.
             let rows = (bh * 0.22).ceil() as usize;
@@ -476,45 +502,64 @@ impl Visual for Envelope {
     fn draw(&mut self, c: &mut Canvas, f: &Features, p: &Palette, _o: &Opts) {
         c.clear(p.bg);
         let k = c.k;
-        let w = c.w as f32;
-        // Columns tile [0, w) exactly: `k` only picks how many there are, so a
-        // HiDPI cap can never leave a stale strip of midline on the right.
-        let cols = ((w / (3.0 * k)).round() as usize).max(1);
-        let peak = f.wave.iter().fold(0.0f32, |a, s| a.max(s.abs()));
-        self.ceil = if peak > self.ceil {
-            peak
-        } else {
-            self.ceil * 0.992 + peak * 0.008
-        };
-        let pk = (peak / self.ceil.max(0.35)).clamp(0.0, 1.0);
-        let rms = f.level.clamp(0.0, 1.0);
-        self.hist.push((pk, rms));
+        // Column count from `k` only; integer spans tile `[0, w)` with no
+        // rounding gaps (a float `x1 - gap` left uneven dark slivers).
+        let cols = ((c.w as f32 / (3.0 * k)).round() as usize).max(1);
+        // Short hops of the newest samples, not one peak of the whole ~40 ms
+        // window: a loud master always has a near-full-scale peak in that
+        // window, which (with `f.level`, already *2.5 and clamped to 1) painted
+        // a solid wall of columns. Hops keep the beat-to-beat envelope.
+        let hop = (f.wave.len() / 8).max(32);
+        let hops = 4;
+        let origin = f.wave.len().saturating_sub(hop * hops);
+        for h in 0..hops {
+            let sl = &f.wave[origin + h * hop..origin + (h + 1) * hop];
+            if sl.is_empty() {
+                continue;
+            }
+            let peak = sl.iter().fold(0.0f32, |a, s| a.max(s.abs()));
+            let rms = (sl.iter().map(|s| s * s).sum::<f32>() / sl.len() as f32).sqrt();
+            self.ceil = if peak > self.ceil {
+                peak
+            } else {
+                self.ceil * 0.992 + peak * 0.008
+            };
+            let scale = self.ceil.max(0.35);
+            self.hist.push((
+                (peak / scale).clamp(0.0, 1.0),
+                (rms / scale).clamp(0.0, 1.0),
+            ));
+        }
         if self.hist.len() > cols {
             let d = self.hist.len() - cols;
             self.hist.drain(..d);
         }
-        let h = c.h as f32;
-        let mid = h / 2.0;
+        let (w, h) = (c.w, c.h);
+        let mid = h as f32 / 2.0;
+        // Leave a little headroom so even a full-scale hop is not a top-to-bottom fill.
+        let amp = h as f32 * 0.40;
         let pad = cols - self.hist.len();
-        let gap = k.min(w / cols as f32 * 0.25);
         for (i, &(pk, r)) in self.hist.iter().enumerate() {
-            let x0 = (pad + i) as f32 * w / cols as f32;
-            let x1 = (pad + i + 1) as f32 * w / cols as f32;
+            let (x0, x1) = col_span(pad + i, cols, w);
+            let (x0, x1) = (x0 as f32, x1 as f32);
             let age = (pad + i) as f32 / cols as f32;
             let a = 0.25 + 0.75 * age;
             let col = p.at(pk);
-            c.rect(
-                x0,
-                mid - pk * h * 0.45,
-                x1 - gap,
-                mid + pk * h * 0.45,
-                col,
-                a * 0.45,
-            );
+            c.rect(x0, mid - pk * amp, x1, mid + pk * amp, col, a * 0.45);
             let g = p.lift(col, r * 0.6);
-            c.rect(x0, mid - r * h * 0.45, x1 - gap, mid + r * h * 0.45, g, a);
+            c.rect(x0, mid - r * amp, x1, mid + r * amp, g, a);
         }
-        c.rect(0.0, mid - 0.5 * k, w, mid + 0.5 * k, p.accent, 0.3);
+        c.rect(0.0, mid - 0.5 * k, w as f32, mid + 0.5 * k, p.accent, 0.3);
+    }
+}
+
+impl Envelope {
+    #[cfg(test)]
+    fn peak_range(&self) -> (f32, f32) {
+        self.hist
+            .iter()
+            .map(|(pk, _)| *pk)
+            .fold((1.0f32, 0.0f32), |(mn, mx), pk| (mn.min(pk), mx.max(pk)))
     }
 }
 
@@ -847,13 +892,11 @@ impl Classic {
         let n = (o.bars / 2).clamp(16, 48);
         let v = levels(f, n);
         self.peaks.resize(n, (0.0, 0));
-        let (w, h) = (c.w as f32, c.h as f32);
+        let h = c.h as f32;
         let seg = 6.0 * k;
         let pitch = 8.0 * k;
         let base = h * 0.9;
         let rows = ((h * 0.8 / pitch) as usize).max(4);
-        let slot = w / n as f32;
-        let gap = (slot * 0.2).max(2.0 * k);
         let classic = [
             Rgb(0.15, 0.85, 0.3),
             Rgb(0.95, 0.85, 0.12),
@@ -869,8 +912,9 @@ impl Classic {
         };
         for (i, &x) in v.iter().enumerate() {
             let lit = (x * rows as f32).round() as usize;
-            let x0 = i as f32 * slot + gap / 2.0;
-            let x1 = x0 + slot - gap;
+            let (a, b) = col_span(i, n, c.w);
+            let gap = ((((b - a) as f32) * 0.2).round() as usize).max((2.0 * k).round() as usize);
+            let (x0, x1) = col_inset(a, b, gap);
             for r in 0..rows {
                 let y1 = base - r as f32 * pitch;
                 c.rect(
@@ -1163,6 +1207,181 @@ mod tests {
             assert!(lit(1), "left edge empty at {w}×{h}");
             assert!(lit(w / 2), "centre empty at {w}×{h}");
             assert!(lit(w - 2), "right edge empty at {w}×{h}");
+        }
+    }
+
+    /// Scope maps the triggered window across the full canvas, including widths
+    /// wider than the ~1024-sample half-window (the old step ≥ 1 left a flat
+    /// hold of the last sample on the right).
+    #[test]
+    fn scope_spans_full_width_at_several_sizes() {
+        let mut f = super::super::analysis::Analyzer::new(48_000).f;
+        let n = f.wave.len();
+        let span = n / 2;
+        // Rising zero at the start of the displayed span. A wide pulse in the
+        // last 20% of the span, then a quiet tail, so a one-sample-per-pixel
+        // hold would place the pulse at sample x (not the right of a wide canvas)
+        // and a too-narrow spike would vanish on small widths.
+        f.wave.fill(0.0);
+        f.wave[0] = -0.05;
+        for i in 1..span {
+            let t = i as f32 / span as f32;
+            f.wave[i] = if (0.80..0.95).contains(&t) { 0.9 } else { 0.05 };
+        }
+        f.level = 0.5;
+        f.level_avg = 0.3;
+        let p = Palette::plain(Rgb(0.2, 0.9, 0.3), Rgb(0.05, 0.05, 0.05), true);
+        let bg = luma(p.bg);
+        for (w, h) in [(97, 63), (800, 450), (1024, 640), (1025, 641), (1536, 960)] {
+            let mut c = Canvas::new(w, h);
+            c.clear(p.bg);
+            Scope.draw(&mut c, &f, &p, &Opts::default());
+            let mid = h as i32 / 2;
+            // y of the strongest departure from the background in column x.
+            let col_y = |x: usize| -> (i32, f32) {
+                (0..h)
+                    .map(|y| (y as i32, (luma(c.px[y * w + x]) - bg).abs()))
+                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .unwrap()
+            };
+            let (_y_l, d_l) = col_y(1);
+            let (y_r, d_r) = col_y(w - 2);
+            assert!(d_l > 0.04, "Scope left edge has no trace at {w}×{h}");
+            assert!(
+                d_r > 0.04,
+                "Scope right edge has no trace at {w}×{h} (Δ={d_r})"
+            );
+            // The pulse sits in the last fifth of the *canvas*, not at a 1024-sample
+            // pixel index. The quiet tail keeps the right edge near the mid-line.
+            let mut best_x = 0;
+            let mut best_dev = 0i32;
+            for x in 0..w {
+                let (y, d) = col_y(x);
+                let dev = (y - mid).unsigned_abs() as i32;
+                if d > 0.04 && dev > best_dev {
+                    best_dev = dev;
+                    best_x = x;
+                }
+            }
+            assert!(
+                best_x > w * 7 / 10,
+                "Scope pulse at x={best_x} of {w} (expected the right fifth)"
+            );
+            assert!(
+                (y_r - mid).unsigned_abs() < (h / 6).max(8) as u32,
+                "Scope right edge stuck off the mid-line at {w}×{h} (y={y_r}, mid={mid})"
+            );
+        }
+    }
+
+    /// Envelope columns tile every width without holes, stay off the top and
+    /// bottom on a loud signal, and still follow amplitude changes.
+    #[test]
+    fn envelope_spans_and_does_not_saturate_on_loud_signal() {
+        let p = Palette::plain(Rgb(0.9, 0.5, 0.1), Rgb(0.05, 0.05, 0.05), true);
+        let bg = luma(p.bg);
+        for (w, h) in [(97, 63), (800, 450), (1024, 640), (1025, 641), (1536, 960)] {
+            let mut f = super::super::analysis::Analyzer::new(48_000).f;
+            // Alternate quiet / loud hops in the newest samples so column
+            // heights must differ (a 3-cycle |sin| was too mild once ceil settled).
+            let n = f.wave.len();
+            let hop = (n / 8).max(32);
+            for (i, s) in f.wave.iter_mut().enumerate() {
+                let block = if i < n.saturating_sub(hop * 4) {
+                    0
+                } else {
+                    (i - (n - hop * 4)) / hop
+                };
+                let env = if block % 2 == 0 { 0.20 } else { 0.95 };
+                *s = env * (i as f32 * 0.2).sin();
+            }
+            f.level = 1.0;
+            f.level_avg = 0.8;
+            let mut m = Envelope::default();
+            let mut c = Canvas::new(w, h);
+            for _ in 0..(w + 40) {
+                m.draw(&mut c, &f, &p, &Opts::default());
+            }
+            let mid = h / 2;
+            let y_body = mid.saturating_sub((h / 20).max(2));
+            let lit = |x: usize, y: usize| (luma(c.px[y * w + x]) - bg).abs() > 0.04;
+            assert!(lit(1, y_body), "Envelope left empty at {w}×{h}");
+            assert!(lit(w / 2, y_body), "Envelope centre empty at {w}×{h}");
+            assert!(lit(w - 2, y_body), "Envelope right empty at {w}×{h}");
+            // No rounding-gap columns: at most a 1 px hole, never a 2 px run.
+            let mut hole = 0usize;
+            let mut max_hole = 0usize;
+            for x in 0..w {
+                if lit(x, y_body) {
+                    max_hole = max_hole.max(hole);
+                    hole = 0;
+                } else {
+                    hole += 1;
+                }
+            }
+            max_hole = max_hole.max(hole);
+            assert!(
+                max_hole <= 1,
+                "Envelope has a {max_hole}px gap column at {w}×{h}"
+            );
+            // Not a top-to-bottom fill: a loud hop still leaves the top and
+            // bottom bands on the background.
+            let top_lit = (0..w).filter(|&x| lit(x, 1)).count();
+            let bot_lit = (0..w).filter(|&x| lit(x, h - 2)).count();
+            assert!(
+                top_lit < w / 5 && bot_lit < w / 5,
+                "Envelope saturated at {w}×{h}: top={top_lit} bottom={bot_lit} of {w}"
+            );
+            let (pk_lo, pk_hi) = m.peak_range();
+            assert!(
+                pk_hi > pk_lo + 0.4,
+                "Envelope hops did not keep a quiet/loud range at {w}×{h} (pk {pk_lo}..{pk_hi})"
+            );
+            let mut heights = Vec::new();
+            let step = (w / 32).max(1);
+            for x in (0..w).step_by(step) {
+                let mut lo = None;
+                let mut hi = None;
+                for y in 0..h {
+                    if (luma(c.px[y * w + x]) - bg).abs() > 0.12 {
+                        lo = Some(lo.map_or(y, |v: usize| v.min(y)));
+                        hi = Some(hi.map_or(y, |v: usize| v.max(y)));
+                    }
+                }
+                if let (Some(lo), Some(hi)) = (lo, hi) {
+                    heights.push(hi.saturating_sub(lo));
+                }
+            }
+            assert!(
+                !heights.is_empty(),
+                "Envelope painted no strong columns at {w}×{h}"
+            );
+            // On a very short canvas a 1 px column is too coarse for a reliable
+            // painted-height check; hop peaks already prove the shape there.
+            if h >= 200 {
+                let min_h = *heights.iter().min().unwrap();
+                let max_h = *heights.iter().max().unwrap();
+                assert!(
+                    max_h > min_h + h / 10,
+                    "Envelope has no shape on a loud modulated signal at {w}×{h} (min={min_h} max={max_h})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn col_span_tiles_the_width() {
+        for w in [97usize, 1024, 1025, 1536] {
+            for n in [1, 7, 32, 64, 96, w, w + 3] {
+                let mut last = 0;
+                for i in 0..n {
+                    let (a, b) = col_span(i, n, w);
+                    assert_eq!(a, last, "gap or overlap at {i} of {n} in width {w}");
+                    assert!(b > a || w == 0 || n > w, "empty column {i} of {n} in {w}");
+                    last = b;
+                }
+                assert_eq!(last, w);
+            }
         }
     }
 
