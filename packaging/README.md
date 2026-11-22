@@ -45,3 +45,22 @@ yt-dlp is not bundled in the sandbox.
 - `winget/`, `scoop/`: Windows package manifests (portable zip).
 
 All four are bumped to each release by the release workflow (`scripts/bump-packaging.py`, job `packaging`) and checked by `.github/workflows/packaging.yml`. Nothing is published automatically.
+
+## Nix / NixOS
+
+The flake at the repository root (`flake.nix`, `flake.lock`) builds Vivi and a
+dev shell. It is not under `packaging/` and is not bumped by
+`scripts/bump-packaging.py` (the package version is read from `Cargo.toml`).
+
+```sh
+nix run github:Loafer19/vivi
+nix build      # from a checkout
+nix develop
+```
+
+`yt-dlp` and `ffmpeg` are optional and are not wrapped into the package. A
+system `ffmpeg` on PATH is used for library thumbnails and album covers; the
+YouTube plugin can install a managed yt-dlp and, on demand, a small ffmpeg for
+download merge/convert. The Chapter Thumbnails plugin also uses ffmpeg for
+scene detection. Playback of local files needs neither.
+
