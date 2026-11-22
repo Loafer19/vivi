@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **AppImage AppStream metadata is found**: the image ships `io.github.loafer19.vivi.desktop`, so appimagetool looks for `io.github.loafer19.vivi.appdata.xml` (the same id as the metainfo) instead of warning that `vivi.appdata.xml` is missing. The source `vivi.desktop` used by AUR and Nix is unchanged.
+
 ## [0.16.6] - 2026-11-22
 
 Highlights: the **Music Visualizer** consolidates to **eight modes**, with styles on **Spectrum** (Bars, LED, Mountain, Dots) and **Radial** (Rays, Cover); **Scope**, **Envelope** and **Spectrometer** fixes on loud music and wide or HiDPI windows; a **NixOS flake** (#113); an **AppStream Home screenshot** from the configurable widget layout (#112); the **url** crate bump for [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592); and a **vivi-git** packaging fix so fat LTO no longer OOMs the build.
