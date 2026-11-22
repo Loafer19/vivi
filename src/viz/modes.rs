@@ -915,9 +915,9 @@ mod tests {
                 for (w, h, loud) in [(320, 180, false), (320, 180, true), (97, 211, true)] {
                     let mut c = Canvas::new(w, h);
                     c.clear(p.bg);
-                    for b in f.bands.iter_mut().chain(f.raw.iter_mut()) {
-                        *b = if loud { 0.9 } else { 0.0 };
-                    }
+                    let v = if loud { 0.9 } else { 0.0 };
+                    f.bands.fill(v);
+                    f.raw.fill(v);
                     f.level = if loud { 0.8 } else { 0.0 };
                     f.beat = if loud { 1.0 } else { 0.0 };
                     f.onset = loud;
@@ -948,9 +948,7 @@ mod tests {
     #[test]
     fn envelope_history_spans_full_width() {
         let mut f = super::super::analysis::Analyzer::new(48_000).f;
-        for s in &mut f.wave {
-            *s = 0.5;
-        }
+        f.wave.fill(0.5);
         f.level = 0.4;
         let p = Palette::plain(Rgb(0.9, 0.5, 0.1), Rgb(0.05, 0.05, 0.05), true);
         let bg = luma(p.bg);
@@ -974,9 +972,8 @@ mod tests {
     #[test]
     fn spectrometer_stays_dark_on_loud_broadband() {
         let mut f = super::super::analysis::Analyzer::new(48_000).f;
-        for b in f.bands.iter_mut().chain(f.raw.iter_mut()) {
-            *b = 0.85;
-        }
+        f.bands.fill(0.85);
+        f.raw.fill(0.85);
         f.ceil = 0.85;
         let p = Palette::plain(Rgb(0.9, 0.7, 0.2), Rgb(0.05, 0.05, 0.05), true);
         let mut m = Spectrometer::default();
@@ -1008,9 +1005,8 @@ mod tests {
         );
 
         // A single full-scale band still lights its rows, with the rest dark.
-        for b in f.bands.iter_mut().chain(f.raw.iter_mut()) {
-            *b = 0.0;
-        }
+        f.bands.fill(0.0);
+        f.raw.fill(0.0);
         f.raw[8] = 1.0;
         f.bands[8] = 1.0;
         f.ceil = 1.0;
