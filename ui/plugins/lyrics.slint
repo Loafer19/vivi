@@ -5,6 +5,7 @@ import { TextField } from "../core/controls.slint";
 import { Modal } from "../core/modal.slint";
 import { FlatButton, PrimaryButton } from "../core/buttons.slint";
 import { EmptyState } from "../core/empty-state.slint";
+import { ListRow } from "../core/rows.slint";
 import { ScrollView } from "std-widgets.slint";
 
 // A clickable lyrics line: on a live stream click it, or focus it (Tab) and press Enter /
@@ -188,6 +189,81 @@ component KPill inherits Rectangle {
     if kf.has-focus: Rectangle { border-width: Metrics.focus-ring-w; border-color: Theme.focus-ring; border-radius: root.border-radius; }
 }
 
+
+// Compact pill dropdown for Karaoke header (Style / Background).
+component KPillSelect inherits Rectangle {
+    in property <string> prefix;
+    in property <[string]> options;
+    in property <string> value;
+    in property <string> accessible-name;
+    in property <length> popup-w: 176px;
+    callback selected(string);
+    height: 34px;
+    width: kt.preferred-width + 44px;
+    border-radius: self.height / 2;
+    background: ta.has-hover ? Theme.stage-chip-hover : Theme.stage-chip;
+    border-width: 1px;
+    border-color: Theme.stage-chip-line;
+    animate background { duration: 120ms; }
+    kt := Text {
+        x: 14px; height: parent.height;
+        text: root.prefix != "" ? root.prefix + ": " + root.value : root.value;
+        color: Theme.stage-fg.with-alpha(0.88);
+        font-size: Metrics.font-md; font-weight: 600;
+        vertical-alignment: center;
+    }
+    Icon {
+        x: parent.width - 24px; y: (parent.height - 14px) / 2;
+        width: 14px; height: 14px;
+        source: @image-url("../../assets/icons/chevron-down.svg");
+        tint: Theme.stage-fg.with-alpha(0.75);
+    }
+    ta := TouchArea {
+        accessible-role: combobox;
+        accessible-label: root.accessible-name;
+        accessible-value: root.value;
+        accessible-action-default => { pop.show(); }
+        mouse-cursor: pointer;
+        clicked => { pop.show(); }
+    }
+    pop := PopupWindow {
+        x: parent.width - root.popup-w;
+        y: root.height + 6px;
+        width: root.popup-w;
+        height: min(root.options.length * 36px + 8px, 372px);
+        Rectangle {
+            background: Theme.bar-solid.with-alpha(0.97);
+            border-radius: Metrics.radius-lg;
+            drop-shadow-blur: 15px; drop-shadow-offset-y: 8px; drop-shadow-color: Theme.shadow-soft;
+            Flickable {
+                content-height: root.options.length * 36px + 8px;
+                VerticalLayout {
+                    padding: 4px; alignment: start;
+                    for opt in root.options: ListRow {
+                        label: opt;
+                        row-height: 36px;
+                        radius: Metrics.radius-md;
+                        selected: opt == root.value;
+                        hover-bg: Theme.popup; selected-bg: Theme.popup;
+                        clicked => { root.selected(opt); pop.close(); }
+                        Text {
+                            x: 12px; width: parent.width - 42px;
+                            text: opt; color: Theme.fg-a2; font-size: Metrics.font-md;
+                            vertical-alignment: center; overflow: elide;
+                        }
+                        if opt == root.value: Icon {
+                            x: parent.width - 28px; y: (parent.height - 18px) / 2;
+                            width: 18px; height: 18px;
+                            source: @image-url("../../assets/icons/check-active.svg");
+                            tint: Theme.accent;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Full-screen karaoke: the current line large and centred in the accent colour (with a
 // word-by-word wipe for enhanced LRC), past lines dimmed above, upcoming lines below;
 // the list glides as lines change. Header: track, source, timing offset, search, save.
@@ -217,10 +293,24 @@ export component KaraokeView inherits Rectangle {
     in property <bool> can-save-lrc;
     in property <bool> can-embed;
     in property <bool> manual;
+    in property <string> style: "Stage";
+    in property <string> background-mode: "None";
+    in property <[string]> styles: ["Stage", "Classic", "Neon"];
+    in property <[string]> backgrounds: ["None", "Cover art"];
+    in property <bool> viz-active;
+    in property <float> line-progress;
+    in property <image> cover;
+    in property <bool> has-cover;
+    in property <float> level;
+    in property <float> beat;
+    in property <int> pitch-s;
+    in property <string> pitch-label: "0 st";
     in property <length> big: 48px;
     // Player chrome shown (follows the UI auto-hide): header, hint and cursor hide with it.
     in property <bool> chrome: true;
     callback cmd(string, string);
+    callback set-karaoke(string, string);
+    callback step-pitch(int);
     callback activity(); // pointer moved: reset the auto-hide timer
     property <length> small: root.big * 0.55;
     property <length> pitch: root.small * 1.85;
@@ -240,7 +330,7 @@ export component KaraokeView inherits Rectangle {
         text: root.index >= 0 && root.index < root.lines.length ? root.lines[root.index] : "";
         font-size: root.big; font-weight: 800;
     }
-    background: Theme.stage;
+    background: root.viz-active ? Theme.stage.with-alpha(0.58) : Theme.stage;
     clip: true;
     accessible-role: AccessibleRole.text;
     accessible-label: root.title != "" ? "Karaoke: " + root.title + (root.artist != "" ? ", " + root.artist : "") : "Karaoke";
@@ -250,8 +340,23 @@ export component KaraokeView inherits Rectangle {
         changed mouse-x => { root.activity(); }
         changed mouse-y => { root.activity(); }
     }
-    // Soft accent glow behind the current line: full-view radial fade, no hard edges.
-    Rectangle {
+    // Blurred breathing cover art background.
+    if root.background-mode == "Cover art" && root.has-cover: Rectangle {
+        width: 100%; height: 100%; clip: true;
+        property <float> breath: 1.08 + 0.045 * sin(mod(animation-tick() / 1ms, 9000) * 0.04deg);
+        Image {
+            width: parent.width * parent.breath;
+            height: parent.height * parent.breath;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            source: root.cover;
+            image-fit: ImageFit.cover;
+            opacity: 0.72;
+        }
+        Rectangle { width: 100%; height: 100%; background: Theme.stage.with-alpha(0.54); }
+    }
+    // Soft accent glow behind the current line when no custom background is active.
+    if !root.viz-active && !(root.background-mode == "Cover art" && root.has-cover): Rectangle {
         width: 100%; height: 100%;
         background: @radial-gradient(circle, Theme.accent.with-alpha(0.13) 0%, Theme.accent.with-alpha(0.04) 40%, transparent 78%);
     }
@@ -260,7 +365,20 @@ export component KaraokeView inherits Rectangle {
         y: 112px; height: root.height - 112px - 120px;
         clip: true;
         property <length> mid: self.height / 2;
-        if !root.plain: Rectangle {
+        property <float> neon-pulse: clamp(0.18 + root.level * 0.48 + root.beat * 0.34, 0.18, 1.0);
+
+        // Neon pulsing aura behind current line.
+        if !root.plain && root.style == "Neon": Rectangle {
+            property <length> d: min(area.width, area.height) * (0.72 + root.level * 0.22 + root.beat * 0.14);
+            x: (area.width - self.d) / 2;
+            y: area.mid - self.d / 2;
+            width: self.d; height: self.d;
+            border-radius: self.d / 2;
+            background: @radial-gradient(circle, Theme.accent.with-alpha(area.neon-pulse * 0.38) 0%, Theme.accent.with-alpha(area.neon-pulse * 0.14) 40%, transparent 72%);
+        }
+
+        // Style 1: Stage (existing scrolling full-stage karaoke) and Style 3: Neon.
+        if !root.plain && root.style != "Classic": Rectangle {
             for l[i] in root.lines: Text {
                 property <int> d: i - root.index;
                 property <bool> cur: i == root.index;
@@ -277,9 +395,50 @@ export component KaraokeView inherits Rectangle {
                 font-weight: self.cur ? 800 : 600;
                 wrap: word-wrap; overflow: elide;
                 horizontal-alignment: center; vertical-alignment: center;
-                color: self.cur ? Theme.accent : Theme.stage-fg;
+                color: self.cur ? (root.style == "Neon" ? Theme.accent-bright : Theme.accent) : Theme.stage-fg;
                 opacity: self.cur ? (root.rows > 0 ? 0 : 1) : max(0.07, (self.d < 0 ? 0.30 : 0.58) - (abs(self.d) - 1) * 0.085);
                 animate opacity, color { duration: 260ms; }
+            }
+            // Neon halo bloom on the current line (layered bright halos modulated by PCM level & beat).
+            if root.style == "Neon" && root.index >= 0 && root.index < root.lines.length && root.rows == 0: Rectangle {
+                x: root.side; width: area.width - 2 * root.side;
+                y: area.mid - root.cur-h / 2; height: root.cur-h;
+                Text {
+                    x: -2px; y: 0; width: parent.width; height: parent.height;
+                    text: root.lines[root.index] == "" ? "♪" : root.lines[root.index];
+                    font-size: root.fit; font-weight: 800; wrap: word-wrap; overflow: elide;
+                    horizontal-alignment: center; vertical-alignment: center;
+                    color: Theme.accent; opacity: area.neon-pulse * 0.42;
+                }
+                Text {
+                    x: 2px; y: 0; width: parent.width; height: parent.height;
+                    text: root.lines[root.index] == "" ? "♪" : root.lines[root.index];
+                    font-size: root.fit; font-weight: 800; wrap: word-wrap; overflow: elide;
+                    horizontal-alignment: center; vertical-alignment: center;
+                    color: Theme.accent; opacity: area.neon-pulse * 0.42;
+                }
+                Text {
+                    x: 0; y: -2px; width: parent.width; height: parent.height;
+                    text: root.lines[root.index] == "" ? "♪" : root.lines[root.index];
+                    font-size: root.fit; font-weight: 800; wrap: word-wrap; overflow: elide;
+                    horizontal-alignment: center; vertical-alignment: center;
+                    color: Theme.accent-bright; opacity: area.neon-pulse * 0.36;
+                }
+                Text {
+                    x: 0; y: 2px; width: parent.width; height: parent.height;
+                    text: root.lines[root.index] == "" ? "♪" : root.lines[root.index];
+                    font-size: root.fit; font-weight: 800; wrap: word-wrap; overflow: elide;
+                    horizontal-alignment: center; vertical-alignment: center;
+                    color: Theme.accent-bright; opacity: area.neon-pulse * 0.36;
+                }
+                Text {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    text: root.lines[root.index] == "" ? "♪" : root.lines[root.index];
+                    font-size: root.fit; font-weight: 800; wrap: word-wrap; overflow: elide;
+                    horizontal-alignment: center; vertical-alignment: center;
+                    color: Theme.stage-fg.mix(Theme.accent-bright, 0.65);
+                    opacity: 0.92 + 0.08 * area.neon-pulse;
+                }
             }
             // Word-level wipe of the current line (enhanced LRC).
             if root.rows > 0 && root.index >= 0: VerticalLayout {
@@ -297,6 +456,13 @@ export component KaraokeView inherits Rectangle {
                             text: w.text; font-size: root.fit; font-weight: 800;
                             color: Theme.stage-fg; opacity: 0.4; vertical-alignment: center;
                         }
+                        if root.style == "Neon": Text {
+                            x: 0; y: 0; width: base.preferred-width; height: root.line-h;
+                            text: w.text; font-size: root.fit; font-weight: 800;
+                            color: Theme.accent-bright;
+                            opacity: w.progress * area.neon-pulse * 0.55;
+                            vertical-alignment: center;
+                        }
                         Rectangle {
                             x: 0; y: 0; height: root.line-h; clip: true;
                             width: base.preferred-width * w.progress;
@@ -304,7 +470,8 @@ export component KaraokeView inherits Rectangle {
                             Text {
                                 x: 0; y: 0; width: base.preferred-width; height: root.line-h;
                                 text: w.text; font-size: root.fit; font-weight: 800;
-                                color: Theme.accent; vertical-alignment: center;
+                                color: root.style == "Neon" ? Theme.accent-bright : Theme.accent;
+                                vertical-alignment: center;
                             }
                         }
                     }
@@ -326,6 +493,92 @@ export component KaraokeView inherits Rectangle {
                     name: l == "" ? "instrumental" : l; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
                     activated => { root.cmd(root.live ? "sync-line" : "seek-line", i); } moved => { root.activity(); } chrome: root.chrome;
                 }
+            }
+        }
+
+        // Style 2: Classic two-line karaoke (current line word-wiped or smooth line-fill fallback + dimmed next line).
+        if !root.plain && root.style == "Classic": Rectangle {
+            property <string> cur-txt: root.index >= 0 && root.index < root.lines.length ? (root.lines[root.index] == "" ? "♪" : root.lines[root.index]) : (root.lines.length > 0 ? "♪" : "");
+            property <string> next-txt: root.index + 1 >= 0 && root.index + 1 < root.lines.length ? (root.lines[root.index + 1] == "" ? "♪" : root.lines[root.index + 1]) : "";
+            property <length> block-h: root.cur-h + root.pitch + 16px;
+            property <length> top-y: area.mid - self.block-h / 2;
+
+            // Current line via word-level or line-fill-fallback KWord rows.
+            if root.rows > 0 && root.index >= 0: VerticalLayout {
+                x: root.side; width: area.width - 2 * root.side;
+                y: top-y; height: root.cur-h;
+                alignment: center;
+                for r in root.rows: HorizontalLayout {
+                    alignment: center; height: root.line-h;
+                    for w in root.words: Rectangle {
+                        property <bool> on: w.row == r;
+                        visible: self.on;
+                        width: self.on ? cbase.preferred-width + (w.gap ? root.fit * 0.27 : 0px) : 0px;
+                        cbase := Text {
+                            x: 0; y: 0; width: self.preferred-width; height: root.line-h;
+                            text: w.text; font-size: root.fit; font-weight: 800;
+                            color: Theme.stage-fg; opacity: 0.36; vertical-alignment: center;
+                        }
+                        Rectangle {
+                            x: 0; y: 0; height: root.line-h; clip: true;
+                            width: cbase.preferred-width * w.progress;
+                            animate width { duration: 110ms; easing: linear; }
+                            Text {
+                                x: 0; y: 0; width: cbase.preferred-width; height: root.line-h;
+                                text: w.text; font-size: root.fit; font-weight: 800;
+                                color: Theme.accent; vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+            // Fallback smooth single-line wipe before words are populated or on instrumental markers.
+            if (root.rows == 0 || root.index < 0) && cur-txt != "": Rectangle {
+                x: root.side; width: area.width - 2 * root.side;
+                y: top-y; height: root.cur-h;
+                ct := Text {
+                    x: (parent.width - self.preferred-width) / 2;
+                    width: min(parent.width, self.preferred-width);
+                    height: parent.height;
+                    text: cur-txt; font-size: root.fit; font-weight: 800;
+                    color: Theme.stage-fg; opacity: 0.36;
+                    horizontal-alignment: center; vertical-alignment: center; overflow: elide;
+                }
+                Rectangle {
+                    x: ct.x; y: 0; height: parent.height; clip: true;
+                    width: ct.width * (root.index >= 0 ? root.line-progress : 0.0);
+                    animate width { duration: 110ms; easing: linear; }
+                    Text {
+                        x: 0; y: 0; width: ct.width; height: parent.height;
+                        text: cur-txt; font-size: root.fit; font-weight: 800;
+                        color: Theme.accent;
+                        horizontal-alignment: center; vertical-alignment: center; overflow: elide;
+                    }
+                }
+            }
+            // Next line (dimmed, upcoming).
+            if next-txt != "": Text {
+                x: root.side; width: area.width - 2 * root.side;
+                y: top-y + root.cur-h + 14px; height: root.pitch;
+                text: next-txt; font-size: root.small * 1.1; font-weight: 600;
+                wrap: word-wrap; overflow: elide;
+                horizontal-alignment: center; vertical-alignment: center;
+                color: Theme.stage-fg; opacity: 0.54;
+            }
+            // Click hit areas for current & next line.
+            if (root.live || root.seekable) && root.index >= 0: SyncLine {
+                x: root.side - 12px; width: area.width - 2 * root.side + 24px;
+                y: top-y; height: root.cur-h;
+                name: cur-txt; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
+                activated => { root.cmd(root.live ? "sync-line" : "seek-line", root.index); }
+                moved => { root.activity(); } chrome: root.chrome;
+            }
+            if (root.live || root.seekable) && root.index + 1 >= 0 && root.index + 1 < root.lines.length: SyncLine {
+                x: root.side - 12px; width: area.width - 2 * root.side + 24px;
+                y: top-y + root.cur-h + 14px; height: root.pitch;
+                name: next-txt; verb: root.live ? "Sync lyrics to this line: " : "Jump to this line: ";
+                activated => { root.cmd(root.live ? "sync-line" : "seek-line", root.index + 1); }
+                moved => { root.activity(); } chrome: root.chrome;
             }
         }
         // Live stream, not synced yet: every line, clickable, under the hint.
@@ -356,8 +609,8 @@ export component KaraokeView inherits Rectangle {
             }
         }
         // Fade the list out towards the top and bottom.
-        if !root.plain: Rectangle { y: 0; height: 90px; background: @linear-gradient(180deg, Theme.stage 0%, Theme.stage.with-alpha(0) 100%); }
-        if !root.plain: Rectangle { y: parent.height - 90px; height: 90px; background: @linear-gradient(180deg, Theme.stage.with-alpha(0) 0%, Theme.stage 100%); }
+        if !root.plain && root.style != "Classic" && !root.viz-active && !(root.background-mode == "Cover art" && root.has-cover): Rectangle { y: 0; height: 90px; background: @linear-gradient(180deg, Theme.stage 0%, Theme.stage.with-alpha(0) 100%); }
+        if !root.plain && root.style != "Classic" && !root.viz-active && !(root.background-mode == "Cover art" && root.has-cover): Rectangle { y: parent.height - 90px; height: 90px; background: @linear-gradient(180deg, Theme.stage.with-alpha(0) 0%, Theme.stage 100%); }
         // No lyrics yet.
         if root.lines.length == 0 && root.state == LyricsState.searching: Text {
             text: "Looking for lyrics…"; color: Theme.stage-fg; font-size: Metrics.font-lg;
@@ -387,6 +640,39 @@ export component KaraokeView inherits Rectangle {
                     if root.artist != "": Text { text: root.artist; color: Theme.fg-a2; font-size: Metrics.font-base; overflow: elide; vertical-alignment: center; }
                     if root.artist != "": Text { text: "·"; color: Theme.fg-a3; font-size: Metrics.font-base; vertical-alignment: center; }
                     Text { text: root.source; color: Theme.accent; font-size: Metrics.font-md; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                }
+            }
+            // Karaoke style & background pickers.
+            VerticalLayout { alignment: center;
+                KPillSelect {
+                    prefix: "Style"; options: root.styles; value: root.style;
+                    accessible-name: "Karaoke text style"; popup-w: 150px;
+                    selected(v) => { root.set-karaoke(v, ""); }
+                }
+            }
+            VerticalLayout { alignment: center;
+                KPillSelect {
+                    prefix: "Bg"; options: root.backgrounds; value: root.background-mode;
+                    accessible-name: "Karaoke background"; popup-w: 186px;
+                    selected(v) => { root.set-karaoke("", v); }
+                }
+            }
+            // Pitch shift stepper (-12..+12 st, tempo unchanged).
+            VerticalLayout { alignment: center;
+                Rectangle {
+                    height: 34px; width: prow.preferred-width; border-radius: self.height / 2; background: Theme.stage-chip;
+                    border-width: 1px; border-color: Theme.stage-chip-line;
+                    prow := HorizontalLayout {
+                        Rectangle { width: 34px; border-radius: self.height / 2; background: pm.has-hover ? Theme.stage-chip-hover : transparent;
+                            Text { text: "−"; color: Theme.stage-fg; font-size: Metrics.font-h3; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            pm := TouchArea { accessible-role: button; accessible-label: "Pitch −1 semitone"; mouse-cursor: pointer; clicked => { root.step-pitch(-1); } } }
+                        Rectangle { width: 58px;
+                            Text { text: root.pitch-label; color: root.pitch-s == 0 ? Theme.stage-fg.with-alpha(0.69) : Theme.accent; font-family: "DM Mono"; font-size: Metrics.font-md; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { accessible-role: button; accessible-label: "Pitch " + root.pitch-label + " (double-click to reset)"; accessible-action-default => { root.step-pitch(-root.pitch-s); } mouse-cursor: pointer; double-clicked => { root.step-pitch(-root.pitch-s); } } }
+                        Rectangle { width: 34px; border-radius: self.height / 2; background: pp.has-hover ? Theme.stage-chip-hover : transparent;
+                            Text { text: "+"; color: Theme.stage-fg; font-size: Metrics.font-h3; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            pp := TouchArea { accessible-role: button; accessible-label: "Pitch +1 semitone"; mouse-cursor: pointer; clicked => { root.step-pitch(1); } } }
+                    }
                 }
             }
             // Timing offset stepper.
@@ -428,8 +714,8 @@ export component KaraokeView inherits Rectangle {
         y: root.height - 72px - 34px; x: 0; width: root.width; horizontal-alignment: center;
         text: root.live && root.plain ? "Click or Enter on the line being sung to sync   ·   L  Off / Text / Karaoke   ·   Ctrl L  search"
             : root.live ? "Click a line to re-sync   ·   [  ]  fine-tune ±0.1 s   ·   Shift  ±0.5 s   ·   L  Off / Text / Karaoke"
-            : root.seekable ? "Click a line to jump there   ·   [  ]  offset ±0.1 s   ·   Shift  ±0.5 s   ·   L  Off / Text / Karaoke   ·   Ctrl L  search"
-            : "L  Off / Text / Karaoke   ·   Ctrl L  search";
+            : root.seekable ? "Click a line to jump   ·   [  ]  offset ±0.1 s   ·   - / =  pitch ±1 st   ·   0  reset   ·   L  mode   ·   Ctrl L  search"
+            : "- / =  pitch ±1 st   ·   0  reset   ·   L  Off / Text / Karaoke   ·   Ctrl L  search";
         color: Theme.stage-fg.with-alpha(0.33); font-size: Metrics.font-sm;
     }
 }

@@ -45,5 +45,12 @@ export global Panel {
     callback playlist-load(string);
     callback playlist-delete(string);
     callback lib-search(string);
+    in-out property <string> karaoke-style: "Stage";
+    in-out property <string> karaoke-bg: "None";
+    in-out property <int> pitch: 0;
+    in-out property <string> pitch-label: "0 st";
+    callback set-karaoke(string, string);
+    callback step-pitch(int);
+    callback reset-pitch();
     callback save-preset();
 }

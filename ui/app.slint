@@ -296,7 +296,7 @@ export component AppWindow inherits Window {
     }
 
     // ---------- Music visualizer (audio-only media) ----------
-    if Playback.has-media && Viz.audio && Viz.mode > 0: VizView {
+    if Playback.has-media && Viz.audio && (Viz.mode > 0 || (Overlays.karaoke-open && Viz.karaoke-active && !Overlays.library-open && !root.mini)): VizView {
         frame: Viz.frame; note: Viz.note;
         cover: Viz.cover; has-cover: Viz.has-cover; cover-size: Viz.cover-size;
         wake => { Viz.wake(); }
@@ -328,11 +328,20 @@ export component AppWindow inherits Window {
         width: root.width; height: root.height;
         lines: Lyrics.lines; index: Lyrics.index; plain: Lyrics.plain; live: Lyrics.live; seekable: Lyrics.seekable;
         words: Lyrics.words; rows: Lyrics.rows; big: root.karaoke-big;
+        style: Lyrics.style; background-mode: Lyrics.background;
+        styles: Lyrics.styles; backgrounds: Lyrics.backgrounds;
+        viz-active: Viz.audio && Viz.karaoke-active;
+        line-progress: Lyrics.line-progress;
+        cover: Lyrics.cover; has-cover: Lyrics.has-cover;
+        level: Lyrics.level; beat: Lyrics.beat;
+        pitch-s: Lyrics.pitch; pitch-label: Lyrics.pitch-label;
         chrome: root.show-ui; activity => { root.activity(); }
         title: Lyrics.title; artist: Lyrics.artist; source: Lyrics.source;
         state: Lyrics.state; offset-s: Lyrics.offset;
         offset: Lyrics.offset-label; can-save-lrc: Lyrics.can-save-lrc; can-embed: Lyrics.can-embed; manual: Lyrics.manual;
         cmd(n, a) => { root.plugin-command("lyrics", n, a); fs.focus(); }
+        set-karaoke(st, bg) => { Lyrics.set-karaoke(st, bg); fs.focus(); }
+        step-pitch(d) => { Lyrics.step-pitch(d); fs.focus(); }
     }
 
     // ---------- Library (home screen when idle; overlay via the Home button) ----------
@@ -440,6 +449,12 @@ export component AppWindow inherits Window {
         lyrics-enabled: Lyrics.enabled; karaoke-open: Overlays.karaoke-open; lyrics-display: Lyrics.display; lyrics-source: Lyrics.source;
         lyrics-offset-s: Lyrics.offset; subs-offset-s: Panel.pv-sub-delay;
         lyrics-offset: Lyrics.offset-label; lyrics-can-save-lrc: Lyrics.can-save-lrc; lyrics-can-embed: Lyrics.can-embed; lyrics-manual: Lyrics.manual;
+        karaoke-style: Panel.karaoke-style; karaoke-bg: Panel.karaoke-bg;
+        karaoke-styles: Lyrics.styles; karaoke-bgs: Lyrics.backgrounds;
+        pitch-s: Panel.pitch; pitch-label: Panel.pitch-label;
+        set-karaoke(st, bg) => { Panel.set-karaoke(st, bg); }
+        step-pitch(d) => { Panel.step-pitch(d); }
+        reset-pitch() => { Panel.reset-pitch(); }
         lyrics(n, a) => { root.plugin-command("lyrics", n, a); }
         subs-enabled: Subtitles.plugin; subs-offset: Subtitles.offset; subs-has-pick: Subtitles.has-pick; subs-pick-label: Subtitles.pick-label; subs-sync: Subtitles.sync;
         subs(n, a) => { if (n == "offset" || n == "sync") { Panel.sub-offset(n, a); } else { root.plugin-command("subtitle-search", n, a); } }

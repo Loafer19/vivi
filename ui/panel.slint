@@ -330,6 +330,15 @@ export component SidePanel inherits Rectangle {
     in property <bool> lyrics-can-save-lrc;
     in property <bool> lyrics-can-embed;
     in property <bool> lyrics-manual;
+    in property <string> karaoke-style: "Stage";
+    in property <string> karaoke-bg: "None";
+    in property <[string]> karaoke-styles: ["Stage", "Classic", "Neon"];
+    in property <[string]> karaoke-bgs: ["None", "Cover art"];
+    in property <int> pitch-s: 0;
+    in property <string> pitch-label: "0 st";
+    callback set-karaoke(string, string);
+    callback step-pitch(int);
+    callback reset-pitch();
     callback lyrics(string, string);
     // Subtitle Search plugin: per-file offset, Auto-sync, remembered pick (cmd → plugin-command).
     in property <bool> subs-enabled;
@@ -469,6 +478,24 @@ export component SidePanel inherits Rectangle {
                         Line { label: "Lyrics"; hint: "L cycles Off, Text and Karaoke";
                             Segmented { width: 200px; options: ["Off", "Text", "Karaoke"]; value: root.lyrics-display; label: "Lyrics";
                                 selected(o) => { root.lyrics("display", o); } } }
+                        Line { label: "Karaoke Style";
+                            Dropdown { width: 170px; options: root.karaoke-styles; value: root.karaoke-style; label: "Karaoke Style";
+                                selected(i, o) => { root.set-karaoke(o, ""); } } }
+                        Line { label: "Background";
+                            Dropdown { width: 170px; options: root.karaoke-bgs; value: root.karaoke-bg; label: "Karaoke Background";
+                                selected(i, o) => { root.set-karaoke("", o); } } }
+                        Line { label: "Pitch"; hint: "− / = ±1 st, 0 reset · tempo unchanged";
+                            HorizontalLayout { spacing: 4px;
+                                Rectangle { width: 32px; height: 26px; border-radius: Metrics.radius-md; background: kpm.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: "−"; font-size: Metrics.font-md; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    kpm := TouchArea { accessible-role: button; accessible-label: "Pitch −1 semitone"; mouse-cursor: pointer; clicked => { root.step-pitch(-1); } } }
+                                Rectangle { width: 64px; height: 26px; border-radius: Metrics.radius-md; background: Theme.field;
+                                    Text { text: root.pitch-label; font-family: "DM Mono"; font-size: Metrics.font-sm; color: root.pitch-s == 0 ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
+                                    TouchArea { accessible-role: button; accessible-label: "Pitch " + root.pitch-label + " (double-click to reset)"; accessible-action-default => { root.reset-pitch(); } mouse-cursor: pointer; double-clicked => { root.reset-pitch(); } } }
+                                Rectangle { width: 32px; height: 26px; border-radius: Metrics.radius-md; background: kpp.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: "+"; font-size: Metrics.font-md; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    kpp := TouchArea { accessible-role: button; accessible-label: "Pitch +1 semitone"; mouse-cursor: pointer; clicked => { root.step-pitch(1); } } }
+                            } }
                         Line { label: "Timing Offset"; hint: "Saved per track · [ ] ±0.1 s, Shift ±0.5 s";
                             HorizontalLayout { spacing: 4px;
                                 for d in [-0.5, -0.1]: Rectangle { width: 40px; height: 26px; border-radius: Metrics.radius-md; background: oa.has-hover ? Theme.field-raised : Theme.field;
@@ -553,6 +580,18 @@ export component SidePanel inherits Rectangle {
                             value <=> root.audio-delay; changed(v) => { root.set-prop("audio-delay", v); } }
                         SliderRow { label: "Volume Boost"; unit: "%"; minimum: 0; maximum: 150; default-value: 100;
                             value <=> root.boost; changed(v) => { root.set-prop("volume", round(v)); } }
+                        Line { label: "Pitch Shift"; hint: "− / = ±1 st, 0 reset · tempo unchanged";
+                            HorizontalLayout { spacing: 4px;
+                                Rectangle { width: 32px; height: 26px; border-radius: Metrics.radius-md; background: apm.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: "−"; font-size: Metrics.font-md; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    apm := TouchArea { accessible-role: button; accessible-label: "Pitch −1 semitone"; mouse-cursor: pointer; clicked => { root.step-pitch(-1); } } }
+                                Rectangle { width: 64px; height: 26px; border-radius: Metrics.radius-md; background: Theme.field;
+                                    Text { text: root.pitch-label; font-family: "DM Mono"; font-size: Metrics.font-sm; color: root.pitch-s == 0 ? Theme.fg-2 : Theme.accent; horizontal-alignment: center; vertical-alignment: center; }
+                                    TouchArea { accessible-role: button; accessible-label: "Pitch " + root.pitch-label + " (double-click to reset)"; accessible-action-default => { root.reset-pitch(); } mouse-cursor: pointer; double-clicked => { root.reset-pitch(); } } }
+                                Rectangle { width: 32px; height: 26px; border-radius: Metrics.radius-md; background: app2.has-hover ? Theme.field-raised : Theme.field;
+                                    Text { text: "+"; font-size: Metrics.font-md; color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center; }
+                                    app2 := TouchArea { accessible-role: button; accessible-label: "Pitch +1 semitone"; mouse-cursor: pointer; clicked => { root.step-pitch(1); } } }
+                            } }
                     }
                     Group { title: "Equalizer";
                         Equalizer { }
