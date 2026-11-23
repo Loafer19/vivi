@@ -635,21 +635,22 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
     {
         let w = app.as_weak();
         let cfg = cfg.clone();
-        app.global::<crate::Lyrics>().on_set_karaoke(move |style, bg| {
-            let Some(a) = w.upgrade() else { return };
-            update_karaoke(&a, &cfg, &style, &bg, false);
-        });
+        app.global::<crate::Lyrics>()
+            .on_set_karaoke(move |style, bg| {
+                let Some(a) = w.upgrade() else { return };
+                update_karaoke(&a, &cfg, &style, &bg, false);
+            });
     }
     {
         let w = app.as_weak();
         let cfg = cfg.clone();
-        app.global::<crate::Panel>().on_set_karaoke(move |style, bg| {
-            let Some(a) = w.upgrade() else { return };
-            update_karaoke(&a, &cfg, &style, &bg, false);
-        });
+        app.global::<crate::Panel>()
+            .on_set_karaoke(move |style, bg| {
+                let Some(a) = w.upgrade() else { return };
+                update_karaoke(&a, &cfg, &style, &bg, false);
+            });
     }
 }
-
 
 fn cycle_opt<'a>(opts: &[&'a str], cur: &str) -> &'a str {
     let i = opts
@@ -659,13 +660,7 @@ fn cycle_opt<'a>(opts: &[&'a str], cur: &str) -> &'a str {
     opts[(i + 1) % opts.len()]
 }
 
-pub(crate) fn update_karaoke(
-    a: &AppWindow,
-    cfg: &AppState,
-    style: &str,
-    bg: &str,
-    toast: bool,
-) {
+pub(crate) fn update_karaoke(a: &AppWindow, cfg: &AppState, style: &str, bg: &str, toast: bool) {
     let mut changed_what = None;
     {
         let mut c = Config::clone(&cfg.config());

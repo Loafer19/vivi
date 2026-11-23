@@ -232,7 +232,10 @@ mod tests {
     #[test]
     fn detects_rubberband_log_errors() {
         assert!(is_rubberband_error("lavfi", "No such filter: 'rubberband'"));
-        assert!(is_rubberband_error("af", "Error initializing filter 'rubberband'"));
+        assert!(is_rubberband_error(
+            "af",
+            "Error initializing filter 'rubberband'"
+        ));
         assert!(!is_rubberband_error("lavfi", "Initialized audio filter"));
     }
 }

@@ -453,7 +453,6 @@ fn sync_style_ui(
     v.set_style(i as i32);
 }
 
-
 pub(crate) fn art_blurred(path: &std::path::Path) -> Option<SharedPixelBuffer<slint::Rgba8Pixel>> {
     art::decode_blurred(path)
 }

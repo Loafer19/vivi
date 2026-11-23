@@ -274,7 +274,6 @@ pub struct Performance {
     pub video_sync: String,
 }
 
-
 pub const KARAOKE_STYLES: [&str; 3] = ["Stage", "Classic", "Neon"];
 pub const KARAOKE_BACKGROUNDS: [&str; 10] = [
     "None",

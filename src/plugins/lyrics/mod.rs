@@ -71,7 +71,6 @@ pub fn wrap_rows(words: &[&str], cols: usize) -> Vec<i32> {
     rows
 }
 
-
 /// Distribute `line_progress` (`0..=1`) proportionally across words by character count.
 pub fn line_word_progress(words: &[&str], line_progress: f64) -> Vec<f32> {
     let p = line_progress.clamp(0.0, 1.0);
@@ -128,8 +127,8 @@ pub(crate) fn poke_cover(app: &crate::AppWindow) {
 
 pub(crate) fn refresh_cover(app: &crate::AppWindow) {
     let l = app.global::<crate::Lyrics>();
-    let want = app.global::<crate::Overlays>().get_karaoke_open()
-        && l.get_background() == "Cover art";
+    let want =
+        app.global::<crate::Overlays>().get_karaoke_open() && l.get_background() == "Cover art";
     if !want {
         if l.get_has_cover() {
             l.set_has_cover(false);
@@ -482,7 +481,7 @@ impl Lyrics {
         cx.app.global::<crate::Lyrics>().set_display(mode.into());
         let karaoke = mode == "Karaoke" && cx.app.global::<crate::Playback>().get_has_media();
         cx.app.global::<crate::Overlays>().set_karaoke_open(karaoke);
-        karaoke_changed(&cx.app);
+        karaoke_changed(cx.app);
         if toast {
             cx.toast(&format!("Lyrics: {mode}"));
         }
@@ -536,7 +535,7 @@ impl Lyrics {
         // A music service may already have described the stream (see `now_playing`).
         self.np_id = crate::nowplaying::current_id();
         self.now_playing(cx);
-        refresh_cover(&cx.app);
+        refresh_cover(cx.app);
     }
 
     /// Show the best of `found` and the cache of `track`, then ask LRCLIB when nothing
@@ -963,7 +962,7 @@ impl Lyrics {
 
         let cols = cx.app.get_karaoke_cols();
         let i = self.index.filter(|_| karaoke_open);
-        let has_line_words = i.is_some_and(|idx| !l.words.get(idx).map_or(true, |w| w.is_empty()));
+        let has_line_words = i.is_some_and(|idx| !l.words.get(idx).is_none_or(|w| w.is_empty()));
         let use_fallback = i.is_some() && !has_line_words && classic;
         let Some(i) = i.filter(|_| has_line_words || use_fallback) else {
             if self.word_line.take().is_some() {

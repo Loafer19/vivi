@@ -507,7 +507,6 @@ pub fn profile_of(i: &config::Interface) -> String {
         .map_or("Custom".into(), |p| p.to_string())
 }
 
-
 pub fn apply_karaoke(a: &AppWindow, c: &Config) {
     let style = config::normalize_karaoke_style(&c.karaoke.style);
     let bg = config::normalize_karaoke_background(&c.karaoke.background);

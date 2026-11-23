@@ -218,9 +218,11 @@ fn run(a: &AppWindow, id: &str) {
         _ => {
             if let Some(rest) = arg.strip_prefix("karaoke:") {
                 if let Some(st) = rest.strip_prefix("style:") {
-                    a.global::<crate::Lyrics>().invoke_set_karaoke(st.into(), "".into());
+                    a.global::<crate::Lyrics>()
+                        .invoke_set_karaoke(st.into(), "".into());
                 } else if let Some(bg) = rest.strip_prefix("bg:") {
-                    a.global::<crate::Lyrics>().invoke_set_karaoke("".into(), bg.into());
+                    a.global::<crate::Lyrics>()
+                        .invoke_set_karaoke("".into(), bg.into());
                 }
                 return;
             }
