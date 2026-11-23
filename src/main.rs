@@ -31,6 +31,7 @@ mod nowplaying;
 mod overlays;
 mod palette;
 mod peaks;
+mod pitch;
 mod player;
 mod plugins;
 mod preview;
