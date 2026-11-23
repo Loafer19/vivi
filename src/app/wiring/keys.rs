@@ -129,6 +129,9 @@ pub(crate) fn wire(
                 let d = if s == "[" || s == "{" { -d } else { d };
                 crate::plugins::command(plugins::lyrics::ID, "offset", &[d.to_string()]);
             }
+            A::PitchDown => crate::pitch::step(&a, &p, -1),
+            A::PitchUp => crate::pitch::step(&a, &p, 1),
+            A::PitchReset => crate::pitch::reset(&a, &p, true),
             // Alt+Z / Alt+X without media go to mpv (older packages bind them there).
             A::SubtitleOffsetAlt if !a.global::<crate::Playback>().get_has_media() => {
                 forward_key(&p, s, ctrl, alt);

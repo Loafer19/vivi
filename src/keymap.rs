@@ -39,6 +39,9 @@ pub enum Action {
     FindLyrics,
     /// `[` `]` (Shift or `{` `}`: 0.5 s).
     LyricsOffset,
+    PitchDown,
+    PitchUp,
+    PitchReset,
     /// `z` `x` (Shift: 1 s), saved per file (src/suboffset.rs).
     SubtitleOffset,
     /// Alt+Z / Alt+X (Alt+Shift: 1 s): the same, on the keys of the Subtitle Auto-Sync
@@ -182,6 +185,9 @@ pub const BINDINGS: &[Binding] = &[
     b(A::FindLyrics, &[T("l"), T("L")], On, Any, "Find lyrics", "Ctrl+L"),
     b(A::LyricsOffset, &[T("["), T("]"), T("{"), T("}")], Off, Any,
         "Lyrics timing offset ±0.1 s (Shift: 0.5 s)", "[  ]"),
+    b(A::PitchDown, &[T("-")], Off, Off, "Pitch −1 semitone (tempo unchanged)", "-"),
+    b(A::PitchUp, &[T("="), T("+")], Off, Any, "Pitch +1 semitone (tempo unchanged)", "=  +"),
+    b(A::PitchReset, &[T("0")], Off, Off, "Reset pitch to 0 st", "0"),
     // Before the plain z / x row, which matches with Alt held too.
     alt(A::SubtitleOffsetAlt, &[T("z"), T("x"), T("Z"), T("X")], Any,
         "Subtitle offset ±0.1 s (Alt+Shift: 1 s), per file", "Alt+Z  Alt+X"),

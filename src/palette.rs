@@ -37,6 +37,24 @@ fn entries() -> Vec<Entry> {
     };
     v.push(app("app:marketplace", "Extensions: All / Marketplace"));
     v.push(app("app:customize", "Customize Player"));
+    v.push(app("app:karaoke:style:next", "Karaoke: Next text style"));
+    for st in crate::config::KARAOKE_STYLES {
+        v.push(Entry {
+            id: format!("app:karaoke:style:{st}"),
+            label: format!("Karaoke style: {st}"),
+            group: "Karaoke".into(),
+            hint: String::new(),
+        });
+    }
+    v.push(app("app:karaoke:bg:next", "Karaoke: Next background"));
+    for bg in crate::config::KARAOKE_BACKGROUNDS {
+        v.push(Entry {
+            id: format!("app:karaoke:bg:{bg}"),
+            label: format!("Karaoke background: {bg}"),
+            group: "Karaoke".into(),
+            hint: String::new(),
+        });
+    }
     // The Streams hub (#86).
     v.push(app("app:streams:url", "Streams: open a URL"));
     for t in crate::streams::route::Tab::ALL {
@@ -197,11 +215,21 @@ fn run(a: &AppWindow, id: &str) {
         "drawer" => {
             crate::drawer::open(a, arg);
         }
-        _ => match arg {
-            "marketplace" => crate::extwin::open(a, "", false),
-            "customize" => a.global::<crate::Overlays>().set_customize_open(true),
-            p => crate::streams::open_page(a, p),
-        },
+        _ => {
+            if let Some(rest) = arg.strip_prefix("karaoke:") {
+                if let Some(st) = rest.strip_prefix("style:") {
+                    a.global::<crate::Lyrics>().invoke_set_karaoke(st.into(), "".into());
+                } else if let Some(bg) = rest.strip_prefix("bg:") {
+                    a.global::<crate::Lyrics>().invoke_set_karaoke("".into(), bg.into());
+                }
+                return;
+            }
+            match arg {
+                "marketplace" => crate::extwin::open(a, "", false),
+                "customize" => a.global::<crate::Overlays>().set_customize_open(true),
+                p => crate::streams::open_page(a, p),
+            }
+        }
     }
 }
 

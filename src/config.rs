@@ -18,6 +18,7 @@ pub struct Config {
     pub network: Network,
     pub performance: Performance,
     pub recording: Recording,
+    pub karaoke: Karaoke,
     /// Home widgets: order, on / off, size.
     pub home: crate::home::Home,
     /// Values of settings that started as placeholders, keyed by their `stub.…` setting
@@ -271,6 +272,58 @@ pub struct Performance {
     pub framedrop: bool,
     /// mpv `video-sync`.
     pub video_sync: String,
+}
+
+
+pub const KARAOKE_STYLES: [&str; 3] = ["Stage", "Classic", "Neon"];
+pub const KARAOKE_BACKGROUNDS: [&str; 10] = [
+    "None",
+    "Cover art",
+    "Spectrometer",
+    "Scope",
+    "Spectrum",
+    "Envelope",
+    "Radial",
+    "Particles",
+    "Pitch",
+    "VU Meter",
+];
+
+pub fn normalize_karaoke_style(s: &str) -> &'static str {
+    KARAOKE_STYLES
+        .iter()
+        .copied()
+        .find(|k| k.eq_ignore_ascii_case(s.trim()))
+        .unwrap_or(KARAOKE_STYLES[0])
+}
+
+pub fn normalize_karaoke_background(s: &str) -> &'static str {
+    KARAOKE_BACKGROUNDS
+        .iter()
+        .copied()
+        .find(|k| k.eq_ignore_ascii_case(s.trim()))
+        .unwrap_or(KARAOKE_BACKGROUNDS[0])
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Karaoke {
+    /// "Stage" | "Classic" | "Neon"
+    pub style: String,
+    /// "None" | "Cover art" | one of the 8 visualizer mode names.
+    pub background: String,
+    /// Keep per-session pitch shift across track changes.
+    pub keep_pitch: bool,
+}
+
+impl Default for Karaoke {
+    fn default() -> Self {
+        Self {
+            style: KARAOKE_STYLES[0].into(),
+            background: KARAOKE_BACKGROUNDS[0].into(),
+            keep_pitch: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

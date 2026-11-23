@@ -78,6 +78,7 @@ pub(crate) fn setup_features(
     crate::drawer::setup(app);
     crate::downloads::setup(app, player, cfg.clone());
     fx::setup(app, player);
+    crate::pitch::setup(app, player);
     dialogs::setup(app, player);
     ipc::sweep_stale();
     ipc::setup(app, player, cfg.config().general.remote_control);

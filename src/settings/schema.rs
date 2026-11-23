@@ -653,6 +653,21 @@ pub(super) const OTHER: &[Field] = &[
         set: |c, v| c.library.thumbnails = v == "true",
     },
     Field {
+        id: "karaoke.style",
+        get: Some(|c| crate::config::normalize_karaoke_style(&c.karaoke.style).into()),
+        set: |c, v| c.karaoke.style = crate::config::normalize_karaoke_style(v).into(),
+    },
+    Field {
+        id: "karaoke.background",
+        get: Some(|c| crate::config::normalize_karaoke_background(&c.karaoke.background).into()),
+        set: |c, v| c.karaoke.background = crate::config::normalize_karaoke_background(v).into(),
+    },
+    Field {
+        id: "karaoke.keep_pitch",
+        get: Some(|c| c.karaoke.keep_pitch.to_string()),
+        set: |c, v| c.karaoke.keep_pitch = on(v),
+    },
+    Field {
         id: "library.history",
         get: None,
         set: |c, v| c.library.history = v == "true",
@@ -834,5 +849,13 @@ mod tests {
             (c.audio.device.as_str(), get(&c, "audio.device").as_str()),
             ("auto", "System default")
         );
+        for (id, v, expect) in [
+            ("karaoke.style", "classic", "Classic"),
+            ("karaoke.background", "cover art", "Cover art"),
+            ("karaoke.keep_pitch", "true", "true"),
+        ] {
+            assert!(set(&mut c, id, v), "{id}");
+            assert_eq!(get(&c, id), expect, "{id}");
+        }
     }
 }
