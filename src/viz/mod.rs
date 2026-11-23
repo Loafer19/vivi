@@ -470,7 +470,7 @@ pub fn reassert_tap() {
                     ensure_tap(&p, &f);
                 }
             }
-        }
+        };
     });
 }
 

@@ -614,6 +614,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
     {
         let w = app.as_weak();
         let p = player.clone();
+        let cfg = cfg.clone();
         app.global::<crate::Panel>().on_save_preset(move || {
             let Some(a) = w.upgrade() else { return };
             let Some(path) = p.get("path") else { return };
