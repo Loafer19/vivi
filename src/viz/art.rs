@@ -219,7 +219,7 @@ mod tests {
         );
         assert_eq!(dominant(Path::new("/no/such/cover.png")), None);
         let blurred = decode_blurred(&p).unwrap();
-        assert_eq!((blurred.width(), blurred.height()), (32, 32));
+        assert_eq!((blurred.width(), blurred.height()), (256, 256));
         assert!(decode_blurred(Path::new("/no/such/cover.png")).is_none());
         let _ = std::fs::remove_file(p);
     }
