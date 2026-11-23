@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- **Karaoke text styles, backgrounds, and pitch shift**:
+  - **Three Karaoke text styles** (*Stage* keeps the centred scrolling full-stage view; *Classic* shows two lines with word-level wipe and smooth per-line fill fallback for line-synced LRCs; *Neon* adds an audio-reactive glow pulsing with live level and beat data).
+  - **Karaoke backgrounds**: *None* (radial accent stage), *Cover art* (blurred, gently breathing track artwork), or any of the eight **Music Visualizer** modes dimmed behind the lyrics.
+  - **Per-session pitch shift** (`-12..+12` semitones, tempo unchanged): `-` / `=` (`+`) step by ±1 semitone and `0` resets to `0 st`, plus steppers in the Karaoke header, side panel (*Playback → Lyrics* and *Audio → Synchronization*), and command palette entries. Uses mpv's `rubberband` filter with automatic fallback to FFmpeg's built-in `lavfi` pitch graph on builds without `librubberband`, and resets on track change unless *Keep pitch shift across tracks* is enabled under *Settings → Playback → Karaoke*.
+
 ### Fixed
 - **AppImage AppStream metadata is found**: the image ships `io.github.loafer19.vivi.desktop`, so appimagetool looks for `io.github.loafer19.vivi.appdata.xml` (the same id as the metainfo) instead of warning that `vivi.appdata.xml` is missing. The source `vivi.desktop` used by AUR and Nix is unchanged.
 
