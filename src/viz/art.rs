@@ -38,6 +38,19 @@ pub fn decode(path: &Path) -> Option<(slint::SharedPixelBuffer<slint::Rgba8Pixel
     Some((buf, pal))
 }
 
+
+/// A cover file decoded and blurred for the karaoke "Cover art" background.
+/// Blocking: run it on a worker thread.
+pub fn decode_blurred(path: &Path) -> Option<slint::SharedPixelBuffer<slint::Rgba8Pixel>> {
+    let img = open(path)?;
+    let pic = img.thumbnail(256, 256).fast_blur(14.0).to_rgba8();
+    Some(slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+        pic.as_raw(),
+        pic.width(),
+        pic.height(),
+    ))
+}
+
 fn open(path: &Path) -> Option<image::DynamicImage> {
     image::ImageReader::open(path)
         .ok()?
@@ -205,6 +218,9 @@ mod tests {
             "{c:?}"
         );
         assert_eq!(dominant(Path::new("/no/such/cover.png")), None);
+        let blurred = decode_blurred(&p).unwrap();
+        assert_eq!((blurred.width(), blurred.height()), (32, 32));
+        assert!(decode_blurred(Path::new("/no/such/cover.png")).is_none());
         let _ = std::fs::remove_file(p);
     }
 }

@@ -105,6 +105,7 @@ struct Viz {
     modes: Vec<Box<dyn modes::Visual>>,
     /// 0 = Disabled, i = modes[i - 1].
     mode: usize,
+    last_eff_mode: usize,
     canvas: Canvas,
     samples: Vec<f32>,
     path: Option<String>,
@@ -135,6 +136,8 @@ thread_local! {
     static WAKE: Cell<bool> = const { Cell::new(false) };
     static TICK: Cell<Option<crate::ticker::Task>> = const { Cell::new(None) };
     static CTX: RefCell<Option<Ctx>> = const { RefCell::new(None) };
+    /// (need_levels_for_neon, bg_mode_index_0_if_none)
+    static KARAOKE: Cell<(bool, usize)> = const { Cell::new((false, 0)) };
 }
 
 type Ctx = (slint::Weak<AppWindow>, Rc<Player>, Rc<RefCell<Viz>>);
@@ -450,6 +453,60 @@ fn sync_style_ui(
     v.set_style(i as i32);
 }
 
+
+pub(crate) fn art_blurred(path: &std::path::Path) -> Option<SharedPixelBuffer<slint::Rgba8Pixel>> {
+    art::decode_blurred(path)
+}
+
+/// Re-assert `@vivi-viz` at the end of mpv's `af` chain (e.g. after `@vivi-pitch` was added).
+pub fn reassert_tap() {
+    CTX.with(|c| {
+        let Some((_, p, viz)) = c.borrow().clone() else {
+            return;
+        };
+        if let Ok(v) = viz.try_borrow() {
+            if v.tap_open {
+                if let Some(f) = v.tap.filter() {
+                    ensure_tap(&p, &f);
+                }
+            }
+        }
+    });
+}
+
+/// Update visualizer behaviour for the open Karaoke view (Neon audio levels / dimmed viz bg).
+pub fn set_karaoke(a: &AppWindow) {
+    let open = a.global::<crate::Overlays>().get_karaoke_open();
+    let need_levels = open && a.global::<crate::Lyrics>().get_style() == "Neon";
+    let bg_mode = if open {
+        let bg = a.global::<crate::Lyrics>().get_background();
+        let b = bg.as_str();
+        if b != "None" && b != "Cover art" {
+            let names: Vec<String> = a
+                .global::<crate::Viz>()
+                .get_modes()
+                .iter()
+                .map(|m| m.to_string())
+                .collect();
+            mode_index(&names, b).unwrap_or(0)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+    let prev = KARAOKE.with(|k| k.replace((need_levels, bg_mode)));
+    a.global::<crate::Viz>().set_karaoke_active(bg_mode > 0);
+    if !need_levels {
+        let l = a.global::<crate::Lyrics>();
+        l.set_level(0.0);
+        l.set_beat(0.0);
+    }
+    if prev != (need_levels, bg_mode) {
+        wake();
+    }
+}
+
 /// Redraw the visualizer even if its paused frame had settled and the frame task was
 /// stopped: a seek, a window resize, a theme, cover or setting change.
 pub fn wake() {
@@ -489,6 +546,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>) {
         an: None,
         modes,
         mode,
+        last_eff_mode: mode,
         canvas: Canvas::new(1, 1),
         samples: Vec::new(),
         path: None,
@@ -874,10 +932,23 @@ impl Viz {
             self.audio_only = self.path.is_some() && audio_only(p);
             a.global::<crate::Viz>().set_audio(self.audio_only);
         }
-        let active =
-            self.audio_only && self.mode > 0 && a.global::<crate::Playback>().get_has_media();
+        let (need_levels, k_bg_mode) = KARAOKE.with(|k| k.get());
+        let eff_mode = if k_bg_mode > 0 { k_bg_mode } else { self.mode };
+        if eff_mode != self.last_eff_mode {
+            self.last_eff_mode = eff_mode;
+            self.canvas = Canvas::new(1, 1);
+            self.paused_for = 0.0;
+        }
+        let active = self.audio_only
+            && (eff_mode > 0 || need_levels)
+            && a.global::<crate::Playback>().get_has_media();
         if !active {
             self.remove_tap(p);
+            if need_levels {
+                let l = a.global::<crate::Lyrics>();
+                l.set_level(0.0);
+                l.set_beat(0.0);
+            }
             TICK.with(crate::ticker::clear);
             return false;
         }
@@ -899,10 +970,11 @@ impl Viz {
         };
         let dark = th.get_dark();
         let set = SETTINGS.with(|e| e.get());
-        let shows_cover = self
-            .modes
-            .get(self.mode - 1)
-            .is_some_and(|m| m.shows_cover());
+        let shows_cover = eff_mode > 0
+            && self
+                .modes
+                .get(eff_mode - 1)
+                .is_some_and(|m| m.shows_cover());
         let want_art = set.color == ColorMode::Art;
         self.art
             .update(want_art || shows_cover, self.path.as_deref());
@@ -947,7 +1019,12 @@ impl Viz {
         } else {
             self.paused_for + dt
         };
-        if self.paused_for > 1.5 && self.canvas.w > 1 {
+        if self.paused_for > 1.5 && (eff_mode == 0 || self.canvas.w > 1) {
+            if need_levels {
+                let l = a.global::<crate::Lyrics>();
+                l.set_level(0.0);
+                l.set_beat(0.0);
+            }
             // Settled: keep the last frame and stop the frame task until play, a seek,
             // a mode / setting / theme change or a resize wakes it ([`wake`], [`arm`]).
             TICK.with(crate::ticker::clear);
@@ -985,13 +1062,21 @@ impl Viz {
             an.idle(dt);
         }
 
+        if need_levels {
+            let l = a.global::<crate::Lyrics>();
+            l.set_level(an.f.level.clamp(0.0, 1.0));
+            l.set_beat(an.f.beat.clamp(0.0, 1.0));
+        }
+        if eff_mode == 0 {
+            return true;
+        }
         let size = a.window().size();
         let (cw, ch) = canvas_size(size.width, size.height, a.window().scale_factor());
         if self.canvas.w != cw || self.canvas.h != ch {
             self.canvas = Canvas::new(cw, ch);
             self.canvas.clear(pal.bg);
         }
-        let Some(m) = self.modes.get_mut(self.mode - 1) else {
+        let Some(m) = self.modes.get_mut(eff_mode - 1) else {
             return true;
         };
         let has_cover = shows_cover && self.art.image.is_some();

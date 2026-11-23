@@ -344,3 +344,17 @@ fn display_cycles_off_text_karaoke() {
     assert_eq!(super::next_display("Karaoke"), "Off");
     assert_eq!(super::next_display(""), "Off");
 }
+
+#[test]
+fn line_progress_and_fallback_words() {
+    let l = Lrc::parse("[00:10.00]Hello world\n[00:14.00]Next");
+    assert!((l.line_progress_at(0, 10.0, 30.0) - 0.0).abs() < 1e-6);
+    assert!((l.line_progress_at(0, 12.0, 30.0) - 0.5).abs() < 1e-6);
+    assert!((l.line_progress_at(0, 14.0, 30.0) - 1.0).abs() < 1e-6);
+    assert!((l.line_progress_at(1, 22.0, 30.0) - 0.5).abs() < 1e-6);
+
+    let p = line_word_progress(&["aa", "bbbb"], 0.5);
+    assert_eq!(p.len(), 2);
+    assert!((p[0] - 1.0).abs() < 1e-4);
+    assert!((p[1] - 0.25).abs() < 1e-4);
+}

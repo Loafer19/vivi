@@ -259,6 +259,7 @@ fn drain() {
         // Commands arrive via invoke_from_event_loop; position and metadata
         // are published here so MPRIS does not need a 100 ms poll.
         crate::desktop::poke();
+        crate::plugins::lyrics::poke_cover(&a);
         a.window().request_redraw();
     });
 }
