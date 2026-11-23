@@ -82,6 +82,18 @@ impl Lrc {
         let p = ((t - start) / (end - start)).clamp(0.0, 1.0);
         Some((k, p))
     }
+    /// Progress through line `i` (`0.0..=1.0`) for smooth line-fill fallback.
+    pub fn line_progress_at(&self, i: usize, t: f64, track_duration: f64) -> f64 {
+        let Some(&(start, _)) = self.lines.get(i) else {
+            return 0.0;
+        };
+        let next = self.lines.get(i + 1).map(|l| l.0);
+        let end = next
+            .or_else(|| (track_duration > start).then_some(track_duration))
+            .unwrap_or(start + 4.0)
+            .max(start + 0.5);
+        ((t - start) / (end - start)).clamp(0.0, 1.0)
+    }
     /// The line texts (no timing).
     pub fn texts(&self) -> Vec<String> {
         self.lines.iter().map(|l| l.1.clone()).collect()

@@ -32,6 +32,19 @@ export global Lyrics {
     in-out property <string> search-status;
     in-out property <string> search-preview;
     in-out property <bool> search-busy;
+    in-out property <string> style: "Stage";
+    in-out property <string> background: "None";
+    in-out property <[string]> styles: ["Stage", "Classic", "Neon"];
+    in-out property <[string]> backgrounds: ["None", "Cover art", "Spectrometer", "Scope", "Spectrum", "Envelope", "Radial", "Particles", "Pitch", "VU Meter"];
+    in-out property <float> line-progress;
+    in-out property <image> cover;
+    in-out property <bool> has-cover;
+    in-out property <float> level;
+    in-out property <float> beat;
+    in-out property <int> pitch;
+    in-out property <string> pitch-label: "0 st";
     // Plugin command from views without their own callback (side drawer).
     callback cmd(string, string);
+    callback set-karaoke(string, string);
+    callback step-pitch(int);
 }

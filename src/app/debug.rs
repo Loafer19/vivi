@@ -245,6 +245,30 @@ pub(crate) fn debug_ui(app: &AppWindow) {
             }
         });
     }
+    // VIVI_KARAOKE=Stage|Classic|Neon [VIVI_KARAOKE_BG=...] [VIVI_KARAOKE_PITCH=...] [VIVI_KARAOKE_AT=secs]
+    if let Some(st) = var("VIVI_KARAOKE") {
+        let bg = var("VIVI_KARAOKE_BG").unwrap_or_default();
+        let pitch: i32 = var("VIVI_KARAOKE_PITCH")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        let seek_at: Option<f32> = var("VIVI_KARAOKE_AT").and_then(|v| v.parse().ok());
+        let w = app.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(2000), move || {
+            let Some(a) = w.upgrade() else { return };
+            let style = if st == "1" { "" } else { st.as_str() };
+            if !style.is_empty() || !bg.is_empty() {
+                a.global::<crate::Lyrics>()
+                    .invoke_set_karaoke(style.into(), bg.into());
+            }
+            crate::plugins::command(crate::plugins::lyrics::ID, "display", &["Karaoke".into()]);
+            if pitch != 0 {
+                a.global::<crate::Lyrics>().invoke_step_pitch(pitch);
+            }
+            if let Some(t) = seek_at {
+                a.global::<crate::Playback>().invoke_seek(t);
+            }
+        });
+    }
     if let Some(n) = var("VIVI_ONBOARDING").and_then(|v| v.parse().ok()) {
         app.global::<crate::Settings>().set_onboarding_step(n);
         app.global::<crate::Overlays>().set_onboarding_open(true);

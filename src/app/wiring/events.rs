@@ -139,6 +139,7 @@ fn drain() {
                     drop(c);
                     // After the preset, so the file's own offset wins.
                     suboffset::file_loaded(&a, &d.player);
+                    crate::pitch::file_loaded(&a, &d.player, d.cfg.config().karaoke.keep_pitch);
                     crate::nowplaying::file_loaded();
                     plugins::file_loaded();
                     crate::bookmarks::file_loaded(&d.player);
@@ -235,6 +236,7 @@ fn drain() {
                     if d.load.url().is_some() && !text.is_empty() {
                         d.last_err = text.chars().take(120).collect();
                     }
+                    crate::pitch::mpv_log(&a, &d.player, &prefix, &text);
                     plugins::mpv_log(&prefix, &text)
                 }
             }
@@ -257,6 +259,7 @@ fn drain() {
         // Commands arrive via invoke_from_event_loop; position and metadata
         // are published here so MPRIS does not need a 100 ms poll.
         crate::desktop::poke();
+        crate::plugins::lyrics::poke_cover(&a);
         a.window().request_redraw();
     });
 }

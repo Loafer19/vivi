@@ -71,6 +71,145 @@ pub fn wrap_rows(words: &[&str], cols: usize) -> Vec<i32> {
     rows
 }
 
+/// Distribute `line_progress` (`0..=1`) proportionally across words by character count.
+pub fn line_word_progress(words: &[&str], line_progress: f64) -> Vec<f32> {
+    let p = line_progress.clamp(0.0, 1.0);
+    let weights: Vec<usize> = words
+        .iter()
+        .map(|w| w.trim().chars().count().max(1))
+        .collect();
+    let total: usize = weights.iter().sum::<usize>().max(1);
+    let mut out = Vec::with_capacity(words.len());
+    let mut acc = 0usize;
+    for w in weights {
+        let lo = acc as f64 / total as f64;
+        let hi = (acc + w) as f64 / total as f64;
+        let prog = if hi > lo {
+            ((p - lo) / (hi - lo)).clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        };
+        out.push(prog);
+        acc += w;
+    }
+    out
+}
+
+#[derive(Default)]
+struct CoverState {
+    np_id: i64,
+    url: String,
+    img: Option<slint::SharedPixelBuffer<slint::Rgba8Pixel>>,
+    pending: u64,
+}
+
+thread_local! {
+    static COVER: std::cell::RefCell<CoverState> = std::cell::RefCell::new(CoverState::default());
+}
+
+pub(crate) fn karaoke_changed(app: &crate::AppWindow) {
+    crate::viz::set_karaoke(app);
+    refresh_cover(app);
+}
+
+pub(crate) fn poke_cover(app: &crate::AppWindow) {
+    if !app.global::<crate::Overlays>().get_karaoke_open()
+        || app.global::<crate::Lyrics>().get_background() != "Cover art"
+    {
+        return;
+    }
+    let id = crate::nowplaying::current_id();
+    let seen = COVER.with(|c| c.borrow().np_id);
+    if id != seen {
+        refresh_cover(app);
+    }
+}
+
+pub(crate) fn refresh_cover(app: &crate::AppWindow) {
+    let l = app.global::<crate::Lyrics>();
+    let want =
+        app.global::<crate::Overlays>().get_karaoke_open() && l.get_background() == "Cover art";
+    if !want {
+        if l.get_has_cover() {
+            l.set_has_cover(false);
+            l.set_cover(slint::Image::default());
+        }
+        return;
+    }
+    let id = crate::nowplaying::current_id();
+    let t = crate::nowplaying::current();
+    let url = t.cover;
+    enum Action {
+        Set(slint::SharedPixelBuffer<slint::Rgba8Pixel>),
+        Clear,
+        Fetch(u64, String),
+        None,
+    }
+    let act = COVER.with(|c| {
+        let mut s = c.borrow_mut();
+        s.np_id = id;
+        if url.is_empty() {
+            s.url.clear();
+            s.img = None;
+            s.pending = s.pending.wrapping_add(1);
+            return Action::Clear;
+        }
+        if s.url == url {
+            if let Some(buf) = &s.img {
+                return Action::Set(buf.clone());
+            }
+            return Action::None;
+        }
+        s.url = url.clone();
+        s.img = None;
+        s.pending = s.pending.wrapping_add(1);
+        Action::Fetch(s.pending, url)
+    });
+    match act {
+        Action::Set(buf) => {
+            l.set_cover(slint::Image::from_rgba8(buf));
+            l.set_has_cover(true);
+        }
+        Action::Clear => {
+            l.set_has_cover(false);
+            l.set_cover(slint::Image::default());
+        }
+        Action::Fetch(gen_id, url) => {
+            l.set_has_cover(false);
+            l.set_cover(slint::Image::default());
+            let w = app.as_weak();
+            let _ = std::thread::Builder::new()
+                .name("vivi-karaoke-art".into())
+                .spawn(move || {
+                    let buf = crate::plugins::host::fetch_cover(&url)
+                        .and_then(|p| crate::viz::art_blurred(&p));
+                    let _ = slint::invoke_from_event_loop(move || {
+                        let Some(a) = w.upgrade() else { return };
+                        let ok = COVER.with(|c| {
+                            let mut s = c.borrow_mut();
+                            if s.pending != gen_id {
+                                return false;
+                            }
+                            s.img = buf.clone();
+                            true
+                        });
+                        if ok
+                            && a.global::<crate::Overlays>().get_karaoke_open()
+                            && a.global::<crate::Lyrics>().get_background() == "Cover art"
+                        {
+                            let l = a.global::<crate::Lyrics>();
+                            if let Some(buf) = buf {
+                                l.set_cover(slint::Image::from_rgba8(buf));
+                                l.set_has_cover(true);
+                            }
+                        }
+                    });
+                });
+        }
+        Action::None => {}
+    }
+}
+
 /// Manual search dialog state.
 #[derive(Default)]
 struct Search {
@@ -131,6 +270,7 @@ pub struct Lyrics {
     words: Option<std::rc::Rc<VecModel<crate::KWord>>>,
     word_line: Option<usize>,
     word_cols: i32,
+    word_classic: bool,
     search: Search,
 }
 
@@ -341,6 +481,7 @@ impl Lyrics {
         cx.app.global::<crate::Lyrics>().set_display(mode.into());
         let karaoke = mode == "Karaoke" && cx.app.global::<crate::Playback>().get_has_media();
         cx.app.global::<crate::Overlays>().set_karaoke_open(karaoke);
+        karaoke_changed(cx.app);
         if toast {
             cx.toast(&format!("Lyrics: {mode}"));
         }
@@ -394,6 +535,7 @@ impl Lyrics {
         // A music service may already have described the stream (see `now_playing`).
         self.np_id = crate::nowplaying::current_id();
         self.now_playing(cx);
+        refresh_cover(cx.app);
     }
 
     /// Show the best of `found` and the cache of `track`, then ask LRCLIB when nothing
@@ -804,13 +946,28 @@ impl Lyrics {
     /// updated in place so the wipe animates smoothly.
     fn update_words(&mut self, cx: &Ctx, t: f64) {
         let Some(l) = &self.lrc else { return };
+        let karaoke_open = cx.app.global::<crate::Overlays>().get_karaoke_open();
+        let classic = cx.app.global::<crate::Lyrics>().get_style() == "Classic";
+        let lp = if karaoke_open {
+            self.index
+                .map(|idx| l.line_progress_at(idx, t, self.duration(cx)) as f32)
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        let lg = cx.app.global::<crate::Lyrics>();
+        if (lg.get_line_progress() - lp).abs() > 0.001 {
+            lg.set_line_progress(lp);
+        }
+
         let cols = cx.app.get_karaoke_cols();
-        let i = self
-            .index
-            .filter(|_| cx.app.global::<crate::Overlays>().get_karaoke_open() && l.has_words());
-        let Some(i) = i else {
+        let i = self.index.filter(|_| karaoke_open);
+        let has_line_words = i.is_some_and(|idx| !l.words.get(idx).is_none_or(|w| w.is_empty()));
+        let use_fallback = i.is_some() && !has_line_words && classic;
+        let Some(i) = i.filter(|_| has_line_words || use_fallback) else {
             if self.word_line.take().is_some() {
                 self.words = None;
+                self.word_classic = false;
                 cx.app
                     .global::<crate::Lyrics>()
                     .set_words(ModelRc::new(VecModel::<crate::KWord>::default()));
@@ -818,8 +975,59 @@ impl Lyrics {
             }
             return;
         };
+
+        if use_fallback {
+            let line_words: Vec<&str> = l.lines[i].1.split_whitespace().collect();
+            if self.word_line != Some(i)
+                || self.words.is_none()
+                || self.word_cols != cols
+                || !self.word_classic
+            {
+                let rows = wrap_rows(&line_words, cols.max(1) as usize);
+                let total = line_words.len();
+                let m: Vec<crate::KWord> = line_words
+                    .iter()
+                    .enumerate()
+                    .zip(&rows)
+                    .map(|((j, w), r)| crate::KWord {
+                        text: (*w).into(),
+                        gap: j + 1 < total,
+                        row: *r,
+                        progress: 0.0,
+                    })
+                    .collect();
+                let model = std::rc::Rc::new(VecModel::from(m));
+                cx.app
+                    .global::<crate::Lyrics>()
+                    .set_words(ModelRc::from(model.clone()));
+                cx.app
+                    .global::<crate::Lyrics>()
+                    .set_rows(rows.last().map(|r| r + 1).unwrap_or(0));
+                self.words = Some(model);
+                self.word_line = Some(i);
+                self.word_cols = cols;
+                self.word_classic = true;
+            }
+            let Some(model) = &self.words else { return };
+            let progs = line_word_progress(&line_words, lp as f64);
+            use slint::Model;
+            for (n, prog) in progs.into_iter().enumerate() {
+                if let Some(mut row) = model.row_data(n) {
+                    if (row.progress - prog).abs() > 0.001 {
+                        row.progress = prog;
+                        model.set_row_data(n, row);
+                    }
+                }
+            }
+            return;
+        }
+
         let ws: Vec<&(f64, String)> = l.words[i].iter().filter(|w| !w.1.is_empty()).collect();
-        if self.word_line != Some(i) || self.words.is_none() || self.word_cols != cols {
+        if self.word_line != Some(i)
+            || self.words.is_none()
+            || self.word_cols != cols
+            || self.word_classic
+        {
             let texts: Vec<&str> = ws.iter().map(|w| w.1.as_str()).collect();
             let rows = wrap_rows(&texts, cols.max(1) as usize);
             let m: Vec<crate::KWord> = ws
@@ -842,6 +1050,7 @@ impl Lyrics {
             self.words = Some(model);
             self.word_line = Some(i);
             self.word_cols = cols;
+            self.word_classic = false;
         }
         let Some(model) = &self.words else { return };
         let (k, p) = l.word_at(i, t).unwrap_or((0, 0.0));

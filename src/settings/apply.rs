@@ -507,6 +507,21 @@ pub fn profile_of(i: &config::Interface) -> String {
         .map_or("Custom".into(), |p| p.to_string())
 }
 
+pub fn apply_karaoke(a: &AppWindow, c: &Config) {
+    let style = config::normalize_karaoke_style(&c.karaoke.style);
+    let bg = config::normalize_karaoke_background(&c.karaoke.background);
+    let l = a.global::<crate::Lyrics>();
+    l.set_style(style.into());
+    l.set_background(bg.into());
+    l.set_styles(strings(config::KARAOKE_STYLES));
+    l.set_backgrounds(strings(config::KARAOKE_BACKGROUNDS));
+    let p = a.global::<crate::Panel>();
+    p.set_karaoke_style(style.into());
+    p.set_karaoke_bg(bg.into());
+    crate::viz::set_karaoke(a);
+    crate::plugins::lyrics::karaoke_changed(a);
+}
+
 /// Mirror mpv's current values into the side-panel sliders.
 pub fn sync_panel(a: &AppWindow, p: &Player) {
     let f = |k: &str, d: f64| p.get(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d) as f32;

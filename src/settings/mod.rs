@@ -147,6 +147,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
     apply_theme(app, &cfg.config());
     apply_toolbar(app, &cfg.config());
     apply_player(player, &cfg.config());
+    apply_karaoke(app, &cfg.config());
     player.set_volume(cfg.config().audio.startup_volume as f64);
     let devices: Rc<Vec<String>> = Rc::new(
         player
@@ -592,6 +593,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
                 apply_theme(&a, &cfg.config());
                 apply_toolbar(&a, &cfg.config());
                 apply_player(&p, &cfg.config());
+                apply_karaoke(&a, &cfg.config());
                 sync_panel(&a, &p);
                 save();
                 refresh();
@@ -612,6 +614,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
     {
         let w = app.as_weak();
         let p = player.clone();
+        let cfg = cfg.clone();
         app.global::<crate::Panel>().on_save_preset(move || {
             let Some(a) = w.upgrade() else { return };
             let Some(path) = p.get("path") else { return };
@@ -628,6 +631,72 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: AppState, log: bool) {
                 eprintln!("preset saved: {key} {:?}", cfg.config().presets.get(&key));
             }
         });
+    }
+    {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        app.global::<crate::Lyrics>()
+            .on_set_karaoke(move |style, bg| {
+                let Some(a) = w.upgrade() else { return };
+                update_karaoke(&a, &cfg, &style, &bg, false);
+            });
+    }
+    {
+        let w = app.as_weak();
+        let cfg = cfg.clone();
+        app.global::<crate::Panel>()
+            .on_set_karaoke(move |style, bg| {
+                let Some(a) = w.upgrade() else { return };
+                update_karaoke(&a, &cfg, &style, &bg, false);
+            });
+    }
+}
+
+fn cycle_opt<'a>(opts: &[&'a str], cur: &str) -> &'a str {
+    let i = opts
+        .iter()
+        .position(|x| x.eq_ignore_ascii_case(cur))
+        .unwrap_or(0);
+    opts[(i + 1) % opts.len()]
+}
+
+pub(crate) fn update_karaoke(a: &AppWindow, cfg: &AppState, style: &str, bg: &str, toast: bool) {
+    let mut changed_what = None;
+    {
+        let mut c = Config::clone(&cfg.config());
+        if !style.is_empty() {
+            let next = if style == "next" {
+                cycle_opt(&config::KARAOKE_STYLES, &c.karaoke.style)
+            } else {
+                config::normalize_karaoke_style(style)
+            };
+            if c.karaoke.style != next {
+                c.karaoke.style = next.into();
+                changed_what = Some(format!("Karaoke style: {next}"));
+            }
+        }
+        if !bg.is_empty() {
+            let next = if bg == "next" {
+                cycle_opt(&config::KARAOKE_BACKGROUNDS, &c.karaoke.background)
+            } else {
+                config::normalize_karaoke_background(bg)
+            };
+            if c.karaoke.background != next {
+                c.karaoke.background = next.into();
+                changed_what = Some(format!("Karaoke background: {next}"));
+            }
+        }
+        if changed_what.is_some() {
+            cfg.replace(c);
+        }
+    }
+    if let Some(msg) = changed_what {
+        apply_karaoke(a, &cfg.config());
+        let _ = cfg.save();
+        refresh_ui();
+        if toast {
+            crate::plugins::toast(a, &msg);
+        }
     }
 }
 

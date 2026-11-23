@@ -539,6 +539,27 @@ pub(crate) fn all_rows(c: &Config, devices: &[String]) -> Vec<(SettingRow, bool)
         .seg("playback.repeat", "Repeat", "Off, repeat the current file, or repeat the whole queue.", &c.playback.repeat, &["Off", "One", "All"])
         .header("Sleep timer")
         .slider("playback.sleep_fade", "Fade out before pausing", "The sleep timer (side panel → Playback) lowers the volume over this many seconds, then pauses and restores it. Off pauses at once.", c.playback.sleep_fade as f64, (0.0, 120.0, 5.0), &["Off", "60 s", "120 s"])
+        .header("Karaoke")
+        .choice(
+            "karaoke.style",
+            "Karaoke text style",
+            "Stage centres the current line and scrolls smoothly; Classic shows two lines with word or line fill; Neon pulses with the music.",
+            config::normalize_karaoke_style(&c.karaoke.style),
+            &config::KARAOKE_STYLES,
+        )
+        .choice(
+            "karaoke.background",
+            "Karaoke background",
+            "Behind the lyrics: None, blurred breathing Cover art, or any music visualizer mode dimmed under the text.",
+            config::normalize_karaoke_background(&c.karaoke.background),
+            &config::KARAOKE_BACKGROUNDS,
+        )
+        .toggle(
+            "karaoke.keep_pitch",
+            "Keep pitch shift across tracks",
+            "Keep the current semitone pitch shift when opening the next track instead of resetting to 0 st.",
+            c.karaoke.keep_pitch,
+        )
         .section("Per-show presets", "Subtitle and audio adjustments saved for a show from the side panel → Subtitles.", &[]);
     if c.presets.is_empty() {
         r.push(

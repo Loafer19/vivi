@@ -11,7 +11,7 @@
 - **Library**: home screen, video folders, music by album/artist/genre, playlists, resume, search
 - **Side panel**: queue, bookmarks, chapters, plus quick playback/video/audio/subtitle settings
 - **Equalizer & effects**, seek-bar previews (Chapter Thumbnails extension), miniplayer, music visualizer, MPRIS, light/dark themes
-- **Lyrics karaoke**: full-screen synced lyrics with word highlight, click a line to jump there, Find Lyrics, save as `.lrc` or embed; music-service songs and radio streams too
+- **Lyrics karaoke**: full-screen synced lyrics in Stage, Classic (two-line) or Neon styles, with blurred cover art or dimmed visualizer backgrounds, per-session semitone pitch shift, word highlight, click a line to jump there, Find Lyrics, save as `.lrc` or embed; music-service songs and radio streams too
 - **Subtitles**: OpenSubtitles hash-first search, language chips, preview, one-click load, per-file offset, auto-sync
 - **Auto-tagger**: AcoustID + MusicBrainz and more, confidence-ranked, per-field alternatives, undo; can name untagged songs as they play (nothing is written until you review)
 - **Free Music**: Jamendo + Internet Archive/FMA search, album/artist pages, download queue (Internet Archive/FMA; Jamendo links to its site)
