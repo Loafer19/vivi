@@ -23,9 +23,9 @@ thread_local! {
         RefCell::new(Default::default());
 }
 
-/// Rows kept around the visible ones (decoded ahead, not dropped while scrolling back).
 /// How long the library search waits after the last key before it runs (#117).
 const SEARCH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
+/// Rows kept around the visible ones (decoded ahead, not dropped while scrolling back).
 const WINDOW_MARGIN: usize = 24;
 
 /// A model that shows thumbnails plus the rows of each `thumb_key`, so a finished
