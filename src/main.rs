@@ -44,6 +44,7 @@ mod store;
 mod streams;
 mod sublocal;
 mod suboffset;
+mod textmatch;
 mod ticker;
 mod transitions;
 mod tray;
