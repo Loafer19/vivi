@@ -74,6 +74,12 @@ export global Theme {
     out property <color> track-fill: #371F06;
     out property <color> track-fill-hover: #4A2A08;
     out property <color> track-tick: #FFFFFF0D;
+    // The boxed seek / volume track: lighter than the bar in dark mode (darker in light mode),
+    // so the empty part reads; the played part is the plain accent.
+    out property <color> seek-track: dark ? #2E2E2E : #CFCFCF;
+    out property <color> seek-track-hover: dark ? #383838 : #C3C3C3;
+    // Where the pointer would seek to, drawn over the empty track.
+    out property <color> seek-hover: dark ? #FFFFFF26 : #00000026;
     out property <color> range: #4FC3F7;          // plugin range on the seekbar
     // Volume wedge gradient
     out property <color> meter-low: #95D318;

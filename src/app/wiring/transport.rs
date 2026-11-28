@@ -19,6 +19,9 @@ pub(crate) fn wire(
         .on_seek(move |t| p.seek_abs(t as f64));
     let p = player.clone();
     app.global::<crate::Playback>()
+        .on_scrub(move |t| p.seek_scrub(t as f64));
+    let p = player.clone();
+    app.global::<crate::Playback>()
         .on_volume_changed(move |v| p.set_volume(v as f64));
     let p = player.clone();
     app.global::<crate::Playback>()

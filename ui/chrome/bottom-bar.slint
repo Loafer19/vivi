@@ -51,6 +51,8 @@ export component BottomBar inherits Rectangle {
             chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
             ab-set(x, y) => { Playback.set-ab(x, y); }
             fmt(t) => { root.fmt(t) }
+            boxed: root.bar.boxed;
+            scrub(t) => { Playback.scrub(t); }
             seek(t) => { Playback.seek(t); root.focused(); }
         }
         HorizontalLayout {
@@ -101,6 +103,7 @@ export component BottomBar inherits Rectangle {
                     chapters: Playback.chapter-starts; marks: Bookmarks.times; ab-a: Playback.ab-a; ab-b: Playback.ab-b; range-a: Playback.range-a; range-b: Playback.range-b; range-label: Playback.range-label;
                     ab-set(x, y) => { Playback.set-ab(x, y); }
                     fmt(t) => { root.fmt(t) }
+                    scrub(t) => { Playback.scrub(t); }
                     seek(t) => { Playback.seek(t); root.focused(); }
                 } }
                 if id == "spacer" || (id == "seek" && root.bar.classic): Rectangle { horizontal-stretch: 1; }

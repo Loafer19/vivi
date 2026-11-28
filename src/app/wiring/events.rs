@@ -165,6 +165,9 @@ fn drain() {
                 PlayerEvent::StartFile => {
                     hide = true;
                     activity = true;
+                    // The previous track's artist line goes with it; the new one comes
+                    // with its tags (src/nowplaying.rs).
+                    a.global::<crate::Playback>().set_media_sub("".into());
                     crate::transitions::start_file();
                     d.last_err.clear();
                     let path = d.player.get("path").unwrap_or_default();

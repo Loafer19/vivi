@@ -2,6 +2,8 @@
 // repeat/shuffle, A-B loop and seekbar extras (chapters, waveform, range).
 export global Playback {
     in-out property <string> media-title: "";
+    // Artist · album of the playing track (src/nowplaying.rs); "" when the file has no tags.
+    in-out property <string> media-sub: "";
     in-out property <bool> playing: false;
     in-out property <float> position: 0;
     in-out property <float> duration: 0;
@@ -33,6 +35,9 @@ export global Playback {
     callback toggle-play();
     callback open-file();
     callback seek(float);
+    // The seek bar is being dragged: a fast, throttled seek (src/player.rs `seek_scrub`);
+    // `seek` follows on release with the exact position.
+    callback scrub(float);
     callback volume-changed(float);
     callback toggle-mute();
     callback toggle-fullscreen();
