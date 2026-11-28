@@ -1,6 +1,6 @@
 // Library per the Figma "Library Sidebar" frames (docs/design/frames/library-sidebars.png):
 // 50 px icon rail (#191919, 32 px buttons, gap 14), content #0E0E0E with 20 px padding:
-// back/forward + breadcrumb (Inter 16 #8F8F8F, "▸" separators) + more/open icons; folder views
+// back/forward + breadcrumb (Inter 16, bright title, "▸" separators) + more/open icons; folder views
 // also show the item count with sort/view/search icons, a #222 divider, then 32 px rows
 // (32 px thumbnail, gap 10, Inter 14; watched rows dimmer with an orange progress line;
 // "⋯" on hover). Home is a 3-column widget grid with a Customize Home button in the header.
@@ -393,7 +393,7 @@ component HomeHead inherits HorizontalLayout {
     callback action();
     visible: root.show;
     height: root.show ? 24px : 0; spacing: 4px;
-    Text { text: root.title; color: tta.has-hover && root.link ? Theme.fg-1 : Theme.fg-a1; font-size: Metrics.font-lg; vertical-alignment: center; horizontal-stretch: 1; overflow: elide;
+    Text { text: root.title; color: tta.has-hover && root.link ? Theme.accent-bright : Theme.fg-1; font-size: Metrics.font-lg; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; overflow: elide;
         tta := TouchArea { enabled: root.link; accessible-role: button; accessible-label: root.title; mouse-cursor: pointer; clicked => { root.clicked(); } } }
     if root.action-text != "": Text {
         text: root.action-text; font-size: Metrics.font-base; vertical-alignment: center;
@@ -694,7 +694,11 @@ export component LibraryView inherits Rectangle {
     // Plugin dialogs shown as pages (Streams hub tabs, service pages): (owner, name, args).
     callback plugin-command(string, string, string);
     in-out property <string> query;
-    property <bool> searching: query != "";
+    // The search field is open; bound to Library.search-open so Ctrl+F and Esc (Rust) drive it.
+    in-out property <bool> searching;
+    in property <int> search-focus;
+    // Count / sort / view / search row: not on a bare Home.
+    property <bool> tools-row: !hub && (nav != "home" || query != "");
     property <string> section: nav == "home" ? "home" : (crumb-keys.length > 0 ? crumb-keys[0] : nav);
     // The Streams hub or a service page fills the content area (#86).
     property <bool> hub: Streams.view != "";
@@ -775,11 +779,16 @@ export component LibraryView inherits Rectangle {
                             text: root.crumb-labels[i]; font-size: Metrics.font-lg; overflow: elide; vertical-alignment: center;
                             // Docked, long names give way sooner so the row fits the panel.
                             min-width: min(self.preferred-width, root.sidebar ? 56px : 140px);
-                            color: cta.has-hover ? Theme.fg-1 : Theme.fg-a2;
+                            color: cta.has-hover ? Theme.accent-bright : Theme.fg-1;
                             cta := TouchArea { accessible-role: button; accessible-label: root.crumb-labels[i]; mouse-cursor: pointer; clicked => { root.navigate(k); } }
                         }
                     }
                     Rectangle { horizontal-stretch: 1; }
+                }
+                // Library-wide search from Home; once results show, the toolbar row has its own.
+                if root.nav == "home" && !root.hub && !root.tools-row: HeadIcon {
+                    label: "Search (Ctrl+F)"; icon: "search";
+                    clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }
                 // On Home: Refresh, Customize, Reset. In a video subfolder: folder actions.
                 // Hidden when it would only have repeated the toolbar Grid / List control.
@@ -796,7 +805,7 @@ export component LibraryView inherits Rectangle {
                 }
                 HeadIcon { label: root.has-media ? "Back to the player" : "Open file"; icon: "open"; clicked => { root.popout(); } }
             }
-            if !root.hub && (root.nav != "home" || root.query != "" || root.searching): HorizontalLayout {
+            if root.tools-row: HorizontalLayout {
                 height: 24px; spacing: 12px;
                 Text {
                     horizontal-stretch: 1; vertical-alignment: center; font-size: Metrics.font-base; color: Theme.fg-a3;
@@ -811,12 +820,12 @@ export component LibraryView inherits Rectangle {
                     clicked => { root.menu-request("view", self.absolute-position.x, self.absolute-position.y + 28px, ""); }
                 }
                 if root.nav != "downloads": HeadIcon {
-                    label: "Search"; icon: "search";
+                    label: "Search (Ctrl+F)"; icon: "search";
                     clicked => { root.searching = !root.searching; if (!root.searching) { root.query = ""; root.search(""); } }
                 }
             }
             if root.searching && !root.hub: TextField {
-                placeholder: "Search library"; label: "Search library"; text <=> root.query;
+                placeholder: "Search library"; label: "Search library"; text <=> root.query; focus-tick: root.search-focus;
                 edited(t) => { root.search(t); }
                 init => { self.focus-input(); }
             }

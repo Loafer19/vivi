@@ -1783,6 +1783,27 @@ thread_local! {
 }
 
 /// Attach pending external tracks if a file is loaded (called again on FileLoaded).
+/// Ctrl+F: open the library search field (Home, a folder or the docked library while a
+/// file plays) and focus it; with the field already open it just takes the focus back.
+/// Does nothing under a dialog (Settings, the palette, …) or in the miniplayer.
+pub fn open_search(a: &AppWindow) {
+    use crate::overlays::Overlay as O;
+    if a.get_mini() || !matches!(a.get_top_overlay(), O::None | O::Library | O::LibrarySearch) {
+        return;
+    }
+    let (o, l) = (a.global::<crate::Overlays>(), a.global::<crate::Library>());
+    if a.global::<crate::Playback>().get_has_media() && !o.get_library_open() {
+        o.set_library_open(true);
+    }
+    // The Streams hub has no item list: land on Home first, as the rail's Home does.
+    if !a.global::<crate::Streams>().get_view().is_empty() {
+        l.set_query("".into());
+        l.invoke_navigate("home".into());
+    }
+    l.set_search_open(true);
+    l.set_search_focus(l.get_search_focus().wrapping_add(1));
+}
+
 pub fn flush_pending(p: &Player) {
     if p.get("duration").is_none() {
         return;

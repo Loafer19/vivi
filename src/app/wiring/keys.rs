@@ -167,6 +167,7 @@ pub(crate) fn wire(
             }
             A::Extensions => crate::extwin::toggle(&a),
             A::Palette => crate::palette::toggle(&a),
+            A::LibrarySearch => crate::libview::open_search(&a),
             A::Bookmark => a.global::<crate::Bookmarks>().invoke_add(),
             A::Shortcuts => a
                 .global::<crate::Overlays>()

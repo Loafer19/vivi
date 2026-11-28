@@ -117,6 +117,7 @@ export component AppWindow inherits Window {
         : Overlays.network-open ? Overlay.network
         : Overlays.drawer-open && Playback.has-media && !root.mini && root.show-ui ? Overlay.drawer
         : Overlays.panel-open && Playback.has-media && !root.mini ? Overlay.side-panel
+        : Library.search-open && (!Playback.has-media || Overlays.library-open) && Streams.view == "" ? Overlay.library-search
         : Overlays.library-open && Playback.has-media ? Overlay.library
         : Overlays.karaoke-open && Playback.has-media && !root.mini && !Overlays.library-open ? Overlay.karaoke
         : Overlay.none;
@@ -352,6 +353,8 @@ export component AppWindow inherits Window {
         sort: Library.sort; grid: Library.grid; count: Library.count; scanning: Library.scanning; has-media: Playback.has-media;
         can-back: Library.can-back; can-forward: Library.can-forward;
         query <=> Library.query;
+        searching <=> Library.search-open;
+        search-focus: Library.search-focus;
         navigate(k) => { Library.query = ""; Library.navigate(k); }
         history(f) => { Library.query = ""; Library.history(f); }
         search(q) => { Library.search(q); }

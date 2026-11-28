@@ -53,6 +53,7 @@ pub enum Action {
     Extensions,
     /// The command palette.
     Palette,
+    LibrarySearch,
     Bookmark,
     /// Audio-only files with the visualizer on; otherwise the key goes to mpv.
     Visualizer,
@@ -160,6 +161,8 @@ use K::{Named as N, Text as T};
 pub const BINDINGS: &[Binding] = &[
     // Before Play / pause, whose K matches with any Ctrl state.
     b(A::Palette, &[T("k")], On, Any, "Command palette", "Ctrl+K"),
+    // Before Fullscreen (F ignores Ctrl), so Ctrl+F is the search, not the fullscreen.
+    b(A::LibrarySearch, &[T("f")], On, Any, "Search the library", "Ctrl+F"),
     b(A::PlayPause, &[T(" "), T("k")], Any, Any, "Play / pause", "Space  K").no_alt(),
     b(A::SeekForward, &[N(Key::RightArrow)], Any, Any, "Seek forward (Shift: long skip)", "→").no_alt(),
     b(A::SeekBack, &[N(Key::LeftArrow)], Any, Any, "Seek back (Shift: long skip)", "←").no_alt(),
@@ -319,6 +322,7 @@ mod tests {
             ("k", false, true, Some(A::Palette)), // Ctrl+K: command palette (was play / pause)
             ("K", true, false, None),
             ("f", false, false, Some(A::Fullscreen)),
+            ("f", false, true, Some(A::LibrarySearch)), // Ctrl+F: library search
             ("F", true, false, None),
             ("p", false, false, Some(A::Miniplayer)),
             ("p", false, true, None),
