@@ -101,7 +101,11 @@ pub fn fold(s: &str) -> String {
         }
         match c {
             // Apostrophes, combining marks, zero-width characters.
-            '\u{2019}' | '\u{2018}' | '\u{02BC}' | '\u{0300}'..='\u{036F}' | '\u{200B}'..='\u{200D}' => {}
+            '\u{2019}'
+            | '\u{2018}'
+            | '\u{02BC}'
+            | '\u{0300}'..='\u{036F}'
+            | '\u{200B}'..='\u{200D}' => {}
             // Full-width ASCII (NFKD folds it to plain ASCII).
             '\u{FF01}'..='\u{FF5E}' => {
                 out.push(((c as u32 - 0xFF01 + 0x21) as u8).to_ascii_lowercase() as char);
@@ -460,7 +464,10 @@ fn exact(w: &Word, lines: &Lines) -> Option<i64> {
     let mut best: Option<i64> = None;
     for (li, line) in lines.text.iter().enumerate() {
         for (i, _) in line.match_indices(&w.text) {
-            let before = line[..i].chars().next_back().is_none_or(|c| !c.is_alphanumeric());
+            let before = line[..i]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !c.is_alphanumeric());
             let after = line[i + w.text.len()..]
                 .chars()
                 .next()
@@ -711,7 +718,10 @@ mod tests {
         let fuzzy = score("sntl", "Sintel");
         let typo = score("sintle", "Sintel");
         let layout = score("сінтел", "Sintel");
-        assert!(exact > prefix && prefix > inside, "{exact} {prefix} {inside}");
+        assert!(
+            exact > prefix && prefix > inside,
+            "{exact} {prefix} {inside}"
+        );
         assert!(inside > fuzzy, "{inside} {fuzzy}");
         assert!(fuzzy > typo, "{fuzzy} {typo}");
         assert!(typo > layout && layout > 0, "{typo} {layout}");
@@ -739,7 +749,11 @@ mod tests {
     #[test]
     fn osa_distances() {
         let d = |a: &str, b: &str, k| {
-            osa_within(&a.chars().collect::<Vec<_>>(), &b.chars().collect::<Vec<_>>(), k)
+            osa_within(
+                &a.chars().collect::<Vec<_>>(),
+                &b.chars().collect::<Vec<_>>(),
+                k,
+            )
         };
         assert_eq!(d("kitten", "kitten", 1), Some(0));
         assert_eq!(d("ab", "ba", 1), Some(1), "swap");
@@ -755,7 +769,13 @@ mod tests {
     #[test]
     fn large_library_stays_fast() {
         let rows: Vec<String> = (0..20_000)
-            .map(|i| text(&format!("Track number {i} of the album"), "Some Artist", "Album Name"))
+            .map(|i| {
+                text(
+                    &format!("Track number {i} of the album"),
+                    "Some Artist",
+                    "Album Name",
+                )
+            })
             .collect();
         let m = Matcher::new("sintle trailer").unwrap();
         let t = std::time::Instant::now();

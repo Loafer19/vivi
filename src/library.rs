@@ -1066,11 +1066,35 @@ mod tests {
     fn search_ranks_and_forgives_mistakes() {
         let c = index(&[
             ("/v/Sintel.mkv", "video", "Sintel", "", "", "", 1),
-            ("/v/Sinatra Live.mkv", "video", "Sinatra Live", "", "", "", 2),
-            ("/v/Interstellar.mkv", "video", "Interstellar", "", "", "", 3),
+            (
+                "/v/Sinatra Live.mkv",
+                "video",
+                "Sinatra Live",
+                "",
+                "",
+                "",
+                2,
+            ),
+            (
+                "/v/Interstellar.mkv",
+                "video",
+                "Interstellar",
+                "",
+                "",
+                "",
+                3,
+            ),
             ("/a/s.mp3", "audio", "Сінтел", "Привіт Гурт", "Київ", "", 4),
             ("/a/c.mp3", "audio", "Café", "Zażółć", "Ёлка", "", 5),
-            ("/v/Sintel Trailer.mkv", "video", "Sintel Trailer", "", "", "", 6),
+            (
+                "/v/Sintel Trailer.mkv",
+                "video",
+                "Sintel Trailer",
+                "",
+                "",
+                "",
+                6,
+            ),
         ]);
         let no = |_: &Media| false;
         let find = |q: &str| {

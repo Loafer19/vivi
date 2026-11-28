@@ -1360,7 +1360,9 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
                 return;
             }
             let render = render.clone();
-            timer.start(slint::TimerMode::SingleShot, SEARCH_DEBOUNCE, move || render());
+            timer.start(slint::TimerMode::SingleShot, SEARCH_DEBOUNCE, move || {
+                render()
+            });
         });
     }
     {
