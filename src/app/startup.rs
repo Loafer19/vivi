@@ -65,6 +65,7 @@ pub(crate) fn setup_features(
     crate::homeview::setup(app, cfg.clone());
     libview::setup(app, player, cfg.clone(), log);
     menus::setup(app, player, cfg.clone());
+    crate::nowplaying::bind(app);
     crate::nowplaying::setup(player);
     desktop::setup(app, player, log);
     mini::setup(app, cfg.clone());

@@ -286,6 +286,8 @@ struct State {
     looked_up: String,
     library: Option<crate::library::Media>,
     player: Option<Rc<Player>>,
+    /// The window whose `Playback.media-sub` line shows artist · album.
+    app: Option<slint::Weak<crate::AppWindow>>,
 }
 
 thread_local! {
@@ -436,11 +438,40 @@ pub fn refresh() {
         s.id += 1;
         Some(s.id)
     });
+    // Every refresh, not only on a change: the line is cleared when a file starts, and an
+    // unchanged track (the same file played again) must bring it back.
+    show_sub(&t);
     if let Some(id) = changed {
         publish(&p, &t, id);
         crate::plugins::arm_ticks();
         crate::desktop::poke();
     }
+}
+
+/// The line under the player title: "Artist · Album", whichever of the two the track has
+/// ("" for untagged files, so the title sits alone).
+pub fn sub_line(t: &Track) -> String {
+    [t.artist.trim(), t.album.trim()]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+fn show_sub(t: &Track) {
+    use slint::ComponentHandle;
+    let app = ST.with(|s| s.borrow().app.clone());
+    if let Some(a) = app.and_then(|w| w.upgrade()) {
+        a.global::<crate::Playback>()
+            .set_media_sub(sub_line(t).into());
+    }
+}
+
+/// Show the track's artist · album under the title in `app` from now on.
+pub fn bind(app: &crate::AppWindow) {
+    use slint::ComponentHandle;
+    ST.with(|s| s.borrow_mut().app = Some(app.as_weak()));
 }
 
 /// mpv loaded a file: publish its track right away.
@@ -563,6 +594,18 @@ fn publish(p: &Player, t: &Track, id: i64) {
 mod tests {
     use super::*;
     use crate::plugins::host::Meta;
+
+    #[test]
+    fn sub_line_is_artist_and_album_when_present() {
+        let mut t = Track::default();
+        assert_eq!(sub_line(&t), "");
+        t.artist = " Kevin MacLeod ".into();
+        assert_eq!(sub_line(&t), "Kevin MacLeod");
+        t.album = "Calming".into();
+        assert_eq!(sub_line(&t), "Kevin MacLeod · Calming");
+        t.artist.clear();
+        assert_eq!(sub_line(&t), "Calming");
+    }
 
     fn tags(title: &str, artist: &str) -> Tags {
         Tags {

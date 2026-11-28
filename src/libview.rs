@@ -23,6 +23,8 @@ thread_local! {
         RefCell::new(Default::default());
 }
 
+/// How long the library search waits after the last key before it runs (#117).
+const SEARCH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 /// Rows kept around the visible ones (decoded ahead, not dropped while scrolling back).
 const WINDOW_MARGIN: usize = 24;
 
@@ -1347,9 +1349,20 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
     {
         let lib = lib.clone();
         let render = render.clone();
+        // Typing renders once the keys pause: a search scores the whole library. Clearing
+        // the field is immediate.
+        let timer = slint::Timer::default();
         app.global::<crate::Library>().on_search(move |q| {
             lib.borrow_mut().search = q.to_string();
-            render();
+            if q.trim().is_empty() {
+                timer.stop();
+                render();
+                return;
+            }
+            let render = render.clone();
+            timer.start(slint::TimerMode::SingleShot, SEARCH_DEBOUNCE, move || {
+                render()
+            });
         });
     }
     {
@@ -1699,7 +1712,7 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
         // Compact library in the side panel.
         let w = app.as_weak();
         let lib = lib.clone();
-        app.global::<crate::Panel>().on_lib_search(move |q| {
+        let run = move |q: String| {
             let Some(a) = w.upgrade() else { return };
             // Newest first; a few pages' worth, the panel shows 60 after de-duplication.
             let v: Vec<Media> = match lib.try_borrow() {
@@ -1735,6 +1748,20 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
                 .collect();
             a.global::<crate::Panel>()
                 .set_lib(ModelRc::new(VecModel::from(items)));
+        };
+        let run = Rc::new(run);
+        let timer = slint::Timer::default();
+        app.global::<crate::Panel>().on_lib_search(move |q| {
+            let q = q.to_string();
+            if q.trim().is_empty() {
+                timer.stop();
+                run(q);
+                return;
+            }
+            let run = run.clone();
+            timer.start(slint::TimerMode::SingleShot, SEARCH_DEBOUNCE, move || {
+                run(q.clone())
+            });
         });
     }
 
@@ -1780,6 +1807,27 @@ pub fn setup(app: &AppWindow, player: &Rc<Player>, cfg: crate::app::state::AppSt
 thread_local! {
     /// Subtitle/audio files to attach once the chosen file has loaded: (is_sub, path).
     static PENDING: RefCell<Vec<(bool, String)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Ctrl+F: open the library search field (Home, a folder or the docked library while a
+/// file plays) and focus it; with the field already open it just takes the focus back.
+/// Does nothing under a dialog (Settings, the palette, …) or in the miniplayer.
+pub fn open_search(a: &AppWindow) {
+    use crate::overlays::Overlay as O;
+    if a.get_mini() || !matches!(a.get_top_overlay(), O::None | O::Library | O::LibrarySearch) {
+        return;
+    }
+    let (o, l) = (a.global::<crate::Overlays>(), a.global::<crate::Library>());
+    if a.global::<crate::Playback>().get_has_media() && !o.get_library_open() {
+        o.set_library_open(true);
+    }
+    // The Streams hub has no item list: land on Home first, as the rail's Home does.
+    if !a.global::<crate::Streams>().get_view().is_empty() {
+        l.set_query("".into());
+        l.invoke_navigate("home".into());
+    }
+    l.set_search_open(true);
+    l.set_search_focus(l.get_search_focus().wrapping_add(1));
 }
 
 /// Attach pending external tracks if a file is loaded (called again on FileLoaded).

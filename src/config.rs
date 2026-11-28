@@ -82,7 +82,7 @@ pub struct Interface {
     pub window: Option<[i32; 4]>,
     /// Progress bar style: "Compact" | "Classic" | "Waveform" | "Plain" (see `BAR_STYLES`).
     pub bar_style: String,
-    /// Volume control style: "Cone" | "Bar" | "Popup" | "Percent" (see `VOLUME_STYLES`).
+    /// Volume control style: "Bar" (default) | "Cone" | "Popup" | "Percent" (see `VOLUME_STYLES`).
     pub volume_style: String,
     /// Player top and bottom bar icons: "Two-tone" | "Single-tone" (see `BAR_ICONS`).
     pub bar_icons: String,
@@ -419,7 +419,7 @@ impl Default for Interface {
             autohide_cursor: true,
             autohide_keep_paused: true,
             autohide_keep_panel: true,
-            autohide_keep_hover: false,
+            autohide_keep_hover: true,
             autohide_keep_audio: false,
             autohide_wake: "move".into(),
             autohide_keys: "any".into(),
@@ -431,7 +431,7 @@ impl Default for Interface {
             mini_window: None,
             window: None,
             bar_style: "Compact".into(),
-            volume_style: "Cone".into(),
+            volume_style: "Bar".into(),
             bar_icons: "Two-tone".into(),
             hint_chapter_thumbnails: true,
             bar_layout: None,
@@ -735,12 +735,12 @@ pub fn bar_style_name(s: &str) -> &'static str {
 /// with a pop-up vertical slider, and an icon with the percentage.
 pub const VOLUME_STYLES: [&str; 4] = ["Cone", "Bar", "Popup", "Percent"];
 
-/// The canonical [`VOLUME_STYLES`] name, ignoring case; unknown values fall back to "Cone".
+/// The canonical [`VOLUME_STYLES`] name, ignoring case; unknown values fall back to "Bar".
 pub fn volume_style_name(s: &str) -> &'static str {
     VOLUME_STYLES
         .into_iter()
         .find(|b| b.eq_ignore_ascii_case(s.trim()))
-        .unwrap_or("Cone")
+        .unwrap_or("Bar")
 }
 
 /// Icon styles of the player's top and bottom bars (other icons are always two-tone).
@@ -811,9 +811,9 @@ pub fn bar_icons_name(s: &str) -> &'static str {
         .unwrap_or("Two-tone")
 }
 
-/// Volume style that goes with a built-in profile (all keep the cone for now).
+/// Volume style that goes with a built-in profile (all use the flat bar, the default).
 pub fn profile_volume(_name: &str) -> &'static str {
-    "Cone"
+    "Bar"
 }
 
 pub const PROFILES: [&str; 3] = ["Minimal", "Default", "Power"];
@@ -1102,17 +1102,18 @@ mod toolbar_tests {
     fn volume_style_names_are_case_insensitive() {
         assert_eq!(volume_style_name("popup"), "Popup");
         assert_eq!(volume_style_name(" PERCENT "), "Percent");
-        assert_eq!(volume_style_name("bogus"), "Cone");
-        assert_eq!(volume_style_name(""), "Cone");
+        assert_eq!(volume_style_name("cone"), "Cone");
+        assert_eq!(volume_style_name("bogus"), "Bar");
+        assert_eq!(volume_style_name(""), "Bar");
         let mut i = Interface {
-            volume_style: "bar".into(),
+            volume_style: "cone".into(),
             ..Default::default()
         };
         migrate_toolbar(&mut i);
-        assert_eq!(i.volume_style, "Bar");
-        // Older configs have no volume_style: serde default → Cone.
-        let i: Interface = toml::from_str("bar_style = \"Plain\"").unwrap();
         assert_eq!(i.volume_style, "Cone");
+        // A config without volume_style (written before the setting existed): serde default → Bar.
+        let i: Interface = toml::from_str("bar_style = \"Plain\"").unwrap();
+        assert_eq!(i.volume_style, "Bar");
     }
 
     #[test]

@@ -119,12 +119,16 @@ pub fn open_db(path: &Path) -> rusqlite::Result<Connection> {
 }
 
 /// Schema version of the derived columns below (`PRAGMA user_version`).
-const SCHEMA: i64 = 2;
+const SCHEMA: i64 = 3;
 
 /// Version 2 (#100): the library UI filters, sorts and pages in SQL, so each row also
 /// keeps its folder (`dir`), natural-order sort keys (`nt` title, `nar` artist, `nal`
-/// album, `np` path; "Ep 2" < "Ep 10") and a lowercase search text (`find`). Older
-/// databases get the columns and are backfilled once; no user-visible change.
+/// album, `np` path; "Ep 2" < "Ep 10") and a search text (`find`). Older databases get the
+/// columns and are backfilled once; no user-visible change.
+///
+/// Version 3 (#117): `find` holds the folded text of [`crate::textmatch`] (case and
+/// diacritics removed, one field per line) instead of plain lower case, and is backfilled
+/// again; the search (`vmatch`) ranks, tolerates typos and reads other keyboard layouts.
 fn migrate(c: &Connection) -> rusqlite::Result<()> {
     let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if v >= SCHEMA {
@@ -186,11 +190,7 @@ impl Derived {
             nar: natural(&m.artist),
             nal: natural(&m.album),
             np: natural(&m.path),
-            find: format!(
-                "{}\n{}\n{}\n{}\n{}",
-                m.title, m.artist, m.album, m.genre, m.path
-            )
-            .to_lowercase(),
+            find: crate::textmatch::search_text(&m.title, &m.artist, &m.album, &m.genre, &m.path),
         }
     }
 }
@@ -429,6 +429,12 @@ fn like_under(d: &str) -> String {
 }
 
 impl Query {
+    /// Number of the `vmatch` parameter in [`Self::filter`]'s list (the search comes right
+    /// after the kind), when there is a search.
+    fn search_at(&self) -> Option<usize> {
+        (!self.search.trim().is_empty()).then_some(1 + usize::from(self.kind.is_some()))
+    }
+
     /// The `WHERE` clause (with a leading space, or empty) and its parameters.
     fn filter(&self) -> (String, Vec<String>) {
         let mut w: Vec<String> = Vec::new();
@@ -437,9 +443,9 @@ impl Query {
             p.push(k.as_str().into());
             w.push(format!("kind=?{}", p.len()));
         }
-        for word in self.search.to_lowercase().split_whitespace() {
-            p.push(like_any(word));
-            w.push(format!("find LIKE ?{} ESCAPE '\\'", p.len()));
+        if self.search_at().is_some() {
+            p.push(self.search.trim().to_string());
+            w.push(format!("vmatch(find, ?{}) > 0", p.len()));
         }
         if let Some(d) = &self.dir {
             p.push(d.trim_end_matches('/').into());
@@ -493,9 +499,38 @@ impl Query {
     }
 }
 
+/// Make `vmatch(text, query)` (the [`crate::textmatch`] score; 0 = no match) available to
+/// the SQL of a query with a search. The compiled query is cached per statement.
+fn prep(conn: &Connection, q: &Query) {
+    use rusqlite::functions::FunctionFlags;
+    use rusqlite::types::{Type, ValueRef};
+    if q.search_at().is_none() {
+        return;
+    }
+    let _ = conn.create_scalar_function(
+        "vmatch",
+        2,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let m = ctx.get_or_create_aux(1, |v| {
+                v.as_str().map(crate::textmatch::Matcher::new).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e))
+                })
+            })?;
+            let m: &Option<crate::textmatch::Matcher> = &m;
+            Ok(match (ctx.get_raw(0), m) {
+                (ValueRef::Text(t), Some(m)) => std::str::from_utf8(t).map_or(0, |t| m.score(t)),
+                (_, None) => 1,
+                _ => 0,
+            })
+        },
+    );
+}
+
 /// One page of `q`, already filtered and sorted. `watched` decides the watched /
 /// unwatched orders (resume positions live in mpv's watch-later files, not here).
 pub fn query(conn: &Connection, q: &Query, watched: &dyn Fn(&Media) -> bool) -> Vec<Media> {
+    prep(conn, q);
     let (clause, p) = q.filter();
     let Some(order) = q.order() else {
         let mut all = q.clone();
@@ -512,8 +547,12 @@ pub fn query(conn: &Connection, q: &Query, watched: &dyn Fn(&Media) -> bool) -> 
         return v.drain(q.offset.min(end)..end).collect();
     };
     let limit = if q.limit == 0 { -1 } else { q.limit as i64 };
+    // A search ranks first (best match on top); the sort key orders equal scores.
+    let rank = q
+        .search_at()
+        .map_or(String::new(), |n| format!("vmatch(find, ?{n}) DESC, "));
     let sql = format!(
-        "SELECT {COLS} FROM media{clause} ORDER BY {order} LIMIT {limit} OFFSET {}",
+        "SELECT {COLS} FROM media{clause} ORDER BY {rank}{order} LIMIT {limit} OFFSET {}",
         q.offset
     );
     select(conn, &sql, &p)
@@ -530,6 +569,7 @@ pub(crate) fn select(conn: &Connection, sql: &str, p: &[String]) -> Vec<Media> {
 
 /// Rows matching `q` (its sort and page are ignored).
 pub fn count(conn: &Connection, q: &Query) -> usize {
+    prep(conn, q);
     let (clause, p) = q.filter();
     conn.query_row(
         &format!("SELECT COUNT(*) FROM media{clause}"),
@@ -542,6 +582,7 @@ pub fn count(conn: &Connection, q: &Query) -> usize {
 /// Tag groups of the rows matching `q`: (value, songs, first path by title), by
 /// natural order of the value. An empty tag is its own group ("").
 pub fn groups(conn: &Connection, q: &Query, f: Field) -> Vec<(String, usize, String)> {
+    prep(conn, q);
     let (clause, p) = q.filter();
     let col = f.col();
     let sql = format!(
@@ -578,6 +619,7 @@ pub fn groups(conn: &Connection, q: &Query, f: Field) -> Vec<(String, usize, Str
 
 /// Files per folder for the rows matching `q` (folders that hold files directly).
 pub fn dir_counts(conn: &Connection, q: &Query) -> BTreeMap<String, usize> {
+    prep(conn, q);
     let (clause, p) = q.filter();
     let sql = format!("SELECT IFNULL(dir,''), COUNT(*) FROM media{clause} GROUP BY dir");
     let Ok(mut st) = conn.prepare(&sql) else {
@@ -622,6 +664,7 @@ pub fn by_paths(conn: &Connection, paths: &[String]) -> std::collections::HashMa
 
 /// Files, total size and total length of the rows matching `q`.
 pub fn totals(conn: &Connection, q: &Query) -> (usize, i64, f64) {
+    prep(conn, q);
     let (clause, p) = q.filter();
     conn.query_row(
         &format!(
@@ -1017,6 +1060,78 @@ mod tests {
 
     fn paths(v: &[Media]) -> Vec<&str> {
         v.iter().map(|m| m.path.as_str()).collect()
+    }
+
+    #[test]
+    fn search_ranks_and_forgives_mistakes() {
+        let c = index(&[
+            ("/v/Sintel.mkv", "video", "Sintel", "", "", "", 1),
+            (
+                "/v/Sinatra Live.mkv",
+                "video",
+                "Sinatra Live",
+                "",
+                "",
+                "",
+                2,
+            ),
+            (
+                "/v/Interstellar.mkv",
+                "video",
+                "Interstellar",
+                "",
+                "",
+                "",
+                3,
+            ),
+            ("/a/s.mp3", "audio", "Сінтел", "Привіт Гурт", "Київ", "", 4),
+            ("/a/c.mp3", "audio", "Café", "Zażółć", "Ёлка", "", 5),
+            (
+                "/v/Sintel Trailer.mkv",
+                "video",
+                "Sintel Trailer",
+                "",
+                "",
+                "",
+                6,
+            ),
+        ]);
+        let no = |_: &Media| false;
+        let find = |q: &str| {
+            let q = Query {
+                search: q.into(),
+                sort: "title".into(),
+                ..Default::default()
+            };
+            let v = query(&c, &q, &no);
+            assert_eq!(count(&c, &q), v.len(), "count follows the query for {q:?}");
+            v.into_iter().map(|m| m.title).collect::<Vec<_>>()
+        };
+        // Best first: the exact word, then the word that continues, then the rest by sort.
+        assert_eq!(find("sintel")[..3], ["Sintel", "Sintel Trailer", "Сінтел"]);
+        // Fuzzy letters and typos find Sintel; Sinatra does not match a typo of Sintel.
+        assert_eq!(find("sntl")[0], "Sintel");
+        assert_eq!(find("sintle")[0], "Sintel");
+        assert!(!find("sintle").contains(&"Sinatra Live".to_string()));
+        assert_eq!(find("interstelar"), ["Interstellar"]);
+        // Case and diacritics on either side.
+        assert_eq!(find("CAFE"), ["Café"]);
+        assert_eq!(find("zazolc"), ["Café"]);
+        assert_eq!(find("елка"), ["Café"]);
+        // Keyboard layout and transliteration, both directions.
+        assert_eq!(find("ghbdsn"), ["Сінтел"], "привіт typed in QWERTY");
+        assert_eq!(find("kyiv"), ["Сінтел"]);
+        assert_eq!(find("сінтел")[0], "Сінтел");
+        // A kind filter and a search share the parameter list.
+        let q = Query {
+            kind: Some(MediaKind::Audio),
+            search: "sintel".into(),
+            ..Default::default()
+        };
+        assert_eq!(paths(&query(&c, &q, &no)), ["/a/s.mp3"]);
+        assert_eq!(totals(&c, &q).0, 1);
+        // No words: everything.
+        assert_eq!(find("   ").len(), 6);
     }
 
     #[test]

@@ -97,6 +97,9 @@ export component TextField inherits Rectangle {
     in property <string> label;
     callback edited(string);
     callback accepted(string);
+    // Bump to move focus here again (Ctrl+F while the field is already open).
+    in property <int> focus-tick;
+    changed focus-tick => { ti.focus(); }
     public function focus-input() { ti.focus(); }
     height: 32px; border-radius: Metrics.radius-md; background: Theme.field;
     border-width: ti.has-focus ? 1px : 0px; border-color: Theme.accent;

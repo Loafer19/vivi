@@ -264,6 +264,29 @@ impl Player {
             .mpv
             .command("seek", &[&format!("{secs:.3}"), "absolute"]);
     }
+    /// A seek while the seek bar is dragged: keyframes only (fast), and at most one every
+    /// 70 ms so a drag does not queue a seek per mouse event. The release does the exact
+    /// seek ([`Self::seek_abs`]), so a skipped move costs nothing.
+    pub fn seek_scrub(&self, secs: f64) {
+        thread_local! {
+            static LAST: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+        }
+        let now = std::time::Instant::now();
+        let due = LAST.with(|l| {
+            let due = l
+                .get()
+                .is_none_or(|t| now.duration_since(t) >= std::time::Duration::from_millis(70));
+            if due {
+                l.set(Some(now));
+            }
+            due
+        });
+        if due {
+            let _ = self
+                .mpv
+                .command("seek", &[&format!("{secs:.3}"), "absolute+keyframes"]);
+        }
+    }
     pub fn seek_rel(&self, secs: f64) {
         let _ = self
             .mpv

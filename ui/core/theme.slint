@@ -74,6 +74,9 @@ export global Theme {
     out property <color> track-fill: #371F06;
     out property <color> track-fill-hover: #4A2A08;
     out property <color> track-tick: #FFFFFF0D;
+    // The boxed seek / volume track: a plain, subtle colour a little lighter than the bar in
+    // dark mode (darker in light mode); the played part is the plain accent.
+    out property <color> seek-track: dark ? #262626 : #D6D6D6;
     out property <color> range: #4FC3F7;          // plugin range on the seekbar
     // Volume wedge gradient
     out property <color> meter-low: #95D318;

@@ -62,7 +62,16 @@ pub fn close(a: &AppWindow, o: Overlay) {
         }
         Overlay::Drawer => a.global::<crate::Overlays>().set_drawer_open(false),
         Overlay::SidePanel => a.global::<crate::Overlays>().set_panel_open(false),
-        Overlay::Library => a.global::<crate::Overlays>().set_library_open(false),
+        Overlay::Library => {
+            a.global::<crate::Overlays>().set_library_open(false);
+            a.global::<crate::Library>().set_search_open(false);
+        }
+        Overlay::LibrarySearch => {
+            let l = a.global::<crate::Library>();
+            l.set_search_open(false);
+            l.set_query("".into());
+            l.invoke_search("".into());
+        }
         Overlay::Karaoke => {
             plugins::command(lyrics::ID, "karaoke", &["off".into()]);
             a.global::<crate::Overlays>().set_karaoke_open(false);

@@ -35,11 +35,23 @@ if root.reveal > 0: Rectangle {
         padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; spacing: Theme.gap;
         IconButton { tab-focus: false; bar: true; duo: "open"; tip: "Open file"; clicked => { Playback.open-file(); } }
         if Playback.has-media: IconButton { tab-focus: false; bar: true; duo: "home"; tip: "Library"; active: Overlays.library-open; clicked => { Overlays.library-open = !Overlays.library-open; } }
-        Text {
-            horizontal-stretch: 1;
-            text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
-            color: Theme.fg-a2; horizontal-alignment: center; vertical-alignment: center;
-            overflow: elide;
+        // The title in the bright text colour (it is the one name on screen), with
+        // artist · album under it, dimmer, when the file has tags.
+        VerticalLayout {
+            horizontal-stretch: 1; alignment: center; spacing: 0px;
+            Text {
+                text: Playback.has-media ? Playback.media-title : "Vivi Media Player";
+                color: Playback.has-media ? Theme.fg-1 : Theme.fg-2;
+                font-size: Playback.has-media && Playback.media-sub != "" ? Metrics.font-md : Metrics.font-base;
+                horizontal-alignment: center; vertical-alignment: center;
+                overflow: elide;
+            }
+            if Playback.has-media && Playback.media-sub != "": Text {
+                text: Playback.media-sub;
+                color: Theme.fg-a1; font-size: Metrics.font-xs;
+                horizontal-alignment: center; vertical-alignment: center;
+                overflow: elide;
+            }
         }
         // Status indicators (sleep timer, loudness, A-B loop, speed, remote, plugins).
         for it in Status.items: StatusChip { y: (parent.height - self.height) / 2; it: it; clicked => { Status.clicked(it.id); } }

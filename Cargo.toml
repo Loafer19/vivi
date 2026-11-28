@@ -13,7 +13,7 @@ rfd = "0.15"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"
 walkdir = "2.5.0"
-rusqlite = { version = "0.41.1", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.41.1", default-features = false, features = ["bundled", "functions"] }
 lofty = "0.25.4"
 md5 = "0.8.1"
 ureq = { version = "3", features = ["json"] }

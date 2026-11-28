@@ -14,6 +14,9 @@ export global Library {
     in-out property <[HomeLine]> home;
     in-out property <[LibItem]> mixes;
     in-out property <bool> home-edit;
+    // Library search field open (Ctrl+F / the Search icon); `search-focus` is bumped to refocus it.
+    in-out property <bool> search-open;
+    in-out property <int> search-focus;
     callback home-action(string, string, string);
     callback home-narrow(bool);
     in-out property <bool> can-back;

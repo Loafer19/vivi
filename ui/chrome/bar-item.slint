@@ -17,7 +17,7 @@ export component BarItem inherits HorizontalLayout {
     in property <bool> wide: true; // room for the volume slider
     in property <bool> shown: true; // false = collapsed into the overflow menu
     in property <bool> compact: false;
-    in property <VolumeStyle> vstyle: VolumeStyle.cone;
+    in property <VolumeStyle> vstyle: VolumeStyle.bar;
     in property <bool> boxed: true; // bar style draws boxed tracks (all but Plain)
     callback act(string);
     callback volume-changed(float);

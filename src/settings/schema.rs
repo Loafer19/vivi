@@ -738,7 +738,7 @@ mod tests {
             ("interface.autohide_mode", "Only in fullscreen"),
             ("interface.autohide_top", "false"),
             ("interface.autohide_keep_paused", "false"),
-            ("interface.autohide_keep_hover", "true"),
+            ("interface.autohide_keep_hover", "false"),
             (
                 "interface.autohide_wake",
                 "Mouse near the top or bottom edge",
