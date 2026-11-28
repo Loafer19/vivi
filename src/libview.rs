@@ -1782,7 +1782,6 @@ thread_local! {
     static PENDING: RefCell<Vec<(bool, String)>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Attach pending external tracks if a file is loaded (called again on FileLoaded).
 /// Ctrl+F: open the library search field (Home, a folder or the docked library while a
 /// file plays) and focus it; with the field already open it just takes the focus back.
 /// Does nothing under a dialog (Settings, the palette, …) or in the miniplayer.
@@ -1804,6 +1803,7 @@ pub fn open_search(a: &AppWindow) {
     l.set_search_focus(l.get_search_focus().wrapping_add(1));
 }
 
+/// Attach pending external tracks if a file is loaded (called again on FileLoaded).
 pub fn flush_pending(p: &Player) {
     if p.get("duration").is_none() {
         return;
