@@ -149,19 +149,19 @@ export component VolumeSlider inherits Rectangle {
         height: root.boxed ? (root.compact ? root.height : Metrics.bar-track-h) : 4px;
         border-radius: root.boxed ? 4px : 2px;
         // Same colours as the seek track (Theme.seek-track, accent fill).
-        background: root.boxed ? (ta.has-hover ? Theme.seek-track-hover : Theme.seek-track) : Theme.bg-a1;
+        background: root.boxed ? Theme.seek-track : Theme.bg-a1;
         Rectangle {
             x: root.boxed ? 1.5px : 0; y: root.boxed ? 1.5px : 0;
             height: parent.height - (root.boxed ? 3px : 0); border-radius: root.boxed ? 2.5px : 2px;
             width: max(0, (parent.width - (root.boxed ? 3px : 0)) * root.frac);
-            background: ta.has-hover ? Theme.accent-bright : Theme.accent;
+            background: ta.has-hover && !root.boxed ? Theme.accent-bright : Theme.accent;
         }
     }
     Rectangle {
         width: root.boxed ? 5px : 4px; height: root.boxed ? track.height - 3px : 12px; border-radius: 2px;
         x: clamp(1.5px + (root.width - 3px) * root.frac - self.width, 1.5px, root.width - self.width - 1.5px);
         y: (root.height - self.height) / 2;
-        background: root.boxed ? (ta.has-hover || ta.pressed ? Theme.fg-1 : Theme.accent-bright) : Theme.accent;
+        background: root.boxed ? Theme.accent-bright : Theme.accent;
         visible: root.boxed || ta.has-hover;
     }
     ta := VolumeTouch { value: root.value; maximum: root.maximum; changed(v) => { root.changed(v); } }

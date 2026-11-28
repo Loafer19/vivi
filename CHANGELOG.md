@@ -5,11 +5,12 @@
 ### Added
 - **Library search from Home** (Ctrl+F): a Search icon in the Home header and **Ctrl+F** open the library-wide search (videos and music) from Home, a folder, or the docked library while a file plays. The field takes the keyboard focus; **Esc** clears and closes it before anything else (then the library). Ctrl+F no longer toggles fullscreen (F still does).
 - **Artist / album line under the player title**: the top bar shows the artist and album (or whatever secondary metadata exists: tags, plugin metadata, stream titles) dimmer under the title. Untagged files and the idle window show the title alone.
+- **Smarter library search**: one matcher for Home, Videos, Music, the docked library and the `search` MCP tool. It ranks the best match first (exact word and word start, then letters in order such as `sntl` → Sintel, then typos) and forgives typing mistakes: one wrong, missing, extra or swapped letter in words of 4-7 letters, two in longer words. Case and diacritics are ignored (`cafe` finds *Café*, `елка` finds *Ёлка*; `й`, `ї`, `ґ` fold to `и`, `і`, `г`). A Ukrainian or English query is also tried as typed on the other keyboard layout (`ghbdsn` finds *Привіт*; ЙЦУКЕН ↔ QWERTY including `і ї є ґ`) and transliterated (`сінтел` ↔ `sintel`), ranked below direct matches. Typing waits about 0.1 s after the last key; the library index is rebuilt once on first start (a few seconds for 100k files).
 - **Live seeking**: dragging the seek bar now moves the video while you drag (fast keyframe seeks, at most about every 70 ms, like the volume slider); releasing does the exact seek.
 
 ### Changed
 - **Brighter titles**: the playing title in the top bar and the Home title, breadcrumb and headings use the primary text colour instead of the dim one (the breadcrumb and title light up in the accent on hover).
-- **The seek bar is visible by default**: the Compact (boxed) seek bar has an accent-coloured fill and a track lighter than the bar, in Compact and Classic alike (Classic did not receive the boxed look before). The boxed playhead is accent and turns white while grabbed; the flat volume bar uses the same look.
+- **The seek bar is visible by default**: the Compact (boxed) seek bar has an accent-coloured fill on a plain, subtle track, in Compact and Classic alike (Classic did not receive the boxed look before), with no hover highlight. The flat volume bar uses the same look.
 - **New defaults** (existing settings keep their saved values): *Keep shown while the pointer is over a bar* is **on**, and the volume control is the **Flat bar** instead of the cone. Only an installation without a saved choice sees them; *Customize* and *Settings → Interface → Auto-hide* still change both.
 
 ### Fixed
